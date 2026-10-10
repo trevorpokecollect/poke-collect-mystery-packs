@@ -172,7 +172,7 @@ async function orderIdsForViewer(db: Db, viewer: Viewer): Promise<string[] | nul
 
 const pullInclude = {
   slot: { include: { card: true } },
-  series: { select: { title: true, handle: true } },
+  series: { select: { title: true, handle: true, packProductId: true } },
 } as const;
 
 export async function pullsForViewer(db: Db, shop: string, viewer: Viewer) {
@@ -296,7 +296,7 @@ export async function voidPulls(
   });
 }
 
-/** Public odds: every card with its total and remaining copies. */
+/** Public odds: every card with its total and remaining copies. Card values stay admin-only. */
 export async function seriesOdds(db: Db, shop: string, handle: string) {
   const series = await db.series.findUnique({
     where: { shop_handle: { shop, handle } },

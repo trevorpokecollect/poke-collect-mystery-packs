@@ -34,13 +34,21 @@
   }
 
   function packTile(pack, onOpen) {
-    var button = el("button", { class: "mp-pack", type: "button", "aria-label": "Open " + pack.series }, [
-      el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
-      el("span", { class: "mp-pack-brand", text: "Poke-Collect" }),
-      el("span", { class: "mp-pack-emblem", "aria-hidden": "true" }),
-      el("span", { class: "mp-pack-series", text: pack.series }),
-      el("span", { class: "mp-pack-label", text: "Tap to open" }),
-    ]);
+    // Use the pack product's own artwork when it has one; otherwise draw the CSS foil pack.
+    var art = pack.packImageUrl;
+    var button = el("button", { class: "mp-pack" + (art ? " mp-pack-art" : ""), type: "button", "aria-label": "Open " + pack.series }, art
+      ? [
+          el("img", { class: "mp-pack-img", src: art, alt: "" }),
+          el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
+          el("span", { class: "mp-pack-label", text: "Tap to open" }),
+        ]
+      : [
+          el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
+          el("span", { class: "mp-pack-brand", text: "Poke-Collect" }),
+          el("span", { class: "mp-pack-emblem", "aria-hidden": "true" }),
+          el("span", { class: "mp-pack-series", text: pack.series }),
+          el("span", { class: "mp-pack-label", text: "Tap to open" }),
+        ]);
     if (onOpen) button.addEventListener("click", function () { onOpen(pack); });
     return button;
   }
