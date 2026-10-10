@@ -2,6 +2,7 @@
 // then adding the won cards to the order and releasing it to ship.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import type { PrismaClient } from "@prisma/client";
+import { unreserveForPulls } from "./inventory.server";
 
 const HOLD_HANDLE = "mystery-pack-reveal";
 
@@ -232,6 +233,8 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
   });
 
   if (pulls.length > 0 && !packOrder.cardsAddedAt) {
+    // Auto-built pools hold their cards as "reserved"; free each won copy so the edit can commit it.
+    await unreserveForPulls(db, admin, pulls.map((p) => p.id));
     await addCardsToOrder(
       admin,
       orderId,

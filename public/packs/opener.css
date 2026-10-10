@@ -114,6 +114,10 @@
 .mp-tier[data-tier="rare"] { color: var(--mp-rare); }
 .mp-tier[data-tier="epic"] { color: var(--mp-epic); }
 .mp-tier[data-tier="chase"] { color: var(--mp-chase); }
+.mp-tier[data-tier="poke"] { color: #e3350d; }
+.mp-tier[data-tier="great"] { color: var(--mp-rare); }
+.mp-tier[data-tier="ultra"] { color: var(--mp-chase); }
+.mp-tier[data-tier="master"] { color: var(--mp-epic); }
 
 /* Opening stage */
 .mp-stage {

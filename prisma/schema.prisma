@@ -49,6 +49,13 @@ model Series {
   packPrice     Decimal      @db.Decimal(10, 2)
   // Unopened packs are revealed automatically after this many days so orders can ship.
   autoOpenDays  Int          @default(7)
+  // Auto-built pools draw from the shop's live inventory: each card's copies are moved to
+  // "reserved" at launch so they can only be won from packs, and released when the series closes.
+  reserveInventory Boolean   @default(false)
+  // [{ name, min }] lowest first; a card's tier is the highest one its value reaches.
+  tierRules     Json?
+  // Last rules used to auto-build the pool, to prefill the form.
+  buildRules    Json?
   // Provable fairness: sha256(salt + ordered slot list) published at launch,
   // salt published after the series closes.
   commitHash    String?
@@ -78,6 +85,11 @@ model Card {
   marketValue      Decimal @db.Decimal(10, 2)
   quantity         Int
   sortOrder        Int     @default(0)
+  // Where this card's stock is reserved (auto-built pools only).
+  inventoryItemId  String?
+  locationId       String?
+  // Copies currently held in Shopify's "reserved" state for this series.
+  reservedQty      Int     @default(0)
 
   slots Slot[]
 
@@ -126,6 +138,8 @@ model Pull {
   revealedAt   DateTime?
   autoOpened   Boolean    @default(false)
   fulfillingAt DateTime?
+  // Set once this pull's reserved copy is moved back to available for the order edit.
+  unreservedAt DateTime?
   createdAt    DateTime   @default(now())
 
   @@unique([lineItemId, packIndex])

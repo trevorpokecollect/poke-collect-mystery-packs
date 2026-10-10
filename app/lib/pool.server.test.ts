@@ -12,6 +12,7 @@ import {
   seriesOdds,
   voidPulls,
 } from "./pool.server";
+import { releaseUnneeded, reservePool, unreserveForPulls } from "./inventory.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -245,5 +246,100 @@ describe("seriesOdds", () => {
     const closed = await seriesOdds(db, SHOP, "series-1");
     expect(closed!.status).toBe("CLOSED");
     expect(commitmentHash(closed!.reveal!.salt!, closed!.reveal!.sequence)).toBe(closed!.commitHash);
+  });
+});
+
+// Records inventory moves instead of calling Shopify.
+function fakeAdmin() {
+  const moves: { from: string; to: string; quantity: number; item: string; key: string }[] = [];
+  const admin = {
+    graphql: async (_query: string, { variables }: { variables: Record<string, unknown> }) => {
+      const input = variables.input as {
+        changes: { quantity: number; inventoryItemId: string; from: { name: string }; to: { name: string } }[];
+      };
+      for (const c of input.changes) {
+        moves.push({ from: c.from.name, to: c.to.name, quantity: c.quantity, item: c.inventoryItemId, key: String(variables.key) });
+      }
+      return new Response(JSON.stringify({ data: { inventoryMoveQuantities: { userErrors: [] } } }));
+    },
+  };
+  const net = (item: string) =>
+    moves.filter((m) => m.item === item).reduce((n, m) => n + (m.to === "reserved" ? m.quantity : -m.quantity), 0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { admin: admin as any, moves, net };
+}
+
+async function makeReservedSeries(n: number) {
+  const series = await makeSeries(
+    Array.from({ length: n }, (_, i) => ({ name: `Card ${i}`, tier: "Poke", value: 5, qty: 1 })),
+  );
+  await db.series.update({ where: { id: series.id }, data: { reserveInventory: true } });
+  const cards = await db.card.findMany({ where: { seriesId: series.id } });
+  for (const c of cards) {
+    await db.card.update({
+      where: { id: c.id },
+      data: { inventoryItemId: `item-${c.title}`, locationId: "gid://shopify/Location/1" },
+    });
+  }
+  return series;
+}
+
+describe("inventory reservation", () => {
+  it("reserves every card at launch and releases unpulled ones when the series closes", async () => {
+    const { admin, net } = fakeAdmin();
+    const series = await makeReservedSeries(5);
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    expect((await db.card.findMany({ where: { seriesId: series.id } })).every((c) => c.reservedQty === 1)).toBe(true);
+
+    // Nothing is released while the series is live.
+    expect(await releaseUnneeded(db, admin, series.id)).toBe(0);
+
+    // Two packs sold, one still unopened, then the merchant closes the series early.
+    const { pulls } = await drawForOrder(db, order(2));
+    await db.series.update({ where: { id: series.id }, data: { status: "CLOSED" } });
+    expect(await releaseUnneeded(db, admin, series.id)).toBe(3);
+
+    const held = await db.pull.findMany({ where: { id: { in: pulls.map((p) => p.id) } }, include: { slot: { include: { card: true } } } });
+    for (const p of held) expect(net(p.slot.card.inventoryItemId!)).toBe(1);
+    const total = (await db.card.findMany({ where: { seriesId: series.id } })).reduce((n, c) => n + c.reservedQty, 0);
+    expect(total).toBe(2);
+  });
+
+  it("frees a won copy once for the order edit, even when retried", async () => {
+    const { admin, moves } = fakeAdmin();
+    const series = await makeReservedSeries(3);
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(1));
+
+    await unreserveForPulls(db, admin, [pulls[0].id]);
+    await unreserveForPulls(db, admin, [pulls[0].id]);
+    expect(moves.filter((m) => m.from === "reserved")).toHaveLength(1);
+
+    // After the card ships, closing the series releases only the two unpulled cards.
+    await db.series.update({ where: { id: series.id }, data: { status: "CLOSED" } });
+    expect(await releaseUnneeded(db, admin, series.id)).toBe(2);
+  });
+
+  it("puts a refunded pack's card straight back on sale", async () => {
+    const { admin } = fakeAdmin();
+    const series = await makeReservedSeries(3);
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const input = order(1);
+    await drawForOrder(db, input);
+    await voidPulls(db, input.orderId);
+    expect(await releaseUnneeded(db, admin, series.id)).toBe(1);
+  });
+
+  it("leaves hand-picked series alone", async () => {
+    const { admin, moves } = fakeAdmin();
+    const series = await makeSeries(standardPool);
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    await db.series.update({ where: { id: series.id }, data: { status: "CLOSED" } });
+    expect(await releaseUnneeded(db, admin, series.id)).toBe(0);
+    expect(moves).toHaveLength(0);
   });
 });

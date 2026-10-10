@@ -21,6 +21,11 @@
     rare: "#2f6fe0",
     epic: "#8b46e0",
     chase: "#e0a21a",
+    // Value tiers used by auto-built pools, colored like their Poké Balls.
+    poke: "#e3350d",
+    great: "#2f6fe0",
+    ultra: "#e0a21a",
+    master: "#8b46e0",
   };
 
   function el(tag, attrs, children) {
@@ -185,7 +190,7 @@
           flip.classList.remove("mp-rise");
           flip.classList.add("mp-flipped");
           glow.classList.add("mp-on");
-          var big = ["epic", "chase"].indexOf(tierKey(card.tier)) !== -1;
+          var big = ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1;
           if (big && !reduced) confetti(stage, color);
 
           result.appendChild(el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }));

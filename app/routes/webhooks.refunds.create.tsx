@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ordersReadyToFinalize, voidPulls } from "../lib/pool.server";
 import { finalizeOrder, releaseHolds } from "../lib/orders.server";
+import { releaseUnneeded } from "../lib/inventory.server";
 
 interface RefundPayload {
   order_id: number;
@@ -22,6 +23,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   const voided = await voidPulls(db, orderId, perLine);
   if (voided.length === 0 || !admin) return new Response();
+
+  // Cards from voided packs go back on sale (auto-built pools reserve real inventory).
+  for (const seriesId of new Set(voided.map((p) => p.seriesId))) await releaseUnneeded(db, admin, seriesId);
 
   // The refund may have removed the last unopened pack, or every pack.
   const live = await db.pull.count({ where: { orderId, status: { in: ["UNOPENED", "REVEALED"] } } });

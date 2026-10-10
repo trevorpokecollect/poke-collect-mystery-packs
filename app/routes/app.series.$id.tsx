@@ -4,7 +4,15 @@ import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { addCards, launch, poolSummary } from "../lib/series.server";
+import {
+  addCards,
+  autoBuildPool,
+  launch,
+  poolSummary,
+  seriesTierRules,
+  updateTierRules,
+} from "../lib/series.server";
+import { releaseUnneeded } from "../lib/inventory.server";
 import { TIERS } from "../lib/tiers";
 import { PoolError } from "../lib/pool.server";
 import { packsPageUrl, storefrontBase } from "../lib/links.server";
@@ -30,6 +38,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     include: { slot: { include: { card: { select: { title: true, tier: true } } } } },
   });
   const summary = poolSummary(series.cards, Number(series.packPrice));
+  const tierRules = seriesTierRules(series);
+  const tierCounts = new Map<string, number>();
+  for (const c of series.cards) tierCounts.set(c.tier, (tierCounts.get(c.tier) ?? 0) + c.quantity);
+  const build = (series.buildRules ?? {}) as Partial<Record<string, string | number>>;
 
   return {
     series: {
@@ -40,6 +52,18 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       packPrice: series.packPrice.toString(),
       autoOpenDays: series.autoOpenDays,
       commitHash: series.commitHash,
+      reserveInventory: series.reserveInventory,
+    },
+    tierRules,
+    tierNames: series.tierRules ? tierRules.map((t) => t.name) : [...TIERS],
+    tierCounts: [...tierCounts.entries()],
+    buildDefaults: {
+      count: String(build.count ?? 100),
+      minValue: String(build.minValue ?? 2),
+      maxValue: String(build.maxValue ?? 100),
+      targetAverage: String(build.targetAverage ?? 10),
+      productType: String(build.productType ?? "Pokemon Single"),
+      condition: String(build.condition ?? "Near Mint"),
     },
     cards: series.cards.map((c) => ({
       id: c.id,
@@ -80,6 +104,24 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         await addCards(admin, series.id, JSON.parse(String(form.get("variantIds") || "[]")));
         return { ok: "Cards added." };
       }
+      case "autoBuild": {
+        if (!editable) return { error: "Cards can't change after launch." };
+        const num = (name: string) => Number(form.get(name));
+        const count = await autoBuildPool(admin, session.shop, series.id, {
+          count: Math.floor(num("count")),
+          minValue: num("minValue"),
+          maxValue: num("maxValue"),
+          targetAverage: num("targetAverage"),
+          productType: String(form.get("productType") || "").trim(),
+          condition: String(form.get("condition") || "").trim(),
+        });
+        return { ok: `Built a pool of ${count} cards from your inventory.` };
+      }
+      case "saveTiers": {
+        if (!editable) return { error: "Tiers can't change after launch." };
+        await updateTierRules(series.id, JSON.parse(String(form.get("tiers") || "[]")));
+        return { ok: "Tiers saved and applied to every card." };
+      }
       case "updateCard": {
         if (!editable) return { error: "Cards can't change after launch." };
         const tier = String(form.get("tier"));
@@ -109,7 +151,10 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           where: { id: series.id },
           data: { status: "CLOSED", closedAt: new Date() },
         });
-        return { ok: "Series closed. No more packs will be drawn." };
+        const released = await releaseUnneeded(db, admin, series.id);
+        return {
+          ok: `Series closed. No more packs will be drawn.${released ? ` ${released} unpulled card${released === 1 ? " is" : "s are"} back on sale.` : ""}`,
+        };
       }
       default:
         return { error: "Unknown action." };
@@ -124,7 +169,8 @@ const money = (n: number | string) => `$${Number(n).toFixed(2)}`;
 const percent = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 export default function SeriesPage() {
-  const { series, cards, summary, pulls, oddsUrl, packsPage } = useLoaderData<typeof loader>();
+  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults } =
+    useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const navigation = useNavigation();
@@ -139,6 +185,27 @@ export default function SeriesPage() {
       { intent: "addCards", variantIds: JSON.stringify(selection.map((v: { id: string }) => v.id)) },
       { method: "post" },
     );
+  }
+
+  function autoBuild(form: HTMLElement) {
+    const read = (name: string) =>
+      (form.querySelector(`[data-build="${name}"]`) as HTMLInputElement | null)?.value ?? "";
+    const fields = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition"] as const;
+    const values = Object.fromEntries(fields.map((f) => [f, read(f)]));
+    if (cards.length > 0 && !confirm("Replace the current card list with a new pool from your inventory?")) return;
+    submit({ intent: "autoBuild", ...values }, { method: "post" });
+  }
+
+  function saveTiers(form: HTMLElement) {
+    const rows = Array.from(form.querySelectorAll("[data-tier-row]"));
+    const tiers = rows
+      .map((row) => ({
+        name: (row.querySelector('[data-tier="name"]') as HTMLInputElement | null)?.value.trim() ?? "",
+        min: (row.querySelector('[data-tier="min"]') as HTMLInputElement | null)?.value ?? "",
+      }))
+      .filter((t) => t.name !== "")
+      .map((t) => ({ name: t.name, min: Number(t.min || 0) }));
+    submit({ intent: "saveTiers", tiers: JSON.stringify(tiers) }, { method: "post" });
   }
 
   function saveCard(cardId: string, row: HTMLElement) {
@@ -158,7 +225,10 @@ export default function SeriesPage() {
           variant="primary"
           disabled={cards.length === 0 || busy}
           onClick={() => {
-            if (confirm(`Launch ${series.title}? The card list and odds are locked once packs go on sale.`)) {
+            const reserveNote = series.reserveInventory
+              ? " Every card in the pool is reserved in your inventory, so it can only be won from a pack."
+              : "";
+            if (confirm(`Launch ${series.title}? The card list and odds are locked once packs go on sale.${reserveNote}`)) {
               submit({ intent: "launch" }, { method: "post" });
             }
           }}
@@ -170,7 +240,10 @@ export default function SeriesPage() {
           slot="secondary-actions"
           tone="critical"
           onClick={() => {
-            if (confirm("Close this series? No more packs will be drawn.")) submit({ intent: "close" }, { method: "post" });
+            const releaseNote = series.reserveInventory ? " Unpulled cards go back on sale in your store." : "";
+            if (confirm(`Close this series? No more packs will be drawn.${releaseNote}`)) {
+              submit({ intent: "close" }, { method: "post" });
+            }
           }}
         >
           Close series
@@ -179,6 +252,69 @@ export default function SeriesPage() {
 
       {result && "error" in result && result.error ? <s-banner tone="critical">{result.error}</s-banner> : null}
       {result && "ok" in result && result.ok ? <s-banner tone="success">{result.ok}</s-banner> : null}
+
+      {draft ? (
+        <s-section heading="Auto-build from inventory">
+          <s-stack gap="base">
+            <s-paragraph>
+              Picks one copy of each card from your in-stock inventory so the average value per pack matches your
+              target. Building again gives a different mix. At launch the cards are reserved in Shopify, so they
+              can only be won from a pack; closing the series puts unpulled cards back on sale.
+            </s-paragraph>
+            <s-grid gridTemplateColumns="repeat(auto-fit, minmax(160px, 1fr))" gap="base">
+              <s-number-field label="Cards in pool" min={1} max={1000} value={buildDefaults.count} data-build="count" />
+              <s-money-field label="Lowest card value" value={buildDefaults.minValue} data-build="minValue" />
+              <s-money-field label="Highest card value" value={buildDefaults.maxValue} data-build="maxValue" />
+              <s-money-field label="Target average value" value={buildDefaults.targetAverage} data-build="targetAverage" />
+              <s-text-field label="Product type" value={buildDefaults.productType} data-build="productType" />
+              <s-text-field
+                label="Condition"
+                details="Leave blank for any condition"
+                value={buildDefaults.condition}
+                data-build="condition"
+              />
+            </s-grid>
+            <s-button
+              variant="primary"
+              {...(busy ? { loading: true } : {})}
+              onClick={(e) => autoBuild((e.currentTarget as HTMLElement).closest("s-section")!)}
+            >
+              {cards.length > 0 ? "Rebuild pool" : "Build pool"}
+            </s-button>
+          </s-stack>
+        </s-section>
+      ) : null}
+
+      {draft ? (
+        <s-section heading="Tiers">
+          <s-stack gap="base">
+            <s-paragraph>
+              Each card gets the highest tier its value reaches. Customers see the tier, never the value. Clear a
+              name to remove a tier.
+            </s-paragraph>
+            {[...tierRules, { name: "", min: 0 }].map((t, i) => (
+              <s-stack key={`${t.name}-${i}`} direction="inline" gap="base" data-tier-row="">
+                <s-text-field
+                  label="Tier name"
+                  labelAccessibilityVisibility={i === 0 ? "visible" : "exclusive"}
+                  value={t.name}
+                  placeholder="Add a tier"
+                  data-tier="name"
+                />
+                <s-money-field
+                  label="Starts at"
+                  labelAccessibilityVisibility={i === 0 ? "visible" : "exclusive"}
+                  value={t.name ? String(t.min) : ""}
+                  data-tier="min"
+                />
+              </s-stack>
+            ))}
+            <s-button onClick={(e) => saveTiers((e.currentTarget as HTMLElement).closest("s-section")!)}>
+              Save tiers
+            </s-button>
+          </s-stack>
+        </s-section>
+      ) : null}
 
       <s-section heading="Card pool">
         {draft ? (
@@ -217,7 +353,7 @@ export default function SeriesPage() {
                     <>
                       <s-table-cell>
                         <s-select label="Tier" labelAccessibilityVisibility="exclusive" value={card.tier} data-field="tier">
-                          {TIERS.map((t) => (
+                          {tierNames.map((t) => (
                             <s-option key={t} value={t}>
                               {t}
                             </s-option>
@@ -311,6 +447,14 @@ export default function SeriesPage() {
           <s-text>Customer return: {percent(summary.returnRate)} of price</s-text>
           <s-text>Revenue if sold out: {money(summary.revenue)}</s-text>
           <s-text>Pool market value: {money(summary.totalValue)}</s-text>
+          {tierCounts.length > 0 ? (
+            <s-text>
+              Tiers: {tierCounts.map(([tier, n]) => `${tier} ${n}`).join(" · ")}
+            </s-text>
+          ) : null}
+          {series.reserveInventory ? (
+            <s-text>Cards are reserved from your store inventory while the series is live.</s-text>
+          ) : null}
         </s-stack>
       </s-section>
 

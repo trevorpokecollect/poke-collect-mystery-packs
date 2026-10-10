@@ -1,9 +1,20 @@
 // Admin-side series management: creating a series, filling its card pool from
 // Shopify variants, and launching it (which also sets the pack's inventory).
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
+import type { Prisma } from "@prisma/client";
 import db from "../db.server";
 import { launchSeries } from "./pool.server";
 import { gql } from "./orders.server";
+import { fetchCandidates, releaseUnneeded, reservePool, type CandidateFilter } from "./inventory.server";
+import {
+  buildPool,
+  DEFAULT_TIER_RULES,
+  normalizeTierRules,
+  tierFor,
+  validateBuildRules,
+  type BuildRules,
+  type TierRule,
+} from "./pool-builder";
 
 
 interface VariantNode {
@@ -12,6 +23,10 @@ interface VariantNode {
   displayName: string;
   price: string;
   inventoryQuantity: number | null;
+  inventoryItem: {
+    id: string;
+    inventoryLevels: { nodes: { location: { id: string }; quantities: { quantity: number }[] }[] };
+  } | null;
   media: { nodes: { preview: { image: { url: string } | null } | null }[] };
   product: { id: string; title: string; featuredMedia: { preview: { image: { url: string } | null } | null } | null };
 }
@@ -29,6 +44,10 @@ export async function fetchVariants(admin: AdminApiContext, ids: string[]): Prom
             displayName
             price
             inventoryQuantity
+            inventoryItem {
+              id
+              inventoryLevels(first: 5) { nodes { location { id } quantities(names: ["available"]) { quantity } } }
+            }
             media(first: 1) { nodes { preview { image { url } } } }
             product { id title featuredMedia { preview { image { url } } } }
           }
@@ -77,21 +96,31 @@ export async function createSeries(
 
 /** Adds picked variants to the pool with default tier, value (its price) and quantity (its stock). */
 export async function addCards(admin: AdminApiContext, seriesId: string, variantIds: string[]) {
+  const series = await db.series.findUniqueOrThrow({ where: { id: seriesId } });
   const variants = await fetchVariants(admin, variantIds);
   const existing = await db.card.count({ where: { seriesId } });
+  const tiers = series.tierRules ? seriesTierRules(series) : null;
   await db.card.createMany({
     skipDuplicates: true,
-    data: variants.map((v, i) => ({
-      seriesId,
-      variantId: v.id,
-      productId: v.product.id,
-      title: cardTitle(v),
-      imageUrl: variantImage(v),
-      tier: "Base",
-      marketValue: v.price,
-      quantity: Math.max(1, v.inventoryQuantity ?? 1),
-      sortOrder: existing + i,
-    })),
+    data: variants.map((v, i) => {
+      // Auto-built pools reserve one copy from the location holding the most stock.
+      const levels = v.inventoryItem?.inventoryLevels.nodes ?? [];
+      const best = [...levels].sort((a, b) => (b.quantities[0]?.quantity ?? 0) - (a.quantities[0]?.quantity ?? 0))[0];
+      const reserve = series.reserveInventory && v.inventoryItem && best;
+      return {
+        seriesId,
+        variantId: v.id,
+        productId: v.product.id,
+        title: cardTitle(v),
+        imageUrl: variantImage(v),
+        tier: tiers ? tierFor(Number(v.price), tiers) : "Base",
+        marketValue: v.price,
+        quantity: reserve ? 1 : Math.max(1, v.inventoryQuantity ?? 1),
+        sortOrder: existing + i,
+        inventoryItemId: reserve ? v.inventoryItem!.id : null,
+        locationId: reserve ? best.location.id : null,
+      };
+    }),
   });
 }
 
@@ -100,7 +129,25 @@ export async function addCards(admin: AdminApiContext, seriesId: string, variant
  * available inventory to the number of packs so the store can never oversell.
  */
 export async function launch(admin: AdminApiContext, seriesId: string) {
-  const series = await launchSeries(db, seriesId);
+  const draft = await db.series.findUniqueOrThrow({ where: { id: seriesId } });
+  if (draft.reserveInventory && draft.status === "DRAFT") {
+    const short = await unavailableCards(admin, seriesId);
+    if (short.length > 0) {
+      throw new Error(
+        `${short.length} card${short.length === 1 ? " has" : "s have"} sold since the pool was built: ` +
+          `${short.slice(0, 5).join(", ")}${short.length > 5 ? "…" : ""}. Rebuild the pool or remove ${short.length === 1 ? "it" : "them"}.`,
+      );
+    }
+    await reservePool(db, admin, seriesId);
+  }
+  let series;
+  try {
+    series = await launchSeries(db, seriesId);
+  } catch (error) {
+    // Still a draft, so this hands every reserved copy back.
+    await releaseUnneeded(db, admin, seriesId);
+    throw error;
+  }
   const packs = await db.slot.count({ where: { seriesId } });
 
   const data = await gql(
@@ -146,4 +193,112 @@ export function poolSummary(cards: { marketValue: { toString(): string }; quanti
   const totalValue = cards.reduce((n, c) => n + Number(c.marketValue.toString()) * c.quantity, 0);
   const ev = packs ? totalValue / packs : 0;
   return { packs, totalValue, ev, returnRate: packPrice ? ev / packPrice : 0, revenue: packs * packPrice };
+}
+
+export interface AutoBuildInput extends BuildRules, CandidateFilter {}
+
+/** Tier rules saved on the series, or the defaults. */
+export function seriesTierRules(series: { tierRules: unknown }): TierRule[] {
+  try {
+    return series.tierRules ? normalizeTierRules(series.tierRules) : DEFAULT_TIER_RULES;
+  } catch {
+    return DEFAULT_TIER_RULES;
+  }
+}
+
+/**
+ * Replaces a draft series' cards with a pool picked from live inventory: one copy each,
+ * inside the value range, averaging the target. Cards already in another draft or live
+ * series are skipped so two pools never claim the same copy.
+ */
+export async function autoBuildPool(admin: AdminApiContext, shop: string, seriesId: string, input: AutoBuildInput) {
+  validateBuildRules(input);
+  if (!input.productType.trim()) throw new Error("Choose which product type to pick cards from.");
+  const series = await db.series.findFirstOrThrow({ where: { id: seriesId, shop } });
+  if (series.status !== "DRAFT") throw new Error("Cards can't change after launch.");
+
+  const inUse = new Set(
+    (
+      await db.card.findMany({
+        where: { series: { shop, status: { in: ["DRAFT", "LIVE"] }, id: { not: seriesId } } },
+        select: { variantId: true },
+      })
+    ).map((c) => c.variantId),
+  );
+  const candidates = (await fetchCandidates(admin, input)).filter((c) => !inUse.has(c.variantId));
+  const { cards } = buildPool(candidates, input);
+  const tiers = seriesTierRules(series);
+
+  await db.$transaction([
+    db.card.deleteMany({ where: { seriesId } }),
+    db.card.createMany({
+      data: cards.map((c, i) => ({
+        seriesId,
+        variantId: c.variantId,
+        productId: c.productId,
+        title: c.title,
+        imageUrl: c.imageUrl,
+        tier: tierFor(c.value, tiers),
+        marketValue: c.value,
+        quantity: 1,
+        sortOrder: i,
+        inventoryItemId: c.inventoryItemId,
+        locationId: c.locationId,
+      })),
+    }),
+    db.series.update({
+      where: { id: seriesId },
+      data: {
+        reserveInventory: true,
+        tierRules: tiers as unknown as Prisma.InputJsonValue,
+        buildRules: { ...input } as unknown as Prisma.InputJsonValue,
+      },
+    }),
+  ]);
+  return cards.length;
+}
+
+/** Saves new tier rules and re-tiers every card in a draft series by its value. */
+export async function updateTierRules(seriesId: string, rules: unknown) {
+  const tiers = normalizeTierRules(rules);
+  const series = await db.series.findUniqueOrThrow({ where: { id: seriesId }, include: { cards: true } });
+  if (series.status !== "DRAFT") throw new Error("Tiers can't change after launch.");
+  await db.$transaction([
+    db.series.update({ where: { id: seriesId }, data: { tierRules: tiers as unknown as Prisma.InputJsonValue } }),
+    ...series.cards.map((c) =>
+      db.card.update({ where: { id: c.id }, data: { tier: tierFor(Number(c.marketValue), tiers) } }),
+    ),
+  ]);
+}
+
+/** Cards in the pool whose copies are no longer available to reserve (sold since the pool was built). */
+async function unavailableCards(admin: AdminApiContext, seriesId: string) {
+  const cards = await db.card.findMany({ where: { seriesId, inventoryItemId: { not: null } } });
+  const short: string[] = [];
+  for (let i = 0; i < cards.length; i += 100) {
+    const batch = cards.slice(i, i + 100);
+    const data = await gql(
+      admin,
+      `#graphql
+        query PoolAvailability($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on InventoryItem {
+              id
+              inventoryLevels(first: 5) { nodes { location { id } quantities(names: ["available"]) { quantity } } }
+            }
+          }
+        }`,
+      { ids: batch.map((c) => c.inventoryItemId) },
+    );
+    const byItem = new Map<string, { location: { id: string }; quantities: { quantity: number }[] }[]>(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (data.nodes as any[]).filter(Boolean).map((n) => [n.id, n.inventoryLevels.nodes]),
+    );
+    for (const card of batch) {
+      const level = byItem.get(card.inventoryItemId!)?.find((l) => l.location.id === card.locationId);
+      const available = level?.quantities[0]?.quantity ?? 0;
+      if (available < card.quantity - card.reservedQty) short.push(card.title);
+    }
+  }
+  return short;
 }
