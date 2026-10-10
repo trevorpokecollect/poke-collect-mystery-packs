@@ -32,6 +32,11 @@ api_version = "2026-10"
   topics = ["orders/paid"]
   uri = "/webhooks/orders/paid"
 
+  # Orders created already paid get no orders/paid, so they are drawn on create.
+  [[webhooks.subscriptions]]
+  topics = ["orders/create"]
+  uri = "/webhooks/orders/create"
+
   [[webhooks.subscriptions]]
   topics = ["orders/cancelled"]
   uri = "/webhooks/orders/cancelled"

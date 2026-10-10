@@ -65,7 +65,7 @@ export interface DrawResult {
   pulls: Pull[];
   /** Packs that could not be drawn because the series had no cards left. */
   shortfall: { lineItemId: string; missing: number }[];
-  packOrder: { openToken: string } | null;
+  packOrder: { openToken: string; held: boolean } | null;
 }
 
 /**

@@ -117,6 +117,17 @@ describe("drawForOrder", () => {
     expect(positions).toEqual([0, 1, 2]);
   });
 
+  it("draws once when orders/create and orders/paid arrive together", async () => {
+    const series = await makeSeries(standardPool);
+    await launchSeries(db, series.id);
+    const input = order(2);
+
+    const results = await Promise.all([drawForOrder(db, input), drawForOrder(db, input)]);
+    expect(results.flatMap((r) => r.pulls)).toHaveLength(2);
+    expect(await db.pull.count({ where: { orderId: input.orderId } })).toBe(2);
+    expect(await db.slot.count({ where: { seriesId: series.id, claimed: true } })).toBe(2);
+  });
+
   it("ignores line items that are not packs", async () => {
     const series = await makeSeries(standardPool);
     await launchSeries(db, series.id);

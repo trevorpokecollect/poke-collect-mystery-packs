@@ -7,10 +7,10 @@ import db from "../db.server";
 import { addCards, launch, poolSummary } from "../lib/series.server";
 import { TIERS } from "../lib/tiers";
 import { PoolError } from "../lib/pool.server";
-import { packsPageUrl } from "../lib/links.server";
+import { packsPageUrl, storefrontBase } from "../lib/links.server";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const series = await db.series.findFirst({
     where: { id: params.id, shop: session.shop },
     include: { cards: { orderBy: [{ sortOrder: "asc" }] } },
@@ -60,7 +60,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       createdAt: p.createdAt.toISOString(),
     })),
     oddsUrl: `/apps/packs/api/odds/${series.handle}`,
-    packsPage: packsPageUrl(session.shop),
+    packsPage: packsPageUrl(await storefrontBase(admin, session.shop)),
   };
 };
 
