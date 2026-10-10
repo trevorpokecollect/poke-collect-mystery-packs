@@ -1,0 +1,39 @@
+{% comment %}
+  Shows the live card list and odds for a mystery pack series on its product page.
+  Data comes from the app at /apps/packs/api/odds/<series handle>.
+{% endcomment %}
+<div
+  class="mp-odds"
+  data-mp-odds
+  data-endpoint="/apps/packs/api/odds/{{ block.settings.series_handle | url_encode }}"
+  {{ block.shopify_attributes }}
+>
+  <h3 class="mp-odds__heading">{{ block.settings.heading | default: 'odds.heading' | t }}</h3>
+  <p class="mp-odds__summary" data-mp-summary>Loading odds…</p>
+  <table class="mp-odds__table" data-mp-table hidden>
+    <thead>
+      <tr><th scope="col">Card</th><th scope="col">Tier</th><th scope="col">Value</th><th scope="col">Left</th><th scope="col">Odds now</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  {% if block.settings.show_fairness %}
+    <p class="mp-odds__fair" data-mp-fair hidden></p>
+  {% endif %}
+  <p class="mp-odds__note">{{ block.settings.note }}</p>
+</div>
+{{ 'pack-odds.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'pack-odds.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Mystery pack odds",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "settings": [
+    { "type": "text", "id": "series_handle", "label": "Series handle", "info": "Shown on the series page in the Mystery Packs app, e.g. series-1" },
+    { "type": "text", "id": "heading", "label": "Heading", "default": "What's in the pack" },
+    { "type": "checkbox", "id": "show_fairness", "label": "Show fairness commitment", "default": true },
+    { "type": "textarea", "id": "note", "label": "Note", "default": "Every pack contains one card from this list, shipped to you after you open it online. Odds update as packs are opened." }
+  ]
+}
+{% endschema %}

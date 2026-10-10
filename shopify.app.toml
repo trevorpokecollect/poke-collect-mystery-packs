@@ -1,0 +1,42 @@
+# Shopify app configuration for Poke-Collect Mystery Packs.
+# client_id and application_url are filled in by `shopify app config link` / deploy.
+client_id = ""
+name = "Poke-Collect Mystery Packs"
+application_url = "https://example.com"
+embedded = true
+
+[access_scopes]
+scopes = "write_app_proxy,read_products,write_products,read_inventory,write_inventory,read_locations,read_orders,write_orders,write_order_edits,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
+
+[auth]
+redirect_urls = ["https://example.com/auth/callback"]
+
+[app_proxy]
+# Storefront URL: https://poke-collect.com/apps/packs
+url = "/proxy"
+subpath = "packs"
+prefix = "apps"
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks/app/scopes_update"
+
+  # The card for each pack is drawn when payment clears.
+  [[webhooks.subscriptions]]
+  topics = ["orders/paid"]
+  uri = "/webhooks/orders/paid"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/cancelled"]
+  uri = "/webhooks/orders/cancelled"
+
+  [[webhooks.subscriptions]]
+  topics = ["refunds/create"]
+  uri = "/webhooks/refunds/create"
