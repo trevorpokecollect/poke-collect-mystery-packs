@@ -142,6 +142,8 @@ model PackOrder {
   customerId String?
   // Random token for the "open your packs" link (lets guests open without logging in).
   openToken  String   @unique
+  // The checkout's token (order.checkout_token), so the thank-you page can find this order's packs.
+  checkoutToken String?
   held         Boolean   @default(false)
   // Set right after the order edit commits, so a retry never adds the cards twice.
   cardsAddedAt DateTime?
@@ -150,4 +152,6 @@ model PackOrder {
   finalized    Boolean   @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([shop, checkoutToken])
 }

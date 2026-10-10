@@ -1,0 +1,16 @@
+# Order status page block (customer accounts): "Open your pack" for orders with mystery packs.
+api_version = "2026-07"
+
+[[extensions]]
+name = "Open your pack (order status page)"
+handle = "pack-reveal-order-status"
+type = "ui_extension"
+uid = "dc3bab7a-5c60-0348-b231-9ed5aea9553ef0deeb32"
+
+[[extensions.targeting]]
+module = "./src/OrderStatusBlock.jsx"
+target = "customer-account.order-status.block.render"
+
+[extensions.capabilities]
+# Calls the app's /api/pack-link endpoint to get this order's "open your pack" link.
+network_access = true

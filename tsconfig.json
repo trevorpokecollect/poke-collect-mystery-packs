@@ -1,5 +1,6 @@
 {
   "include": ["env.d.ts", "**/*.ts", "**/*.tsx", ".react-router/types/**/*"],
+  "exclude": ["node_modules", "build", "extensions"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "strict": true,

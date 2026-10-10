@@ -58,6 +58,7 @@ export interface DrawInput {
   orderId: string;
   orderName: string;
   customerId: string | null;
+  checkoutToken?: string | null;
   lines: PackLine[];
 }
 
@@ -93,9 +94,10 @@ export async function drawForOrder(db: PrismaClient, input: DrawInput): Promise<
         shop: input.shop,
         orderName: input.orderName,
         customerId: input.customerId,
+        checkoutToken: input.checkoutToken ?? null,
         openToken: newToken(),
       },
-      update: {},
+      update: input.checkoutToken ? { checkoutToken: input.checkoutToken } : {},
     });
 
     const pulls: Pull[] = [];

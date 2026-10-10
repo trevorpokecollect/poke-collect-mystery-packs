@@ -11,6 +11,7 @@ export interface OrderPayload {
   admin_graphql_api_id: string;
   name: string;
   financial_status?: string | null;
+  checkout_token?: string | null;
   customer?: { admin_graphql_api_id?: string } | null;
   line_items: {
     admin_graphql_api_id: string;
@@ -25,6 +26,7 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
     orderId: order.admin_graphql_api_id,
     orderName: order.name,
     customerId: order.customer?.admin_graphql_api_id ?? null,
+    checkoutToken: order.checkout_token ?? null,
     lines: order.line_items
       .filter((l) => l.variant_id)
       .map((l) => ({

@@ -1,0 +1,16 @@
+# Thank-you page block: "Your pack is ready – Open it now", linking straight to the opening animation.
+api_version = "2026-07"
+
+[[extensions]]
+name = "Open your pack (thank-you page)"
+handle = "pack-reveal"
+type = "ui_extension"
+uid = "0ce5b933-f9ab-7fe2-b64b-42508d534652973b7415"
+
+[[extensions.targeting]]
+module = "./src/ThankYou.jsx"
+target = "purchase.thank-you.block.render"
+
+[extensions.capabilities]
+# Calls the app's /api/pack-link endpoint to get this order's "open your pack" link.
+network_access = true

@@ -7,7 +7,14 @@
   if (!root) return;
 
   var api = root.getAttribute("data-api") || "/apps/packs/api";
-  var query = window.location.search; // keeps the ?k= order link token for guests
+  var params = new URLSearchParams(window.location.search);
+  // Arriving from the thank-you page button (?open=1) starts opening right away, once.
+  var autoOpen = params.get("open") === "1";
+  params.delete("open");
+  var query = params.toString() ? "?" + params.toString() : ""; // keeps the ?k= order link token for guests
+  if (autoOpen && window.history.replaceState) {
+    window.history.replaceState(null, "", window.location.pathname + query + window.location.hash);
+  }
   var TIER_COLORS = {
     base: "#9aa0a6",
     uncommon: "#2fa36b",
@@ -95,7 +102,13 @@
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) throw new Error(data.error);
-        render(data.packs || []);
+        var packs = data.packs || [];
+        render(packs);
+        if (autoOpen) {
+          autoOpen = false;
+          var first = packs.filter(function (p) { return !p.opened; })[0];
+          if (first) openPack(first);
+        }
       })
       .catch(function (err) {
         root.innerHTML = "";
