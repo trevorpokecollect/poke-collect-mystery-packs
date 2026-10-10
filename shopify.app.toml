@@ -1,6 +1,5 @@
 # Shopify app configuration for Poke-Collect Mystery Packs.
-# client_id and application_url are filled in by `shopify app config link` / deploy.
-client_id = ""
+client_id = "8d90f6b067ef3ea7ef50f9696c2b51bd"
 name = "Poke-Collect Mystery Packs"
 application_url = "https://app-production-9bd21.up.railway.app"
 embedded = true
@@ -40,3 +39,8 @@ api_version = "2026-10"
   [[webhooks.subscriptions]]
   topics = ["refunds/create"]
   uri = "/webhooks/refunds/create"
+
+[build]
+include_config_on_deploy = true
+# Keep the Railway URLs; don't let `shopify app dev` rewrite them.
+automatically_update_urls_on_dev = false
