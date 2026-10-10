@@ -23,7 +23,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               title: p.slot.card.title,
               tier: p.slot.card.tier,
               imageUrl: p.slot.card.imageUrl,
-              marketValue: p.slot.card.marketValue.toString(),
             },
     })),
   });

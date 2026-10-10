@@ -341,7 +341,6 @@ export async function seriesOdds(db: Db, shop: string, handle: string) {
         title: c.title,
         tier: c.tier,
         imageUrl: c.imageUrl,
-        marketValue: c.marketValue.toString(),
         quantity: c.quantity,
         remaining: left,
         currentOdds: totalRemaining > 0 ? left / totalRemaining : 0,

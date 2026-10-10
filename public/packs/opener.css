@@ -29,41 +29,72 @@
   gap: 16px;
 }
 
-/* Unopened pack tile */
+/* Unopened pack tile: a crimped foil pack in Poke-Collect colors. Sizes follow the tile width. */
 .mp-pack {
   appearance: none;
   border: 0;
   padding: 0;
   cursor: pointer;
   aspect-ratio: 5 / 7;
-  border-radius: 14px;
+  border-radius: 6px;
   position: relative;
   overflow: hidden;
+  container-type: inline-size;
   color: #fff;
+  font-family: inherit;
+  text-align: center;
   background:
-    linear-gradient(115deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.45) 45%, rgba(255,255,255,0) 60%) -200% 0 / 300% 100% no-repeat,
-    linear-gradient(160deg, #e3350d 0%, #b5179e 55%, #3a0ca3 100%);
-  box-shadow: 0 6px 18px rgba(20, 20, 26, .18);
+    radial-gradient(120% 70% at 50% 42%, rgba(255, 210, 120, .28), transparent 60%),
+    linear-gradient(165deg, #2a0f4f 0%, #120a2e 48%, #3b0d1c 100%);
+  box-shadow: 0 10px 24px rgba(20, 20, 26, .28), inset 0 0 0 1px rgba(255,255,255,.12);
   transition: transform .2s ease;
+}
+/* Crimped seals top and bottom */
+.mp-pack::before, .mp-pack::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 7%; z-index: 3;
+  background:
+    linear-gradient(90deg, #8d8f99, #f4f4f8 20%, #a9abb5 40%, #ffffff 60%, #9a9ca6 80%, #e9e9ef),
+    #ccc;
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 3px, rgba(0,0,0,.55) 3px 6px);
+          mask: repeating-linear-gradient(90deg, #000 0 3px, rgba(0,0,0,.55) 3px 6px);
+}
+.mp-pack::before { top: 0; }
+.mp-pack::after { bottom: 0; }
+/* Holographic foil that sweeps across the pack */
+.mp-pack-foil {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: screen; opacity: .55;
+  background:
+    linear-gradient(115deg, transparent 30%, rgba(255,255,255,.55) 45%, transparent 60%) -200% 0 / 300% 100% no-repeat,
+    conic-gradient(from 200deg at 50% 45%, #ff4d6d33, #ffd16633, #4dd4ff33, #b06bff33, #ff4d6d33);
   animation: mp-shine 3.5s ease-in-out infinite;
 }
+.mp-pack-brand {
+  position: absolute; z-index: 2; left: 0; right: 0; top: 11%;
+  font-size: 7.2cqw; font-weight: 800; letter-spacing: .28em; text-transform: uppercase;
+  color: #f2f2f7; text-shadow: 0 1px 0 rgba(0,0,0,.4);
+}
+.mp-pack-emblem {
+  position: absolute; z-index: 2; left: 50%; top: 40%; width: 46%; aspect-ratio: 1; transform: translate(-50%, -50%);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  background: conic-gradient(from 0deg, #fff6c9, #f2c94c, #b8860b, #ffe9a3, #f2c94c, #fff6c9);
+  filter: drop-shadow(0 0 6px rgba(242, 201, 76, .8));
+}
+.mp-pack-series {
+  position: absolute; z-index: 2; left: 8%; right: 8%; top: 61%;
+  font-size: 9.5cqw; line-height: 1.05; font-weight: 900; text-transform: uppercase; letter-spacing: .02em;
+  background: linear-gradient(180deg, #fff7d6 0%, #f2c94c 55%, #c48a12 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.45));
+}
+.mp-pack-label {
+  position: absolute; z-index: 2; left: 50%; bottom: 11%; transform: translateX(-50%);
+  padding: 1.6cqw 5cqw; border-radius: 999px; white-space: nowrap;
+  font-size: 5.6cqw; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35);
+}
+.mp-stage .mp-pack-label { display: none; }
 .mp-pack:hover, .mp-pack:focus-visible { transform: translateY(-4px) rotate(-1deg); }
 .mp-pack:focus-visible { outline: 3px solid var(--mp-ink); outline-offset: 3px; }
-.mp-pack-label {
-  position: absolute; inset: auto 0 18% 0;
-  text-align: center; font-weight: 700; font-size: 1rem; letter-spacing: .02em;
-  text-shadow: 0 2px 6px rgba(0,0,0,.35);
-}
-.mp-pack-series { position: absolute; inset: 8% 0 auto 0; text-align: center; font-size: .75rem; opacity: .9; }
-.mp-pack-ball {
-  position: absolute; left: 50%; top: 42%; width: 44%; aspect-ratio: 1; transform: translate(-50%, -50%);
-  border-radius: 50%; border: 4px solid rgba(255,255,255,.9);
-  background: linear-gradient(#fff0 0 46%, rgba(255,255,255,.9) 46% 54%, #fff0 54%);
-}
-.mp-pack-ball::after {
-  content: ""; position: absolute; left: 50%; top: 50%; width: 26%; aspect-ratio: 1;
-  transform: translate(-50%, -50%); border-radius: 50%; background: #fff; border: 3px solid rgba(0,0,0,.25);
-}
 @keyframes mp-shine { 0%, 60% { background-position: -200% 0, 0 0; } 100% { background-position: 200% 0, 0 0; } }
 
 /* Revealed card tile */
@@ -95,8 +126,8 @@
 .mp-stage .mp-pack { position: absolute; inset: 0; cursor: default; animation: mp-shake .6s ease-in-out 2; }
 .mp-stage .mp-pack.mp-tearing { animation: none; }
 .mp-tear {
-  position: absolute; left: 0; right: 0; top: 0; height: 16%;
-  background: inherit; border-bottom: 2px dashed rgba(255,255,255,.7);
+  position: absolute; left: 0; right: 0; top: 0; height: 16%; z-index: 4;
+  background: linear-gradient(165deg, #2a0f4f, #1d0c3d); border-bottom: 2px dashed rgba(255,255,255,.7);
   transform-origin: 100% 100%;
 }
 .mp-tearing .mp-tear { animation: mp-tear .7s cubic-bezier(.3,.6,.4,1) forwards; }
@@ -151,7 +182,7 @@
 @keyframes mp-fall { to { transform: translateY(110vh) rotate(720deg); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .mp-pack, .mp-stage .mp-pack { animation: none; }
+  .mp-pack-foil, .mp-stage .mp-pack { animation: none; }
   .mp-tearing { animation: none !important; opacity: 0; }
   .mp-flip.mp-rise, .mp-flip.mp-flipped { animation: none; transition: none; transform: none; }
   .mp-confetti { display: none; }

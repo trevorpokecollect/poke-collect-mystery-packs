@@ -1,6 +1,5 @@
 (function () {
   "use strict";
-  function money(v) { return "$" + Number(v).toFixed(2); }
   function pct(v) { return (v * 100).toFixed(1) + "%"; }
 
   document.querySelectorAll("[data-mp-odds]").forEach(function (root) {
@@ -19,7 +18,7 @@
         var body = table.querySelector("tbody");
         data.cards.forEach(function (card) {
           var row = document.createElement("tr");
-          [card.title, card.tier, money(card.marketValue), card.remaining + " / " + card.quantity,
+          [card.title, card.tier, card.remaining + " / " + card.quantity,
             data.status === "CLOSED" ? "—" : pct(card.currentOdds)].forEach(function (text) {
             var cell = document.createElement("td");
             cell.textContent = text;

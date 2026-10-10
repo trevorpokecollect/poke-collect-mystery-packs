@@ -33,15 +33,12 @@
     return String(tier || "").trim().toLowerCase();
   }
 
-  function money(value) {
-    var n = Number(value);
-    return isFinite(n) ? "$" + n.toFixed(2) : "";
-  }
-
   function packTile(pack, onOpen) {
-    var button = el("button", { class: "mp-pack", type: "button", "aria-label": "Open " + pack.series + " pack" }, [
+    var button = el("button", { class: "mp-pack", type: "button", "aria-label": "Open " + pack.series }, [
+      el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
+      el("span", { class: "mp-pack-brand", text: "Poke-Collect" }),
+      el("span", { class: "mp-pack-emblem", "aria-hidden": "true" }),
       el("span", { class: "mp-pack-series", text: pack.series }),
-      el("span", { class: "mp-pack-ball", "aria-hidden": "true" }),
       el("span", { class: "mp-pack-label", text: "Tap to open" }),
     ]);
     if (onOpen) button.addEventListener("click", function () { onOpen(pack); });
@@ -172,7 +169,7 @@
 
           result.appendChild(el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }));
           result.appendChild(el("h2", { text: card.title }));
-          result.appendChild(el("p", { text: "Market value " + money(card.marketValue) }));
+          result.appendChild(el("p", { text: "Ships with your order" }));
           var done = el("button", { class: "mp-btn", type: "button", text: "Done" });
           done.addEventListener("click", close);
           var actions = el("div", { class: "mp-actions" }, [done]);

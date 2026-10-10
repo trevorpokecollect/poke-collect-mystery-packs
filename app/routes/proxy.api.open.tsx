@@ -26,7 +26,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         title: result.card.title,
         tier: result.card.tier,
         imageUrl: result.card.imageUrl,
-        marketValue: result.card.marketValue.toString(),
       },
     });
   } catch (error) {
