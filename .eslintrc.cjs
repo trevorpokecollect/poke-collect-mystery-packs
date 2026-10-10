@@ -53,6 +53,14 @@ module.exports = {
       },
     },
 
+    // Checkout and customer account UI extensions (Preact, no PropTypes)
+    {
+      files: ["extensions/**/*.{js,jsx}"],
+      rules: {
+        "react/prop-types": "off",
+      },
+    },
+
     // Typescript
     {
       files: ["**/*.{ts,tsx}"],
