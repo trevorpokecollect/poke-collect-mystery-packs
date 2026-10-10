@@ -188,10 +188,15 @@
   .mp-confetti { display: none; }
 }
 
-/* Pack product artwork in place of the CSS foil pack: the image already has its own crimps and branding */
-.mp-pack-art { background: #e7e7e9; }
-.mp-pack-art::before, .mp-pack-art::after { display: none; }
-.mp-pack-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.mp-pack-art .mp-pack-foil { opacity: .25; }
-.mp-pack-art .mp-pack-label { bottom: 3%; color: #14141a; background: rgba(255,255,255,.75); border-color: rgba(20,20,26,.2); }
-.mp-pack-art .mp-tear { left: 14%; right: 14%; height: 11%; background: linear-gradient(180deg, #2a2a2e, #0d0d0f); border-bottom-color: rgba(255,255,255,.55); }
+/* Pack product artwork in place of the CSS foil pack. Product photos are square bag mockups on a
+   light background, so the tile is clipped to the bag itself and the photo backdrop disappears. */
+.mp-pack-art { background: transparent; box-shadow: none; overflow: visible; }
+.mp-pack-art::before, .mp-pack-art::after, .mp-pack-art .mp-pack-foil { display: none; }
+.mp-pack-img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  clip-path: inset(4.2% 16.5% 4.2% 16.5% round 1.5%);
+  transform: scale(1.09);
+  filter: drop-shadow(0 10px 18px rgba(20, 20, 26, .35));
+}
+.mp-pack-art .mp-pack-label { bottom: -2%; color: #14141a; background: #fff; border-color: rgba(20,20,26,.15); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.mp-pack-art .mp-tear { left: 13.5%; right: 13.5%; top: 0; height: 10%; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #2a2a2e, #0d0d0f); border-bottom-color: rgba(255,255,255,.55); }
