@@ -41,6 +41,5 @@ api_version = "2026-10"
   uri = "/webhooks/refunds/create"
 
 [build]
-include_config_on_deploy = true
 # Keep the Railway URLs; don't let `shopify app dev` rewrite them.
 automatically_update_urls_on_dev = false
