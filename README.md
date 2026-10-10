@@ -78,7 +78,10 @@ TEST_DATABASE_URL=postgresql://postgres@localhost:5432/packs_test npm test
   directly. Their inventory is only decremented when a pulled card is added to an order.
 - **Theme:** add the "Mystery pack odds" block to the pack product template and enter the series
   handle. Add a "My Packs" link to the account menu or header pointing to `/apps/packs`.
-- **Order confirmation email:** optionally add
-  `{{ order.metafields.mystery_packs.open_url }}` as an "Open your packs" button. The metafield is
-  written by the webhook, which can land just after the email is sent, so the account page is the
-  main path.
+- **Pack product type:** set the pack product's type to `Mystery Pack` (the confirmation email uses it).
+- **Thank-you and order status pages:** in Settings > Checkout > Customize, add the "Open your pack" app
+  block to the Thank you page and the Order status page. It shows "Preparing your pack..." for the few
+  seconds until the card is drawn, then "Open it now", which opens the pack straight into the animation.
+- **Order confirmation email:** paste `docs/order-confirmation-email.liquid` above the `{% if order_status_url %}`
+  block in Settings > Notifications > Order confirmation. It links to the open link, or to the order status page
+  when the email goes out before the link is saved.
