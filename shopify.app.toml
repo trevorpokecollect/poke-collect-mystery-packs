@@ -2,14 +2,14 @@
 # client_id and application_url are filled in by `shopify app config link` / deploy.
 client_id = ""
 name = "Poke-Collect Mystery Packs"
-application_url = "https://example.com"
+application_url = "https://app-production-9bd21.up.railway.app"
 embedded = true
 
 [access_scopes]
 scopes = "write_app_proxy,read_products,write_products,read_inventory,write_inventory,read_locations,read_orders,write_orders,write_order_edits,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
 
 [auth]
-redirect_urls = ["https://example.com/auth/callback"]
+redirect_urls = ["https://app-production-9bd21.up.railway.app/auth/callback"]
 
 [app_proxy]
 # Storefront URL: https://poke-collect.com/apps/packs
