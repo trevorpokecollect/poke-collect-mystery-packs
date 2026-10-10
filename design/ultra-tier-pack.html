@@ -1,0 +1,83 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&display=block" rel="stylesheet">
+<style>html,body{margin:0;background:#e7e7e9}svg{display:block}text{font-family:Montserrat,Arial,sans-serif}</style></head><body>
+<svg width="900" height="900" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<defs>
+  <linearGradient id="bag" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#0b0b0d"/><stop offset=".12" stop-color="#1c1c20"/><stop offset=".3" stop-color="#0e0e10"/>
+    <stop offset=".62" stop-color="#151518"/><stop offset=".86" stop-color="#0a0a0c"/><stop offset="1" stop-color="#202024"/></linearGradient>
+  <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".42" stop-color="#fff" stop-opacity=".0"/>
+    <stop offset=".5" stop-color="#fff" stop-opacity=".09"/><stop offset=".58" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="crimp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a2e"/><stop offset="1" stop-color="#0d0d0f"/></linearGradient>
+  <linearGradient id="yellow" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffe600"/><stop offset="1" stop-color="#f5c400"/></linearGradient>
+  <clipPath id="bagclip"><rect x="235" y="38" width="430" height="824" rx="10"/></clipPath>
+  <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity=".35"/></filter>
+  <filter id="cs" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity=".6"/></filter>
+  <g id="cardback">
+    <rect x="-62" y="-86" width="124" height="172" rx="9" fill="#141416" stroke="#3a3a40" stroke-width="3"/>
+    <rect x="-52" y="-76" width="104" height="152" rx="6" fill="none" stroke="#e5262f" stroke-width="2.5" opacity=".9"/>
+    <circle r="34" fill="none" stroke="#e5262f" stroke-width="9"/>
+    <rect x="-34" y="-4.5" width="68" height="9" fill="#e5262f"/>
+    <circle r="11" fill="#141416" stroke="#e5262f" stroke-width="6"/>
+    <text y="-44" text-anchor="middle" font-size="34" font-weight="900" fill="#fff">?</text>
+  </g>
+</defs>
+
+<!-- bag -->
+<g filter="url(#sh)">
+  <rect x="235" y="38" width="430" height="824" rx="10" fill="url(#bag)"/>
+</g>
+<g clip-path="url(#bagclip)">
+  <!-- faint ball watermark -->
+  <g opacity=".045" fill="none" stroke="#fff" stroke-width="34">
+    <circle cx="450" cy="470" r="230"/><line x1="220" y1="470" x2="680" y2="470"/></g>
+  <!-- diagonal stripes, as on Poke-Collect mystery packaging -->
+  <polygon points="235,150 235,95 345,38 420,38" fill="#f4f4f6"/>
+  <polygon points="235,215 235,175 455,38 520,38" fill="#f4f4f6" opacity=".0"/>
+  <polygon points="430,210 560,38 625,38 495,210" fill="#e5262f"/>
+  <polygon points="520,262 665,70 665,140 585,262" fill="#e5262f"/>
+  <polygon points="610,262 665,190 665,262" fill="#e5262f" opacity=".0"/>
+  <!-- crimp seal -->
+  <rect x="235" y="38" width="430" height="40" fill="url(#crimp)" opacity=".55"/>
+  <g stroke="#000" stroke-opacity=".35" stroke-width="2">
+    <path d="M235 46 H665 M235 54 H665 M235 62 H665 M235 70 H665"/></g>
+  <rect x="235" y="822" width="430" height="40" fill="url(#crimp)" opacity=".55"/>
+  <g stroke="#000" stroke-opacity=".35" stroke-width="2"><path d="M235 830 H665 M235 838 H665 M235 846 H665 M235 854 H665"/></g>
+
+  <!-- logo + title -->
+  <image href="https://poke-collect.com/cdn/shop/files/Typeface_Logo_Main_1.png?v=1722970271&amp;width=600" x="335" y="268" width="230" height="93.4"/>
+  <text x="450" y="402" text-anchor="middle" font-size="38" font-weight="900" fill="#fff" letter-spacing="2">MYSTERY PACK</text>
+  <g transform="translate(450 432)">
+    <rect x="-88" y="-17" width="96" height="27" rx="3" fill="none" stroke="#fff" stroke-width="2.5"/>
+    <text x="-40" y="3.5" text-anchor="middle" font-size="15.5" font-weight="900" fill="#fff" letter-spacing="1">ONLINE</text>
+    <text x="16" y="3.5" font-size="15.5" font-weight="800" fill="#fff" letter-spacing="1">OPENING</text>
+  </g>
+
+  <!-- three mystery card backs -->
+  <g filter="url(#cs)">
+    <use href="#cardback" transform="translate(352 585) rotate(-12) scale(.92)"/>
+    <use href="#cardback" transform="translate(548 585) rotate(12) scale(.92)"/>
+    <use href="#cardback" transform="translate(450 568) scale(1.08)"/>
+  </g>
+
+  <!-- tier band (Ultra = yellow, matching Ultra Edition / Ultra Tier) -->
+  <path d="M235 700 Q300 690 340 740 L340 822 L235 822 Z" fill="url(#yellow)"/>
+  <rect x="340" y="722" width="325" height="9" fill="url(#yellow)"/>
+  <rect x="340" y="731" width="325" height="58" fill="#0a0a0c"/>
+  <text x="502" y="772" text-anchor="middle" font-size="33" font-weight="900" fill="#fff" letter-spacing="1">ULTRA TIER</text>
+  <rect x="235" y="789" width="430" height="33" fill="#f4f4f6"/>
+  <text x="450" y="811" text-anchor="middle" font-size="11.5" font-weight="800" fill="#141416" letter-spacing=".8">1 CARD PER PACK · OPENED ONLINE · SHIPPED TO YOU</text>
+  <g transform="translate(287 760)">
+    <circle r="27" fill="#0a0a0c"/><path d="M-27 0 A27 27 0 0 1 27 0 Z" fill="#0a0a0c"/>
+    <rect x="-20" y="-20" width="9" height="16" fill="#ffe600"/><rect x="11" y="-20" width="9" height="16" fill="#ffe600"/>
+    <rect x="-27" y="-3" width="54" height="6" fill="#f4f4f6"/><circle r="9" fill="#f4f4f6" stroke="#0a0a0c" stroke-width="4"/>
+  </g>
+
+  <!-- gloss -->
+  <rect x="235" y="38" width="430" height="824" fill="url(#gloss)"/>
+  <rect x="250" y="38" width="16" height="824" fill="#fff" opacity=".05"/>
+</g>
+<!-- hang hole -->
+<circle cx="450" cy="92" r="13" fill="#e7e7e9" stroke="#2a2a2e" stroke-width="3"/>
+</svg></body></html>

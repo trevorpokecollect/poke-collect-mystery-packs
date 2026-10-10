@@ -189,9 +189,9 @@
 }
 
 /* Pack product artwork in place of the CSS foil pack: the image already has its own crimps and branding */
-.mp-pack-art { background: #120a2e; }
+.mp-pack-art { background: #e7e7e9; }
 .mp-pack-art::before, .mp-pack-art::after { display: none; }
 .mp-pack-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.mp-pack-art .mp-pack-foil { opacity: .35; }
-.mp-pack-art .mp-pack-label { bottom: 4%; background: rgba(18,10,46,.55); }
-.mp-pack-art .mp-tear { background: linear-gradient(90deg, #9aa3ad, #f4f6f9 30%, #b7bec7 60%, #eef1f4); }
+.mp-pack-art .mp-pack-foil { opacity: .25; }
+.mp-pack-art .mp-pack-label { bottom: 3%; color: #14141a; background: rgba(255,255,255,.75); border-color: rgba(20,20,26,.2); }
+.mp-pack-art .mp-tear { left: 14%; right: 14%; height: 11%; background: linear-gradient(180deg, #2a2a2e, #0d0d0f); border-bottom-color: rgba(255,255,255,.55); }
