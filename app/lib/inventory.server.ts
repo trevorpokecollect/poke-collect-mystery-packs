@@ -161,8 +161,19 @@ async function moveQuantities(
         changes: moves.map((m) => ({
           quantity: m.quantity,
           inventoryItemId: m.inventoryItemId,
-          from: { locationId: m.locationId, name: from, ledgerDocumentUri: from === "reserved" ? ledger : null },
-          to: { locationId: m.locationId, name: to, ledgerDocumentUri: to === "reserved" ? ledger : null },
+          // changeFromQuantity is required by the API; null skips the compare-and-swap check.
+          from: {
+            locationId: m.locationId,
+            name: from,
+            ledgerDocumentUri: from === "reserved" ? ledger : null,
+            changeFromQuantity: null,
+          },
+          to: {
+            locationId: m.locationId,
+            name: to,
+            ledgerDocumentUri: to === "reserved" ? ledger : null,
+            changeFromQuantity: null,
+          },
         })),
       },
     },
