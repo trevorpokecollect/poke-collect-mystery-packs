@@ -23,7 +23,7 @@ const STYLE = `
 .mpf-box h2 { margin: 0 0 8px; font-size: 1.05em; }
 .mpf-code { display: block; font-family: ui-monospace, Menlo, monospace; font-size: .8em; word-break: break-all; padding: 10px; border-radius: 8px; background: #f3f3f6; margin: 6px 0; }
 .mpf-btn { display: inline-block; margin-top: 8px; padding: 10px 16px; border-radius: 10px; border: 0; background: #14141a; color: #fff; font-weight: 700; cursor: pointer; }
-.mpf-btn:hover { background: #e3350d; }
+.mpf-btn:hover, .mpf-btn:focus-visible { background: #14141a !important; border-color: #14141a !important; color: #fff !important; }
 .mpf-ok { color: #1f8a4c; font-weight: 700; }
 .mpf-bad { color: #c0261b; font-weight: 700; }
 .mpf-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
@@ -60,7 +60,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         <p>Secret code (salt):</p><code class="mpf-code">${safe(odds.reveal?.salt ?? "")}</code>
         <p>Card order: ${odds.reveal?.sequence.length ?? 0} cards, published in this pack's <a href="${endpoint}" target="_blank" rel="noopener">pool data</a> as <code>reveal.sequence</code>.</p>
         <p>Formula: <code>sha256(salt + ":" + card order joined with commas)</code></p>
-        <button class="mpf-btn button button--primary" type="button" data-mpf-verify>Verify the fingerprint</button>
+        <button class="mpf-btn button button--primary" type="button" data-mpf-verify>Verify The Fingerprint</button>
         <p data-mpf-result></p>
       </div>
       <script>

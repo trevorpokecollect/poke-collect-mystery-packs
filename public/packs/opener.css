@@ -280,3 +280,15 @@
 .mp-btn { font-family: var(--mp-heading); font-size: 1.1em; letter-spacing: .03em; padding: 12px 26px; }
 .mp-theme-recs { margin: 40px 0 0; width: 100vw; position: relative; left: 50%; transform: translateX(-50%); }
 .mp-theme-recs .pc-product-row, .mp-theme-recs .pr-section { width: 100%; }
+
+/* Quantity stepper on "Buy & Open" */
+.mp-more-buy { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.mp-more-buy .mp-more-actions { margin-top: 0; }
+.mp-qty { display: inline-flex; align-items: center; height: 52px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25); }
+.mp-qty-btn { appearance: none; border: 0; background: transparent; color: #fff; width: 46px; height: 100%; font-size: 1.4em; font-weight: 700; cursor: pointer; border-radius: 999px; }
+.mp-qty-btn:hover:not(:disabled) { background: rgba(255,255,255,.12); }
+.mp-qty-btn:disabled { opacity: .35; cursor: default; }
+.mp-qty-n { min-width: 2ch; text-align: center; font-family: var(--mp-heading); font-size: 1.3em; font-weight: 700; }
+.mp-more-buy .mp-btn-dark { height: 52px; display: inline-flex; align-items: center; }
+.mp-qty-hint { font-size: .9em; color: #d6d2e4; }
+.mp-qty-hint-on { color: #7ee2a8; font-weight: 700; }

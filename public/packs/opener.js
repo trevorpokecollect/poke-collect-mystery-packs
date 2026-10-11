@@ -52,14 +52,14 @@
       ? [
           el("img", { class: "mp-pack-img", src: art, alt: "" }),
           el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
-          el("span", { class: "mp-pack-label", text: "Tap to open" }),
+          el("span", { class: "mp-pack-label", text: "Tap To Open" }),
         ]
       : [
           el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
           el("span", { class: "mp-pack-brand", text: "Poke-Collect" }),
           el("span", { class: "mp-pack-emblem", "aria-hidden": "true" }),
           el("span", { class: "mp-pack-series", text: pack.series }),
-          el("span", { class: "mp-pack-label", text: "Tap to open" }),
+          el("span", { class: "mp-pack-label", text: "Tap To Open" }),
         ]);
     if (onOpen) button.addEventListener("click", function () { onOpen(pack); });
     return button;
@@ -202,6 +202,36 @@
     return isNaN(n) ? "" : "$" + n.toFixed(2);
   }
 
+  // Quantity stepper + "Buy & Open", which goes straight to checkout with that many packs.
+  function buyControls(a) {
+    var max = Math.max(1, Math.min(20, a.packsLeft));
+    var qty = 1;
+    var count = el("span", { class: "mp-qty-n", "aria-live": "polite", text: "1" });
+    var minus = el("button", { class: "mp-qty-btn", type: "button", "aria-label": "Fewer packs", text: "\u2212" });
+    var plus = el("button", { class: "mp-qty-btn", type: "button", "aria-label": "More packs", text: "+" });
+    var buy = el("a", { class: "mp-btn mp-btn-dark", href: a.buyUrl });
+    var hint = el("span", { class: "mp-qty-hint" });
+    function update() {
+      count.textContent = String(qty);
+      buy.textContent = qty > 1 ? "Buy & Open " + qty + " Packs" : "Buy & Open";
+      buy.href = a.buyUrl.replace(/:\d+$/, ":" + qty);
+      minus.disabled = qty <= 1;
+      plus.disabled = qty >= max;
+      hint.textContent = qty >= 5 ? "Free shipping unlocked!" : "Add " + (5 - qty) + " more for free shipping";
+      hint.classList.toggle("mp-qty-hint-on", qty >= 5);
+    }
+    minus.addEventListener("click", function () { if (qty > 1) { qty--; update(); } });
+    plus.addEventListener("click", function () { if (qty < max) { qty++; update(); } });
+    update();
+    return el("div", { class: "mp-more-buy" }, [
+      el("div", { class: "mp-more-actions" }, [
+        el("div", { class: "mp-qty", role: "group", "aria-label": "Number of packs" }, [minus, count, plus]),
+        buy,
+      ]),
+      hint,
+    ]);
+  }
+
   // "Open More Packs?": every pack on sale right now, linking to its page or straight to checkout.
   function shelf(available) {
     if (!available || !available.length) return null;
@@ -216,10 +246,8 @@
           el("div", { class: "mp-more-info" }, [
             el("a", { class: "mp-more-name", href: a.url, text: a.title }),
             el("div", { class: "mp-more-meta", text: money(a.price) + " · " + a.packsLeft + " pack" + (a.packsLeft === 1 ? "" : "s") + " left" }),
-            el("div", { class: "mp-more-actions" }, [
-              el("a", { class: "mp-btn mp-btn-dark", href: a.buyUrl, text: "Buy & open" }),
-              el("a", { class: "mp-more-link", href: a.url, text: "View potential pulls" }),
-            ]),
+            buyControls(a),
+            el("a", { class: "mp-more-link", href: a.url, text: "View Potential Pulls" }),
           ]),
         ]);
       })),
@@ -247,7 +275,7 @@
     if (signedIn === false) {
       root.appendChild(el("p", { class: "mp-login-hint" }, [
         document.createTextNode("Showing this order only. "),
-        el("a", { href: "/account/login?return_url=" + encodeURIComponent("/apps/packs"), text: "Log in to see all your pulls" }),
+        el("a", { href: "/account/login?return_url=" + encodeURIComponent("/apps/packs"), text: "Log In To See All Your Pulls" }),
       ]));
     }
     root.appendChild(

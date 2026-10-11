@@ -35,7 +35,7 @@
       <h4 class="mpd__subheading">{{ block.settings.how_heading }}</h4>
       <ol class="mpd__steps">
         <li><span class="mpd__num">1</span><div><strong>Buy your pack</strong><p>Each pack holds one card from the pool below, picked the moment your payment clears.</p></div></li>
-        <li><span class="mpd__num">2</span><div><strong>Open it online</strong><p>Right after checkout, tap <em>Open it now</em> to tear the pack open and reveal your card.</p></div></li>
+        <li><span class="mpd__num">2</span><div><strong>Open it online</strong><p>Right after checkout, tap <em>Open It Now</em> to tear the pack open and reveal your card.</p></div></li>
         <li><span class="mpd__num">3</span><div><strong>We ship your card</strong><p>Your card ships to you with your order, sleeved and top loaded.</p></div></li>
       </ol>
       {%- if block.settings.shipping_note != blank -%}<p class="mpd__ship">{{ block.settings.shipping_note }}</p>{%- endif -%}
@@ -44,7 +44,7 @@
 
   <a class="mpd__fair" href="/apps/packs/fair?{{ query }}" data-mp-fair hidden>
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1 2 3.5v4C2 11 4.6 14 8 15c3.4-1 6-4 6-7.5v-4Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m5.3 8 1.9 1.9L10.9 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-    Provably fair
+    Provably Fair
   </a>
 </div>
 {{ 'pack-odds.css' | asset_url | stylesheet_tag }}

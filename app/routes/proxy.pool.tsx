@@ -45,6 +45,8 @@ const STYLE = `
 .mpp-out { opacity: .45; }
 .mpp-out .mpp-meta strong { text-decoration: line-through; }
 .mpp-fair { margin-top: 40px; }
+.mpp-fair-btn:hover, .mpp-fair-btn:focus-visible { background: #14141a !important; border-color: #14141a !important; color: #fff !important; }
+.mpp-fair-btn:hover *, .mpp-fair-btn:focus-visible * { color: #fff !important; }
 .mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; padding: 16px 20px; font-size: 18px !important; font-weight: 800 !important; letter-spacing: .02em; text-align: center; text-decoration: none !important; }
 .mpp-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
 `;
@@ -55,7 +57,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const odds = await oddsFromQuery(shop, url);
   const product = url.searchParams.get("product");
   const back = product
-    ? `<a class="mpp-back button button--secondary" href="javascript:history.back()">&larr; Back to the pack</a>`
+    ? `<a class="mpp-back button button--secondary" href="javascript:history.back()">&larr; Back To The Pack</a>`
     : "";
 
   if (!odds) {
@@ -100,7 +102,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ? `<div class="mpp-fair">
         <a class="mpp-fair-btn button button--primary" href="/apps/packs/fair?series=${encodeURIComponent(odds.handle)}">
           <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true"><path d="M8 1 2 3.5v4C2 11 4.6 14 8 15c3.4-1 6-4 6-7.5v-4Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m5.3 8 1.9 1.9L10.9 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
-          Provably fair: see how we prove every pack is fair
+          Provably Fair: See How We Prove Every Pack Is Fair
         </a>
       </div>`
     : "";
