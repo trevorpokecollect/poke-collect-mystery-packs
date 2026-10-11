@@ -151,6 +151,12 @@ export async function launch(admin: AdminApiContext, seriesId: string) {
   }
   const packs = await db.slot.count({ where: { seriesId } });
 
+  await setPackStock(admin, series.packVariantId, packs, `launch-${series.id}`);
+  return { series, packs };
+}
+
+/** Sets the pack variant's available stock at its location (packs left to sell). */
+export async function setPackStock(admin: AdminApiContext, packVariantId: string, quantity: number, key: string) {
   const data = await gql(
     admin,
     `#graphql
@@ -160,7 +166,7 @@ export async function launch(admin: AdminApiContext, seriesId: string) {
           inventoryItem { id inventoryLevels(first: 1) { nodes { location { id } } } }
         }
       }`,
-    { id: series.packVariantId },
+    { id: packVariantId },
   );
   const item = data.productVariant?.inventoryItem;
   const locationId = item?.inventoryLevels.nodes[0]?.location.id;
@@ -177,15 +183,14 @@ export async function launch(admin: AdminApiContext, seriesId: string) {
         }
       }`,
     {
-      key: `launch-${series.id}`,
+      key,
       input: {
         name: "available",
         reason: "correction",
-        quantities: [{ inventoryItemId: item.id, locationId, quantity: packs, changeFromQuantity: null }],
+        quantities: [{ inventoryItemId: item.id, locationId, quantity, changeFromQuantity: null }],
       },
     },
   );
-  return { series, packs };
 }
 
 /** Expected market value per pack and the share of the pack price it returns. */

@@ -9,6 +9,7 @@ import {
   autoBuildPool,
   launch,
   poolSummary,
+  setPackStock,
   seriesTierRules,
   updateTierRules,
 } from "../lib/series.server";
@@ -153,6 +154,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           where: { id: series.id },
           data: { status: "CLOSED", closedAt: new Date() },
         });
+        // Stop selling packs, then hand unpulled cards back to normal stock.
+        await setPackStock(admin, series.packVariantId, 0, `close-${series.id}`);
         const released = await releaseUnneeded(db, admin, series.id);
         return {
           ok: `Series closed. No more packs will be drawn.${released ? ` ${released} unpulled card${released === 1 ? " is" : "s are"} back on sale.` : ""}`,

@@ -66,25 +66,32 @@ export async function holdOrder(admin: Admin, orderId: string) {
   for (const fo of await fulfillmentOrders(admin, orderId)) {
     if (fo.fulfillmentHolds.some((h) => h.handle === HOLD_HANDLE)) continue;
     if (fo.status !== "OPEN" && fo.status !== "ON_HOLD" && fo.status !== "SCHEDULED") continue;
-    await gql(
-      admin,
-      `#graphql
-        mutation PackHold($id: ID!, $hold: FulfillmentOrderHoldInput!) {
-          fulfillmentOrderHold(id: $id, fulfillmentHold: $hold) {
-            fulfillmentOrder { id status }
-            userErrors { field message }
-          }
-        }`,
-      {
-        id: fo.id,
-        hold: {
-          reason: "OTHER",
-          handle: HOLD_HANDLE,
-          reasonNotes: "Waiting for the customer to open their mystery packs.",
-          notifyMerchant: false,
+    // orders/create and orders/paid can both arrive at once for the same order; if the other
+    // webhook placed this hold first, Shopify rejects the duplicate handle, which is fine.
+    try {
+      await gql(
+        admin,
+        `#graphql
+          mutation PackHold($id: ID!, $hold: FulfillmentOrderHoldInput!) {
+            fulfillmentOrderHold(id: $id, fulfillmentHold: $hold) {
+              fulfillmentOrder { id status }
+              userErrors { field message }
+            }
+          }`,
+        {
+          id: fo.id,
+          hold: {
+            reason: "OTHER",
+            handle: HOLD_HANDLE,
+            reasonNotes: "Waiting for the customer to open their mystery packs.",
+            notifyMerchant: false,
+          },
         },
-      },
-    );
+      );
+    } catch (error) {
+      if (error instanceof Error && /already in use/i.test(error.message)) continue;
+      throw error;
+    }
   }
 }
 
