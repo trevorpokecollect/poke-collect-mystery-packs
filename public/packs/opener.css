@@ -227,3 +227,29 @@
 .mp-btn-dark:hover { background: #ff4a22; }
 .mp-more-link { font-size: .85rem; color: #fff !important; opacity: .8; }
 .mp-login-hint { margin: -4px 0 12px; color: var(--mp-muted); font-size: .9rem; }
+
+/* Shipping status on each pulled card */
+.mp-ship-wrap { display: flex; align-items: center; gap: 8px; }
+.mp-ship { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 700; background: #fff4e5; color: #9a5b00; }
+.mp-ship::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.mp-ship[data-state="shipped"], .mp-ship[data-state="picked_up"] { background: #e7f6ec; color: #1f7a45; }
+.mp-ship[data-state="pickup_ready"] { background: #e8f0ff; color: #2456c4; }
+.mp-track { font-size: .8rem; font-weight: 600; color: var(--mp-ink); }
+
+/* How your card ships */
+.mp-info { margin-top: 36px; }
+.mp-info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 12px; }
+.mp-info-item { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: 12px; border: 1px solid var(--mp-line); background: var(--mp-surface); }
+.mp-info-item p { margin: 4px 0 0; font-size: .88rem; color: var(--mp-muted); line-height: 1.45; }
+.mp-info-num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #e3350d; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: .9rem; }
+.mp-info-note { margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; background: rgba(227,53,13,.08); font-weight: 600; font-size: .9rem; }
+
+/* You Might Also Like */
+.mp-recs { margin-top: 36px; }
+.mp-recs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+.mp-rec { display: flex; flex-direction: column; gap: 6px; color: var(--mp-ink) !important; text-decoration: none !important; }
+.mp-rec-img { aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #f4f4f7; border: 1px solid var(--mp-line); }
+.mp-rec-img img { width: 100%; height: 100%; object-fit: contain; transition: transform .2s; }
+.mp-rec:hover .mp-rec-img img { transform: scale(1.04); }
+.mp-rec-title { font-size: .85rem; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mp-rec-price { font-size: .85rem; color: var(--mp-muted); }

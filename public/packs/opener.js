@@ -65,6 +65,25 @@
     return button;
   }
 
+  var SHIP_LABELS = {
+    preparing: "Preparing to ship",
+    shipped: "Shipped",
+    pickup_ready: "Ready for pickup",
+    picked_up: "Picked up",
+  };
+
+  function shipBadge(pack) {
+    var ship = pack.shipping || { state: "preparing" };
+    var badge = el("span", { class: "mp-ship", "data-state": ship.state, text: SHIP_LABELS[ship.state] || SHIP_LABELS.preparing });
+    if (ship.state === "shipped" && ship.tracking && ship.tracking.url) {
+      return el("span", { class: "mp-ship-wrap" }, [
+        badge,
+        el("a", { class: "mp-track", href: ship.tracking.url, target: "_blank", rel: "noopener", text: "Track" }),
+      ]);
+    }
+    return badge;
+  }
+
   function cardTile(pack) {
     var card = pack.card;
     return el("div", { class: "mp-card" }, [
@@ -72,9 +91,83 @@
       el("div", { class: "mp-card-title", text: card.title }),
       el("div", { class: "mp-card-meta" }, [
         el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }),
-        el("span", { text: pack.shipped ? "Shipping" : "Ships with order " + pack.orderName }),
+        el("span", { text: "Order " + pack.orderName }),
       ]),
+      shipBadge(pack),
     ]);
+  }
+
+  // How the pulled card gets to the customer.
+  function shippingInfo() {
+    var steps = [
+      ["Open every pack", "Your cards ship together with the rest of your order once every pack on it is opened. Packs you don't open are opened for you after 7 days, so nothing gets held up."],
+      ["We pack it with care", "Each card is sleeved and protected before it goes out."],
+      ["Track it here", "Each card above shows Preparing to ship, then Shipped with a tracking link. You'll also get a shipping email from us."],
+      ["Local pickup", "Chose pickup at checkout? Your card is ready for pickup as soon as you open your pack."],
+    ];
+    return el("section", { class: "mp-info" }, [
+      el("h2", { class: "mp-section-title", text: "How your card ships" }),
+      el("div", { class: "mp-info-grid" }, steps.map(function (s, i) {
+        return el("div", { class: "mp-info-item" }, [
+          el("span", { class: "mp-info-num", text: String(i + 1) }),
+          el("div", {}, [el("strong", { text: s[0] }), el("p", { text: s[1] })]),
+        ]);
+      })),
+      el("p", { class: "mp-info-note", text: "Free shipping when you buy 5 or more packs." }),
+    ]);
+  }
+
+  // "You Might Also Like": Shopify's storefront recommendations, minus mystery packs and sold-out items.
+  function recommendations(productId) {
+    var section = el("section", { class: "mp-recs", hidden: "" }, [
+      el("h2", { class: "mp-section-title", text: "You Might Also Like" }),
+    ]);
+    var grid = el("div", { class: "mp-recs-grid" });
+    section.appendChild(grid);
+
+    function cents(p) {
+      if (p.price == null && p.variants && p.variants[0]) return Math.round(Number(p.variants[0].price) * 100);
+      return typeof p.price === "number" ? p.price : Math.round(Number(p.price) * 100);
+    }
+    function image(p) {
+      var src = p.featured_image || (p.images && p.images[0] && (p.images[0].src || p.images[0])) || null;
+      if (src && typeof src === "object") src = src.src || src.url;
+      if (!src) return null;
+      if (src.indexOf("//") === 0) src = "https:" + src;
+      return src + (src.indexOf("?") === -1 ? "?" : "&") + "width=400";
+    }
+    function show(products) {
+      var items = (products || []).filter(function (p) {
+        var type = String(p.type || p.product_type || "").toLowerCase();
+        var available = p.available !== undefined ? p.available : (p.variants || []).some(function (v) { return v.available; });
+        return type !== "mystery pack" && available !== false;
+      }).slice(0, 8);
+      if (!items.length) return false;
+      items.forEach(function (p) {
+        var url = p.url || "/products/" + p.handle;
+        var src = image(p);
+        grid.appendChild(el("a", { class: "mp-rec", href: url }, [
+          el("span", { class: "mp-rec-img" }, [src ? el("img", { src: src, alt: "", loading: "lazy" }) : null]),
+          el("span", { class: "mp-rec-title", text: p.title }),
+          el("span", { class: "mp-rec-price", text: money(cents(p) / 100) }),
+        ]));
+      });
+      section.hidden = false;
+      return true;
+    }
+    function getJson(url) {
+      return fetch(url, { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; });
+    }
+    var first = productId
+      ? getJson("/recommendations/products.json?product_id=" + encodeURIComponent(productId) + "&limit=12&intent=related")
+      : Promise.resolve(null);
+    first
+      .then(function (data) {
+        if (data && show(data.products)) return;
+        return getJson("/products.json?limit=24").then(function (d) { if (d) show(d.products); });
+      })
+      .catch(function () {});
+    return section;
   }
 
   function money(amount) {
@@ -106,7 +199,7 @@
     ]);
   }
 
-  function render(packs, available, signedIn) {
+  function render(packs, available, signedIn, recommendFrom) {
     root.innerHTML = "";
     var unopened = packs.filter(function (p) { return !p.opened; });
     var opened = packs.filter(function (p) { return p.opened; });
@@ -137,6 +230,8 @@
         ? el("div", { class: "mp-grid" }, opened.map(cardTile))
         : el("p", { class: "mp-empty", text: "Nothing pulled yet." }),
     );
+    root.appendChild(shippingInfo());
+    root.appendChild(recommendations(recommendFrom));
   }
 
   // Coming from checkout, a cover hides the page until the opening stage is up, so the
@@ -162,7 +257,7 @@
             return;
           }
         }
-        render(packs, data.available, data.signedIn);
+        render(packs, data.available, data.signedIn, data.recommendFrom);
         uncover();
       })
       .catch(function (err) {
