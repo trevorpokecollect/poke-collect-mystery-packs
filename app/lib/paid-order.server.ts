@@ -53,7 +53,7 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
   }
 
   if (result.pulls.length > 0) {
-    await checkTopTierGone(db, admin, shop, result.pulls.map((p) => p.seriesId)).catch((error) =>
+    await checkTopTierGone(db, admin, shop, result.pulls.map((p) => p.seriesId), order.admin_graphql_api_id).catch((error) =>
       console.error("Top tier check failed", error),
     );
   }
