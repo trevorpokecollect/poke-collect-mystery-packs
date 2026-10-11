@@ -1,40 +1,33 @@
+// Fills the "Potential Pulls" block with live per-tier odds. Hidden if the product isn't a live pack.
 (function () {
   "use strict";
-  function pct(v) { return (v * 100).toFixed(1) + "%"; }
+  var COLORS = { poke: "#e3350d", great: "#2f6fe0", ultra: "#d49a00", master: "#8b46e0" };
+  function pct(v) { return v === 0 ? "0%" : v < 0.001 ? "<0.1%" : (v * 100).toFixed(1) + "%"; }
 
   document.querySelectorAll("[data-mp-odds]").forEach(function (root) {
     var summary = root.querySelector("[data-mp-summary]");
-    var table = root.querySelector("[data-mp-table]");
-    var fair = root.querySelector("[data-mp-fair]");
-
+    var list = root.querySelector("[data-mp-tiers]");
     fetch(root.getAttribute("data-endpoint"), { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
+      .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
-        if (data.error) throw new Error(data.error);
+        if (!data || data.error) return;
         summary.textContent = data.status === "CLOSED"
           ? "This series is sold out."
-          : data.packsRemaining + " of " + data.totalPacks + " packs left.";
-
-        var body = table.querySelector("tbody");
-        data.cards.forEach(function (card) {
-          var row = document.createElement("tr");
-          [card.title, card.tier, card.remaining + " / " + card.quantity,
-            data.status === "CLOSED" ? "—" : pct(card.currentOdds)].forEach(function (text) {
-            var cell = document.createElement("td");
-            cell.textContent = text;
-            row.appendChild(cell);
-          });
-          body.appendChild(row);
+          : data.packsRemaining + " of " + data.totalPacks + " packs left · " + data.cards.length + " different cards";
+        (data.tiers || []).forEach(function (tier) {
+          var item = document.createElement("li");
+          var dot = document.createElement("span");
+          dot.className = "mp-odds__dot";
+          dot.style.background = COLORS[String(tier.name).toLowerCase()] || "#6b6b76";
+          var name = document.createElement("strong");
+          name.textContent = tier.name;
+          var odds = document.createElement("span");
+          odds.textContent = data.status === "CLOSED" ? "" : pct(tier.currentOdds);
+          item.append(dot, name, odds);
+          list.appendChild(item);
         });
-        table.hidden = false;
-
-        if (fair && data.commitHash) {
-          fair.textContent = data.reveal
-            ? "Fairness check: sha256(\"" + data.reveal.salt + ":\" + the published card order) = " + data.commitHash
-            : "Pack order committed before launch. Fingerprint: " + data.commitHash;
-          fair.hidden = false;
-        }
+        root.hidden = false;
       })
-      .catch(function () { summary.textContent = "Odds are unavailable right now."; });
+      .catch(function () {});
   });
 })();

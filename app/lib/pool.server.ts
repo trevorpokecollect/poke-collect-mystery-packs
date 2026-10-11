@@ -298,6 +298,25 @@ export async function voidPulls(
   });
 }
 
+/** The launched series sold through a pack product (the newest one if a product was reused). */
+export async function seriesHandleForProduct(db: Db, shop: string, productId: string) {
+  const series = await db.series.findFirst({
+    where: { shop, packProductId: productId, status: { not: "DRAFT" } },
+    orderBy: { createdAt: "desc" },
+    select: { handle: true },
+  });
+  return series?.handle ?? null;
+}
+
+/** Tier names from highest to lowest, using the series' tier rules when it has them. */
+function tierOrder(tierRules: unknown): string[] {
+  if (!Array.isArray(tierRules)) return [];
+  return [...tierRules]
+    .filter((r): r is { name: string; min: number } => typeof r?.name === "string" && typeof r?.min === "number")
+    .sort((a, b) => b.min - a.min)
+    .map((r) => r.name);
+}
+
 /** Public odds: every card with its total and remaining copies. Card values stay admin-only. */
 export async function seriesOdds(db: Db, shop: string, handle: string) {
   const series = await db.series.findUnique({
@@ -337,6 +356,26 @@ export async function seriesOdds(db: Db, shop: string, handle: string) {
         : null,
     totalPacks: total,
     packsRemaining: totalRemaining,
+    // Odds of pulling each tier right now, highest tier first.
+    tiers: (() => {
+      const byTier = new Map<string, { remaining: number; total: number }>();
+      for (const c of series.cards) {
+        const entry = byTier.get(c.tier) ?? { remaining: 0, total: 0 };
+        entry.remaining += remainingBy.get(c.id) ?? 0;
+        entry.total += c.quantity;
+        byTier.set(c.tier, entry);
+      }
+      const order = tierOrder(series.tierRules);
+      const rank = (name: string) => (order.includes(name) ? order.indexOf(name) : order.length);
+      return [...byTier.entries()]
+        .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
+        .map(([name, n]) => ({
+          name,
+          remaining: n.remaining,
+          total: n.total,
+          currentOdds: totalRemaining > 0 ? n.remaining / totalRemaining : 0,
+        }));
+    })(),
     cards: series.cards.map((c) => {
       const left = remainingBy.get(c.id) ?? 0;
       return {

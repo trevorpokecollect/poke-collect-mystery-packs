@@ -1,25 +1,28 @@
 {% comment %}
-  Shows the live card list and odds for a mystery pack series on its product page.
-  Data comes from the app at /apps/packs/api/odds/<series handle>.
+  Mystery pack "Potential Pulls" block for the pack product page: live odds per tier and a
+  "View Potential Pulls" button that opens the full card list at /apps/packs/pool.
+  Finds the series from the product, so it works on any pack product without setup.
 {% endcomment %}
+{%- liquid
+  assign handle = block.settings.series_handle | strip
+  if handle != blank
+    assign query = 'series=' | append: handle
+  else
+    assign query = 'product=' | append: product.id
+  endif
+-%}
 <div
   class="mp-odds"
   data-mp-odds
-  data-endpoint="/apps/packs/api/odds/{{ block.settings.series_handle | url_encode }}"
+  data-endpoint="/apps/packs/api/pool?{{ query }}"
+  hidden
   {{ block.shopify_attributes }}
 >
-  <h3 class="mp-odds__heading">{{ block.settings.heading | default: 'odds.heading' | t }}</h3>
-  <p class="mp-odds__summary" data-mp-summary>Loading odds…</p>
-  <table class="mp-odds__table" data-mp-table hidden>
-    <thead>
-      <tr><th scope="col">Card</th><th scope="col">Tier</th><th scope="col">Left</th><th scope="col">Odds now</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-  {% if block.settings.show_fairness %}
-    <p class="mp-odds__fair" data-mp-fair hidden></p>
-  {% endif %}
-  <p class="mp-odds__note">{{ block.settings.note }}</p>
+  <h3 class="mp-odds__heading">{{ block.settings.heading }}</h3>
+  <p class="mp-odds__summary" data-mp-summary></p>
+  <ul class="mp-odds__tiers" data-mp-tiers></ul>
+  <a class="button button--secondary mp-odds__button" href="/apps/packs/pool?{{ query }}">{{ block.settings.button_label }}</a>
+  {% if block.settings.note != blank %}<p class="mp-odds__note">{{ block.settings.note }}</p>{% endif %}
 </div>
 {{ 'pack-odds.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'pack-odds.js' | asset_url }}" defer></script>
@@ -30,10 +33,10 @@
   "target": "section",
   "enabled_on": { "templates": ["product"] },
   "settings": [
-    { "type": "text", "id": "series_handle", "label": "Series handle", "info": "Shown on the series page in the Mystery Packs app, e.g. series-1" },
     { "type": "text", "id": "heading", "label": "Heading", "default": "What's in the pack" },
-    { "type": "checkbox", "id": "show_fairness", "label": "Show fairness commitment", "default": true },
-    { "type": "textarea", "id": "note", "label": "Note", "default": "Every pack contains one card from this list, shipped to you after you open it online. Odds update as packs are opened." }
+    { "type": "text", "id": "button_label", "label": "Button label", "default": "View Potential Pulls" },
+    { "type": "textarea", "id": "note", "label": "Note", "default": "Every pack holds one card from the list, shipped to you after you open it online. Odds update as packs are opened." },
+    { "type": "text", "id": "series_handle", "label": "Series handle (optional)", "info": "Leave blank to use the series sold through this product." }
   ]
 }
 {% endschema %}
