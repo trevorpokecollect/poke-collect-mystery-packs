@@ -60,8 +60,10 @@ const quote = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'
  * Shopify's variant search ignores price ranges, so the caller filters by value.
  */
 export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Promise<InventoryCandidate[]> {
+  // "Pokemon Single, Pokemon Japanese Single" draws from either product type.
+  const types = filter.productType.split(",").map((t) => t.trim()).filter(Boolean);
   const query = [
-    `product_type:${quote(filter.productType)}`,
+    types.length > 1 ? `(${types.map((t) => `product_type:${quote(t)}`).join(" OR ")})` : `product_type:${quote(types[0] ?? "")}`,
     "product_status:active",
     "inventory_quantity:>0",
   ].join(" AND ");
@@ -104,7 +106,7 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
     );
     const conn: VariantPage = data.productVariants;
     for (const v of conn.nodes) {
-      if (v.product.status !== "ACTIVE" || v.product.productType !== filter.productType) continue;
+      if (v.product.status !== "ACTIVE" || !types.includes(v.product.productType)) continue;
       if (!v.inventoryItem?.tracked) continue;
       if (languageTags.length && !v.product.tags.some((t) => languageTags.includes(t.trim().toLowerCase()))) continue;
       if (condition && !v.selectedOptions.some((o) => o.value.trim().toLowerCase() === condition)) {

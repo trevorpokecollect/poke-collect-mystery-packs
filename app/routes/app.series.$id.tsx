@@ -373,7 +373,12 @@ export default function SeriesPage() {
                 data-build="minHits"
               />
               <s-money-field label="Hit value" value={buildDefaults.hitValue} data-build="hitValue" />
-              <s-text-field label="Product type" value={buildDefaults.productType} data-build="productType" />
+              <s-text-field
+                label="Product type"
+                details="Separate several with commas, e.g. Pokemon Single, Pokemon Japanese Single"
+                value={buildDefaults.productType}
+                data-build="productType"
+              />
               <s-text-field
                 label="Condition"
                 details="Leave blank for any condition"
