@@ -1,13 +1,12 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { proxyContext } from "../lib/proxy.server";
 import { validDemoToken } from "../lib/demo.server";
+import { OPENER_VERSION } from "../lib/opener-version.server";
 
 // Rendered inside the store theme at /apps/packs. The page shell is Liquid so it
 // picks up the theme's header and footer; the opener script does the rest.
 // Shown instantly when arriving from checkout (?open=1) and removed once the opening stage is up,
 // so the packs list never flashes first. Inline so it applies before any stylesheet loads.
-// Changes with every deploy so phones fetch the new opener files instead of a cached copy.
-const VERSION = (process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now())).slice(0, 12);
 
 const COVER = `<div id="mp-cover" style="position:fixed;inset:0;z-index:9998;display:grid;place-items:center;background:radial-gradient(circle at 50% 45%,#2b2140 0%,#0b0a12 70%);color:#c9c6d8;font:600 15px/1.4 system-ui,sans-serif;letter-spacing:.04em">Getting your pack ready…</div>`;
 
@@ -31,9 +30,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return liquid(
     `${opening ? COVER : ""}
-     <link rel="preload" href="${assets}/packs/opener.js?v=${VERSION}" as="script">
-     <link rel="stylesheet" href="${assets}/packs/opener.css?v=${VERSION}">
+     <link rel="preload" href="${assets}/packs/opener.js?v=${OPENER_VERSION}" as="script">
+     <link rel="stylesheet" href="${assets}/packs/opener.css?v=${OPENER_VERSION}">
      <div class="mp-page" id="mystery-packs" data-api="/apps/packs/api"${demo ? ' data-demo="1"' : ""}></div>
-     <script src="${assets}/packs/opener.js?v=${VERSION}" defer></script>`,
+     <script src="${assets}/packs/opener.js?v=${OPENER_VERSION}" defer></script>`,
   );
 };

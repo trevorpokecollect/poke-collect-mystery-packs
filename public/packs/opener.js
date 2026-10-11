@@ -10,6 +10,8 @@
   // Merchant preview (?demo=<signed token>): sample packs from the live pool, opened locally.
   var demo = root.getAttribute("data-demo") === "1";
   var demoData = null;
+  // Shopper demo from the product page (/apps/packs/try): one opening with a random card from the pool.
+  var tryQuery = root.getAttribute("data-try");
   var params = new URLSearchParams(window.location.search);
   // Arriving from the thank-you page button (?open=1) starts opening right away, once.
   var autoOpen = params.get("open") === "1";
@@ -544,11 +546,13 @@
       closed = true;
       stage.remove();
       document.removeEventListener("keydown", onKey);
-      load();
+      if (pack.trial) window.location.href = pack.productUrl || "/";
+      else load();
     }
     function onKey(e) { if (e.key === "Escape") close(); }
     skip.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
+    if (pack.trial) stage.appendChild(el("div", { class: "mp-demo-tag", text: "Demo Opening" }));
     document.body.appendChild(stage);
 
     // The pack is as tall as the card's final spot and as wide as the artwork's pack bag.
@@ -640,6 +644,16 @@
 
           result.appendChild(el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }));
           result.appendChild(el("h2", { text: card.title }));
+          if (pack.trial) {
+            result.appendChild(el("p", { text: "Just a demo. Buy a pack to pull a card of your own." }));
+            var again = el("button", { class: "mp-btn", type: "button", text: "Try Again" });
+            again.addEventListener("click", function () { window.location.reload(); });
+            var buy = el("a", { class: "mp-btn mp-btn-ghost", href: pack.productUrl || "/", text: "Buy A Pack" });
+            result.appendChild(el("div", { class: "mp-actions" }, [again, buy]));
+            result.classList.add("mp-show");
+            again.focus();
+            return;
+          }
           result.appendChild(el("p", { text: "Ships with your order" }));
           var done = el("button", { class: "mp-btn", type: "button", text: "Done" });
           done.addEventListener("click", close);
@@ -663,5 +677,20 @@
       });
   }
 
-  load();
+  function startTry() {
+    fetch(api + "/sample?" + tryQuery, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error || !data.card) throw new Error(data.error || "Couldn't start the demo.");
+        openPack({ id: "try", trial: true, series: data.series, packImageUrl: data.packImageUrl, productUrl: data.productUrl, demoCard: data.card });
+      })
+      .catch(function (err) {
+        root.innerHTML = "";
+        root.appendChild(el("p", { class: "mp-error", text: err.message || "Couldn't start the demo." }));
+        root.appendChild(el("a", { class: "mp-btn", href: "javascript:history.back()", text: "Back To The Pack" }));
+      });
+  }
+
+  if (tryQuery !== null) startTry();
+  else load();
 })();
