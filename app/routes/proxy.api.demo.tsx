@@ -5,11 +5,13 @@ import { packImages, packProducts } from "../lib/pack-art.server";
 import { validDemoToken } from "../lib/demo.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { packShelf } from "../lib/shelf.server";
+import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 
 // Sample data for the My Packs preview (/apps/packs?demo=<token>). Cards come from the newest
 // live series so the page and the opening animation look exactly like a real customer's.
 // Nothing here touches orders, the pool or inventory.
 const SHIPPING = [
+  { state: "vault" },
   { state: "preparing" },
   { state: "shipped", tracking: { number: "PREVIEW", url: "https://www.usps.com/" } },
   { state: "pickup_ready" },
@@ -51,6 +53,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     recommendFrom: series.packProductId.split("/").pop(),
     recommendHandle: products.get(series.packProductId)?.handle ?? null,
     available: packShelf(live, products),
+    vault: { cards: pulled.length, fee: SHIP_FEE, freeAt: FREE_SHIPPING_CARDS, pending: null },
     packs: [
       ...unopened.map((pack, i) => ({
         id: `demo-${i}`,

@@ -66,7 +66,7 @@ export interface DrawResult {
   pulls: Pull[];
   /** Packs that could not be drawn because the series had no cards left. */
   shortfall: { lineItemId: string; missing: number }[];
-  packOrder: { openToken: string; held: boolean } | null;
+  packOrder: { openToken: string; held: boolean; vault: boolean } | null;
 }
 
 /**
@@ -111,6 +111,8 @@ export async function drawForOrder(db: PrismaClient, input: DrawInput): Promise<
         customerId: input.customerId,
         checkoutToken: input.checkoutToken ?? null,
         openToken: newToken(),
+        // New orders keep their pulls in the customer's vault until they ask to ship them.
+        vault: true,
       },
       update: input.checkoutToken ? { checkoutToken: input.checkoutToken } : {},
     });
@@ -204,6 +206,7 @@ async function viewerScope(db: Db, viewer: Viewer): Promise<Prisma.PullWhereInpu
 const pullInclude = {
   slot: { include: { card: true } },
   series: { select: { title: true, handle: true, packProductId: true, cardsPerPack: true } },
+  shipRequest: { select: { id: true, status: true, invoiceUrl: true, expiresAt: true } },
 } as const;
 
 export async function pullsForViewer(db: Db, shop: string, viewer: Viewer) {
@@ -305,7 +308,8 @@ export async function voidPulls(
 ) {
   return db.$transaction(async (tx) => {
     const pulls = await tx.pull.findMany({
-      where: { orderId, status: { in: ["UNOPENED", "REVEALED"] } },
+      // Cards already on a ship request are left alone; that request settles them.
+      where: { orderId, status: { in: ["UNOPENED", "REVEALED"] }, shipRequestId: null },
       orderBy: [{ lineItemId: "asc" }, { packIndex: "desc" }],
     });
     // Limits count packs, not cards: every card of a voided pack goes together.

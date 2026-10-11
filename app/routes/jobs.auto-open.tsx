@@ -3,6 +3,7 @@ import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { autoOpenDue, ordersReadyToFinalize } from "../lib/pool.server";
 import { finalizeOrder } from "../lib/orders.server";
+import { expireShipments } from "../lib/vault.server";
 
 // Called on a schedule (Railway cron): opens packs past their window and retries
 // any order that is ready to ship but wasn't finalized yet.
@@ -25,5 +26,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       results.push({ orderId, ok: false });
     }
   }
+  // Unpaid "ship my cards" invoices past their window: cards go back to the vault.
+  await expireShipments(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   return Response.json({ finalized: results });
 };

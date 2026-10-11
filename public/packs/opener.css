@@ -359,3 +359,15 @@
   .mp-stage.mp-multi { --mp-result-space: 300px; }
   .mp-fan-card { width: 42px; }
 }
+
+/* Card vault: everything pulled waits here until the customer ships it. */
+.mp-ship[data-state="vault"] { background: #f1ecff; color: #5b3cc4; }
+.mp-ship[data-state="awaiting_payment"] { background: #fff4e0; color: #9a5b00; }
+.mp-vault {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
+  margin: 0 0 18px; padding: 16px 18px; border-radius: 12px; border: 2px solid #14141a; background: #fff;
+}
+.mp-vault-text strong { display: block; font-family: var(--mp-heading); font-size: 1.25em; }
+.mp-vault-text p { margin: 2px 0 0; color: var(--mp-muted); }
+.mp-vault-btn { background: #e3350d; color: #fff; padding: 12px 26px; font-size: 1.05em; text-decoration: none; }
+.mp-vault-btn[disabled] { opacity: .6; cursor: default; }

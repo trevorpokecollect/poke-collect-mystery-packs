@@ -239,7 +239,8 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
     include: { slot: { include: { card: true } }, series: true },
   });
 
-  if (pulls.length > 0 && !packOrder.cardsAddedAt) {
+  // Vault orders keep their cards in the vault; only the pack lines are closed out.
+  if (pulls.length > 0 && !packOrder.cardsAddedAt && !packOrder.vault) {
     // Auto-built pools hold their cards as "reserved"; free each won copy so the edit can commit it.
     await unreserveForPulls(db, admin, pulls.map((p) => p.id));
     await addCardsToOrder(

@@ -240,6 +240,32 @@ export async function unreserveForPulls(db: PrismaClient, admin: Admin, pullIds:
 }
 
 /**
+ * Puts a released copy back into reserved for each pull, e.g. when a vault shipment's invoice
+ * lapses unpaid and the cards return to the vault. Skips pulls that were never released.
+ */
+export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds: string[]) {
+  const pulls = await db.pull.findMany({
+    where: { id: { in: pullIds }, unreservedAt: { not: null } },
+    include: { slot: { include: { card: true } } },
+  });
+  for (const pull of pulls) {
+    const card = pull.slot.card;
+    if (!reservable(card)) continue;
+    await moveQuantities(
+      admin,
+      [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: 1 }],
+      "reserve",
+      ledgerFor(pull.seriesId),
+      `rereserve-${pull.id}-${pull.unreservedAt!.getTime()}`,
+    );
+    await db.$transaction([
+      db.pull.update({ where: { id: pull.id }, data: { unreservedAt: null } }),
+      db.card.update({ where: { id: card.id }, data: { reservedQty: { increment: 1 } } }),
+    ]);
+  }
+}
+
+/**
  * Returns reserved copies the series no longer needs to normal inventory: everything
  * not owed to a pack once the series is closed, including cards from voided packs.
  * Safe to call any time; a live series keeps every unclaimed copy reserved.

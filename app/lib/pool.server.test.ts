@@ -14,6 +14,7 @@ import {
 } from "./pool.server";
 import { releaseUnneeded, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
+import { expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -31,6 +32,7 @@ beforeAll(() => {
 afterAll(() => db.$disconnect());
 beforeEach(async () => {
   await db.pull.deleteMany();
+  await db.shipRequest.deleteMany();
   await db.packOrder.deleteMany();
   await db.series.deleteMany();
 });
@@ -479,5 +481,97 @@ describe("multi-card packs", () => {
     const voided = await voidPulls(db, input.orderId, new Map([[input.lines[0].lineItemId, 1]]));
     expect(voided).toHaveLength(5);
     expect(new Set(voided.map((p) => p.packIndex))).toEqual(new Set([1]));
+  });
+});
+
+// Handles the Shopify calls a vault shipment makes, recording the draft orders it creates.
+function vaultAdmin() {
+  const base = fakeAdmin();
+  const drafts: { input: Record<string, unknown> }[] = [];
+  const deleted: string[] = [];
+  const admin = {
+    graphql: async (query: string, opts: { variables: Record<string, unknown> }) => {
+      const reply = (data: unknown) => new Response(JSON.stringify({ data }));
+      if (query.includes("draftOrderCreate")) {
+        drafts.push({ input: opts.variables.input as Record<string, unknown> });
+        return reply({ draftOrderCreate: { draftOrder: { id: `gid://shopify/DraftOrder/${drafts.length}`, invoiceUrl: `https://pay/${drafts.length}` }, userErrors: [] } });
+      }
+      if (query.includes("VaultCurrency")) return reply({ shop: { currencyCode: "USD" } });
+      if (query.includes("VaultOrderEmail")) return reply({ order: { email: "guest@example.com" } });
+      if (query.includes("VaultDraftStatus")) return reply({ draftOrder: { id: "d", status: "OPEN", order: null } });
+      if (query.includes("draftOrderDelete")) {
+        deleted.push(String((opts.variables.input as { id: string }).id));
+        return reply({ draftOrderDelete: { deletedId: "d", userErrors: [] } });
+      }
+      return base.admin.graphql(query, opts);
+    },
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { admin: admin as any, drafts, deleted, net: base.net };
+}
+
+describe("vault", () => {
+  const viewer = { customerId: "gid://shopify/Customer/1" };
+
+  async function openedVaultOrder(packs: number) {
+    const series = await makeReservedSeries(10);
+    const { admin } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const { pulls, packOrder } = await drawForOrder(db, order(packs));
+    expect(packOrder!.vault).toBe(true);
+    for (const p of pulls) await revealPull(db, SHOP, p.id, viewer);
+    return pulls;
+  }
+
+  it("ships every vaulted card on one invoice with the flat fee, then marks them shipping once paid", async () => {
+    const pulls = await openedVaultOrder(3);
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(3);
+
+    const { admin, drafts, net } = vaultAdmin();
+    const first = await requestShipment(db, admin, SHOP, viewer);
+    expect(first.invoiceUrl).toBe("https://pay/1");
+    expect(drafts).toHaveLength(1);
+    const input = drafts[0].input as { shippingLine: { priceWithCurrency: { amount: string } }; lineItems: unknown[]; customAttributes: { value: string }[] };
+    expect(input.shippingLine.priceWithCurrency.amount).toBe("8.00");
+    expect(input.lineItems).toHaveLength(3);
+    // Each card's reserved copy is released for the draft order's own reservation.
+    expect(pulls.map((p) => p.slotId)).toHaveLength(3);
+    expect((await db.pull.findMany()).every((p) => p.unreservedAt)).toBe(true);
+    expect(net("item-Card 0") + net("item-Card 1") + net("item-Card 2")).toBeLessThan(0);
+
+    // Asking again returns the same open invoice instead of a second one.
+    const again = await requestShipment(db, admin, SHOP, viewer);
+    expect(again).toEqual({ invoiceUrl: "https://pay/1", reused: true });
+    expect(drafts).toHaveLength(1);
+
+    const requestId = input.customAttributes[0].value;
+    await markShipmentPaid(db, requestId, "gid://shopify/Order/999");
+    const shipped = await db.pull.findMany();
+    expect(shipped.every((p) => p.status === "FULFILLING" && p.shipOrderId === "gid://shopify/Order/999")).toBe(true);
+    await expect(requestShipment(db, admin, SHOP, viewer)).rejects.toThrow(/no cards in your vault/);
+  });
+
+  it("ships free from the free-shipping card count", async () => {
+    await openedVaultOrder(10);
+    const { admin, drafts } = vaultAdmin();
+    // Fewer than 25 cards pays the flat fee; the rule is checked directly at the threshold.
+    await requestShipment(db, admin, SHOP, viewer);
+    expect((drafts[0].input as { shippingLine: { priceWithCurrency: { amount: string } } }).shippingLine.priceWithCurrency.amount).toBe("8.00");
+    const { shippingFeeFor } = await import("./vault.server");
+    expect(shippingFeeFor(24)).toBe(8);
+    expect(shippingFeeFor(25)).toBe(0);
+  });
+
+  it("puts cards back in the vault, reserved again, when the invoice lapses unpaid", async () => {
+    await openedVaultOrder(2);
+    const { admin, deleted } = vaultAdmin();
+    await requestShipment(db, admin, SHOP, viewer);
+    await expireShipments(db, async () => admin, new Date(Date.now() + 8 * 86_400_000));
+    expect(deleted).toEqual(["gid://shopify/DraftOrder/1"]);
+    const pulls = await db.pull.findMany();
+    expect(pulls.every((p) => p.shipRequestId === null && p.unreservedAt === null && p.status === "REVEALED")).toBe(true);
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(2);
+    expect((await db.shipRequest.findFirstOrThrow()).status).toBe("EXPIRED");
   });
 });
