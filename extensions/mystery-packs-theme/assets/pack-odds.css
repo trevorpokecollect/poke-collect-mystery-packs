@@ -1,0 +1,9 @@
+.mp-odds { margin: 1.5rem 0; }
+.mp-odds__heading { margin: 0 0 .25rem; }
+.mp-odds__summary { margin: 0 0 .75rem; opacity: .8; }
+.mp-odds__tiers { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .5rem; }
+.mp-odds__tiers li { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; border: 1px solid rgba(0,0,0,.1); border-radius: 999px; }
+.mp-odds__tiers li span:last-child { margin-left: auto; opacity: .8; }
+.mp-odds__dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.mp-odds__button { width: 100%; }
+.mp-odds__note { font-size: .85em; opacity: .8; margin-top: .75rem; }

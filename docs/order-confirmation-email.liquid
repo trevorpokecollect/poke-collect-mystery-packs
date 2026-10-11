@@ -1,0 +1,24 @@
+{% comment %}
+  Poke-Collect Mystery Packs: "Open your pack" button for the Order confirmation email.
+  Paste above the `{% if order_status_url %}` block in Settings > Notifications > Order confirmation > Edit code.
+  Shows only on orders containing a product whose type is "Mystery Pack". Uses the app's open link when it has
+  already been saved on the order; the email can go out before that, so it falls back to the order status page,
+  whose "Open your pack" block links to the same opening.
+{% endcomment %}
+{% assign mp_has_pack = false %}
+{% for line in line_items %}{% if line.product.type == 'Mystery Pack' %}{% assign mp_has_pack = true %}{% endif %}{% endfor %}
+{% if mp_has_pack %}
+  {% assign mp_url = order.metafields.mystery_packs.open_url | default: order_status_url %}
+  <table class="row actions">
+    <tr>
+      <td class="actions__cell">
+        <table class="button main-action-cell">
+          <tr>
+            <td class="button__cell"><a href="{{ mp_url }}" class="button__text">Open your mystery pack</a></td>
+          </tr>
+        </table>
+        <p style="margin: 12px 0 20px; color: #777777; font-size: 14px;">Your card ships once your pack is opened. Already opened it on the thank-you page? You're all set.</p>
+      </td>
+    </tr>
+  </table>
+{% endif %}

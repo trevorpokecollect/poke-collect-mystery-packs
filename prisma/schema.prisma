@@ -1,0 +1,171 @@
+// Prisma schema for the Poke-Collect mystery pack app.
+// Hosted on Railway Postgres; DATABASE_URL is provided by the Railway Postgres plugin.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+enum SeriesStatus {
+  DRAFT // cards being set up, not on sale
+  LIVE // pool shuffled and committed, packs on sale
+  CLOSED // no longer drawing (sold out or closed by the merchant)
+}
+
+// One sellable run of packs with a fixed card list, e.g. "Series 1: 500 packs at $10".
+model Series {
+  id            String       @id @default(cuid())
+  shop          String
+  title         String
+  handle        String
+  status        SeriesStatus @default(DRAFT)
+  // The Shopify product variant customers buy (the pack itself).
+  packProductId String
+  packVariantId String       @unique
+  packPrice     Decimal      @db.Decimal(10, 2)
+  // Unopened packs are revealed automatically after this many days so orders can ship.
+  autoOpenDays  Int          @default(7)
+  // Auto-built pools draw from the shop's live inventory: each card's copies are moved to
+  // "reserved" at launch so they can only be won from packs, and released when the series closes.
+  reserveInventory Boolean   @default(false)
+  // [{ name, min }] lowest first; a card's tier is the highest one its value reaches.
+  tierRules     Json?
+  // Last rules used to auto-build the pool, to prefill the form.
+  buildRules    Json?
+  // Provable fairness: sha256(salt + ordered slot list) published at launch,
+  // salt published after the series closes.
+  commitHash    String?
+  salt          String?
+  launchedAt    DateTime?
+  closedAt      DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  cards Card[]
+  slots Slot[]
+  pulls Pull[]
+
+  @@unique([shop, handle])
+}
+
+// A card in the pool. Each card is a hidden Shopify variant with real inventory.
+model Card {
+  id               String  @id @default(cuid())
+  seriesId         String
+  series           Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  variantId        String
+  productId        String
+  title            String
+  imageUrl         String?
+  tier             String
+  marketValue      Decimal @db.Decimal(10, 2)
+  quantity         Int
+  sortOrder        Int     @default(0)
+  // Where this card's stock is reserved (auto-built pools only).
+  inventoryItemId  String?
+  locationId       String?
+  // Copies currently held in Shopify's "reserved" state for this series.
+  reservedQty      Int     @default(0)
+
+  slots Slot[]
+
+  @@unique([seriesId, variantId])
+}
+
+// One physical copy of a card in a series. At launch every slot is given a
+// position in a cryptographically shuffled sequence; packs claim positions in order.
+model Slot {
+  id        String  @id @default(cuid())
+  seriesId  String
+  series    Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  cardId    String
+  card      Card    @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  position  Int?
+  claimed   Boolean @default(false)
+  // Voided slots belonged to a refunded/cancelled unopened pack; the card returns to stock.
+  voided    Boolean @default(false)
+
+  pull Pull?
+
+  @@unique([seriesId, position])
+  @@index([seriesId, claimed, voided])
+}
+
+enum PullStatus {
+  UNOPENED // drawn at payment, not yet revealed to the customer
+  REVEALED // customer (or auto-open) revealed it
+  FULFILLING // card added to the order, holds released
+  VOIDED // order refunded or cancelled before the card shipped
+}
+
+model Pull {
+  id           String     @id @default(cuid())
+  shop         String
+  seriesId     String
+  series       Series     @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  slotId       String     @unique
+  slot         Slot       @relation(fields: [slotId], references: [id])
+  orderId      String // gid://shopify/Order/...
+  orderName    String
+  lineItemId   String // gid://shopify/LineItem/... of the pack line
+  packIndex    Int // 0-based copy within that line item's quantity
+  customerId   String? // gid://shopify/Customer/...
+  status       PullStatus @default(UNOPENED)
+  revealedAt   DateTime?
+  autoOpened   Boolean    @default(false)
+  fulfillingAt DateTime?
+  // Set once this pull's reserved copy is moved back to available for the order edit.
+  unreservedAt DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@unique([lineItemId, packIndex])
+  @@index([orderId])
+  @@index([customerId])
+  @@index([status, createdAt])
+}
+
+// Per-order bookkeeping for orders that contain packs.
+model PackOrder {
+  orderId    String   @id
+  shop       String
+  orderName  String
+  customerId String?
+  // Random token for the "open your packs" link (lets guests open without logging in).
+  openToken  String   @unique
+  // The checkout's token (order.checkout_token), so the thank-you page can find this order's packs.
+  checkoutToken String?
+  held         Boolean   @default(false)
+  // Set right after the order edit commits, so a retry never adds the cards twice.
+  cardsAddedAt DateTime?
+  // Lease so the reveal request and the cron job never finalize the same order at once.
+  finalizingAt DateTime?
+  finalized    Boolean   @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([shop, checkoutToken])
+}
