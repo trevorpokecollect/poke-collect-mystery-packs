@@ -1,0 +1,1 @@
+ALTER TABLE "Pull" ADD COLUMN "remindedAt" TIMESTAMP(3);

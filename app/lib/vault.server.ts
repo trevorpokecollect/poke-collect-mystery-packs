@@ -186,3 +186,100 @@ async function shopCurrency(admin: AdminApiContext) {
   }
   return currency;
 }
+
+/** Vaulted cards are held this long (see the Cancellation Policy). */
+export const HOLD_DAYS = 365;
+/** Customers are reminded this long before the holding period ends. */
+const REMIND_DAYS_BEFORE = 30;
+export const VAULT_REMINDER_TAG = "vault-reminder";
+export const VAULT_REMINDER_METRIC = "Vault Reminder";
+
+/**
+ * Reminds each customer once their oldest vaulted cards are a month from the end of the holding
+ * period: tags their latest pack order (for a Shopify Flow trigger) and, when a Klaviyo key is
+ * set, sends a "Vault Reminder" event with the card count and the date to ship by.
+ */
+export async function sendVaultReminders(db: Db, adminFor: (shop: string) => Promise<AdminApiContext>, now = new Date()) {
+  const cutoff = new Date(now.getTime() - (HOLD_DAYS - REMIND_DAYS_BEFORE) * 86_400_000);
+  const due = await db.pull.findMany({
+    where: {
+      status: "REVEALED",
+      remindedAt: null,
+      createdAt: { lt: cutoff },
+      OR: [{ shipRequestId: null }, { shipRequest: { status: { not: "PENDING" } } }],
+    },
+    include: { slot: { include: { card: true } } },
+    take: 500,
+  });
+  if (due.length === 0) return 0;
+  const vaultOrders = new Set(
+    (
+      await db.packOrder.findMany({ where: { orderId: { in: [...new Set(due.map((p) => p.orderId))] }, vault: true }, select: { orderId: true } })
+    ).map((o) => o.orderId),
+  );
+  const groups = new Map<string, typeof due>();
+  for (const p of due.filter((p) => vaultOrders.has(p.orderId))) {
+    const key = `${p.shop}|${p.customerId ?? p.orderId}`;
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+
+  let sent = 0;
+  for (const pulls of groups.values()) {
+    const { shop, customerId } = pulls[0];
+    try {
+      const admin = await adminFor(shop);
+      const oldest = pulls.reduce((a, p) => (p.createdAt < a ? p.createdAt : a), pulls[0].createdAt);
+      const holdUntil = new Date(oldest.getTime() + HOLD_DAYS * 86_400_000);
+      // Tag their latest pack order (a Shopify Flow "Order tags added" trigger) and email via Klaviyo.
+      const latest = pulls.reduce((a, p) => (p.createdAt > a.createdAt ? p : a), pulls[0]);
+      await gql(
+        admin,
+        `#graphql
+          mutation VaultReminderTag($id: ID!, $tags: [String!]!) {
+            tagsAdd(id: $id, tags: $tags) { node { id } userErrors { field message } }
+          }`,
+        { id: latest.orderId, tags: [VAULT_REMINDER_TAG] },
+      );
+      const email = await orderEmail(admin, latest.orderId);
+      if (email) {
+        await klaviyoEvent(email, {
+          cards: pulls.length,
+          card_titles: pulls.map((p) => p.slot.card.title),
+          ship_by: holdUntil.toISOString().slice(0, 10),
+          vault_url: `https://${shop}/apps/packs`,
+        });
+      }
+      await db.pull.updateMany({ where: { id: { in: pulls.map((p) => p.id) } }, data: { remindedAt: now } });
+      sent++;
+    } catch (error) {
+      console.error(`Vault reminder for ${customerId ?? pulls[0].orderId} failed`, error);
+    }
+  }
+  return sent;
+}
+
+/** Sends a Klaviyo event (triggers a Klaviyo flow) when KLAVIYO_PRIVATE_KEY is set; otherwise does nothing. */
+async function klaviyoEvent(email: string, properties: Record<string, unknown>) {
+  const key = process.env.KLAVIYO_PRIVATE_KEY;
+  if (!key) return;
+  const response = await fetch("https://a.klaviyo.com/api/events/", {
+    method: "POST",
+    headers: {
+      Authorization: `Klaviyo-API-Key ${key}`,
+      revision: "2024-10-15",
+      "Content-Type": "application/vnd.api+json",
+      Accept: "application/vnd.api+json",
+    },
+    body: JSON.stringify({
+      data: {
+        type: "event",
+        attributes: {
+          properties,
+          metric: { data: { type: "metric", attributes: { name: VAULT_REMINDER_METRIC } } },
+          profile: { data: { type: "profile", attributes: { email } } },
+        },
+      },
+    }),
+  });
+  if (!response.ok) throw new Error(`Klaviyo event failed: ${response.status} ${await response.text()}`);
+}

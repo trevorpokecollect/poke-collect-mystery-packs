@@ -151,6 +151,8 @@ model Pull {
   shipRequestId String?
   shipRequest   ShipRequest? @relation(fields: [shipRequestId], references: [id])
   shipOrderId   String?
+  // When the customer was reminded this vaulted card is near the end of its holding period.
+  remindedAt    DateTime?
   createdAt     DateTime     @default(now())
 
   @@unique([lineItemId, packIndex, cardIndex])

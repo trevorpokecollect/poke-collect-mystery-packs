@@ -499,6 +499,7 @@ function vaultAdmin() {
         drafts.push({ input: opts.variables.input as Record<string, unknown> });
         return reply({ draftOrderCreate: { draftOrder: { id: `gid://shopify/DraftOrder/${drafts.length}`, invoiceUrl: `https://pay/${drafts.length}` }, userErrors: [] } });
       }
+      if (query.includes("tagsAdd")) return reply({ tagsAdd: { node: { id: "x" }, userErrors: [] } });
       if (query.includes("VaultCurrency")) return reply({ shop: { currencyCode: "USD" } });
       if (query.includes("VaultOrderEmail")) return reply({ order: { email: "guest@example.com" } });
       if (query.includes("VaultDraftStatus")) return reply({ draftOrder: { id: "d", status: "OPEN", order: null } });
@@ -577,5 +578,32 @@ describe("vault", () => {
     expect(pulls.every((p) => p.shipRequestId === null && p.unreservedAt === null && p.status === "REVEALED")).toBe(true);
     expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(2);
     expect((await db.shipRequest.findFirstOrThrow()).status).toBe("EXPIRED");
+  });
+});
+
+describe("vault reminders", () => {
+  it("reminds once, a month before the 12-month hold ends", async () => {
+    const series = await makeReservedSeries(4);
+    const { admin } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const viewer = { customerId: "gid://shopify/Customer/1" };
+    const { pulls } = await drawForOrder(db, order(2));
+    for (const p of pulls) await revealPull(db, SHOP, p.id, viewer);
+    const tagged: unknown[] = [];
+    const remindAdmin = {
+      graphql: async (query: string, opts: { variables: Record<string, unknown> }) => {
+        if (query.includes("VaultReminderTag")) tagged.push(opts.variables);
+        return admin.graphql(query, opts);
+      },
+    };
+    const { sendVaultReminders } = await import("./vault.server");
+    // 300 days in: not yet.
+    expect(await sendVaultReminders(db, async () => remindAdmin as never, new Date(Date.now() + 300 * 86_400_000))).toBe(0);
+    // 340 days in: one reminder for this customer, then never again.
+    const later = new Date(Date.now() + 340 * 86_400_000);
+    expect(await sendVaultReminders(db, async () => remindAdmin as never, later)).toBe(1);
+    expect(tagged).toHaveLength(1);
+    expect(await sendVaultReminders(db, async () => remindAdmin as never, later)).toBe(0);
   });
 });
