@@ -4,11 +4,13 @@
   "use strict";
 
   var root = document.getElementById("mystery-packs");
-  if (!root) return;
+  // Loaded without the My Packs page (e.g. the product page's demo button): only the opening
+  // animation is used, through window.PCPackOpener.
+  var standalone = !root;
 
-  var api = root.getAttribute("data-api") || "/apps/packs/api";
+  var api = (root && root.getAttribute("data-api")) || "/apps/packs/api";
   // Merchant preview (?demo=<signed token>): sample packs from the live pool, opened locally.
-  var demo = root.getAttribute("data-demo") === "1";
+  var demo = !!root && root.getAttribute("data-demo") === "1";
   var demoData = null;
   var params = new URLSearchParams(window.location.search);
   // Arriving from the thank-you page button (?open=1) starts opening right away, once.
@@ -544,7 +546,8 @@
       closed = true;
       stage.remove();
       document.removeEventListener("keydown", onKey);
-      load();
+      if (pack.onClose) pack.onClose();
+      if (!standalone) load();
     }
     function onKey(e) { if (e.key === "Escape") close(); }
     skip.addEventListener("click", close);
@@ -640,11 +643,16 @@
 
           result.appendChild(el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }));
           result.appendChild(el("h2", { text: card.title }));
-          result.appendChild(el("p", { text: "Ships with your order" }));
-          var done = el("button", { class: "mp-btn", type: "button", text: "Done" });
+          result.appendChild(el("p", { text: pack.resultNote || "Ships with your order" }));
+          var done = el("button", { class: "mp-btn", type: "button", text: pack.doneLabel || "Done" });
           done.addEventListener("click", close);
           var actions = el("div", { class: "mp-actions" }, [done]);
-          if (navigator.share) {
+          if (pack.again) {
+            var again = el("button", { class: "mp-btn mp-btn-ghost", type: "button", text: "Try Again" });
+            again.addEventListener("click", function () { close(); pack.again(); });
+            actions.appendChild(again);
+          }
+          if (navigator.share && !pack.noShare) {
             var share = el("button", { class: "mp-btn mp-btn-ghost", type: "button", text: "Share" });
             share.addEventListener("click", function () {
               navigator.share({ title: "My mystery pack pull", text: "I pulled " + card.title + "!", url: window.location.origin + "/apps/packs" }).catch(function () {});
@@ -663,5 +671,22 @@
       });
   }
 
-  load();
+  // Demo opening for any page: PCPackOpener.open({ packImageUrl, card: { title, tier, imageUrl }, ... }).
+  window.PCPackOpener = {
+    open: function (opts) {
+      openPack({
+        id: "demo",
+        series: opts.series || "Mystery Pack",
+        packImageUrl: opts.packImageUrl || null,
+        demoCard: opts.card,
+        resultNote: opts.note,
+        doneLabel: opts.doneLabel,
+        again: opts.again,
+        noShare: true,
+        onClose: opts.onClose,
+      });
+    },
+  };
+
+  if (!standalone) load();
 })();

@@ -26,6 +26,58 @@
   function pct(v) { return v === 0 ? "0%" : v < 0.001 ? "<0.1%" : (v * 100).toFixed(1) + "%"; }
   function esc(s) { var d = document.createElement("div"); d.textContent = String(s); return d.innerHTML; }
 
+  // "Try A Demo Pack": a pretend opening with a card picked from what's left in the pool,
+  // weighted by copies remaining (the live odds). Uses the same opener as My Packs.
+  var openerLoading = null;
+  function loadOpener(app) {
+    if (window.PCPackOpener) return Promise.resolve();
+    if (openerLoading) return openerLoading;
+    var v = Math.floor(Date.now() / 3600000);
+    openerLoading = new Promise(function (resolve, reject) {
+      var css = document.createElement("link");
+      css.rel = "stylesheet"; css.href = app + "/packs/opener.css?v=" + v;
+      document.head.appendChild(css);
+      var js = document.createElement("script");
+      js.src = app + "/packs/opener.js?v=" + v; js.onload = resolve; js.onerror = reject;
+      document.head.appendChild(js);
+    });
+    return openerLoading;
+  }
+  function pickCard(cards) {
+    var total = cards.reduce(function (n, c) { return n + (c.remaining || 0); }, 0);
+    var r = Math.random() * total;
+    for (var i = 0; i < cards.length; i++) {
+      r -= cards[i].remaining || 0;
+      if (r < 0) return cards[i];
+    }
+    return cards[cards.length - 1];
+  }
+  function setupDemo(root, data) {
+    var btn = root.querySelector("[data-mp-demo]");
+    var note = root.querySelector("[data-mp-demo-note]");
+    var cards = (data.cards || []).filter(function (c) { return c.remaining > 0; });
+    if (!btn || !cards.length || data.status === "CLOSED") return;
+    btn.hidden = false;
+    if (note) note.hidden = false;
+    var app = btn.getAttribute("data-app").replace(/\/$/, "");
+    function run() {
+      btn.disabled = true;
+      loadOpener(app).then(function () {
+        var c = pickCard(cards);
+        window.PCPackOpener.open({
+          packImageUrl: btn.getAttribute("data-pack-image") || null,
+          series: btn.getAttribute("data-series"),
+          card: { title: c.title, tier: c.tier, imageUrl: c.imageUrl },
+          note: "Demo pull. Buy a pack to open one for real!",
+          doneLabel: "Done",
+          again: run,
+          onClose: function () { btn.disabled = false; },
+        });
+      }).catch(function () { btn.disabled = false; });
+    }
+    btn.addEventListener("click", run);
+  }
+
   document.querySelectorAll("[data-mp-odds]").forEach(function (root) {
     var left = root.querySelector("[data-mp-left]");
     var bar = root.querySelector("[data-mp-bar]");
@@ -52,6 +104,8 @@
             "</li>"
           );
         }).join("");
+
+        setupDemo(root, data);
 
         // The "Provably fair" link only makes sense once the pool order is committed.
         if (fair && data.commitHash) fair.hidden = false;

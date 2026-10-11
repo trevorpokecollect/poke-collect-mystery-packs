@@ -29,3 +29,11 @@
   .mpd { padding: 1rem; }
   .mpd__tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+.mpd__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.mpd__buttons > :only-child { grid-column: 1 / -1; }
+.mpd__button--demo { display: flex; align-items: center; justify-content: center; gap: .45em; border: 0; cursor: pointer; font: inherit; font-weight: 700;
+  background: linear-gradient(120deg, #e22f39, #b3122b); box-shadow: 0 6px 16px rgba(226,47,57,.3); }
+.mpd__button--demo:hover { background: #14141a; }
+.mpd__button--demo[hidden] { display: none; }
+.mpd__demo-note { margin: .5em 0 0; font-size: .8em; opacity: .65; text-align: center; }
+@media (max-width: 480px) { .mpd__buttons { grid-template-columns: 1fr; } }

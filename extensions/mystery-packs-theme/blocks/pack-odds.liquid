@@ -28,7 +28,19 @@
 
   <ul class="mpd__tiers" data-mp-tiers aria-label="Card tiers"></ul>
 
-  <a class="mpd__button" href="/apps/packs/pool?{{ query }}">{{ block.settings.button_label }}</a>
+  <div class="mpd__buttons">
+    <a class="mpd__button" href="/apps/packs/pool?{{ query }}">{{ block.settings.button_label }}</a>
+    {%- if block.settings.show_demo -%}
+      <button type="button" class="mpd__button mpd__button--demo" data-mp-demo hidden
+        data-app="{{ block.settings.app_url | default: 'https://app-production-9bd21.up.railway.app' }}"
+        data-pack-image="{%- if product.featured_image -%}{{ product.featured_image | image_url: width: 900 }}{%- endif -%}"
+        data-series="{{ product.title | escape }}">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3l14 9-14 9V3z"/></svg>
+        {{ block.settings.demo_label }}
+      </button>
+    {%- endif -%}
+  </div>
+  {%- if block.settings.show_demo -%}<p class="mpd__demo-note" data-mp-demo-note hidden>{{ block.settings.demo_note }}</p>{%- endif -%}
 
   {%- if block.settings.show_how -%}
     <div class="mpd__how">
@@ -62,7 +74,12 @@
     { "type": "checkbox", "id": "show_how", "label": "Show how it works", "default": true },
     { "type": "text", "id": "how_heading", "label": "How it works heading", "default": "How it works" },
     { "type": "text", "id": "shipping_note", "label": "Shipping note", "default": "Free shipping when you buy 5 or more packs." },
-    { "type": "text", "id": "series_handle", "label": "Series handle (optional)", "info": "Leave blank to use the series sold through this product." }
+    { "type": "text", "id": "series_handle", "label": "Series handle (optional)", "info": "Leave blank to use the series sold through this product." },
+    { "type": "header", "content": "Demo opening" },
+    { "type": "checkbox", "id": "show_demo", "label": "Show demo button", "info": "Lets shoppers watch a pretend pack opening with a card from the cards still in the pool. Nothing is bought or drawn.", "default": true },
+    { "type": "text", "id": "demo_label", "label": "Demo button label", "default": "Try A Demo Pack" },
+    { "type": "text", "id": "demo_note", "label": "Demo note", "default": "Demo only: the card is picked at random from what's left in the pool, using the live odds. Nothing is bought or reserved." },
+    { "type": "text", "id": "app_url", "label": "App URL (advanced)", "default": "https://app-production-9bd21.up.railway.app" }
   ]
 }
 {% endschema %}
