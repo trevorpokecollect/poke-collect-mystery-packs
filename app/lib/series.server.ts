@@ -82,6 +82,12 @@ export async function createSeries(
 ) {
   const [variant] = await fetchVariants(admin, [input.packVariantId]);
   if (!variant) throw new Error("That pack product variant wasn't found.");
+  const inUse = await db.series.findFirst({
+    where: { shop, packVariantId: variant.id, status: { in: ["DRAFT", "LIVE"] } },
+  });
+  if (inUse) {
+    throw new Error(`That pack is already used by "${inUse.title}". Close that series first, then reuse the pack.`);
+  }
   return db.series.create({
     data: {
       shop,

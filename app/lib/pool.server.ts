@@ -75,10 +75,25 @@ export interface DrawResult {
  */
 export async function drawForOrder(db: PrismaClient, input: DrawInput): Promise<DrawResult> {
   const variantIds = [...new Set(input.lines.map((l) => l.variantId))];
-  const seriesList = await db.series.findMany({
-    where: { shop: input.shop, packVariantId: { in: variantIds } },
+  // A pack product can be reused by later series, so draw from the live one. A series that
+  // already drew for this order (e.g. a retried webhook after it sold out) still counts.
+  const candidates = await db.series.findMany({
+    where: {
+      shop: input.shop,
+      packVariantId: { in: variantIds },
+      OR: [{ status: "LIVE" }, { pulls: { some: { orderId: input.orderId } } }],
+    },
+    include: { _count: { select: { pulls: { where: { orderId: input.orderId } } } } },
+    orderBy: { createdAt: "asc" },
   });
-  const byVariant = new Map(seriesList.map((s) => [s.packVariantId, s]));
+  const byVariant = new Map<string, (typeof candidates)[number]>();
+  for (const s of candidates) {
+    const current = byVariant.get(s.packVariantId);
+    if (!current || (current._count.pulls === 0 && (s._count.pulls > 0 || s.status === "LIVE"))) {
+      byVariant.set(s.packVariantId, s);
+    }
+  }
+  const seriesList = [...byVariant.values()];
   const lines = input.lines.filter((l) => byVariant.has(l.variantId));
   if (lines.length === 0) return { pulls: [], shortfall: [], packOrder: null };
 

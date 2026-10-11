@@ -34,12 +34,12 @@ beforeEach(async () => {
   await db.series.deleteMany();
 });
 
-async function makeSeries(cards: { name: string; tier: string; value: number; qty: number }[]) {
+async function makeSeries(cards: { name: string; tier: string; value: number; qty: number }[], handle = "series-1") {
   return db.series.create({
     data: {
       shop: SHOP,
-      title: "Series 1",
-      handle: "series-1",
+      title: handle,
+      handle,
       packProductId: "gid://shopify/Product/1",
       packVariantId: PACK,
       packPrice: 10,
@@ -74,6 +74,28 @@ const standardPool = [
   { name: "Rare", tier: "Rare", value: 15, qty: 3 },
   { name: "Chase", tier: "Chase", value: 50, qty: 1 },
 ];
+
+describe("reusing a pack product", () => {
+  it("draws from the live series once an earlier one on the same pack has closed", async () => {
+    const first = await makeSeries(standardPool, "series-1");
+    await launchSeries(db, first.id);
+    const early = order(1);
+    await drawForOrder(db, early);
+    await db.series.update({ where: { id: first.id }, data: { status: "CLOSED" } });
+
+    const second = await makeSeries(standardPool, "series-2");
+    await launchSeries(db, second.id);
+    const later = order(2);
+    const result = await drawForOrder(db, later);
+    expect(result.pulls).toHaveLength(2);
+    expect(result.pulls.every((p) => p.seriesId === second.id)).toBe(true);
+
+    // A retried webhook for the early order stays with the series that drew it.
+    const retry = await drawForOrder(db, early);
+    expect(retry.pulls).toHaveLength(0);
+    expect(await db.pull.count({ where: { orderId: early.orderId, seriesId: first.id } })).toBe(1);
+  });
+});
 
 describe("launchSeries", () => {
   it("creates one slot per copy with a verifiable commitment", async () => {

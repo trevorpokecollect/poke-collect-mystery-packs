@@ -45,7 +45,8 @@ model Series {
   status        SeriesStatus @default(DRAFT)
   // The Shopify product variant customers buy (the pack itself).
   packProductId String
-  packVariantId String       @unique
+  // Reusable across series: only one draft or live series may use a pack at a time.
+  packVariantId String
   packPrice     Decimal      @db.Decimal(10, 2)
   // Unopened packs are revealed automatically after this many days so orders can ship.
   autoOpenDays  Int          @default(7)
@@ -69,6 +70,7 @@ model Series {
   slots Slot[]
   pulls Pull[]
 
+  @@index([shop, packVariantId])
   @@unique([shop, handle])
 }
 
