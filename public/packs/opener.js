@@ -216,8 +216,6 @@
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
       root.appendChild(el("div", { class: "mp-grid" }, unopened.map(function (p) { return packTile(p, openPack); })));
     }
-    var more = shelf(available);
-    if (more) root.appendChild(more);
     root.appendChild(el("h2", { class: "mp-section-title", text: "Your pulls" }));
     if (signedIn === false) {
       root.appendChild(el("p", { class: "mp-login-hint" }, [
@@ -230,6 +228,8 @@
         ? el("div", { class: "mp-grid" }, opened.map(cardTile))
         : el("p", { class: "mp-empty", text: "Nothing pulled yet." }),
     );
+    var more = shelf(available);
+    if (more) root.appendChild(more);
     root.appendChild(shippingInfo());
     root.appendChild(recommendations(recommendFrom));
   }
