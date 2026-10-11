@@ -45,6 +45,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const tierCounts = new Map<string, number>();
   for (const c of series.cards) tierCounts.set(c.tier, (tierCounts.get(c.tier) ?? 0) + c.quantity);
   const build = (series.buildRules ?? {}) as Partial<Record<string, string | number>>;
+  // A link can carry pool-rule overrides (e.g. ?targetAverage=10.99) and show a one-click
+  // "Rebuild pool" in the title bar for a draft.
+  const url = new URL(request.url);
+  const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition", "language"];
+  const buildOverrides = Object.fromEntries(BUILD_KEYS.filter((k) => url.searchParams.has(k)).map((k) => [k, url.searchParams.get(k) ?? ""]));
 
   return {
     series: {
@@ -58,6 +63,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       reserveInventory: series.reserveInventory,
     },
     tierRules,
+    buildOverrides,
     tierNames: series.tierRules ? tierRules.map((t) => t.name) : [...TIERS],
     tierCounts: [...tierCounts.entries()],
     buildDefaults: {
@@ -193,7 +199,7 @@ const money = (n: number | string) => `$${Number(n).toFixed(2)}`;
 const percent = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 export default function SeriesPage() {
-  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults } =
+  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults, buildOverrides } =
     useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
@@ -254,6 +260,15 @@ export default function SeriesPage() {
 
   return (
     <s-page heading={series.title}>
+      {draft && Object.keys(buildOverrides).length > 0 ? (
+        <s-button
+          slot="secondary-actions"
+          disabled={busy}
+          onClick={() => submit({ intent: "autoBuild", ...buildDefaults, ...buildOverrides }, { method: "post" })}
+        >
+          Rebuild Pool ({Object.entries(buildOverrides).map(([k, v]) => `${k} ${v}`).join(", ")})
+        </s-button>
+      ) : null}
       {draft ? (
         <s-button
           slot="primary-action"
