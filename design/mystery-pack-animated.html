@@ -22,7 +22,7 @@
 .a-ball2{animation-delay:calc(var(--t)*-1s + .8s)}.a-ball3{animation-delay:calc(var(--t)*-1s + 1.2s)}
 @keyframes ball{0%,40%,100%{opacity:.7}15%{opacity:1;filter:brightness(1.6)}}
 </style>
-<script>var m=location.search.match(/t=([0-9.]+)/);if(m)document.documentElement.style.setProperty('--t',m[1]);else document.querySelectorAll('[class^=a-]').forEach(function(e){e.style.animationPlayState='running'});</script>
+<script>if(/[?&]bg=0/.test(location.search))document.write('<style>html,body{background:transparent}.backdrop{display:none}</style>');var m=location.search.match(/t=([0-9.]+)/);if(m)document.documentElement.style.setProperty('--t',m[1]);else document.querySelectorAll('[class^=a-]').forEach(function(e){e.style.animationPlayState='running'});</script>
 </head><body>
 <svg width="900" height="900" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg">
 <defs>
@@ -45,8 +45,8 @@
 </defs>
 
 <!-- backdrop -->
-<rect width="900" height="900" fill="url(#bgGlow)"/>
-<rect width="900" height="900" fill="url(#dots)"/>
+<g class="backdrop"><rect width="900" height="900" fill="url(#bgGlow)"/>
+<rect width="900" height="900" fill="url(#dots)"/></g>
 
 <!-- bag -->
 <g filter="url(#shadow)"><rect x="235" y="38" width="430" height="824" rx="14" fill="url(#bag)"/></g>
