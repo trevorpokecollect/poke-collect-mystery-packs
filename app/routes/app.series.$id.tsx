@@ -16,7 +16,6 @@ import {
   syncDraftPackPrice,
   updateTierRules,
 } from "../lib/series.server";
-import { Prisma } from "@prisma/client";
 import { releaseUnneeded } from "../lib/inventory.server";
 import { TIERS } from "../lib/tiers";
 import { PoolError } from "../lib/pool.server";
@@ -29,8 +28,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     include: { cards: { orderBy: [{ sortOrder: "asc" }] } },
   });
   if (!series) throw new Response("Not found", { status: 404 });
-  const newPrice = await syncDraftPackPrice(admin, series);
-  if (newPrice !== null) series.packPrice = new Prisma.Decimal(newPrice);
+  const packPrice = (await syncDraftPackPrice(admin, series)) ?? series.packPrice.toString();
 
   const remaining = await db.slot.groupBy({
     by: ["cardId"],
@@ -44,7 +42,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     take: 25,
     include: { slot: { include: { card: { select: { title: true, tier: true } } } } },
   });
-  const summary = poolSummary(series.cards, Number(series.packPrice), series.cardsPerPack);
+  const summary = poolSummary(series.cards, Number(packPrice), series.cardsPerPack);
   const tierRules = seriesTierRules(series);
   const tierCounts = new Map<string, number>();
   for (const c of series.cards) tierCounts.set(c.tier, (tierCounts.get(c.tier) ?? 0) + c.quantity);
@@ -67,7 +65,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       title: series.title,
       handle: series.handle,
       status: series.status,
-      packPrice: series.packPrice.toString(),
+      packPrice,
       autoOpenDays: series.autoOpenDays,
       commitHash: series.commitHash,
       reserveInventory: series.reserveInventory,
@@ -83,7 +81,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       maxValue: String(build.maxValue ?? 50),
       // Default to a 100% return: the average card value equals the pack price.
       // Per card: a multi-card pack spreads the pack price across its cards.
-      targetAverage: String(build.targetAverage ?? (Number(series.packPrice) / series.cardsPerPack).toFixed(2)),
+      targetAverage: String(build.targetAverage ?? (Number(packPrice) / series.cardsPerPack).toFixed(2)),
       productType: String(build.productType ?? "Pokemon Single"),
       condition: String(build.condition ?? "Near Mint"),
       language: String(build.language ?? "English"),
