@@ -206,7 +206,7 @@ async function fulfillPackLines(admin: Admin, orderId: string, packVariantIds: S
 }
 
 /**
- * Legacy hold flow (orders placed before no-hold): once every pack on an order is revealed, add the cards, release our hold, and close out
+ * Once every pack on an order is revealed: add the cards, release our hold, and close out
  * the pack line items. Safe to call repeatedly; each step checks what is already done.
  */
 export async function finalizeOrder(db: PrismaClient, admin: Admin, orderId: string) {
@@ -266,46 +266,6 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
   await fulfillPackLines(admin, orderId, packVariants);
   await db.packOrder.update({ where: { orderId }, data: { finalized: true, held: false } });
   return true;
-}
-
-/**
- * No-hold flow: right after payment, add every drawn card to the order and close out the pack
- * lines, so the order ships on its normal schedule whether or not the packs are opened online.
- * The pulls stay UNOPENED in the app, so the opening animation still works any time.
- * Safe to call repeatedly (cardsAddedAt guards the order edit).
- */
-export async function shipAtPayment(db: PrismaClient, admin: Admin, orderId: string) {
-  const now = new Date();
-  const lease = await db.packOrder.updateMany({
-    where: {
-      orderId,
-      cardsAddedAt: null,
-      OR: [{ finalizingAt: null }, { finalizingAt: { lt: new Date(now.getTime() - 5 * 60_000) } }],
-    },
-    data: { finalizingAt: now },
-  });
-  if (lease.count === 0) return false;
-  try {
-    const packOrder = await db.packOrder.findUniqueOrThrow({ where: { orderId } });
-    const pulls = await db.pull.findMany({
-      where: { orderId, status: { in: ["UNOPENED", "REVEALED"] } },
-      include: { slot: { include: { card: true } } },
-    });
-    if (pulls.length === 0) return false;
-    await unreserveForPulls(db, admin, pulls.map((p) => p.id));
-    await addCardsToOrder(admin, orderId, pulls.map((p) => p.slot.card.variantId), packOrder.orderName);
-    await db.packOrder.update({ where: { orderId }, data: { cardsAddedAt: new Date() } });
-    const packVariants = new Set(
-      (await db.series.findMany({ where: { shop: packOrder.shop }, select: { packVariantId: true } })).map(
-        (s) => s.packVariantId,
-      ),
-    );
-    await fulfillPackLines(admin, orderId, packVariants);
-    await db.packOrder.update({ where: { orderId }, data: { finalized: true, held: false } });
-    return true;
-  } finally {
-    await db.packOrder.update({ where: { orderId }, data: { finalizingAt: null } });
-  }
 }
 
 /** Stores the "open your packs" link on the order so notification templates can show it. */
