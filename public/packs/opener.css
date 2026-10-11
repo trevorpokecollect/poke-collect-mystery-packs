@@ -278,5 +278,5 @@
 .mp-result h2 { font-family: var(--mp-heading); font-size: 1.7em; font-weight: 700; line-height: 1.15; margin: 8px auto 6px; max-width: 30ch; }
 .mp-result p { font-size: 1.05em; }
 .mp-btn { font-family: var(--mp-heading); font-size: 1.1em; letter-spacing: .03em; padding: 12px 26px; }
-.mp-theme-recs { margin: 40px -16px 0; }
+.mp-theme-recs { margin: 40px 0 0; width: 100vw; position: relative; left: 50%; transform: translateX(-50%); }
 .mp-theme-recs .pc-product-row, .mp-theme-recs .pr-section { width: 100%; }
