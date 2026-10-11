@@ -331,3 +331,11 @@
    glow behind on iPhone). It slides away with the body. */
 .mp-open-glow { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0 0 10px 10px; pointer-events: none;
   box-shadow: 0 0 18px rgba(255, 40, 90, .38), 0 14px 26px rgba(0, 0, 0, .5); }
+
+/* Digital rain behind the opening: black and red, with a dark spotlight so the pack and card stay readable. */
+.mp-stage { background: #050306; }
+.mp-matrix { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .55; }
+.mp-stage::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 55% at 50% 45%, rgba(5,3,6,.85) 0%, rgba(5,3,6,.55) 45%, rgba(5,3,6,0) 75%); }
+.mp-stage-inner, .mp-skip { z-index: 1; }
+.mp-stage .mp-confetti { z-index: 2; }

@@ -534,6 +534,53 @@
     }, easeInOut);
   }
 
+  // Red-on-black "digital rain" behind the opening (katakana, digits and Poke-Collect glyphs).
+  // Returns a stop function. Skipped for reduced motion.
+  function matrixRain(stage) {
+    var canvas = el("canvas", { class: "mp-matrix", "aria-hidden": "true" });
+    stage.insertBefore(canvas, stage.firstChild);
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return function () {};
+    var GLYPHS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789POKECOLLECT";
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var size, cols, drops, speeds, w, h;
+    function resize() {
+      w = stage.clientWidth; h = stage.clientHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      size = w < 600 ? 14 : 16;
+      cols = Math.ceil(w / size);
+      drops = []; speeds = [];
+      for (var i = 0; i < cols; i++) { drops.push(Math.random() * -h / size); speeds.push(0.35 + Math.random() * 0.65); }
+      ctx.fillStyle = "#050306"; ctx.fillRect(0, 0, w, h);
+    }
+    resize();
+    window.addEventListener("resize", resize);
+    var running = true, last = 0;
+    function frame(now) {
+      if (!running) return;
+      requestAnimationFrame(frame);
+      if (now - last < 33) return; // ~30 fps is plenty and easy on phones
+      last = now;
+      ctx.fillStyle = "rgba(5, 3, 6, 0.16)"; // fade the old glyphs into trails
+      ctx.fillRect(0, 0, w, h);
+      ctx.font = "700 " + size + "px ui-monospace, Menlo, monospace";
+      for (var i = 0; i < cols; i++) {
+        var y = drops[i] * size;
+        var ch = GLYPHS.charAt(Math.floor(Math.random() * GLYPHS.length));
+        // Bright head, deep red body.
+        ctx.fillStyle = Math.random() < 0.08 ? "#ffd1dc" : "#ff2d55";
+        ctx.globalAlpha = 0.85;
+        ctx.fillText(ch, i * size, y);
+        ctx.globalAlpha = 1;
+        drops[i] += speeds[i];
+        if (y > h && Math.random() > 0.975) drops[i] = Math.random() * -20;
+      }
+    }
+    requestAnimationFrame(frame);
+    return function () { running = false; window.removeEventListener("resize", resize); };
+  }
+
   function openPack(pack) {
     var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -543,10 +590,12 @@
     var inner = el("div", { class: "mp-stage-inner" }, [glow, front, result]);
     var skip = el("button", { class: "mp-btn mp-btn-ghost mp-skip", type: "button", text: "Close" });
     var stage = el("div", { class: "mp-stage", role: "dialog", "aria-modal": "true", "aria-label": "Opening pack" }, [inner, skip]);
+    var stopRain = function () {};
     var closed = false;
     function close() {
       if (closed) return;
       closed = true;
+      stopRain();
       stage.remove();
       document.removeEventListener("keydown", onKey);
       if (pack.onClose) pack.onClose();
@@ -556,6 +605,8 @@
     skip.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
     document.body.appendChild(stage);
+    var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reducedMotion) stopRain = matrixRain(stage);
 
     // The pack is as tall as the card's final spot and as wide as the artwork's pack bag.
     var height = inner.getBoundingClientRect().height;
