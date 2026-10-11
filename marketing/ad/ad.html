@@ -1,0 +1,284 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Montserrat:wght@600;700;800;900&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet">
+<style>
+:root{--red:#e22f39;--red2:#ff2d55;--pink:#ff6fb1;--blue:#3d8bff;--purple:#8b46ff;--gold:#ffd400}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#07070b}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:radial-gradient(ellipse at 50% 55%,#3a0710 0%,#12060a 55%,#07070b 100%);font-family:Montserrat,Arial,sans-serif;color:#fff}
+canvas{position:absolute;inset:0}
+.abs{position:absolute;left:0;top:0;will-change:transform,opacity}
+.center{left:50%;top:50%}
+.h1{font-family:Oswald,sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:2px;line-height:.95;text-align:center}
+.mono{font-family:'JetBrains Mono',monospace}
+.glow-red{text-shadow:0 0 18px rgba(255,45,85,.85),0 0 48px rgba(255,45,85,.45)}
+.pill{display:inline-block;padding:14px 34px;border-radius:999px;border:3px solid rgba(255,255,255,.85);font-family:'JetBrains Mono',monospace;font-weight:700;font-size:34px;letter-spacing:3px;white-space:nowrap}
+.pack{width:430px;height:824px;background-size:cover;border-radius:14px}
+.card{width:420px;height:586px;border-radius:26px;position:relative;overflow:hidden}
+.cardback{background:linear-gradient(160deg,#160a12,#0b0b12 60%,#1b0710);border:6px solid #ff2d55;box-shadow:0 0 40px rgba(255,45,85,.7)}
+.cardfront{border:8px solid var(--tc);background:linear-gradient(160deg,#141020,#0a0a12 55%,#140a1e);box-shadow:0 0 60px var(--tc),0 0 140px var(--tc)}
+.cardfront .holo{position:absolute;inset:-40%;background:linear-gradient(115deg,transparent 30%,rgba(255,45,85,.35) 40%,rgba(255,214,224,.45) 46%,rgba(124,242,255,.4) 52%,rgba(139,70,255,.35) 58%,transparent 68%);mix-blend-mode:screen}
+.cardfront .tname{position:absolute;left:0;right:0;bottom:56px;text-align:center;font-family:Oswald;font-weight:700;font-size:72px;letter-spacing:6px;color:var(--tc);text-shadow:0 0 20px var(--tc)}
+.cardfront .ball{position:absolute;left:50%;top:150px;transform:translateX(-50%)}
+.cardfront .grid{position:absolute;inset:24px;border:2px solid rgba(255,255,255,.12);border-radius:16px;background-image:linear-gradient(rgba(255,255,255,.05) 2px,transparent 2px),linear-gradient(90deg,rgba(255,255,255,.05) 2px,transparent 2px);background-size:40px 40px}
+.step{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--red2);font-size:40px;letter-spacing:8px;text-align:center}
+.btn{background:linear-gradient(180deg,#ff3b45,#c3141f);border-radius:22px;font-family:Oswald;font-weight:700;font-size:64px;letter-spacing:2px;padding:30px 0;width:640px;text-align:center;box-shadow:0 14px 40px rgba(226,47,57,.55)}
+.tile{width:230px;height:300px;border-radius:26px;background:rgba(20,16,28,.92);border:3px solid rgba(255,255,255,.14);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.tile .tl{font-family:Oswald;font-weight:700;font-size:44px;letter-spacing:4px}
+.tile .ts{font-family:Montserrat;font-weight:800;font-size:22px;color:#c9c9d6;letter-spacing:1px}
+.vault{width:560px;height:430px;border-radius:40px;background:linear-gradient(180deg,#1a1622,#0c0a12);border:6px solid #ff2d55;box-shadow:0 0 60px rgba(255,45,85,.6),inset 0 0 60px rgba(255,45,85,.25)}
+.bar{width:760px;height:44px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;border:3px solid rgba(255,255,255,.25)}
+.bar>div{height:100%;background:linear-gradient(90deg,#e22f39,#ff7a59,#ffd400)}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.65) 100%);pointer-events:none}
+.scan{position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 2px,transparent 2px 5px);pointer-events:none;mix-blend-mode:multiply}
+</style></head><body>
+<div id="stage">
+  <canvas id="matrix" width="1080" height="1920"></canvas>
+  <canvas id="fx" width="1080" height="1920"></canvas>
+  <div id="root"></div>
+  <div class="vignette"></div><div class="scan"></div>
+  <div class="flash" id="flash"></div>
+</div>
+<script>
+const R=document.getElementById('root');
+const BALLS={poke:{top:"#e3350d",extra:""},great:{top:"#2f6fe0",extra:'<path d="M7 11 L11 7 L11 13 Z M33 11 L29 7 L29 13 Z" fill="#e3350d"/>'},ultra:{top:"#1d1d24",extra:'<rect x="12" y="5" width="4" height="10" fill="#ffd400"/><rect x="24" y="5" width="4" height="10" fill="#ffd400"/>'},master:{top:"#7b3fe4",extra:'<circle cx="13" cy="11" r="2.6" fill="#ff5fae"/><circle cx="27" cy="11" r="2.6" fill="#ff5fae"/>'}};
+const TC={poke:'#ff4b3a',great:'#3d8bff',ultra:'#ffd400',master:'#a46bff'};
+function ball(n,s){const b=BALLS[n];return `<svg viewBox="0 0 40 40" width="${s}" height="${s}"><circle cx="20" cy="20" r="18" fill="#f4f4f6" stroke="#14141a" stroke-width="2.5"/><path d="M2 20 A18 18 0 0 1 38 20 Z" fill="${b.top}" stroke="#14141a" stroke-width="2.5"/>${b.extra}<rect x="2" y="18.3" width="36" height="3.4" fill="#14141a"/><circle cx="20" cy="20" r="5.6" fill="#f4f4f6" stroke="#14141a" stroke-width="2.6"/></svg>`}
+function el(html,cls='abs'){const d=document.createElement('div');d.className=cls;d.innerHTML=html;R.appendChild(d);return d}
+function cardFront(tier){return `<div class="card cardfront" style="--tc:${TC[tier]}"><div class="grid"></div><div class="holo"></div><div class="ball">${ball(tier,230)}</div><div class="tname">${tier.toUpperCase()}</div></div>`}
+function cardBack(){return `<div class="card cardback"><div style="position:absolute;inset:26px;border:2px solid rgba(255,45,85,.35);border-radius:16px"></div><div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.9">${ball('poke',200).replace('#e3350d','#ff2d55')}</div><div class="mono" style="position:absolute;left:0;right:0;bottom:48px;text-align:center;font-size:26px;letter-spacing:4px;color:#ff8aa0">POKE-COLLECT</div></div>`}
+
+// ---------- easing ----------
+const cl=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const P=(t,a,b)=>cl((t-a)/(b-a));
+const oC=x=>1-Math.pow(1-x,3), iC=x=>x*x*x, ioC=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const oB=x=>{const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+const oE=x=>x===1?1:1-Math.pow(2,-10*x);
+const L=(a,b,x)=>a+(b-a)*x;
+function rnd(s){let x=Math.sin(s*12.9898)*43758.5453;return x-Math.floor(x)}
+function inout(t,a,b,fi=.35,fo=.35){return Math.min(P(t,a,a+fi),1-P(t,b-fo,b))}
+function setT(e,x,y,s=1,r=0,o=1,extra=''){e.style.transform=`translate(${x}px,${y}px) translate(-50%,-50%) scale(${s}) rotate(${r}deg) ${extra}`;e.style.opacity=o;e.style.display=o<=0.001?'none':'block'}
+
+// ---------- elements ----------
+const logo=el('<img src="assets/poke-collect-logo.png" style="width:640px;display:block">');
+const hook1=el('<div class="h1 glow-red" style="font-size:150px;white-space:nowrap">RIP PACKS</div>');
+const hook2=el('<div class="h1" style="font-size:150px;white-space:nowrap;color:#ff2d55" >ONLINE.</div>');
+const hook3=el('<div class="pill" style="border-color:#ff2d55;color:#ffd6e0">REAL CARDS · REAL PULLS</div>');
+
+const s1title=el('<div class="h1" style="font-size:112px;white-space:nowrap">DIGITAL<br><span style="color:#ff2d55" class="glow-red">MYSTERY PACKS</span></div>');
+const packJP=el('<div class="pack" style="background-image:url(assets/pack-jp.png);box-shadow:0 0 70px rgba(255,111,177,.6)"></div>');
+const packBO=el('<div class="pack" style="background-image:url(assets/pack-booster.png);box-shadow:0 0 70px rgba(61,139,255,.6)"></div>');
+const packRD=el('<div class="pack" style="background-image:url(assets/pack-red.png);box-shadow:0 0 80px rgba(255,45,85,.7)"></div>');
+const lblJP=el('<div class="pill" style="font-size:28px;border-color:#ff6fb1;color:#ffd0e6">JAPANESE</div>');
+const lblRD=el('<div class="pill" style="font-size:28px;border-color:#ff2d55;color:#ffd6e0">ORIGINAL</div>');
+const lblBO=el('<div class="pill" style="font-size:28px;border-color:#3d8bff;color:#cfe2ff">BOOSTER · 5 CARDS</div>');
+const from=el('<div class="h1" style="font-size:70px;white-space:nowrap">PACKS FROM <span style="color:#ffd400">$9.99</span></div>');
+
+const st1=el('<div class="step">STEP 01</div>');
+const st1h=el('<div class="h1" style="font-size:130px;white-space:nowrap">BUY YOUR PACK</div>');
+const buyPack=el('<div class="pack" style="background-image:url(assets/pack-red.png);box-shadow:0 0 80px rgba(255,45,85,.7)"></div>');
+const btn=el('<div class="btn">ADD TO CART</div>');
+const cursor=el('<svg width="90" height="110" viewBox="0 0 24 30"><path d="M3 2 L3 24 L9 18 L13 28 L17 26 L13 16 L21 16 Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>');
+const ripple=el('<div style="width:200px;height:200px;border-radius:50%;border:8px solid #fff"></div>');
+const lock=el('<div style="text-align:center"><div class="h1" style="font-size:62px;white-space:nowrap">YOUR CARD IS DRAWN</div><div class="h1" style="font-size:62px;white-space:nowrap;color:#ffd400">THE MOMENT YOU PAY</div></div>');
+const fairChip=el('<div class="pill" style="font-size:30px;border-color:#7cf2ff;color:#cff9ff">✓ PROVABLY FAIR DRAW</div>');
+
+const st2=el('<div class="step">STEP 02</div>');
+const st2h=el('<div class="h1" style="font-size:130px;white-space:nowrap">OPEN IT ONLINE</div>');
+const openPack=el('<div class="pack" style="background-image:url(assets/pack-red.png);box-shadow:0 0 90px rgba(255,45,85,.8)"></div>');
+const openTop=el('<div class="pack" style="background-image:url(assets/pack-red.png);height:150px;background-size:430px 824px;background-position:top;border-radius:14px 14px 0 0;box-shadow:0 0 50px rgba(255,45,85,.7)"></div>');
+const openBot=el('<div class="pack" style="background-image:url(assets/pack-red.png);height:674px;background-size:430px 824px;background-position:bottom;border-radius:0 0 14px 14px;box-shadow:0 0 70px rgba(255,45,85,.7)"></div>');
+const tear=el('<div style="width:520px;height:10px;background:linear-gradient(90deg,transparent,#fff,#ffd6e0,#fff,transparent);box-shadow:0 0 30px #ff2d55,0 0 60px #fff;border-radius:6px"></div>');
+const revBack=el(cardBack());
+const revFront=el(cardFront('master'));
+const masterTxt=el('<div class="h1" style="font-size:120px;white-space:nowrap;color:#c9a6ff;text-shadow:0 0 30px #a46bff,0 0 80px #7b3fe4">MASTER PULL!</div>');
+const boosterTxt=el('<div style="text-align:center"><div class="h1" style="font-size:84px;white-space:nowrap">BOOSTER EDITION</div><div class="h1" style="font-size:64px;white-space:nowrap;color:#3d8bff">5 CARDS PER PACK</div></div>');
+const fan=['poke','poke','great','ultra','master'].map(t=>{const e=el(cardFront(t));return e});
+
+const s4h=el('<div style="text-align:center"><div class="h1" style="font-size:96px;white-space:nowrap">SEE EVERY CARD</div><div class="h1 glow-red" style="font-size:96px;white-space:nowrap;color:#ff2d55">&amp; THE LIVE ODDS</div></div>');
+const tiers=['master','ultra','great','poke'].map(t=>el(`<div class="tile" style="border-color:${TC[t]}55;box-shadow:0 0 30px ${TC[t]}44">${ball(t,120)}<div class="tl" style="color:${TC[t]}">${t.toUpperCase()}</div><div class="ts">LIVE ODDS</div></div>`));
+const fair=el('<div style="display:flex;align-items:center;gap:22px"><svg width="86" height="98" viewBox="0 0 24 28"><path d="M12 1 L22 5 V13 C22 20 17 25 12 27 C7 25 2 20 2 13 V5 Z" fill="#0d2a33" stroke="#7cf2ff" stroke-width="1.6"/><path d="M7 14 L11 18 L17 10" fill="none" stroke="#7cf2ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="h1" style="font-size:66px;white-space:nowrap;color:#cff9ff">PROVABLY FAIR</div></div>');
+const pool=el('<div class="mono" style="font-size:32px;letter-spacing:3px;color:#c9c9d6;text-align:center;white-space:nowrap">EVERY CARD IN THE POOL · LISTED</div>');
+
+const st3=el('<div class="step">STEP 03</div>');
+const st3h=el('<div class="h1" style="font-size:118px;white-space:nowrap">SHIP WHEN READY</div>');
+const vault=el('<div class="vault"><div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:220px;height:220px;border-radius:50%;border:10px solid #ff2d55;box-shadow:0 0 40px #ff2d55,inset 0 0 30px #ff2d55"></div><div class="vdial" style="position:absolute;left:50%;top:50%;width:150px;height:14px;background:#ff2d55;border-radius:8px;transform:translate(-50%,-50%)"></div><div class="vdial2" style="position:absolute;left:50%;top:50%;width:14px;height:150px;background:#ff2d55;border-radius:8px;transform:translate(-50%,-50%)"></div><div class="mono" style="position:absolute;left:0;right:0;bottom:26px;text-align:center;font-size:30px;letter-spacing:6px;color:#ff8aa0">YOUR VAULT</div></div>');
+const flyers=[0,1,2,3,4,5,6,7].map(i=>el(cardFront(['poke','great','poke','ultra','poke','great','master','poke'][i])));
+const count=el('<div class="h1" style="font-size:76px;white-space:nowrap"><span id="cnt">0</span> CARDS IN VAULT</div>');
+const bar=el('<div class="bar"><div id="barf" style="width:0%"></div></div>');
+const ship1=el('<div class="h1" style="font-size:80px;white-space:nowrap">SHIP THEM ALL FOR <span style="color:#ffd400">$5</span></div>');
+const ship2=el('<div class="h1 glow-red" style="font-size:80px;white-space:nowrap;color:#ff2d55">FREE ON 25+ CARDS</div>');
+const sleeve=el('<div class="pill" style="font-size:30px;border-color:#fff;color:#fff">SLEEVED &amp; TOP LOADED</div>');
+
+const cta1=el('<div class="h1 glow-red" style="font-size:150px;white-space:nowrap">OPEN YOURS</div>');
+const cta2=el('<div class="h1" style="font-size:150px;white-space:nowrap;color:#ff2d55">NOW</div>');
+const cPackJP=el('<div class="pack" style="background-image:url(assets/pack-jp.png);box-shadow:0 0 60px rgba(255,111,177,.6)"></div>');
+const cPackBO=el('<div class="pack" style="background-image:url(assets/pack-booster.png);box-shadow:0 0 60px rgba(61,139,255,.6)"></div>');
+const cPackRD=el('<div class="pack" style="background-image:url(assets/pack-red.png);box-shadow:0 0 80px rgba(255,45,85,.7)"></div>');
+const url=el('<div class="btn" style="width:760px;font-size:72px">POKE-COLLECT.COM</div>');
+const logo2=el('<img src="assets/poke-collect-logo.png" style="width:440px;display:block">');
+const menuHint=el('<div class="mono" style="font-size:30px;letter-spacing:4px;color:#ffb3c2;white-space:nowrap">SHOP › MYSTERY › DIGITAL MYSTERY PACKS</div>');
+
+// ---------- canvases ----------
+const MX=document.getElementById('matrix').getContext('2d');
+const FX=document.getElementById('fx').getContext('2d');
+const GL='ポケコレクトアイウエオカキクケコ0123456789★◆▲';
+const COLS=54;
+function drawMatrix(t,alpha){
+  MX.clearRect(0,0,1080,1920); if(alpha<=0)return;
+  MX.globalAlpha=alpha; MX.font='700 30px "JetBrains Mono"';
+  for(let c=0;c<COLS;c++){
+    const sp=280+rnd(c+1)*520, off=rnd(c+7)*2400, len=8+Math.floor(rnd(c+3)*14);
+    const head=((t*sp+off)%2600)-300, x=c*20+10;
+    for(let k=0;k<len;k++){
+      const y=head-k*34; if(y<-40||y>1960)continue;
+      const ch=GL[Math.floor(rnd(c*97+k*13+Math.floor(t*12+k))*GL.length)];
+      const a=k===0?1:(1-k/len)*.75;
+      MX.fillStyle=k===0?`rgba(255,220,225,${a})`:`rgba(255,45,85,${a})`;
+      MX.fillText(ch,x,y);
+    }
+  }
+  MX.globalAlpha=1;
+}
+function burst(t,t0,cx,cy,n,color,spread=900,life=1.4,seed=1){
+  const p=(t-t0)/life; if(p<0||p>1)return;
+  for(let i=0;i<n;i++){
+    const a=rnd(i*3.1+seed)*Math.PI*2, v=(.35+rnd(i*7.7+seed)*.65)*spread;
+    const d=oC(p)*v, x=cx+Math.cos(a)*d, y=cy+Math.sin(a)*d+p*p*160, r=(2+rnd(i+seed*5)*7)*(1-p);
+    FX.fillStyle=color; FX.globalAlpha=1-p; FX.beginPath(); FX.arc(x,y,r,0,Math.PI*2); FX.fill();
+  }
+  FX.globalAlpha=1;
+}
+function rays(t,a,b,cx,cy,color){
+  const o=inout(t,a,b,.2,.6); if(o<=0)return;
+  FX.save(); FX.translate(cx,cy); FX.rotate(t*.6); FX.globalAlpha=o*.55;
+  for(let i=0;i<16;i++){FX.rotate(Math.PI/8);const g=FX.createLinearGradient(0,0,0,-1100);g.addColorStop(0,color);g.addColorStop(1,'rgba(0,0,0,0)');FX.fillStyle=g;FX.beginPath();FX.moveTo(-26,0);FX.lineTo(26,0);FX.lineTo(110,-1100);FX.lineTo(-110,-1100);FX.fill();}
+  FX.restore();
+}
+function sparkles(t,a,b,seed){const o=inout(t,a,b,.3,.4);if(o<=0)return;for(let i=0;i<40;i++){const x=rnd(i+seed)*1080,y=(rnd(i*3+seed)*1920-t*60*(1+rnd(i)))%1920;const tw=.5+.5*Math.sin(t*6+i);FX.globalAlpha=o*tw*.8;FX.fillStyle=i%3?'#ff8aa0':'#fff';FX.fillRect(x,(y+1920)%1920,4,4)}FX.globalAlpha=1}
+
+// ---------- timeline ----------
+const W=540,H=960;
+function hideAll(){for(const c of R.children){c.style.opacity=0;c.style.display='none'}}
+let lastCount=-1;
+function render(t){
+  hideAll(); FX.clearRect(0,0,1080,1920);
+  const shake=(a,b,amt)=>{const k=inout(t,a,b,.05,.2);return k*amt*Math.sin(t*90)};
+  // matrix background: strong in intro, subtle elsewhere
+  drawMatrix(t, t<3.2?L(.25,.9,P(t,0,.6))*(1-P(t,2.8,3.4)*.6):.28);
+  sparkles(t,3,30,5);
+
+  // S0 hook 0-3.4
+  if(t<3.6){
+    const lg=P(t,.15,.9); const gl=(t>.15&&t<1.1&&rnd(Math.floor(t*30))>.6)?(rnd(t*7)-.5)*40:0;
+    setT(logo,W+gl,520,L(1.4,1,oE(lg)),0,lg*(1-P(t,3,3.4)));
+    const a=P(t,.9,1.2), b=P(t,1.25,1.55), c=P(t,1.8,2.2);
+    setT(hook1,W,860+shake(.9,1.3,10),L(2.6,1,oE(a)),0,a*(1-P(t,3,3.4)));
+    setT(hook2,W,1010+shake(1.25,1.6,10),L(2.6,1,oE(b)),0,b*(1-P(t,3,3.4)));
+    setT(hook3,W,1200,L(.7,1,oB(c)),0,c*(1-P(t,3,3.4)));
+    burst(t,.95,W,880,60,'#ff2d55',700,1.2,2);
+  }
+  // S1 packs 3.2-7.2
+  if(t>3.1&&t<7.4){
+    const o=1-P(t,6.9,7.3);
+    const ti=P(t,3.2,3.7); setT(s1title,W,330,L(1.5,1,oE(ti)),0,ti*o);
+    const pj=oB(P(t,3.6,4.2)), pb=oB(P(t,3.75,4.35)), pr=oB(P(t,3.9,4.5));
+    const fl=Math.sin(t*2.2)*10;
+    setT(packJP,L(-400,290,pj),1000+fl,.72,L(-30,-9,pj),P(t,3.6,3.8)*o);
+    setT(packBO,L(1480,790,pb),1000-fl,.72,L(30,9,pb),P(t,3.75,3.95)*o);
+    setT(packRD,W,L(2400,960,pr)+fl*.6,.84,0,P(t,3.9,4.1)*o);
+    const lb=P(t,4.6,5);
+    setT(lblJP,250,1400,oB(lb),-6,lb*o); setT(lblRD,W,1440,oB(P(t,4.7,5.1)),0,P(t,4.7,5.1)*o); setT(lblBO,830,1400,oB(P(t,4.8,5.2)),6,P(t,4.8,5.2)*o);
+    const fr=P(t,5.4,5.8); setT(from,W,1640,L(.6,1,oB(fr)),0,fr*o);
+    rays(t,3.9,7.2,W,960,'rgba(255,45,85,.35)');
+  }
+  // S2 buy 7.2-11.2
+  if(t>7.1&&t<11.4){
+    const o=1-P(t,10.9,11.3);
+    setT(st1,W,250,1,0,P(t,7.2,7.5)*o); const h=P(t,7.3,7.7); setT(st1h,W+L(-900,0,oE(h)),370,1,0,h*o);
+    const pk=P(t,7.4,7.9); setT(buyPack,W,860+Math.sin(t*2.4)*12,L(.4,.62,oB(pk)),0,pk*o);
+    const press=inout(t,8.55,8.85,.08,.15);
+    const bi=P(t,7.9,8.2); setT(btn,W,1330,L(.6,1,oB(bi))*(1-press*.08),0,bi*o);
+    const cu=P(t,8,8.55); setT(cursor,L(900,610,oC(cu)),L(1650,1370,oC(cu))+press*10,1-press*.1,0,P(t,8,8.2)*(1-P(t,9.4,9.7))*o);
+    const rp=P(t,8.62,9.2); setT(ripple,W+30,1340,L(.3,2.4,oC(rp)),0,(1-rp)*(t>8.62?1:0));
+    burst(t,8.65,W,1330,40,'#ffd400',520,1,3);
+    const lk=P(t,9.1,9.5); setT(lock,W,1580,L(.8,1,oB(lk)),0,lk*o);
+    const fc=P(t,9.6,10); setT(fairChip,W,1760,oB(fc),0,fc*o);
+  }
+  // S3 open 11.2-18.2
+  if(t>11.1&&t<18.4){
+    const o=1-P(t,17.9,18.3);
+    const hd=inout(t,11.2,16,.3,.3); setT(st2,W,250,1,0,hd); setT(st2h,W,370,L(1.4,1,oE(P(t,11.3,11.7))),0,hd);
+    const sh=t<13.4?Math.sin(t*(30+P(t,11.6,13.4)*60))*P(t,11.8,13.4)*18:0;
+    const glowPulse=P(t,11.8,13.4);
+    if(t<13.5){ setT(openPack,W+sh,1000,L(.6,.85,oB(P(t,11.3,11.8))),sh*.4,P(t,11.3,11.5)); openPack.style.filter=`brightness(${1+glowPulse*.6}) drop-shadow(0 0 ${glowPulse*60}px #ff2d55)`; }
+    // tear
+    const tr=P(t,12.9,13.45); if(t>12.9&&t<13.6){ tear.style.clipPath=`inset(0 ${100-tr*100}% 0 0)`; setT(tear,W,1000-412*.85+150*.85,.85,0,1); }
+    if(t>=13.45&&t<17.9){
+      const sp=oC(P(t,13.45,14.1)), fall=iC(P(t,14.15,14.85));
+      setT(openTop,W+sp*120,(1000-412*.85+75*.85)-sp*260,.85,sp*38,1-P(t,13.9,14.3));
+      setT(openBot,W,(1000+75*.85)+fall*1400,.85,fall*8,1-P(t,14.5,14.85));
+    }
+    // flash
+    document.getElementById('flash').style.opacity=Math.max(0,1-Math.abs(t-13.5)/.18)*.95;
+    // card rise and flip
+    if(t>13.5&&t<16.2){
+      const rise=oB(P(t,13.6,14.4)); const flip=P(t,14.6,15.1);
+      const y=L(1050,880,rise), sc=L(.6,1.25,oC(P(t,13.6,14.6)));
+      const ang=flip*180, o2=1-P(t,15.9,16.2);
+      if(ang<90){setT(revBack,W,y,sc,0,P(t,13.5,13.7)*o2,`rotateY(${ang}deg)`)}
+      else{setT(revFront,W,y,sc,0,o2,`rotateY(${ang-180}deg)`);
+        revFront.querySelector('.holo').style.transform=`translateX(${L(-60,60,P(t,15,16))}%)`}
+      rays(t,14.85,16.1,W,880,'rgba(164,107,255,.45)');
+      burst(t,14.85,W,880,90,'#c9a6ff',950,1.3,4); burst(t,14.9,W,880,50,'#fff',700,1.1,9);
+      const mt=P(t,15.1,15.4); setT(masterTxt,W,1420+shake(15.1,15.5,12),L(2,1,oE(mt)),-3,mt*o2);
+    }
+    // booster fan 16.1-18.2
+    if(t>16){
+      const bt=P(t,16.1,16.5); setT(boosterTxt,W,330,L(.7,1,oB(bt)),0,bt*o);
+      fan.forEach((e,i)=>{const p=oB(P(t,16.3+i*.18,16.75+i*.18));const ang=(i-2)*14;const x=W+(i-2)*170, y=1060+Math.abs(i-2)*40;
+        setT(e,L(W,x,p),L(1900,y,p),.62,L(0,ang,p),P(t,16.3+i*.18,16.45+i*.18)*o);
+        e.querySelector('.holo').style.transform=`translateX(${Math.sin(t*2+i)*50}%)`});
+      [0,1,2,3,4].forEach(i=>burst(t,16.75+i*.18,W+(i-2)*170,1060,18,TC[['poke','poke','great','ultra','master'][i]],260,.7,20+i));
+    }
+  }
+  // S4 odds 18.2-21.7
+  if(t>18.1&&t<21.9){
+    const o=1-P(t,21.4,21.8);
+    const hh=P(t,18.2,18.6); setT(s4h,W,380,L(1.4,1,oE(hh)),0,hh*o);
+    tiers.forEach((e,i)=>{const p=P(t,18.6+i*.16,19.0+i*.16);const x=i%2?W+130:W-130, y=i<2?860:1200;setT(e,x,y,L(.3,1,oB(p)),0,p*o);});
+    const f=P(t,19.6,20); setT(fair,W,1530,L(.6,1,oB(f)),0,f*o);
+    const pl=P(t,20,20.4); setT(pool,W,1660,1,0,pl*o);
+    rays(t,19.6,21.6,W,1530,'rgba(124,242,255,.18)');
+  }
+  // S5 vault 21.7-26.6
+  if(t>21.6&&t<26.8){
+    const o=1-P(t,26.3,26.7);
+    setT(st3,W,250,1,0,P(t,21.7,22)*o); const h=P(t,21.8,22.2); setT(st3h,W+L(900,0,oE(h)),370,1,0,h*o);
+    const vi=P(t,22,22.5); setT(vault,W,900,L(.5,1,oB(vi)),0,vi*o);
+    const spin=P(t,22.3,24.6)*720; vault.querySelector('.vdial').style.transform=`translate(-50%,-50%) rotate(${spin}deg)`;vault.querySelector('.vdial2').style.transform=`translate(-50%,-50%) rotate(${spin}deg)`;
+    flyers.forEach((e,i)=>{const t0=22.4+i*.26;const p=P(t,t0,t0+.5);if(p<=0||p>=1)return;const sx=i%2?1400:-320, sy=500+rnd(i)*700;
+      setT(e,L(sx,W,ioC(p)),L(sy,900,ioC(p))-Math.sin(p*Math.PI)*260,L(.55,.12,p),L(i%2?40:-40,0,p),1-P(t,t0+.4,t0+.5))});
+    const n=Math.round(L(0,25,oC(P(t,22.4,24.7)))); if(n!==lastCount){document.getElementById('cnt').textContent=n;lastCount=n}
+    const ci=P(t,22.3,22.6); setT(count,W,1240,1,0,ci*o);
+    setT(bar,W,1340,1,0,ci*o); document.getElementById('barf').style.width=(n/25*100)+'%';
+    if(n>=25) burst(t,24.75,W+380,1340,50,'#ffd400',420,1,30);
+    const s1=P(t,24.8,25.2), s2=P(t,25.1,25.5), s3=P(t,25.5,25.9);
+    setT(ship1,W,1500,L(1.5,1,oE(s1)),0,s1*o); setT(ship2,W,1610+shake(25.1,25.5,8),L(1.5,1,oE(s2)),0,s2*o); setT(sleeve,W,1750,oB(s3),0,s3*o);
+  }
+  // S6 CTA 26.6-30
+  if(t>26.5){
+    const c1=P(t,26.6,26.95), c2=P(t,26.85,27.2);
+    setT(cta1,W,330+shake(26.6,27,10),L(2.4,1,oE(c1)),0,c1); setT(cta2,W,480+shake(26.85,27.25,10),L(2.4,1,oE(c2)),0,c2);
+    const pj=oB(P(t,27,27.5)),pb=oB(P(t,27.1,27.6)),pr=oB(P(t,27.2,27.7)); const fl=Math.sin(t*2.4)*10;
+    setT(cPackJP,L(-300,300,pj),980+fl,.6,-9,P(t,27,27.2)); setT(cPackBO,L(1400,780,pb),980-fl,.6,9,P(t,27.1,27.3)); setT(cPackRD,W,L(2300,950,pr),.72,0,P(t,27.2,27.4));
+    const u=P(t,27.8,28.2); setT(url,W,1450,L(.6,1,oB(u))*(1+Math.sin(t*6)*.015*P(t,28.2,28.4)),0,u);
+    const m=P(t,28.2,28.6); setT(menuHint,W,1580,1,0,m);
+    const lg=P(t,28.4,28.9); setT(logo2,W,1740,L(.7,1,oB(lg)),0,lg);
+    rays(t,27.2,30.5,W,980,'rgba(255,45,85,.3)');
+    burst(t,27.25,W,980,70,'#ff2d55',900,1.3,40);
+  }
+}
+window.render=render; render(0);
+</script></body></html>
