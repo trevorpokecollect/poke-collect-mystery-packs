@@ -32,7 +32,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // One pull from each tier, plus unopened packs that open to random cards from the pool.
   const tiers = [...new Set(cards.map((c) => c.tier))];
   const pulled = tiers.map((tier) => pick(cards.filter((c) => c.tier === tier)));
-  const unopened = cards.length ? [pick(cards), pick(cards), pick(cards)] : [];
+  const perPack = Math.max(1, series.cardsPerPack);
+  // Each sample pack holds as many cards as the series puts in a pack, cheapest first like a real opening.
+  const samplePack = () =>
+    Array.from({ length: perPack }, () => pick(cards)).sort((a, b) => Number(a.marketValue) - Number(b.marketValue));
+  const unopened = cards.length ? [samplePack(), samplePack(), samplePack()] : [];
 
   const [art, products] = await Promise.all([
     packImages(admin, [series.packProductId]),
@@ -48,14 +52,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     recommendHandle: products.get(series.packProductId)?.handle ?? null,
     available: packShelf(live, products),
     packs: [
-      ...unopened.map((c, i) => ({
+      ...unopened.map((pack, i) => ({
         id: `demo-${i}`,
+        cardsPerPack: perPack,
         series: series.title,
         packImageUrl,
         orderName: "#PREVIEW",
         opened: false,
         card: null,
-        demoCard: show(c),
+        demoCard: show(pack[pack.length - 1]),
+        demoCards: perPack > 1 ? pack.map(show) : null,
       })),
       ...pulled.map((c, i) => ({
         id: `demo-pulled-${i}`,

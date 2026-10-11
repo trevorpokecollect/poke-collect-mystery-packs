@@ -65,10 +65,16 @@
       btn.disabled = true;
       loadOpener(app, data.openerVersion).then(function () {
         var c = pickCard(cards);
+        // Multi-card packs: a demo pack of that many cards, cheapest first like a real opening.
+        var per = data.cardsPerPack || 1;
+        var pack = [];
+        for (var i = 0; i < per && per > 1; i++) pack.push(pickCard(cards));
+        pack.sort(function (a, b) { return (a.marketValue || 0) - (b.marketValue || 0); });
         window.PCPackOpener.open({
           packImageUrl: btn.getAttribute("data-pack-image") || null,
           series: btn.getAttribute("data-series"),
           card: { title: c.title, tier: c.tier, imageUrl: c.imageUrl },
+          cards: pack.map(function (p) { return { title: p.title, tier: p.tier, imageUrl: p.imageUrl }; }),
           note: "Demo pull. Buy a pack to open one for real!",
           doneLabel: "Done",
           again: run,
@@ -92,7 +98,8 @@
         var closed = data.status === "CLOSED";
         left.innerHTML = closed
           ? "<strong>Sold out.</strong> This series is complete."
-          : "<strong>" + data.packsRemaining + " of " + data.totalPacks + "</strong> packs left · " + data.cards.length + " different cards";
+          : "<strong>" + data.packsRemaining + " of " + data.totalPacks + "</strong> packs left · " +
+            (data.cardsPerPack > 1 ? data.cardsPerPack + " cards per pack · " : "") + data.cards.length + " different cards";
         bar.style.width = (data.totalPacks ? (data.packsRemaining / data.totalPacks) * 100 : 0) + "%";
 
         list.innerHTML = (data.tiers || []).map(function (tier, i) {
@@ -100,7 +107,7 @@
             '<li class="mpd__tier" data-tier="' + esc(String(tier.name).toLowerCase()) + '">' +
             ball(tier.name, i) +
             '<span class="mpd__tier-name">' + esc(tier.name) + "</span>" +
-            '<span class="mpd__tier-odds">' + (closed ? "&nbsp;" : pct(tier.currentOdds) + " chance") + "</span>" +
+            '<span class="mpd__tier-odds">' + (closed ? "&nbsp;" : pct(tier.currentOdds) + (data.cardsPerPack > 1 ? " per card" : " chance")) + "</span>" +
             '<span class="mpd__tier-count">' + tier.remaining + " of " + tier.total + " left</span>" +
             "</li>"
           );

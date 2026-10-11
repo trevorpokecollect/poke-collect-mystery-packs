@@ -10,7 +10,7 @@ import { autoBuildPool, createSeries } from "../lib/series.server";
 // Prefilled from a link, e.g. /app/series/new?title=…&variant=<gid>&copyFrom=<seriesId>&productType=…&language=
 // creates a series for another pack with the same tiers and pool rules as an existing one
 // (rule overrides in the query), then builds its pool, as a draft to review before launch.
-const OVERRIDES = ["productType", "language", "condition"] as const;
+const OVERRIDES = ["productType", "language", "condition", "count", "minValue", "maxValue", "targetAverage"] as const;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -22,6 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     prefill: {
       title: url.searchParams.get("title") ?? "",
+      cardsPerPack: url.searchParams.get("cardsPerPack") ?? "1",
       variant: url.searchParams.get("variant") ?? "",
       copyFrom,
       overrides: Object.fromEntries(OVERRIDES.filter((k) => url.searchParams.has(k)).map((k) => [k, url.searchParams.get(k) ?? ""])),
@@ -35,17 +36,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const title = String(form.get("title") || "").trim();
   const packVariantId = String(form.get("packVariantId") || "");
   const autoOpenDays = Number(form.get("autoOpenDays") || 1);
+  const cardsPerPack = Number(form.get("cardsPerPack") || 1);
   if (!title || !packVariantId) return { error: "Give the series a name and pick its pack product." };
 
   try {
-    const series = await createSeries(admin, session.shop, { title, packVariantId, autoOpenDays });
+    const series = await createSeries(admin, session.shop, { title, packVariantId, autoOpenDays, cardsPerPack });
     const copyFromId = String(form.get("copyFrom") || "");
     const source = copyFromId ? await db.series.findFirst({ where: { id: copyFromId, shop: session.shop } }) : null;
     if (source) {
       if (source.tierRules) await db.series.update({ where: { id: series.id }, data: { tierRules: source.tierRules as object } });
       if (source.buildRules) {
         const rules = { ...(source.buildRules as Record<string, unknown>) };
-        for (const k of OVERRIDES) if (form.has(k)) rules[k] = String(form.get(k) ?? "");
+        const NUMERIC = new Set(["count", "minValue", "maxValue", "targetAverage"]);
+        for (const k of OVERRIDES) {
+          if (!form.has(k)) continue;
+          rules[k] = NUMERIC.has(k) ? Number(form.get(k)) : String(form.get(k) ?? "");
+        }
         await autoBuildPool(admin, session.shop, series.id, rules as unknown as Parameters<typeof autoBuildPool>[3]);
       }
     }
@@ -72,6 +78,7 @@ export default function NewSeries() {
         title,
         packVariantId: pack?.id ?? "",
         autoOpenDays: days,
+        cardsPerPack: prefill.cardsPerPack,
         ...(prefill.copyFrom ? { copyFrom: prefill.copyFrom.id, ...prefill.overrides } : {}),
       },
       { method: "post" },

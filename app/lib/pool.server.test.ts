@@ -35,10 +35,15 @@ beforeEach(async () => {
   await db.series.deleteMany();
 });
 
-async function makeSeries(cards: { name: string; tier: string; value: number; qty: number }[], handle = "series-1") {
+async function makeSeries(
+  cards: { name: string; tier: string; value: number; qty: number }[],
+  handle = "series-1",
+  cardsPerPack = 1,
+) {
   return db.series.create({
     data: {
       shop: SHOP,
+      cardsPerPack,
       title: handle,
       handle,
       packProductId: "gid://shopify/Product/1",
@@ -416,5 +421,63 @@ describe("checkTopTierGone", () => {
     await checkTopTierGone(db, admin, SHOP, [series.id]);
     expect(calls).toHaveLength(1);
     expect((calls[0] as { payload: Record<string, unknown> }).payload).toMatchObject({ Tier: "Chase" });
+  });
+});
+
+describe("multi-card packs", () => {
+  const boosterPool = [
+    { name: "Cheap", tier: "Poke", value: 1, qty: 12 },
+    { name: "Mid", tier: "Great", value: 5, qty: 2 },
+    { name: "Hit", tier: "Ultra", value: 40, qty: 1 },
+  ];
+
+  it("draws a full pack of cards per pack, in committed order", async () => {
+    const series = await makeSeries(boosterPool, "booster", 5);
+    await launchSeries(db, series.id);
+    const { pulls, shortfall } = await drawForOrder(db, order(2));
+    expect(shortfall).toEqual([]);
+    expect(pulls).toHaveLength(10);
+    const rows = await db.pull.findMany({ include: { slot: true }, orderBy: [{ packIndex: "asc" }, { cardIndex: "asc" }] });
+    expect(rows.map((p) => [p.packIndex, p.cardIndex])).toEqual([
+      [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [1, 0], [1, 1], [1, 2], [1, 3], [1, 4],
+    ]);
+    expect(rows.map((p) => p.slot.position)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    const odds = await seriesOdds(db, SHOP, "booster");
+    expect(odds!.cardsPerPack).toBe(5);
+    expect(odds!.totalPacks).toBe(3);
+    expect(odds!.packsRemaining).toBe(1);
+  });
+
+  it("closes once a full pack can no longer be made", async () => {
+    const series = await makeSeries(boosterPool, "booster", 5);
+    await launchSeries(db, series.id);
+    const { shortfall } = await drawForOrder(db, order(4));
+    expect(shortfall.map((s) => s.missing)).toEqual([1]);
+    expect((await db.series.findUniqueOrThrow({ where: { id: series.id } })).status).toBe("CLOSED");
+    expect(await db.pull.count()).toBe(15);
+  });
+
+  it("reveals the whole pack at once, cheapest card first", async () => {
+    const series = await makeSeries(boosterPool, "booster", 5);
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(1));
+    const opened = await revealPull(db, SHOP, pulls[2].id, { customerId: "gid://shopify/Customer/1" });
+    expect(opened.cards).toHaveLength(5);
+    const values = opened.cards.map((c) => Number(c.marketValue));
+    expect(values).toEqual([...values].sort((a, b) => a - b));
+    expect(opened.card).toBe(opened.cards[4]);
+    expect(opened.orderReady).toBe(true);
+    expect(await db.pull.count({ where: { status: "REVEALED" } })).toBe(5);
+  });
+
+  it("voids every card of a refunded pack", async () => {
+    const series = await makeSeries(boosterPool, "booster", 5);
+    await launchSeries(db, series.id);
+    const input = order(2);
+    await drawForOrder(db, input);
+    const voided = await voidPulls(db, input.orderId, new Map([[input.lines[0].lineItemId, 1]]));
+    expect(voided).toHaveLength(5);
+    expect(new Set(voided.map((p) => p.packIndex))).toEqual(new Set([1]));
   });
 });

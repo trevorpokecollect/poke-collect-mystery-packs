@@ -78,7 +78,7 @@ export function slugify(text: string) {
 export async function createSeries(
   admin: AdminApiContext,
   shop: string,
-  input: { title: string; packVariantId: string; autoOpenDays: number },
+  input: { title: string; packVariantId: string; autoOpenDays: number; cardsPerPack?: number },
 ) {
   const [variant] = await fetchVariants(admin, [input.packVariantId]);
   if (!variant) throw new Error("That pack product variant wasn't found.");
@@ -101,6 +101,7 @@ export async function createSeries(
       packVariantId: variant.id,
       packPrice: variant.price,
       autoOpenDays: input.autoOpenDays,
+      cardsPerPack: Math.min(10, Math.max(1, Math.floor(input.cardsPerPack ?? 1))),
     },
   });
 }
@@ -159,7 +160,7 @@ export async function launch(admin: AdminApiContext, seriesId: string) {
     await releaseUnneeded(db, admin, seriesId);
     throw error;
   }
-  const packs = await db.slot.count({ where: { seriesId } });
+  const packs = Math.floor((await db.slot.count({ where: { seriesId } })) / Math.max(1, series.cardsPerPack));
 
   await setPackStock(admin, series.packVariantId, packs, `launch-${series.id}`);
   return { series, packs };
@@ -213,17 +214,26 @@ export async function syncPackStock(admin: AdminApiContext, seriesId: string) {
   if (!series) return;
   const left =
     series.status === "LIVE"
-      ? await db.slot.count({ where: { seriesId, claimed: false, voided: false } })
+      ? Math.floor(
+          (await db.slot.count({ where: { seriesId, claimed: false, voided: false } })) / Math.max(1, series.cardsPerPack),
+        )
       : 0;
   await setPackStock(admin, series.packVariantId, left, `sync-${seriesId}-${left}-${Date.now()}`);
 }
 
 /** Expected market value per pack and the share of the pack price it returns. */
-export function poolSummary(cards: { marketValue: { toString(): string }; quantity: number }[], packPrice: number) {
-  const packs = cards.reduce((n, c) => n + c.quantity, 0);
+export function poolSummary(
+  cards: { marketValue: { toString(): string }; quantity: number }[],
+  packPrice: number,
+  cardsPerPack = 1,
+) {
+  const cardCount = cards.reduce((n, c) => n + c.quantity, 0);
+  const perPack = Math.max(1, cardsPerPack);
+  const packs = Math.floor(cardCount / perPack);
   const totalValue = cards.reduce((n, c) => n + Number(c.marketValue.toString()) * c.quantity, 0);
-  const ev = packs ? totalValue / packs : 0;
-  return { packs, totalValue, ev, returnRate: packPrice ? ev / packPrice : 0, revenue: packs * packPrice };
+  // Value of one pack = average card value x cards per pack.
+  const ev = cardCount ? (totalValue / cardCount) * perPack : 0;
+  return { packs, cardCount, cardsPerPack: perPack, totalValue, ev, returnRate: packPrice ? ev / packPrice : 0, revenue: packs * packPrice };
 }
 
 export interface AutoBuildInput extends BuildRules, CandidateFilter {}

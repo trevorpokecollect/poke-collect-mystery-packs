@@ -40,7 +40,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     take: 25,
     include: { slot: { include: { card: { select: { title: true, tier: true } } } } },
   });
-  const summary = poolSummary(series.cards, Number(series.packPrice));
+  const summary = poolSummary(series.cards, Number(series.packPrice), series.cardsPerPack);
   const tierRules = seriesTierRules(series);
   const tierCounts = new Map<string, number>();
   for (const c of series.cards) tierCounts.set(c.tier, (tierCounts.get(c.tier) ?? 0) + c.quantity);
@@ -67,11 +67,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     tierNames: series.tierRules ? tierRules.map((t) => t.name) : [...TIERS],
     tierCounts: [...tierCounts.entries()],
     buildDefaults: {
-      count: String(build.count ?? 100),
+      count: String(build.count ?? 100 * series.cardsPerPack),
       minValue: String(build.minValue ?? 2),
       maxValue: String(build.maxValue ?? 50),
       // Default to a 100% return: the average card value equals the pack price.
-      targetAverage: String(build.targetAverage ?? series.packPrice.toString()),
+      // Per card: a multi-card pack spreads the pack price across its cards.
+      targetAverage: String(build.targetAverage ?? (Number(series.packPrice) / series.cardsPerPack).toFixed(2)),
       productType: String(build.productType ?? "Pokemon Single"),
       condition: String(build.condition ?? "Near Mint"),
       language: String(build.language ?? "English"),
@@ -522,7 +523,7 @@ export default function SeriesPage() {
 
       <s-section slot="aside" heading="Pack economics">
         <s-stack gap="small">
-          <s-text>Packs: {summary.packs}</s-text>
+          <s-text>Packs: {summary.packs}{summary.cardsPerPack > 1 ? ` (${summary.cardsPerPack} cards each, ${summary.cardCount} cards)` : ""}</s-text>
           <s-text>Pack price: {money(series.packPrice)}</s-text>
           <s-text>Average value per pack: {money(summary.ev)}</s-text>
           <s-text>Customer return: {percent(summary.returnRate)} of price</s-text>

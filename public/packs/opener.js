@@ -590,6 +590,10 @@
     var inner = el("div", { class: "mp-stage-inner" }, [glow, front, result]);
     var skip = el("button", { class: "mp-btn mp-btn-ghost mp-skip", type: "button", text: "Close" });
     var stage = el("div", { class: "mp-stage", role: "dialog", "aria-modal": "true", "aria-label": "Opening pack" }, [inner, skip]);
+    // Multi-card packs reveal their cards one at a time, so the result area needs room for a counter
+    // and the strip of every card in the pack.
+    var multi = (pack.cardsPerPack || (pack.demoCards ? pack.demoCards.length : 1)) > 1;
+    if (multi) stage.classList.add("mp-multi");
     var stopRain = function () {};
     var closed = false;
     function close() {
@@ -622,12 +626,13 @@
     front.style.transform = inside;
 
     // Ask the server for the result while the pack shakes. Preview packs already carry their card.
-    var reveal = pack.demoCard
-      ? Promise.resolve(pack.demoCard).then(function (card) {
+    var reveal = pack.demoCards || pack.demoCard
+      ? Promise.resolve(pack.demoCards || [pack.demoCard]).then(function (cards) {
           pack.opened = true;
-          pack.card = card;
+          pack.cards = cards;
+          pack.card = cards[cards.length - 1];
           pack.shipping = { state: "preparing" };
-          return card;
+          return cards;
         })
       : fetch(api + "/open" + query, {
       method: "POST",
@@ -637,7 +642,8 @@
     }).then(function (r) {
       return r.json().then(function (data) {
         if (!r.ok || data.error) throw new Error(data.error || "Couldn't open this pack.");
-        return data.card;
+        // Multi-card packs return every card, cheapest first, so the best one is revealed last.
+        return data.cards && data.cards.length ? data.cards : [data.card];
       });
     });
 
@@ -661,19 +667,25 @@
       });
     }
 
-    Promise.all([reveal.then(preload), wait(reduced ? 0 : 900)])
+    function colorOf(card) { return TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base; }
+    function isBig(card) { return ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1; }
+    function showCard(card) {
+      front.textContent = "";
+      if (card.imageUrl) {
+        // Never show a broken-image icon: swap to the card name if the image fails after all.
+        var cardImg = el("img", { src: card.imageUrl, alt: "" });
+        cardImg.onerror = function () { cardImg.replaceWith(el("strong", { text: card.title })); };
+        front.appendChild(cardImg);
+      }
+      else front.appendChild(el("strong", { text: card.title }));
+    }
+
+    Promise.all([reveal.then(function (cards) { return Promise.all(cards.map(preload)); }), wait(reduced ? 0 : 900)])
       .then(function (values) {
-        var card = values[0];
-        var color = TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base;
-        var big = ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1;
-        if (card.imageUrl) {
-          // Never show a broken-image icon: swap to the card name if the image fails after all.
-          var cardImg = el("img", { src: card.imageUrl, alt: "" });
-          cardImg.onerror = function () { cardImg.replaceWith(el("strong", { text: card.title })); };
-          front.appendChild(cardImg);
-        }
-        else front.appendChild(el("strong", { text: card.title }));
-        glow.style.background = color;
+        var cards = values[0];
+        var card = cards[0];
+        showCard(card);
+        glow.style.background = colorOf(card);
         opener.group.classList.remove("mp-shaking");
 
         var sequence = reduced
@@ -713,16 +725,83 @@
               })
               .then(function () { opener.group.remove(); });
 
-        return sequence.then(function () {
-          glow.classList.remove("mp-peek");
-          glow.classList.add("mp-on");
+        // Shows card i under the counter. Every card but the last waits for a tap, then the next
+        // card flips in; the last (best) card gets the full result with every card in the pack.
+        function step(i) {
+          var c = cards[i];
+          var last = i === cards.length - 1;
+          front.classList.remove("mp-holo");
           front.classList.add("mp-revealed");
-          if (big) front.classList.add("mp-holo");
-          if (big && !reduced) confetti(stage, color);
+          if (isBig(c)) front.classList.add("mp-holo");
+          if (isBig(c) && !reduced) confetti(stage, colorOf(c));
+          glow.style.background = colorOf(c);
 
-          result.appendChild(el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }));
-          result.appendChild(el("h2", { text: card.title }));
-          result.appendChild(el("p", { text: pack.resultNote || "Ships with your order" }));
+          result.textContent = "";
+          if (multi) result.appendChild(el("span", { class: "mp-count", text: "Card " + (i + 1) + " of " + cards.length }));
+          var tierLabel = el("span", { class: "mp-tier", "data-tier": tierKey(c.tier), text: c.tier });
+          var name = el("h2", { text: c.title });
+          result.appendChild(tierLabel);
+          result.appendChild(name);
+          if (last) return finish(c, tierLabel, name);
+
+          var next = el("button", { class: "mp-btn", type: "button", text: i === cards.length - 2 ? "Reveal Last Card" : "Next Card" });
+          var all = el("button", { class: "mp-btn mp-btn-ghost", type: "button", text: "Reveal All" });
+          result.appendChild(el("div", { class: "mp-actions" }, [next, all]));
+          result.classList.add("mp-show", "mp-quick");
+          next.focus();
+          return new Promise(function (resolve) {
+            var going = false;
+            function advance(to) {
+              if (going) return;
+              going = true;
+              front.removeEventListener("click", tapNext);
+              result.classList.remove("mp-show");
+              var nextCard = cards[to];
+              var slow = to === cards.length - 1;
+              var out = reduced ? Promise.resolve() : animate(front, [
+                { transform: "none", opacity: 1 },
+                { transform: "translateX(-70%) rotate(-14deg) scale(.7)", opacity: 0 },
+              ], { duration: 360, easing: "cubic-bezier(.5,0,.8,.4)" });
+              resolve(out.then(function () {
+                showCard(nextCard);
+                front.classList.remove("mp-holo");
+                if (reduced) return;
+                // The best card turns over a little slower.
+                return animate(front, [
+                  { transform: "rotateY(90deg) scale(.92)", opacity: 1 },
+                  { transform: "none", opacity: 1 },
+                ], { duration: slow ? 700 : 420, easing: "cubic-bezier(.2,.8,.3,1)" });
+              }).then(function () { return step(to); }));
+            }
+            function tapNext() { advance(i + 1); }
+            next.addEventListener("click", tapNext);
+            front.addEventListener("click", tapNext);
+            all.addEventListener("click", function () { advance(cards.length - 1); });
+          });
+        }
+
+        function finish(best, tierLabel, name) {
+          result.classList.remove("mp-quick");
+          result.appendChild(el("p", { text: pack.resultNote || (multi ? "All " + cards.length + " cards ship with your order" : "Ships with your order") }));
+          if (multi) {
+            // Every card in the pack, best last. Tapping one shows it big again.
+            var strip = el("div", { class: "mp-fan" }, cards.map(function (c, k) {
+              var thumb = el("button", { class: "mp-fan-card" + (k === cards.length - 1 ? " mp-on" : ""), type: "button", "aria-label": c.title, style: "--mp-c:" + colorOf(c) + ";--mp-k:" + (k - (cards.length - 1) / 2) },
+                [c.imageUrl ? el("img", { src: c.imageUrl, alt: "" }) : el("span", { text: c.title })]);
+              thumb.addEventListener("click", function () {
+                strip.querySelectorAll(".mp-fan-card").forEach(function (t) { t.classList.remove("mp-on"); });
+                thumb.classList.add("mp-on");
+                showCard(c);
+                front.classList.toggle("mp-holo", isBig(c));
+                glow.style.background = colorOf(c);
+                tierLabel.textContent = c.tier;
+                tierLabel.setAttribute("data-tier", tierKey(c.tier));
+                name.textContent = c.title;
+              });
+              return thumb;
+            }));
+            result.appendChild(strip);
+          }
           var done = el("button", { class: "mp-btn", type: "button", text: pack.doneLabel || "Done" });
           done.addEventListener("click", close);
           var actions = el("div", { class: "mp-actions" }, [done]);
@@ -734,13 +813,19 @@
           if (navigator.share && !pack.noShare) {
             var share = el("button", { class: "mp-btn mp-btn-ghost", type: "button", text: "Share" });
             share.addEventListener("click", function () {
-              navigator.share({ title: "My mystery pack pull", text: "I pulled " + card.title + "!", url: window.location.origin + "/apps/packs" }).catch(function () {});
+              navigator.share({ title: "My mystery pack pull", text: "I pulled " + best.title + "!", url: window.location.origin + "/apps/packs" }).catch(function () {});
             });
             actions.appendChild(share);
           }
           result.appendChild(actions);
           result.classList.add("mp-show");
           done.focus();
+        }
+
+        return sequence.then(function () {
+          glow.classList.remove("mp-peek");
+          glow.classList.add("mp-on");
+          return step(0);
         });
       })
       .catch(function (err) {
@@ -758,6 +843,8 @@
         series: opts.series || "Mystery Pack",
         packImageUrl: opts.packImageUrl || null,
         demoCard: opts.card,
+        // Multi-card demo: opts.cards, cheapest first.
+        demoCards: opts.cards && opts.cards.length ? opts.cards : null,
         resultNote: opts.note,
         doneLabel: opts.doneLabel,
         again: opts.again,

@@ -65,6 +65,8 @@ model Series {
   closedAt      DateTime?
   // Set once when the last card of the top tier is pulled (fires the Shopify Flow alert).
   topTierGoneAt DateTime?
+  // Cards in each pack (1 for classic packs; e.g. 5 for a booster-style pack). Each card is its own slot.
+  cardsPerPack  Int          @default(1)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -137,6 +139,7 @@ model Pull {
   orderName    String
   lineItemId   String // gid://shopify/LineItem/... of the pack line
   packIndex    Int // 0-based copy within that line item's quantity
+  cardIndex    Int        @default(0) // 0-based card within a multi-card pack
   customerId   String? // gid://shopify/Customer/...
   status       PullStatus @default(UNOPENED)
   revealedAt   DateTime?
@@ -146,7 +149,7 @@ model Pull {
   unreservedAt DateTime?
   createdAt    DateTime   @default(now())
 
-  @@unique([lineItemId, packIndex])
+  @@unique([lineItemId, packIndex, cardIndex])
   @@index([orderId])
   @@index([customerId])
   @@index([status, createdAt])

@@ -14,7 +14,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { slots: true, pulls: true } } },
   });
-  const unopened = await db.pull.count({ where: { shop: session.shop, status: "UNOPENED" } });
+  const unopened = await db.pull.count({ where: { shop: session.shop, status: "UNOPENED", cardIndex: 0 } });
   return {
     // Opens the storefront My Packs page with sample packs to open (link works for 30 days).
     previewUrl: `https://${session.shop}/apps/packs?demo=${demoToken(session.shop)}`,
@@ -25,8 +25,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       title: s.title,
       status: s.status,
       price: s.packPrice.toString(),
-      packs: s._count.slots,
-      sold: s._count.pulls,
+      packs: Math.floor(s._count.slots / Math.max(1, s.cardsPerPack)),
+      sold: Math.floor(s._count.pulls / Math.max(1, s.cardsPerPack)),
     })),
   };
 };

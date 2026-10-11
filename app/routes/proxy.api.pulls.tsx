@@ -29,7 +29,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     recommendHandle: seed ? (products.get(seed)?.handle ?? null) : null,
     // Packs on sale right now, for the "Open More Packs?" shelf.
     available: packShelf(live, products),
-    packs: pulls.map((p) => ({
+    // Unopened multi-card packs show once (opening reveals all their cards); opened cards list one by one.
+    packs: pulls.filter((p, i) =>
+      p.status !== "UNOPENED" ||
+      pulls.findIndex((q) => q.status === "UNOPENED" && q.lineItemId === p.lineItemId && q.packIndex === p.packIndex) === i,
+    ).map((p) => ({
+      cardsPerPack: p.series.cardsPerPack,
       id: p.id,
       series: p.series.title,
       packImageUrl: art.get(p.series.packProductId) ?? null,
