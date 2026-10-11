@@ -314,3 +314,6 @@
   .mp-result p { margin-bottom: 10px; }
   .mp-btn { padding: 10px 22px; font-size: 1em; }
 }
+/* Keep Close clear of the phone's status bar / in-app browser bar. */
+.mp-skip { top: calc(env(safe-area-inset-top, 0px) + 14px); }
+.mp-stage { padding-top: calc(env(safe-area-inset-top, 0px) + 60px); box-sizing: border-box; }
