@@ -127,7 +127,7 @@
           el("div", {}, [el("strong", { text: s[0] }), el("p", { text: s[1] })]),
         ]);
       })),
-      el("p", { class: "mp-info-note", text: "Shipping is a one-time $" + fee + " per shipment, free when you ship " + freeAt + " or more cards at once." }),
+      el("p", { class: "mp-info-note", text: "Shipping is a one-time $" + fee + " per shipment, free when you ship " + freeAt + " or more cards at once. US addresses only." }),
     ]);
   }
 
@@ -305,7 +305,7 @@
     var bar = el("span", { class: "mp-hero-bar" }, [el("span", { style: "width:" + Math.min(100, (cards / freeAt) * 100) + "%" })]);
     var note = el("p", {
       text: !cards
-        ? "Ship your vault for $" + fee + " flat, free on " + freeAt + "+ cards."
+        ? "Ship your vault for $" + fee + " flat, free on " + freeAt + "+ cards (US only)."
         : left === 0
           ? "Your vault ships free!"
           : "$" + fee + " flat shipping. " + left + " more card" + (left === 1 ? "" : "s") + " and it ships free.",
