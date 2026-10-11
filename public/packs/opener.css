@@ -371,3 +371,34 @@
 .mp-vault-text p { margin: 2px 0 0; color: var(--mp-muted); }
 .mp-vault-btn { background: #e3350d; color: #fff; padding: 12px 26px; font-size: 1.05em; text-decoration: none; }
 .mp-vault-btn[disabled] { opacity: .6; cursor: default; }
+
+/* My Packs header: title, status and Ship My Cards in one banner (also used on the logged-out page). */
+.mp-hero {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 20px 32px; align-items: center;
+  margin: 8px 0 28px; padding: 28px 32px; border-radius: 20px; color: #fff; overflow: hidden; isolation: isolate;
+  background: radial-gradient(120% 140% at 90% 0%, rgba(226,47,57,.55), transparent 55%), linear-gradient(120deg, #14141a 0%, #2a0f2e 55%, #3b0d1c 100%);
+  box-shadow: 0 10px 28px rgba(20,20,26,.28);
+}
+.mp-hero-text { min-width: 0; }
+.mp-hero-kicker { display: inline-block; margin-bottom: 6px; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: #ffb3b8; }
+.mp-hero h1 { margin: 0 0 6px; font-family: var(--mp-heading); font-size: clamp(2.2em, 5vw, 3.2em); line-height: 1; color: #fff; }
+.mp-hero-sub { margin: 0 0 14px; font-size: 1.05em; color: #d6d2e4; max-width: 46ch; }
+.mp-hero-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.mp-hero-stat { padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); font-size: .9em; color: #fff; }
+.mp-hero-stat b { font-family: var(--mp-heading); font-size: 1.15em; margin-right: 2px; }
+.mp-hero-ship { display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); }
+.mp-hero-ship p { margin: 0; color: #d6d2e4; font-size: .95em; }
+.mp-hero-ship-title { font-family: var(--mp-heading); font-size: 1.3em; }
+.mp-hero-bar { display: block; height: 8px; border-radius: 999px; background: rgba(255,255,255,.18); overflow: hidden; }
+.mp-hero-bar span { display: block; height: 100%; border-radius: inherit; background: #fff; }
+.mp-hero .mp-vault-btn { width: 100%; text-align: center; justify-content: center; display: inline-flex; box-shadow: 0 6px 16px rgba(226,47,57,.4); }
+.mp-hero .mp-vault-btn[disabled] { opacity: .5; }
+.mp-hero .mp-btn-ghost { width: 100%; text-align: center; text-decoration: none; display: inline-flex; justify-content: center; }
+@media (max-width: 749px) {
+  .mp-hero { grid-template-columns: 1fr; padding: 22px 18px; border-radius: 16px; margin-top: 0; }
+  .mp-hero h1 { font-size: 2.4em; }
+  .mp-hero-sub { font-size: 1em; }
+}
+.mp-hero a.mp-btn, .mp-hero a.mp-btn:hover { color: #fff !important; text-decoration: none !important; }
+.mp-hero a.mp-btn::before, .mp-hero a.mp-btn::after { display: none !important; }
+.mp-hero .mp-btn { box-sizing: border-box; }

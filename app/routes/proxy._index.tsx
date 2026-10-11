@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { proxyContext } from "../lib/proxy.server";
 import { validDemoToken } from "../lib/demo.server";
+import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 
 // Rendered inside the store theme at /apps/packs. The page shell is Liquid so it
 // picks up the theme's header and footer; the opener script does the rest.
@@ -21,10 +22,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!viewer && !demo) {
     return liquid(
-      `<div class="mp-page mp-signin">
-        <h1>My Packs</h1>
-        <p>Log in to see and open your mystery packs, or use the link in your order email.</p>
-        <a class="button" href="{{ routes.account_login_url }}?return_url=/apps/packs">Log in</a>
+      `<link rel="stylesheet" href="${assets}/packs/opener.css?v=${VERSION}">
+      <div class="mp-page mp-signin">
+        <section class="mp-hero">
+          <div class="mp-hero-text">
+            <span class="mp-hero-kicker">Digital Mystery Packs · Your Vault</span>
+            <h1>My Packs</h1>
+            <p class="mp-hero-sub">Log in to open your packs and see every card in your vault, or use the link in your order email.</p>
+          </div>
+          <div class="mp-hero-ship">
+            <strong class="mp-hero-ship-title">Welcome back</strong>
+            <p>Your pulls wait in your vault until you ship them: $${SHIP_FEE} flat, free on ${FREE_SHIPPING_CARDS}+ cards.</p>
+            <a class="mp-btn mp-vault-btn" href="{{ routes.account_login_url }}?return_url=/apps/packs">Log In</a>
+            <a class="mp-btn mp-btn-ghost" href="/products/poke-collect-mystery-pack">Shop Mystery Packs</a>
+          </div>
+        </section>
       </div>`,
     );
   }

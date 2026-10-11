@@ -262,26 +262,51 @@
     ]);
   }
 
+  // Page header: title, what's going on, vault stats, and Ship My Cards, all in one banner.
+  function hero(unopened, vault) {
+    var cards = vault ? vault.cards : 0;
+    var pending = vault && vault.pending;
+    var sub = unopened
+      ? "You have " + unopened + " unopened pack" + (unopened === 1 ? "" : "s") + ". Every card you pull goes to your vault."
+      : cards || pending
+        ? "Your pulls wait safely in your vault. Ship them together whenever you're ready."
+        : "Open packs online. Every card you pull lands in your vault until you ship it.";
+    var stats = el("div", { class: "mp-hero-stats" }, [
+      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(cards) }), document.createTextNode(" card" + (cards === 1 ? "" : "s") + " in vault")]),
+      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(unopened) }), document.createTextNode(" unopened")]),
+    ]);
+    var text = el("div", { class: "mp-hero-text" }, [
+      el("span", { class: "mp-hero-kicker", text: "Digital Mystery Packs · Your Vault" }),
+      el("h1", { text: "My Packs" }),
+      el("p", { class: "mp-hero-sub", text: sub }),
+      stats,
+    ]);
+    return el("section", { class: "mp-hero" }, [text, shipBox(vault)]);
+  }
+
   // "Ship My Cards": everything in the vault ships together for one flat fee.
-  function vaultPanel(vault) {
-    if (!vault || (!vault.cards && !vault.pending)) return null;
-    if (vault.pending) {
-      return el("div", { class: "mp-vault" }, [
-        el("div", { class: "mp-vault-text" }, [
-          el("strong", { text: vault.pending.cards + " card" + (vault.pending.cards === 1 ? " is" : "s are") + " ready to ship" }),
-          el("p", { text: "Finish checkout to pay shipping and we'll send them out." }),
-        ]),
+  function shipBox(vault) {
+    if (vault && vault.pending) {
+      return el("div", { class: "mp-hero-ship" }, [
+        el("strong", { class: "mp-hero-ship-title", text: vault.pending.cards + " card" + (vault.pending.cards === 1 ? " is" : "s are") + " ready to ship" }),
+        el("p", { text: "Finish checkout to pay shipping and we'll send them out." }),
         el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
       ]);
     }
-    var free = vault.cards >= vault.freeAt;
-    var left = vault.freeAt - vault.cards;
-    var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: "Ship My Cards" });
+    var fee = vault ? vault.fee : 5;
+    var freeAt = vault ? vault.freeAt : 25;
+    var cards = vault ? vault.cards : 0;
+    var left = Math.max(0, freeAt - cards);
+    var bar = el("span", { class: "mp-hero-bar" }, [el("span", { style: "width:" + Math.min(100, (cards / freeAt) * 100) + "%" })]);
     var note = el("p", {
-      text: free
-        ? "Shipping is free on " + vault.freeAt + "+ cards."
-        : "$" + vault.fee + " flat shipping. " + left + " more card" + (left === 1 ? "" : "s") + " and it ships free.",
+      text: !cards
+        ? "Ship your vault for $" + fee + " flat, free on " + freeAt + "+ cards."
+        : left === 0
+          ? "Your vault ships free!"
+          : "$" + fee + " flat shipping. " + left + " more card" + (left === 1 ? "" : "s") + " and it ships free.",
     });
+    var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: "Ship My Cards" });
+    if (!cards) button.disabled = true;
     button.addEventListener("click", function () {
       if (demo) { note.textContent = "Preview mode: shipping isn't available for sample cards."; return; }
       button.disabled = true;
@@ -298,11 +323,10 @@
           note.textContent = err.message;
         });
     });
-    return el("div", { class: "mp-vault" }, [
-      el("div", { class: "mp-vault-text" }, [
-        el("strong", { text: vault.cards + " card" + (vault.cards === 1 ? "" : "s") + " in your vault" }),
-        note,
-      ]),
+    return el("div", { class: "mp-hero-ship" }, [
+      el("strong", { class: "mp-hero-ship-title", text: left === 0 && cards ? "Free shipping unlocked" : "Ship when you're ready" }),
+      bar,
+      note,
       button,
     ]);
   }
@@ -313,21 +337,13 @@
     var opened = packs.filter(function (p) { return p.opened; });
 
     if (demo) root.appendChild(demoBanner());
-    root.appendChild(el("h1", { text: "My Packs" }));
-    root.appendChild(el("p", {
-      class: "mp-sub",
-      text: unopened.length
-        ? "You have " + unopened.length + " unopened pack" + (unopened.length === 1 ? "" : "s") + ". Every card you pull goes to your vault."
-        : "All your packs are open. Your cards wait in your vault until you ship them.",
-    }));
+    root.appendChild(hero(unopened.length, vault));
 
     if (unopened.length) {
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
       root.appendChild(el("div", { class: "mp-grid" }, unopened.map(function (p) { return packTile(p, openPack); })));
     }
     root.appendChild(el("h2", { class: "mp-section-title", text: "Your pulls" }));
-    var panel = vaultPanel(vault);
-    if (panel) root.appendChild(panel);
     if (signedIn === false) {
       root.appendChild(el("p", { class: "mp-login-hint" }, [
         document.createTextNode("Showing this order only. "),
