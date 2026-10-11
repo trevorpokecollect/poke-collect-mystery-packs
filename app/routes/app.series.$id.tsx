@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -183,6 +184,16 @@ export default function SeriesPage() {
   const shopify = useAppBridge();
   const draft = series.status === "DRAFT";
   const busy = navigation.state !== "idle";
+  // Two-click confirmation instead of window.confirm(), which some embedded browsers block.
+  const [armed, setArmed] = useState<{ key: string; message: string } | null>(null);
+  function confirmThen(key: string, message: string, run: () => void) {
+    if (armed?.key === key) {
+      setArmed(null);
+      run();
+    } else {
+      setArmed({ key, message });
+    }
+  }
 
   async function pickCards() {
     const selection = await shopify.resourcePicker({ type: "variant", multiple: true });
@@ -198,8 +209,9 @@ export default function SeriesPage() {
       (form.querySelector(`[data-build="${name}"]`) as HTMLInputElement | null)?.value ?? "";
     const fields = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition", "language"] as const;
     const values = Object.fromEntries(fields.map((f) => [f, read(f)]));
-    if (cards.length > 0 && !confirm("Replace the current card list with a new pool from your inventory?")) return;
-    submit({ intent: "autoBuild", ...values }, { method: "post" });
+    const run = () => submit({ intent: "autoBuild", ...values }, { method: "post" });
+    if (cards.length > 0) confirmThen("autoBuild", "Replace the current card list with a new pool from your inventory? Click Build pool again to confirm.", run);
+    else run();
   }
 
   function saveTiers(form: HTMLElement) {
@@ -234,9 +246,11 @@ export default function SeriesPage() {
             const reserveNote = series.reserveInventory
               ? " Every card in the pool is reserved in your inventory, so it can only be won from a pack."
               : "";
-            if (confirm(`Launch ${series.title}? The card list and odds are locked once packs go on sale.${reserveNote}`)) {
-              submit({ intent: "launch" }, { method: "post" });
-            }
+            confirmThen(
+              "launch",
+              `Launch ${series.title}? The card list and odds are locked once packs go on sale.${reserveNote} Click Launch series again to confirm.`,
+              () => submit({ intent: "launch" }, { method: "post" }),
+            );
           }}
         >
           Launch series
@@ -247,15 +261,23 @@ export default function SeriesPage() {
           tone="critical"
           onClick={() => {
             const releaseNote = series.reserveInventory ? " Unpulled cards go back on sale in your store." : "";
-            if (confirm(`Close this series? No more packs will be drawn.${releaseNote}`)) {
-              submit({ intent: "close" }, { method: "post" });
-            }
+            confirmThen(
+              "close",
+              `Close this series? No more packs will be drawn.${releaseNote} Click Close series again to confirm.`,
+              () => submit({ intent: "close" }, { method: "post" }),
+            );
           }}
         >
           Close series
         </s-button>
       ) : null}
 
+      {armed ? (
+        <s-banner tone="warning" heading="Confirm">
+          {armed.message}
+          <s-button slot="secondary-actions" onClick={() => setArmed(null)}>Cancel</s-button>
+        </s-banner>
+      ) : null}
       {result && "error" in result && result.error ? <s-banner tone="critical">{result.error}</s-banner> : null}
       {result && "ok" in result && result.ok ? <s-banner tone="success">{result.ok}</s-banner> : null}
 

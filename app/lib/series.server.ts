@@ -88,11 +88,15 @@ export async function createSeries(
   if (inUse) {
     throw new Error(`That pack is already used by "${inUse.title}". Close that series first, then reuse the pack.`);
   }
+  // A later series can reuse a title (e.g. re-running "Series 1"), so make the handle unique.
+  const base = slugify(input.title) || "series";
+  let handle = base;
+  for (let n = 2; await db.series.findUnique({ where: { shop_handle: { shop, handle } } }); n++) handle = `${base}-${n}`;
   return db.series.create({
     data: {
       shop,
       title: input.title,
-      handle: slugify(input.title),
+      handle,
       packProductId: variant.product.id,
       packVariantId: variant.id,
       packPrice: variant.price,
