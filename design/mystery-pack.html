@@ -1,99 +1,124 @@
 <!doctype html><html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&display=block" rel="stylesheet">
-<style>html,body{margin:0;background:#e7e7e9}svg{display:block}text{font-family:Montserrat,Arial,sans-serif}</style></head><body>
-<svg width="900" height="900" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Poke-Collect Mystery Pack, digital edition. Export at 900x900 (the bag sits at x 235-665, y 38-862,
+     which the My Packs tile clips to). Open in Chrome and screenshot, or use headless Chrome. -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet">
+<style>html,body{margin:0;background:#07070b}svg{display:block}text{font-family:Montserrat,Arial,sans-serif}.mono{font-family:'JetBrains Mono',monospace}</style></head><body>
+<svg width="900" height="900" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg">
 <defs>
-  <linearGradient id="bag" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0" stop-color="#0b0b0d"/><stop offset=".12" stop-color="#1c1c20"/><stop offset=".3" stop-color="#0e0e10"/>
-    <stop offset=".62" stop-color="#151518"/><stop offset=".86" stop-color="#0a0a0c"/><stop offset="1" stop-color="#202024"/></linearGradient>
-  <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#fff" stop-opacity=".0"/><stop offset=".42" stop-color="#fff" stop-opacity=".0"/>
-    <stop offset=".5" stop-color="#fff" stop-opacity=".09"/><stop offset=".58" stop-color="#fff" stop-opacity="0"/></linearGradient>
-  <linearGradient id="crimp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a2e"/><stop offset="1" stop-color="#0d0d0f"/></linearGradient>
-  <linearGradient id="yellow" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffe600"/><stop offset="1" stop-color="#f5c400"/></linearGradient>
-  <clipPath id="bagclip"><rect x="235" y="38" width="430" height="824" rx="10"/></clipPath>
-  <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity=".35"/></filter>
-  <filter id="cs" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity=".6"/></filter>
-  <g id="cardback">
-    <rect x="-62" y="-86" width="124" height="172" rx="9" fill="#141416" stroke="#3a3a40" stroke-width="3"/>
-    <rect x="-52" y="-76" width="104" height="152" rx="6" fill="none" stroke="#e5262f" stroke-width="2.5" opacity=".9"/>
-    <circle r="34" fill="none" stroke="#e5262f" stroke-width="9"/>
-    <rect x="-34" y="-4.5" width="68" height="9" fill="#e5262f"/>
-    <circle r="11" fill="#141416" stroke="#e5262f" stroke-width="6"/>
-    <text y="-44" text-anchor="middle" font-size="34" font-weight="900" fill="#fff">?</text>
-  </g>
+  <radialGradient id="bgGlow" cx=".5" cy=".55" r=".6"><stop offset="0" stop-color="#3a0710"/><stop offset=".55" stop-color="#12060a"/><stop offset="1" stop-color="#07070b"/></radialGradient>
+  <linearGradient id="bag" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#0d0d12"/><stop offset=".55" stop-color="#120a10"/><stop offset="1" stop-color="#1c060c"/></linearGradient>
+  <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset=".18" stop-color="#fff" stop-opacity="0"/>
+    <stop offset=".78" stop-color="#fff" stop-opacity="0"/><stop offset=".92" stop-color="#fff" stop-opacity=".06"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="holo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ff2d55"/><stop offset=".35" stop-color="#ff7a59"/><stop offset=".55" stop-color="#ffd6e0"/><stop offset=".75" stop-color="#7cf2ff"/><stop offset="1" stop-color="#ff2d55"/></linearGradient>
+  <linearGradient id="gridFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff2d55" stop-opacity="0"/><stop offset="1" stop-color="#ff2d55" stop-opacity=".55"/></linearGradient>
+  <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1.3" fill="#000" opacity=".35"/></pattern>
+  <pattern id="dots" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="7" cy="7" r="1" fill="#ff2d55" opacity=".18"/></pattern>
+  <clipPath id="bagclip"><rect x="235" y="38" width="430" height="824" rx="14"/></clipPath>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="bigglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="12" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#ff2d55" flood-opacity=".28"/></filter>
 </defs>
 
+<!-- backdrop -->
+<rect width="900" height="900" fill="url(#bgGlow)"/>
+<rect width="900" height="900" fill="url(#dots)"/>
+
 <!-- bag -->
-<g filter="url(#sh)">
-  <rect x="235" y="38" width="430" height="824" rx="10" fill="url(#bag)"/>
-</g>
+<g filter="url(#shadow)"><rect x="235" y="38" width="430" height="824" rx="14" fill="url(#bag)"/></g>
 <g clip-path="url(#bagclip)">
-  <!-- faint ball watermark -->
-  <g opacity=".045" fill="none" stroke="#fff" stroke-width="34">
-    <circle cx="450" cy="470" r="230"/><line x1="220" y1="470" x2="680" y2="470"/></g>
-  <!-- diagonal stripes, as on Poke-Collect mystery packaging -->
-  <polygon points="235,150 235,95 345,38 420,38" fill="#f4f4f6"/>
-  <polygon points="235,215 235,175 455,38 520,38" fill="#f4f4f6" opacity=".0"/>
-  <polygon points="430,210 560,38 625,38 495,210" fill="#e5262f"/>
-  <polygon points="520,262 665,70 665,140 585,262" fill="#e5262f"/>
-  <polygon points="610,262 665,190 665,262" fill="#e5262f" opacity=".0"/>
-  <!-- crimp seal -->
-  <rect x="235" y="38" width="430" height="40" fill="url(#crimp)" opacity=".55"/>
-  <g stroke="#000" stroke-opacity=".35" stroke-width="2">
-    <path d="M235 46 H665 M235 54 H665 M235 62 H665 M235 70 H665"/></g>
-  <rect x="235" y="822" width="430" height="40" fill="url(#crimp)" opacity=".55"/>
-  <g stroke="#000" stroke-opacity=".35" stroke-width="2"><path d="M235 830 H665 M235 838 H665 M235 846 H665 M235 854 H665"/></g>
+  <!-- perspective grid floor -->
+  <g stroke="url(#gridFade)" stroke-width="1.6" fill="none" opacity=".6">
+    <path d="M235 560 H665 M235 590 H665 M235 628 H665 M235 676 H665 M235 736 H665"/>
+    <path d="M450 520 L450 700 M450 520 L380 700 M450 520 L310 700 M450 520 L240 700 M450 520 L170 700 M450 520 L520 700 M450 520 L590 700 M450 520 L660 700 M450 520 L730 700"/>
+  </g>
+  <!-- circuit traces -->
+  <g stroke="#ff2d55" stroke-width="2" fill="none" opacity=".55" filter="url(#glow)">
+    <path d="M235 205 H285 L305 225 V300"/><path d="M665 160 H610 L590 180 V240 H560"/>
+    <path d="M235 430 H262 L276 444 V520"/><path d="M665 470 H640 L626 484 V545"/>
+  </g>
+  <g fill="#ff2d55" filter="url(#glow)"><circle cx="305" cy="300" r="4"/><circle cx="560" cy="240" r="4"/><circle cx="276" cy="520" r="4"/><circle cx="626" cy="545" r="4"/></g>
+  <!-- top seal: thin neon line + notch + hang hole -->
+  <rect x="235" y="38" width="430" height="44" fill="#000" opacity=".45"/>
+  <g stroke="#2a2a33" stroke-width="2"><path d="M235 50 H665 M235 60 H665 M235 70 H665"/></g>
+  <rect x="235" y="82" width="430" height="2.5" fill="#ff2d55" filter="url(#glow)"/>
+  <rect x="235" y="818" width="430" height="44" fill="#000" opacity=".45"/>
+  <g stroke="#2a2a33" stroke-width="2"><path d="M235 830 H665 M235 840 H665 M235 850 H665"/></g>
+  <rect x="235" y="815.5" width="430" height="2.5" fill="#ff2d55" filter="url(#glow)"/>
 
-  <!-- logo + title -->
-  <image href="https://poke-collect.com/cdn/shop/files/Typeface_Logo_Main_1.png?v=1722970271&amp;width=600" x="335" y="268" width="230" height="93.4"/>
-  <text x="450" y="402" text-anchor="middle" font-size="38" font-weight="900" fill="#fff" letter-spacing="2">MYSTERY PACK</text>
-  <g transform="translate(450 432)">
-    <rect x="-88" y="-17" width="96" height="27" rx="3" fill="none" stroke="#fff" stroke-width="2.5"/>
-    <text x="-40" y="3.5" text-anchor="middle" font-size="15.5" font-weight="900" fill="#fff" letter-spacing="1">ONLINE</text>
-    <text x="16" y="3.5" font-size="15.5" font-weight="800" fill="#fff" letter-spacing="1">OPENING</text>
+  <!-- HUD corner brackets -->
+  <g stroke="#f4f4f6" stroke-width="3" fill="none" opacity=".85">
+    <path d="M258 108 V96 H276"/><path d="M642 108 V96 H624"/><path d="M258 792 V804 H276"/><path d="M642 792 V804 H624"/></g>
+  <text class="mono" x="268" y="124" font-size="11" font-weight="700" fill="#ff2d55" letter-spacing="1.5">PC//SERIES-01</text>
+  <text class="mono" x="632" y="124" font-size="11" font-weight="700" fill="#8a8a96" text-anchor="end" letter-spacing="1.5">ID 0x4D50</text>
+
+  <!-- logo + title (glitch: offset red / cyan copies) -->
+  <image href="https://poke-collect.com/cdn/shop/files/Typeface_Logo_Main_1.png?v=1722970271&amp;width=600" x="345" y="150" width="210" height="85.3" filter="url(#glow)"/>
+  <g font-size="44" font-weight="900" text-anchor="middle" letter-spacing="1">
+    <text x="447" y="292" fill="#00e5ff" opacity=".55">MYSTERY</text>
+    <text x="453" y="292" fill="#ff2d55" opacity=".7">MYSTERY</text>
+    <text x="450" y="292" fill="#ffffff">MYSTERY</text>
+    <text x="447" y="340" fill="#00e5ff" opacity=".55">PACK</text>
+    <text x="453" y="340" fill="#ff2d55" opacity=".7">PACK</text>
+    <text x="450" y="340" fill="#ffffff">PACK</text>
+  </g>
+  <!-- glitch slices -->
+  <rect x="300" y="276" width="70" height="4" fill="#07070b"/><rect x="505" y="322" width="56" height="3" fill="#07070b"/>
+  <g transform="translate(450 368)">
+    <rect x="-92" y="-15" width="184" height="26" rx="13" fill="none" stroke="#ff2d55" stroke-width="2" filter="url(#glow)"/>
+    <text class="mono" y="3.5" text-anchor="middle" font-size="12.5" font-weight="700" fill="#fff" letter-spacing="2.6">DIGITAL EDITION</text>
   </g>
 
-  <!-- three mystery card backs -->
-  <g filter="url(#cs)">
-    <use href="#cardback" transform="translate(352 585) rotate(-12) scale(.92)"/>
-    <use href="#cardback" transform="translate(548 585) rotate(12) scale(.92)"/>
-    <use href="#cardback" transform="translate(450 568) scale(1.08)"/>
+  <!-- holographic wireframe card -->
+  <g transform="translate(450 500) rotate(-6)">
+    <rect x="-78" y="-108" width="156" height="216" rx="12" fill="#0c0c12" opacity=".85"/>
+    <rect x="-78" y="-108" width="156" height="216" rx="12" fill="none" stroke="url(#holo)" stroke-width="4" filter="url(#bigglow)"/>
+    <rect x="-64" y="-94" width="128" height="188" rx="7" fill="none" stroke="url(#holo)" stroke-width="1.5" opacity=".7"/>
+    <g stroke="url(#holo)" stroke-width="1" opacity=".35"><path d="M-64 -50 H64 M-64 0 H64 M-64 50 H64 M-32 -94 V94 M0 -94 V94 M32 -94 V94"/></g>
+    <g filter="url(#glow)">
+      <circle r="40" fill="none" stroke="#ff2d55" stroke-width="7"/>
+      <rect x="-40" y="-3.5" width="80" height="7" fill="#ff2d55"/>
+      <circle r="13" fill="#0c0c12" stroke="#ff2d55" stroke-width="5"/>
+    </g>
+    <text y="-58" text-anchor="middle" font-size="40" font-weight="900" fill="#fff" filter="url(#glow)">?</text>
+    <text class="mono" y="86" text-anchor="middle" font-size="10" font-weight="700" fill="#7cf2ff" letter-spacing="2">REVEAL ON OPEN</text>
   </g>
+  <!-- pixel sparks -->
+  <g fill="#fff" filter="url(#glow)">
+    <rect x="330" y="420" width="5" height="5"/><rect x="566" y="446" width="4" height="4"/><rect x="352" y="590" width="4" height="4"/>
+    <rect x="552" y="604" width="5" height="5"/><rect x="590" y="400" width="3" height="3" fill="#7cf2ff"/><rect x="304" y="508" width="3" height="3" fill="#ff2d55"/></g>
 
-  <!-- tier band: the four card tiers inside every pack -->
-  <rect x="235" y="700" width="430" height="9" fill="#e5262f"/>
-  <rect x="235" y="709" width="430" height="80" fill="#0a0a0c"/>
-  <text x="450" y="729" text-anchor="middle" font-size="11" font-weight="800" fill="#c9c9cf" letter-spacing="2.4">EVERY PACK HOLDS ONE CARD FROM</text>
-  <g font-size="11.5" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing=".8">
-    <g transform="translate(298 750)">
-      <circle r="14" fill="#f4f4f6"/><path d="M-14 0 A14 14 0 0 1 14 0 Z" fill="#e5262f"/>
-      <rect x="-14" y="-1.6" width="28" height="3.2" fill="#0a0a0c"/><circle r="4.6" fill="#f4f4f6" stroke="#0a0a0c" stroke-width="2.4"/>
-      <text y="30">POKE</text></g>
-    <g transform="translate(399 750)">
-      <circle r="14" fill="#f4f4f6"/><path d="M-14 0 A14 14 0 0 1 14 0 Z" fill="#2f6fe0"/>
-      <path d="M-11 -6 L-5 -11 L-5 -4 Z M11 -6 L5 -11 L5 -4 Z" fill="#e5262f"/>
-      <rect x="-14" y="-1.6" width="28" height="3.2" fill="#0a0a0c"/><circle r="4.6" fill="#f4f4f6" stroke="#0a0a0c" stroke-width="2.4"/>
-      <text y="30">GREAT</text></g>
-    <g transform="translate(500 750)">
-      <circle r="14" fill="#f4f4f6"/><path d="M-14 0 A14 14 0 0 1 14 0 Z" fill="#1d1d21"/>
-      <rect x="-9" y="-12" width="5" height="10" fill="#ffd400"/><rect x="4" y="-12" width="5" height="10" fill="#ffd400"/>
-      <rect x="-14" y="-1.6" width="28" height="3.2" fill="#0a0a0c"/><circle r="4.6" fill="#f4f4f6" stroke="#0a0a0c" stroke-width="2.4"/>
-      <circle r="14" fill="none" stroke="#3a3a40" stroke-width="1"/>
-      <text y="30">ULTRA</text></g>
-    <g transform="translate(601 750)">
-      <circle r="14" fill="#f4f4f6"/><path d="M-14 0 A14 14 0 0 1 14 0 Z" fill="#7b3fe4"/>
-      <circle cx="-7" cy="-7" r="2.6" fill="#ff5fae"/><circle cx="7" cy="-7" r="2.6" fill="#ff5fae"/>
-      <rect x="-14" y="-1.6" width="28" height="3.2" fill="#0a0a0c"/><circle r="4.6" fill="#f4f4f6" stroke="#0a0a0c" stroke-width="2.4"/>
-      <text y="30">MASTER</text></g>
+  <!-- tiers -->
+  <text class="mono" x="450" y="676" text-anchor="middle" font-size="11" font-weight="700" fill="#c9c9d3" letter-spacing="2.2">ONE CARD FROM 4 TIERS</text>
+  <g font-size="11" font-weight="900" fill="#fff" text-anchor="middle" letter-spacing="1">
+    <g transform="translate(298 712)" filter="url(#glow)">
+      <circle r="15" fill="#0c0c12" stroke="#ff2d55" stroke-width="2.5"/><path d="M-15 0 A15 15 0 0 1 15 0 Z" fill="#ff2d55"/>
+      <rect x="-15" y="-1.6" width="30" height="3.2" fill="#0c0c12"/><circle r="4.8" fill="#f4f4f6" stroke="#0c0c12" stroke-width="2.4"/>
+      <text y="34">POKE</text></g>
+    <g transform="translate(399 712)" filter="url(#glow)">
+      <circle r="15" fill="#0c0c12" stroke="#3d8bff" stroke-width="2.5"/><path d="M-15 0 A15 15 0 0 1 15 0 Z" fill="#3d8bff"/>
+      <path d="M-12 -6 L-6 -12 L-6 -4 Z M12 -6 L6 -12 L6 -4 Z" fill="#ff2d55"/>
+      <rect x="-15" y="-1.6" width="30" height="3.2" fill="#0c0c12"/><circle r="4.8" fill="#f4f4f6" stroke="#0c0c12" stroke-width="2.4"/>
+      <text y="34">GREAT</text></g>
+    <g transform="translate(500 712)" filter="url(#glow)">
+      <circle r="15" fill="#0c0c12" stroke="#ffd400" stroke-width="2.5"/><path d="M-15 0 A15 15 0 0 1 15 0 Z" fill="#1d1d24"/>
+      <rect x="-10" y="-13" width="5" height="11" fill="#ffd400"/><rect x="5" y="-13" width="5" height="11" fill="#ffd400"/>
+      <rect x="-15" y="-1.6" width="30" height="3.2" fill="#0c0c12"/><circle r="4.8" fill="#f4f4f6" stroke="#0c0c12" stroke-width="2.4"/>
+      <text y="34">ULTRA</text></g>
+    <g transform="translate(601 712)" filter="url(#glow)">
+      <circle r="15" fill="#0c0c12" stroke="#a46bff" stroke-width="2.5"/><path d="M-15 0 A15 15 0 0 1 15 0 Z" fill="#7b3fe4"/>
+      <circle cx="-7.5" cy="-7.5" r="2.8" fill="#ff5fae"/><circle cx="7.5" cy="-7.5" r="2.8" fill="#ff5fae"/>
+      <rect x="-15" y="-1.6" width="30" height="3.2" fill="#0c0c12"/><circle r="4.8" fill="#f4f4f6" stroke="#0c0c12" stroke-width="2.4"/>
+      <text y="34">MASTER</text></g>
   </g>
-  <rect x="235" y="789" width="430" height="33" fill="#f4f4f6"/>
-  <text x="450" y="811" text-anchor="middle" font-size="11.5" font-weight="800" fill="#141416" letter-spacing=".8">1 CARD PER PACK · OPENED ONLINE · SHIPPED TO YOU</text>
+  <text class="mono" x="450" y="786" text-anchor="middle" font-size="10.5" font-weight="700" fill="#8a8a96" letter-spacing="1.4">OPEN ONLINE  ·  REVEAL INSTANTLY  ·  SHIPPED TO YOU</text>
 
-  <!-- gloss -->
-  <rect x="235" y="38" width="430" height="824" fill="url(#gloss)"/>
-  <rect x="250" y="38" width="16" height="824" fill="#fff" opacity=".05"/>
+  <!-- scanlines + sheen -->
+  <rect x="235" y="38" width="430" height="824" fill="url(#scan)"/>
+  <rect x="235" y="38" width="430" height="824" fill="url(#sheen)"/>
 </g>
-<!-- hang hole -->
-<circle cx="450" cy="92" r="13" fill="#e7e7e9" stroke="#2a2a2e" stroke-width="3"/>
+<rect x="235" y="38" width="430" height="824" rx="14" fill="none" stroke="#ff2d55" stroke-opacity=".55" stroke-width="2" filter="url(#glow)"/>
+<circle cx="450" cy="60" r="10" fill="#07070b" stroke="#3a3a44" stroke-width="3"/>
 </svg></body></html>
