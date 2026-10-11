@@ -132,7 +132,6 @@
 /* Opening: the pack (body + a top strip built from slices) wraps the card, which starts small and low. */
 .mp-open-pack {
   position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 2;
-  filter: drop-shadow(0 0 16px rgba(255, 40, 90, .35)) drop-shadow(0 14px 24px rgba(0, 0, 0, .5));
 }
 .mp-open-pack.mp-shaking { animation: mp-shake .6s ease-in-out infinite; }
 .mp-open-body, .mp-open-slice { position: absolute; top: 0; left: 0; }
@@ -327,3 +326,8 @@
   .mp-stage { --mp-top-space: 64px; }
   .mp-skip { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; padding: 7px 16px; font-size: .95em; }
 }
+
+/* Pack glow lives on the body only (a filter on the whole pack left a ghost of the torn strip's
+   glow behind on iPhone). It slides away with the body. */
+.mp-open-glow { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0 0 10px 10px; pointer-events: none;
+  box-shadow: 0 0 18px rgba(255, 40, 90, .38), 0 14px 26px rgba(0, 0, 0, .5); }

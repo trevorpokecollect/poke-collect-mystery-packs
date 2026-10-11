@@ -459,6 +459,9 @@
 
     // Body: everything under the tear line.
     var body = el("div", { class: "mp-open-body" });
+    var bodyGlow = el("div", { class: "mp-open-glow" });
+    bodyGlow.style.top = (TEAR_Y * 100).toFixed(2) + "%";
+    body.appendChild(bodyGlow);
     var bodyFace = face([[0, 1]].concat(points, [[1, 1]]));
     var bodyEdge = tornEdge(points, 1, false);
     bodyFace.appendChild(bodyEdge);
