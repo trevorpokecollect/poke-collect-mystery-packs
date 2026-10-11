@@ -163,27 +163,29 @@ model Pull {
 
 // Per-order bookkeeping for orders that contain packs.
 model PackOrder {
-  orderId       String    @id
-  shop          String
-  orderName     String
-  customerId    String?
+  orderId              String    @id
+  shop                 String
+  orderName            String
+  customerId           String?
   // Random token for the "open your packs" link (lets guests open without logging in).
-  openToken     String    @unique
+  openToken            String    @unique
   // The checkout's token (order.checkout_token), so the thank-you page can find this order's packs.
-  checkoutToken String?
-  held          Boolean   @default(false)
+  checkoutToken        String?
+  held                 Boolean   @default(false)
   // Set right after the order edit commits, so a retry never adds the cards twice.
-  cardsAddedAt  DateTime?
+  cardsAddedAt         DateTime?
   // Lease so the reveal request and the cron job never finalize the same order at once.
-  finalizingAt  DateTime?
-  finalized     Boolean   @default(false)
+  finalizingAt         DateTime?
+  finalized            Boolean   @default(false)
   // Vault orders keep pulled cards in the customer's vault until they ask to have them shipped,
   // instead of adding them to this order. Orders from before the vault have this false.
-  vault         Boolean   @default(false)
+  vault                Boolean   @default(false)
   // Vault orders: when the pulled cards were written to the order's note (cards aren't line items).
-  pullsNotedAt  DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  pullsNotedAt         DateTime?
+  // Vault orders: when the pack lines were marked fulfilled (at payment).
+  packLinesFulfilledAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([shop, checkoutToken])
 }

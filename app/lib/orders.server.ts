@@ -173,6 +173,33 @@ async function addCardsToOrder(admin: Admin, orderId: string, variantIds: string
   );
 }
 
+/**
+ * Vault orders: the pack lines never ship (cards go to the vault), so they're marked fulfilled at
+ * payment and the order doesn't sit in the unfulfilled queue. Opening packs doesn't depend on it.
+ */
+export async function fulfillVaultPackLines(db: PrismaClient, admin: Admin, orderId: string) {
+  const packOrder = await db.packOrder.findUnique({ where: { orderId } });
+  if (!packOrder?.vault || packOrder.packLinesFulfilledAt) return false;
+  const packVariants = new Set(
+    (await db.series.findMany({ where: { shop: packOrder.shop }, select: { packVariantId: true } })).map((s) => s.packVariantId),
+  );
+  await fulfillPackLines(admin, orderId, packVariants);
+  await db.packOrder.update({ where: { orderId }, data: { packLinesFulfilledAt: new Date() } });
+  return true;
+}
+
+/** Vault orders paid before pack lines were fulfilled at payment. */
+export async function fulfillMissingVaultPackLines(db: PrismaClient, adminFor: (shop: string) => Promise<Admin>) {
+  const orders = await db.packOrder.findMany({ where: { vault: true, packLinesFulfilledAt: null }, take: 50 });
+  for (const o of orders) {
+    try {
+      await fulfillVaultPackLines(db, await adminFor(o.shop), o.orderId);
+    } catch (error) {
+      console.error(`Fulfilling pack lines on ${o.orderId} failed`, error);
+    }
+  }
+}
+
 /** Marks the pack line items themselves as fulfilled: they were opened online, nothing ships for them. */
 async function fulfillPackLines(admin: Admin, orderId: string, packVariantIds: Set<string>) {
   for (const fo of await fulfillmentOrders(admin, orderId)) {

@@ -4,7 +4,7 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import { drawForOrder } from "./pool.server";
-import { holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
+import { fulfillVaultPackLines, holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
 import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
@@ -65,6 +65,12 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
       admin,
       order.admin_graphql_api_id,
       packsPageUrl(await storefrontBase(admin, shop), result.packOrder.openToken),
+    );
+  }
+
+  if (result.packOrder.vault) {
+    await fulfillVaultPackLines(db, admin, order.admin_graphql_api_id).catch((error) =>
+      console.error(`Fulfilling pack lines on ${order.name} failed`, error),
     );
   }
 
