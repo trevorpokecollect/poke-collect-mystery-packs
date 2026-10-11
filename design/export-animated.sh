@@ -2,6 +2,7 @@
 # Renders design/mystery-pack-animated.html into a looping animated WebP for the pack product image.
 # Needs Google Chrome and Python with Pillow (pip install pillow). Usage: design/export-animated.sh [out.webp] [transparent]
 # Pass "transparent" as the second argument to drop the dark backdrop (alpha WebP).
+# Set SRC=mystery-pack-jp-animated.html (or another variant) to export a different series' art.
 set -e
 cd "$(dirname "$0")"
 OUT=${1:-../public/packs/mystery-pack-animated.webp}
@@ -12,7 +13,7 @@ FRAMES=$(mktemp -d)
 for i in $(seq 0 35); do   # 36 frames, 3 s loop at 12 fps
   t=$(python3 -c "print(f'{$i/12:.4f}')")
   "$CHROME" --headless=new --disable-gpu --hide-scrollbars --virtual-time-budget=5000 --window-size=900,900 $DEFBG \
-    --screenshot="$FRAMES/f-$(printf %02d $i).png" "file://$PWD/mystery-pack-animated.html?t=$t$BG" >/dev/null 2>&1
+    --screenshot="$FRAMES/f-$(printf %02d $i).png" "file://$PWD/${SRC:-mystery-pack-animated.html}?t=$t$BG" >/dev/null 2>&1
 done
 python3 - "$FRAMES" "$OUT" "$MODE" <<'PY'
 import glob, sys
