@@ -528,7 +528,7 @@ export default function SeriesPage() {
         <s-stack gap="small">
           <s-paragraph>
             Customers open packs at <s-link href={packsPage} target="_blank">{packsPage}</s-link>. Unopened packs
-            open automatically after {series.autoOpenDays} days.
+            open automatically after {series.autoOpenDays === 1 ? "1 day" : `${series.autoOpenDays} days`}.
           </s-paragraph>
           {series.commitHash ? (
             <s-paragraph>

@@ -49,7 +49,7 @@ model Series {
   packVariantId String
   packPrice     Decimal      @db.Decimal(10, 2)
   // Unopened packs are revealed automatically after this many days so orders can ship.
-  autoOpenDays  Int          @default(7)
+  autoOpenDays  Int          @default(1)
   // Auto-built pools draw from the shop's live inventory: each card's copies are moved to
   // "reserved" at launch so they can only be won from packs, and released when the series closes.
   reserveInventory Boolean   @default(false)

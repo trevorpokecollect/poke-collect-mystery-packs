@@ -16,7 +16,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const title = String(form.get("title") || "").trim();
   const packVariantId = String(form.get("packVariantId") || "");
-  const autoOpenDays = Number(form.get("autoOpenDays") || 7);
+  const autoOpenDays = Number(form.get("autoOpenDays") || 1);
   if (!title || !packVariantId) return { error: "Give the series a name and pick its pack product." };
 
   try {
@@ -33,7 +33,7 @@ export default function NewSeries() {
   const navigation = useNavigation();
   const result = useActionData<typeof action>();
   const [title, setTitle] = useState("");
-  const [days, setDays] = useState("7");
+  const [days, setDays] = useState("1");
   const [pack, setPack] = useState<{ id: string; label: string } | null>(null);
 
   async function pickPack() {
