@@ -92,3 +92,22 @@ describe("buildPool", () => {
     expect(result.cards.every((c) => c.quantity === 1)).toBe(true);
   });
 });
+
+describe("buildPool minimum hits", () => {
+  it("keeps at least minHits cards at or above the hit value while hitting the average", () => {
+    const candidates = [
+      ...Array.from({ length: 400 }, (_, i) => ({ variantId: `c${i}`, value: 0.5 + (i % 4) * 0.5 })),
+      ...Array.from({ length: 80 }, (_, i) => ({ variantId: `h${i}`, value: 5 + (i % 6) })),
+      ...Array.from({ length: 20 }, (_, i) => ({ variantId: `m${i}`, value: 20 + i })),
+    ];
+    const { cards, average } = buildPool(candidates, { count: 200, minValue: 0.5, maxValue: 50, targetAverage: 2.5, minHits: 40, hitValue: 5 });
+    const hits = cards.filter((c) => c.value >= 5).reduce((n, c) => n + c.quantity, 0);
+    expect(hits).toBeGreaterThanOrEqual(40);
+    expect(average).toBeCloseTo(2.5, 1);
+  });
+
+  it("says when there aren't enough hits in stock", () => {
+    const candidates = Array.from({ length: 50 }, (_, i) => ({ variantId: `c${i}`, value: i < 3 ? 10 : 1 }));
+    expect(() => buildPool(candidates, { count: 20, minValue: 0.5, maxValue: 50, targetAverage: 2, minHits: 5, hitValue: 5 })).toThrow(/Only 3 cards/);
+  });
+});

@@ -52,6 +52,9 @@ export interface BuildRules {
   targetAverage: number;
   /** Most copies of one card the pool may hold. Defaults to 1. */
   maxCopies?: number;
+  /** At least this many cards (copies) worth `hitValue` or more. Defaults to 0. */
+  minHits?: number;
+  hitValue?: number;
 }
 
 export interface BuildResult<C extends Candidate> {
@@ -71,6 +74,11 @@ export function validateBuildRules(rules: BuildRules) {
   if (!(minValue >= 0) || !(maxValue > minValue)) throw new Error("The value range needs a lower and a higher value.");
   if (!(targetAverage >= minValue && targetAverage <= maxValue)) {
     throw new Error("The target average has to sit inside the value range.");
+  }
+  const minHits = rules.minHits ?? 0;
+  if (!Number.isInteger(minHits) || minHits < 0 || minHits > count) throw new Error("Minimum hits must be a whole number up to the card count.");
+  if (minHits > 0 && !(Number(rules.hitValue) > minValue && Number(rules.hitValue) <= maxValue)) {
+    throw new Error("The hit value has to sit inside the value range.");
   }
 }
 
@@ -105,7 +113,21 @@ export function buildPool<C extends Candidate>(
     const j = Math.floor(random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
+  // Guaranteed hits: the first `minHits` hit copies go in, then the rest of the random order.
+  const minHits = rules.minHits ?? 0;
+  const hitCents = cents(Number(rules.hitValue ?? Infinity));
+  const isHit = (c: C) => cents(c.value) >= hitCents;
+  if (minHits > 0) {
+    const hits = shuffled.filter(isHit);
+    if (hits.length < minHits) {
+      throw new Error(`Only ${hits.length} cards in stock are worth $${rules.hitValue} or more, and the pool needs ${minHits}.`);
+    }
+    const first = new Set(hits.slice(0, minHits));
+    const ordered = [...first, ...shuffled.filter((c) => !first.has(c))];
+    shuffled.splice(0, shuffled.length, ...ordered);
+  }
   const picked = shuffled.slice(0, rules.count);
+  let hitCount = picked.filter(isHit).length;
   // Unpicked cards sorted by value, so the best swap partner is a binary search away.
   const pool = shuffled.slice(rules.count).sort((a, b) => a.value - b.value);
 
@@ -134,10 +156,15 @@ export function buildPool<C extends Candidate>(
     const gap = goal - total;
     const i = Math.floor(random() * picked.length);
     const out = picked[i];
-    const j = closest(cents(out.value) + gap);
+    // A hit the pool needs to keep its minimum can only be swapped for another hit.
+    const keepHit = isHit(out) && hitCount <= minHits;
+    const want = cents(out.value) + gap;
+    const j = closest(keepHit ? Math.max(want, hitCents) : want);
     const into = pool[j];
+    if (keepHit && !isHit(into)) continue;
     const newGap = gap - (cents(into.value) - cents(out.value));
     if (Math.abs(newGap) >= Math.abs(gap)) continue;
+    hitCount += (isHit(into) ? 1 : 0) - (isHit(out) ? 1 : 0);
     picked[i] = into;
     pool.splice(j, 1);
     pool.splice(lowerBound(cents(out.value)), 0, out);

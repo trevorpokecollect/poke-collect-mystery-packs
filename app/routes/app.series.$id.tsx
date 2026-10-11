@@ -50,7 +50,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   // A link can carry pool-rule overrides (e.g. ?targetAverage=10.99) and show a one-click
   // "Rebuild pool" in the title bar for a draft.
   const url = new URL(request.url);
-  const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition", "language"];
+  const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "productType", "condition", "language"];
   const buildOverrides = Object.fromEntries(BUILD_KEYS.filter((k) => url.searchParams.has(k)).map((k) => [k, url.searchParams.get(k) ?? ""]));
   // ?tiers=Poke:0,Great:5.01,Ultra:10.01,Master:25.01 shows a one-click "Apply Tiers" for a draft.
   const tierOverride = (url.searchParams.get("tiers") ?? "")
@@ -82,6 +82,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       // Default to a 100% return: the average card value equals the pack price.
       // Per card: a multi-card pack spreads the pack price across its cards.
       targetAverage: String(build.targetAverage ?? (Number(packPrice) / series.cardsPerPack).toFixed(2)),
+      minHits: String(build.minHits ?? 0),
+      hitValue: String(build.hitValue ?? 5),
       productType: String(build.productType ?? "Pokemon Single"),
       condition: String(build.condition ?? "Near Mint"),
       language: String(build.language ?? "English"),
@@ -133,6 +135,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           minValue: num("minValue"),
           maxValue: num("maxValue"),
           targetAverage: num("targetAverage"),
+          minHits: Math.floor(num("minHits") || 0),
+          hitValue: num("hitValue") || undefined,
           productType: String(form.get("productType") || "").trim(),
           condition: String(form.get("condition") || "").trim(),
           language: String(form.get("language") || "").trim(),
@@ -240,7 +244,7 @@ export default function SeriesPage() {
   function autoBuild(form: HTMLElement) {
     const read = (name: string) =>
       (form.querySelector(`[data-build="${name}"]`) as HTMLInputElement | null)?.value ?? "";
-    const fields = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition", "language"] as const;
+    const fields = ["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "productType", "condition", "language"] as const;
     const values = Object.fromEntries(fields.map((f) => [f, read(f)]));
     const run = () => submit({ intent: "autoBuild", ...values }, { method: "post" });
     if (cards.length > 0) confirmThen("autoBuild", "Replace the current card list with a new pool from your inventory? Click Build pool again to confirm.", run);
@@ -360,6 +364,15 @@ export default function SeriesPage() {
               <s-money-field label="Lowest card value" value={buildDefaults.minValue} data-build="minValue" />
               <s-money-field label="Highest card value" value={buildDefaults.maxValue} data-build="maxValue" />
               <s-money-field label="Target average value" value={buildDefaults.targetAverage} data-build="targetAverage" />
+              <s-number-field
+                label="Minimum hits"
+                details="At least this many cards worth the hit value or more"
+                min={0}
+                max={1000}
+                value={buildDefaults.minHits}
+                data-build="minHits"
+              />
+              <s-money-field label="Hit value" value={buildDefaults.hitValue} data-build="hitValue" />
               <s-text-field label="Product type" value={buildDefaults.productType} data-build="productType" />
               <s-text-field
                 label="Condition"
