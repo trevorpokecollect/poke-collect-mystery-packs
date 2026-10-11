@@ -46,9 +46,9 @@
     <div class="mpd__how">
       <h4 class="mpd__subheading">{{ block.settings.how_heading }}</h4>
       <ol class="mpd__steps">
-        <li><span class="mpd__num">1</span><div><strong>Buy your pack</strong><p>Your pack's cards are picked from the pool below the moment your payment clears.</p></div></li>
-        <li><span class="mpd__num">2</span><div><strong>Open it online</strong><p>Right after checkout, tap <em>Open It Now</em> to tear the pack open and reveal your cards. They go straight to your vault.</p></div></li>
-        <li><span class="mpd__num">3</span><div><strong>Ship when you're ready</strong><p>Packs have no shipping. Tap <em>Ship My Cards</em> in My Packs to send your whole vault at once, sleeved and top loaded.</p></div></li>
+        <li><span class="mpd__num">1</span><div><strong>Buy Your Pack</strong><p>Your pack's cards are picked from the pool below the moment your payment clears.</p></div></li>
+        <li><span class="mpd__num">2</span><div><strong>Open It Online</strong><p>Right after checkout, tap <em>Open It Now</em> to tear the pack open and reveal your cards. They go straight to your vault.</p></div></li>
+        <li><span class="mpd__num">3</span><div><strong>Ship When You're Ready</strong><p>Packs have no shipping. Tap <em>Ship My Cards</em> in My Packs to send your whole vault at once, sleeved and top loaded.</p></div></li>
       </ol>
       {%- if block.settings.shipping_note != blank -%}<p class="mpd__ship"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h11v9H3z"/><path d="M14 9h4l3 3v3h-7"/><circle cx="7" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/></svg><span>{{ block.settings.shipping_note }}</span></p>{%- endif -%}
     </div>
@@ -69,11 +69,11 @@
   "target": "section",
   "enabled_on": { "templates": ["product"] },
   "settings": [
-    { "type": "text", "id": "heading", "label": "Heading", "default": "What's in the pack" },
+    { "type": "text", "id": "heading", "label": "Heading", "default": "What's In The Pack" },
     { "type": "text", "id": "button_label", "label": "Button label", "default": "View Potential Pulls" },
     { "type": "checkbox", "id": "show_how", "label": "Show how it works", "default": true },
-    { "type": "text", "id": "how_heading", "label": "How it works heading", "default": "How it works" },
-    { "type": "text", "id": "shipping_note", "label": "Shipping note", "default": "Ship your vault for $5 flat, free on 25+ cards." },
+    { "type": "text", "id": "how_heading", "label": "How it works heading", "default": "How It Works" },
+    { "type": "text", "id": "shipping_note", "label": "Shipping note", "default": "Ship Your Vault For $5 Flat, Free On 25+ Cards." },
     { "type": "text", "id": "series_handle", "label": "Series handle (optional)", "info": "Leave blank to use the series sold through this product." },
     { "type": "header", "content": "Demo opening" },
     { "type": "checkbox", "id": "show_demo", "label": "Show demo button", "info": "Lets shoppers watch a pretend pack opening with a card from the cards still in the pool. Nothing is bought or drawn.", "default": true },

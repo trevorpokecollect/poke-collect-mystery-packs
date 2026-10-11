@@ -37,18 +37,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const back = `<a class="mpf-back button button--secondary" href="javascript:history.back()">&larr; Back</a>`;
 
   const steps = `<ol class="mpf-steps">
-    <li><span class="mpf-num">1</span><div><strong>The pool is locked before any pack sells</strong>
+    <li><span class="mpf-num">1</span><div><strong>The Pool Is Locked Before Any Pack Sells</strong>
       <p>When a series launches, every card in the pool is shuffled once by a secure random generator. That order decides which card is in which pack, first pack to last.</p></div></li>
-    <li><span class="mpf-num">2</span><div><strong>We publish a fingerprint of that order</strong>
+    <li><span class="mpf-num">2</span><div><strong>We Publish A Fingerprint Of That Order</strong>
       <p>The fingerprint is a SHA-256 hash of the card order plus a secret code. It's shown below from the moment the series goes live, and it can't be changed without changing the fingerprint.</p></div></li>
-    <li><span class="mpf-num">3</span><div><strong>When the series ends, anyone can check it</strong>
+    <li><span class="mpf-num">3</span><div><strong>When The Series Ends, Anyone Can Check It</strong>
       <p>We publish the secret code and the full card order. Hash them yourself (or tap the button below) and you'll get the same fingerprint, which proves no pull was changed after packs were bought.</p></div></li>
   </ol>`;
 
   if (!odds || !odds.commitHash) {
     return liquid(
-      `<div class="mpf"><style>${STYLE}</style>${back}<h1>Provably fair</h1>
-       <p class="mpf-sub">How we prove every pack is fair.</p>${steps}
+      `<div class="mpf"><style>${STYLE}</style>${back}<h1>Provably Fair</h1>
+       <p class="mpf-sub">How We Prove Every Pack Is Fair.</p>${steps}
        <div class="mpf-box">This pack's fingerprint isn't available yet.</div></div>`,
     );
   }
@@ -57,7 +57,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const endpoint = `/apps/packs/api/pool?series=${encodeURIComponent(odds.handle)}`;
   const check = closed
     ? `<div class="mpf-box">
-        <h2>Check it yourself</h2>
+        <h2>Check It Yourself</h2>
         <p>Secret code (salt):</p><code class="mpf-code">${safe(odds.reveal?.salt ?? "")}</code>
         <p>Card order: ${odds.reveal?.sequence.length ?? 0} cards, published in this pack's <a href="${endpoint}" target="_blank" rel="noopener">pool data</a> as <code>reveal.sequence</code>.</p>
         <p>Formula: <code>sha256(salt + ":" + card order joined with commas)</code></p>
@@ -82,15 +82,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         });
       })();
       </script>`
-    : `<div class="mpf-box"><h2>Check it yourself</h2>
+    : `<div class="mpf-box"><h2>Check It Yourself</h2>
         <p>This series is still open, so the secret code and card order stay private until it ends. Publishing them now would reveal which card is in the next pack. Save the fingerprint above and check it once the series is sold out.</p></div>`;
 
   return liquid(
     `<div class="mpf"><style>${STYLE}</style>${back}
-      <h1>Provably fair</h1>
-      <p class="mpf-sub">${safe(odds.title)}: how we prove every pack is fair.</p>
+      <h1>Provably Fair</h1>
+      <p class="mpf-sub">${safe(odds.title)}: How We Prove Every Pack Is Fair.</p>
       ${steps}
-      <div class="mpf-box"><h2>This series' fingerprint</h2>
+      <div class="mpf-box"><h2>This Series' Fingerprint</h2>
         <code class="mpf-code">${safe(odds.commitHash)}</code>
         <p>${closed ? "Locked at launch. The series is now complete." : "Locked at launch, before the first pack was sold."}</p></div>
       ${check}

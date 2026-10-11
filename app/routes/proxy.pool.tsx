@@ -65,15 +65,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!odds) {
     return liquid(
       `<div class="mpp"><style>${STYLE}</style>${back}<h1>Potential Pulls</h1>
-       <p class="mpp-sub">This pack's card list isn't available yet.</p></div>`,
+       <p class="mpp-sub">This Pack's Card List Isn't Available Yet.</p></div>`,
     );
   }
 
   const closed = odds.status === "CLOSED";
+  // Chance a pack holds at least one card of a tier (multi-card packs draw several cards).
+  const per = Math.max(1, odds.cardsPerPack ?? 1);
+  const left = odds.tiers.reduce((n, t) => n + t.remaining, 0);
+  const perPack = (k: number) => {
+    if (k <= 0 || left <= 0) return 0;
+    let none = 1;
+    for (let i = 0; i < Math.min(per, left); i++) none *= Math.max(0, left - k - i) / (left - i);
+    return 1 - none;
+  };
   const tierChips = odds.tiers
     .map(
       (t) => `<div class="mpp-tier"><span class="mpp-dot" style="background:${tierColor(t.name)}"></span>${safe(t.name)}
-        <small>${closed ? `${t.total} cards` : pct(t.currentOdds)}</small></div>`,
+        <small>${closed ? `${t.total} Cards` : `${pct(perPack(t.remaining))} Per Pack`}</small></div>`,
     )
     .join("");
 
@@ -89,13 +98,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             ${c.imageUrl ? `<img src="${safe(thumb(c.imageUrl))}" alt="${safe(c.title)}" loading="lazy">` : ""}
             <div class="mpp-badge" style="color:${tierColor(c.tier)}">${safe(c.tier)}</div>
             <div class="mpp-name">${safe(c.title)}</div>
-            <div class="mpp-meta"><strong>${closed ? "" : out ? "Pulled" : pct(c.currentOdds)}</strong>
-              <span>${c.remaining} of ${c.quantity} left</span></div>
+            <div class="mpp-meta"><strong>${closed ? "" : out ? "Pulled" : `${pct(c.currentOdds)}${per > 1 ? " Per Card" : ""}`}</strong>
+              <span>${c.remaining} Of ${c.quantity} Left</span></div>
           </div>`;
         })
         .join("");
       return `<div class="mpp-section"><h2 style="color:${tierColor(t.name)}">${safe(t.name)}</h2>
-        <span>${t.remaining} of ${t.total} left${closed ? "" : ` · ${pct(t.currentOdds)} per pack`}</span></div>
+        <span>${t.remaining} Of ${t.total} Left${closed ? "" : ` · ${pct(perPack(t.remaining))} Per Pack`}</span></div>
         <div class="mpp-grid">${items}</div>`;
     })
     .join("");
@@ -114,8 +123,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       <h1>Potential Pulls: ${safe(odds.title)}</h1>
       <p class="mpp-sub">${
         closed
-          ? "This series is sold out."
-          : `Every pack holds one of these cards. ${odds.packsRemaining} of ${odds.totalPacks} packs left. Odds update as packs are opened.`
+          ? "This Series Is Sold Out."
+          : `Every Pack Holds ${per > 1 ? `${per} Of These Cards` : "One Of These Cards"}. ${odds.packsRemaining} Of ${odds.totalPacks} Packs Left. Odds Update As Packs Are Opened.`
       }</p>
       <div class="mpp-tiers">${tierChips}</div>
       ${sections}

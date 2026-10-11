@@ -28,10 +28,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           <div class="mp-hero-text">
             <span class="mp-hero-kicker">Digital Mystery Packs · Your Vault</span>
             <h1>My Packs</h1>
-            <p class="mp-hero-sub">Log in to open your packs and see every card in your vault, or use the link in your order email.</p>
+            <p class="mp-hero-sub">Log In To Open Your Packs And See Every Card In Your Vault, Or Use The Link In Your Order Email.</p>
           </div>
           <div class="mp-hero-ship">
-            <strong class="mp-hero-ship-title">Welcome back</strong>
+            <strong class="mp-hero-ship-title">Welcome Back</strong>
             <p>Your pulls wait in your vault until you ship them: $${SHIP_FEE} flat, free on ${FREE_SHIPPING_CARDS}+ cards.</p>
             <a class="mp-btn mp-vault-btn" href="{{ routes.account_login_url }}?return_url=/apps/packs">Log In</a>
             <a class="mp-btn mp-btn-ghost" href="/products/poke-collect-mystery-pack">Shop Mystery Packs</a>

@@ -108,9 +108,9 @@
         if (!data || data.error) { root.hidden = true; return; }
         var closed = data.status === "CLOSED";
         left.innerHTML = closed
-          ? "<strong>Sold out.</strong> This series is complete."
-          : "<strong>" + data.packsRemaining + " of " + data.totalPacks + "</strong> packs left · " +
-            (data.cardsPerPack > 1 ? data.cardsPerPack + " cards per pack · " : "") + data.cards.length + " different cards";
+          ? "<strong>Sold Out.</strong> This Series Is Complete."
+          : "<strong>" + data.packsRemaining + " Of " + data.totalPacks + "</strong> Packs Left · " +
+            (data.cardsPerPack > 1 ? data.cardsPerPack + " Cards Per Pack · " : "") + data.cards.length + " Different Cards";
         bar.style.width = (data.totalPacks ? (data.packsRemaining / data.totalPacks) * 100 : 0) + "%";
 
         var totalLeft = (data.tiers || []).reduce(function (n, t) { return n + t.remaining; }, 0);
@@ -120,7 +120,7 @@
             ball(tier.name, i) +
             '<span class="mpd__tier-name">' + esc(tier.name) + "</span>" +
             '<span class="mpd__tier-odds">' + (closed ? "&nbsp;" : pct(perPack(tier.remaining, totalLeft, data.cardsPerPack || 1)) + " Per Pack") + "</span>" +
-            '<span class="mpd__tier-count">' + tier.remaining + " of " + tier.total + " left</span>" +
+            '<span class="mpd__tier-count">' + tier.remaining + " Of " + tier.total + " Left</span>" +
             "</li>"
           );
         }).join("");

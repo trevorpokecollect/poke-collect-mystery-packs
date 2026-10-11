@@ -71,12 +71,12 @@
   }
 
   var SHIP_LABELS = {
-    vault: "In your vault",
-    awaiting_payment: "Awaiting shipping payment",
-    preparing: "Preparing to ship",
+    vault: "In Your Vault",
+    awaiting_payment: "Awaiting Shipping Payment",
+    preparing: "Preparing To Ship",
     shipped: "Shipped",
-    pickup_ready: "Ready for pickup",
-    picked_up: "Picked up",
+    pickup_ready: "Ready For Pickup",
+    picked_up: "Picked Up",
   };
 
   function shipBadge(pack) {
@@ -109,13 +109,13 @@
     var fee = vault ? vault.fee : 5;
     var freeAt = vault ? vault.freeAt : 25;
     var steps = [
-      ["Cards go to your vault", "Every card you pull is kept safe in your vault here. Open as many packs as you like and ship them together."],
-      ["Ship when you're ready", "Tap Ship My Cards to send everything in your vault in one package: $" + fee + " flat, or free on " + freeAt + "+ cards."],
-      ["We pack it with care", "Every card is sleeved and top loaded before it goes out."],
-      ["Track it here", "Each card shows Preparing to ship, then Shipped with a tracking link. You'll also get a shipping email from us."],
+      ["Cards Go To Your Vault", "Every card you pull is kept safe in your vault here. Open as many packs as you like and ship them together."],
+      ["Ship When You're Ready", "Tap Ship My Cards to send everything in your vault in one package: $" + fee + " flat, or free on " + freeAt + "+ cards."],
+      ["We Pack It With Care", "Every card is sleeved and top loaded before it goes out."],
+      ["Track It Here", "Each card shows Preparing To Ship, then Shipped with a tracking link. You'll also get a shipping email from us."],
     ];
     return el("section", { class: "mp-info" }, [
-      el("h2", { class: "mp-section-title", text: "How your cards ship" }),
+      el("h2", { class: "mp-section-title", text: "How Your Cards Ship" }),
       el("div", { class: "mp-info-grid" }, steps.map(function (s, i) {
         return el("div", { class: "mp-info-item" }, [
           el("span", { class: "mp-info-num", text: String(i + 1) }),
@@ -245,7 +245,7 @@
     if (!available || !available.length) return null;
     return el("section", { class: "mp-more" }, [
       el("h2", { class: "mp-more-title", text: "Open More Packs?" }),
-      el("p", { class: "mp-more-sub", text: "Grab another pack and open it the moment you check out." }),
+      el("p", { class: "mp-more-sub", text: "Grab Another Pack And Open It The Moment You Check Out." }),
       el("div", { class: "mp-more-grid" }, available.map(function (a) {
         return el("div", { class: "mp-more-item" }, [
           el("a", { class: "mp-more-art", href: a.url, "aria-label": a.title }, [
@@ -267,13 +267,13 @@
     var cards = vault ? vault.cards : 0;
     var pending = vault && vault.pending;
     var sub = unopened
-      ? "You have " + unopened + " unopened pack" + (unopened === 1 ? "" : "s") + ". Every card you pull goes to your vault."
+      ? "You Have " + unopened + " Unopened Pack" + (unopened === 1 ? "" : "s") + ". Every Card You Pull Goes To Your Vault."
       : cards || pending
-        ? "Your pulls wait safely in your vault. Ship them together whenever you're ready."
-        : "Open packs online. Every card you pull lands in your vault until you ship it.";
+        ? "Your Pulls Wait Safely In Your Vault. Ship Them Together Whenever You're Ready."
+        : "Open Packs Online. Every Card You Pull Lands In Your Vault Until You Ship It.";
     var stats = el("div", { class: "mp-hero-stats" }, [
-      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(cards) }), document.createTextNode(" card" + (cards === 1 ? "" : "s") + " in vault")]),
-      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(unopened) }), document.createTextNode(" unopened")]),
+      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(cards) }), document.createTextNode((cards === 1 ? " Card" : " Cards") + " In Vault")]),
+      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(unopened) }), document.createTextNode(" Unopened")]),
     ]);
     var text = el("div", { class: "mp-hero-text" }, [
       el("span", { class: "mp-hero-kicker", text: "Digital Mystery Packs · Your Vault" }),
@@ -288,7 +288,7 @@
   function shipBox(vault) {
     if (vault && vault.pending) {
       return el("div", { class: "mp-hero-ship" }, [
-        el("strong", { class: "mp-hero-ship-title", text: vault.pending.cards + " card" + (vault.pending.cards === 1 ? " is" : "s are") + " ready to ship" }),
+        el("strong", { class: "mp-hero-ship-title", text: vault.pending.cards + (vault.pending.cards === 1 ? " Card Is" : " Cards Are") + " Ready To Ship" }),
         el("p", { text: "Finish checkout to pay shipping and we'll send them out." }),
         el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
       ]);
@@ -324,7 +324,7 @@
         });
     });
     return el("div", { class: "mp-hero-ship" }, [
-      el("strong", { class: "mp-hero-ship-title", text: left === 0 && cards ? "Free shipping unlocked" : "Ship when you're ready" }),
+      el("strong", { class: "mp-hero-ship-title", text: left === 0 && cards ? "Free Shipping Unlocked" : "Ship When You're Ready" }),
       bar,
       note,
       button,
@@ -343,7 +343,7 @@
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
       root.appendChild(el("div", { class: "mp-grid" }, unopened.map(function (p) { return packTile(p, openPack); })));
     }
-    root.appendChild(el("h2", { class: "mp-section-title", text: "Your pulls" }));
+    root.appendChild(el("h2", { class: "mp-section-title", text: "Your Pulls" }));
     if (signedIn === false) {
       root.appendChild(el("p", { class: "mp-login-hint" }, [
         document.createTextNode("Showing this order only. "),
@@ -803,7 +803,7 @@
           glow.style.background = colorOf(c);
 
           result.textContent = "";
-          if (multi) result.appendChild(el("span", { class: "mp-count", text: "Card " + (i + 1) + " of " + cards.length }));
+          if (multi) result.appendChild(el("span", { class: "mp-count", text: "Card " + (i + 1) + " Of " + cards.length }));
           var tierLabel = el("span", { class: "mp-tier", "data-tier": tierKey(c.tier), text: c.tier });
           var name = el("h2", { text: c.title });
           result.appendChild(tierLabel);
@@ -848,7 +848,7 @@
 
         function finish(best, tierLabel, name) {
           result.classList.remove("mp-quick");
-          result.appendChild(el("p", { text: pack.resultNote || (multi ? "All " + cards.length + " cards are in your vault" : "Added to your vault") }));
+          result.appendChild(el("p", { text: pack.resultNote || (multi ? "All " + cards.length + " Cards Are In Your Vault" : "Added To Your Vault") }));
           if (multi) {
             // Every card in the pack, best last. Tapping one shows it big again.
             var strip = el("div", { class: "mp-fan" }, cards.map(function (c, k) {
