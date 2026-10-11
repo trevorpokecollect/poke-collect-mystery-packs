@@ -99,9 +99,11 @@ describe("buildPool minimum hits", () => {
       ...Array.from({ length: 400 }, (_, i) => ({ variantId: `c${i}`, value: 0.5 + (i % 4) * 0.5 })),
       ...Array.from({ length: 80 }, (_, i) => ({ variantId: `h${i}`, value: 5 + (i % 6) })),
       ...Array.from({ length: 20 }, (_, i) => ({ variantId: `m${i}`, value: 20 + i })),
+      // Just under the hit value, so the nearest swap is never a hit.
+      ...Array.from({ length: 30 }, (_, i) => ({ variantId: `u${i}`, value: 4.99 })),
     ];
-    const { cards, average } = buildPool(candidates, { count: 200, minValue: 0.5, maxValue: 50, targetAverage: 2.5, minHits: 40, hitValue: 5 });
-    const hits = cards.filter((c) => c.value >= 5).reduce((n, c) => n + c.quantity, 0);
+    const { cards, average } = buildPool(candidates, { count: 200, minValue: 0.5, maxValue: 50, targetAverage: 2.5, minHits: 40, hitValue: 5.01 });
+    const hits = cards.filter((c) => c.value >= 5.01).reduce((n, c) => n + c.quantity, 0);
     expect(hits).toBeGreaterThanOrEqual(40);
     expect(average).toBeCloseTo(2.5, 1);
   });

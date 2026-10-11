@@ -158,10 +158,11 @@ export function buildPool<C extends Candidate>(
     const out = picked[i];
     // A hit the pool needs to keep its minimum can only be swapped for another hit.
     const keepHit = isHit(out) && hitCount <= minHits;
-    const want = cents(out.value) + gap;
-    const j = closest(keepHit ? Math.max(want, hitCents) : want);
+    let j = closest(cents(out.value) + gap);
+    // The nearest card may sit just under the hit value; take the cheapest hit instead.
+    if (keepHit && !isHit(pool[j])) j = lowerBound(hitCents);
+    if (j >= pool.length) continue;
     const into = pool[j];
-    if (keepHit && !isHit(into)) continue;
     const newGap = gap - (cents(into.value) - cents(out.value));
     if (Math.abs(newGap) >= Math.abs(gap)) continue;
     hitCount += (isHit(into) ? 1 : 0) - (isHit(out) ? 1 : 0);
