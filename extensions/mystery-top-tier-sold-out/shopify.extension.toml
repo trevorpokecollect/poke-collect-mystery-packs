@@ -5,7 +5,7 @@ name = "Mystery pack top tier sold out"
 handle = "mystery-top-tier-sold-out"
 type = "flow_trigger"
 uid = "d4bc664e-cd67-4446-7184-2e19b32fb5f622978cb9"
-description = "Every card in a mystery pack series' top tier (e.g. Master) has been pulled. Use it to email yourself that the series is ready to close and roll over."
+description = "Every top-tier (Master) card in a mystery pack series has been pulled, so it is ready to roll over."
 
 [settings]
 
@@ -20,7 +20,7 @@ description = "Every card in a mystery pack series' top tier (e.g. Master) has b
   description = "The tier that ran out, e.g. Master"
 
   [[settings.fields]]
-  type = "number_integer"
+  type = "number_decimal"
   key = "Packs left"
   description = "Packs still for sale in the series"
 
