@@ -38,7 +38,7 @@
         <li><span class="mpd__num">2</span><div><strong>Open it online</strong><p>Right after checkout, tap <em>Open It Now</em> to tear the pack open and reveal your card.</p></div></li>
         <li><span class="mpd__num">3</span><div><strong>We ship your card</strong><p>Your card ships to you with your order, sleeved and top loaded.</p></div></li>
       </ol>
-      {%- if block.settings.shipping_note != blank -%}<p class="mpd__ship">{{ block.settings.shipping_note }}</p>{%- endif -%}
+      {%- if block.settings.shipping_note != blank -%}<p class="mpd__ship"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h11v9H3z"/><path d="M14 9h4l3 3v3h-7"/><circle cx="7" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/></svg><span>{{ block.settings.shipping_note }}</span></p>{%- endif -%}
     </div>
   {%- endif -%}
 
