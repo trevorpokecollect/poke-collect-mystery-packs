@@ -45,7 +45,10 @@ async function handle(request: Request) {
     // Say "pending" only if this checkout actually bought a pack, so other orders show nothing.
     const variants = (url.searchParams.get("variants") ?? "").split(",").filter(Boolean);
     const series = variants.length
-      ? await db.series.findFirst({ where: { shop, packVariantId: { in: variants } } })
+      ? await db.series.findFirst({
+          where: { shop, packVariantId: { in: variants }, status: "LIVE" },
+          orderBy: { createdAt: "desc" },
+        })
       : null;
     if (!series) return reply({ status: "none" });
     const art = await packImages(admin, [series.packProductId]);
