@@ -24,6 +24,15 @@
     );
   }
   function pct(v) { return v === 0 ? "0%" : v < 0.001 ? "<0.1%" : (v * 100).toFixed(1) + "%"; }
+  // Chance a pack holds at least one card of a tier: its cards are the next ones in a uniform
+  // shuffle of what's left, so this is 1 - C(total - tier, n) / C(total, n).
+  function perPack(tierLeft, totalLeft, n) {
+    if (tierLeft <= 0 || totalLeft <= 0) return 0;
+    n = Math.min(n, totalLeft);
+    var none = 1;
+    for (var i = 0; i < n; i++) none *= Math.max(0, totalLeft - tierLeft - i) / (totalLeft - i);
+    return 1 - none;
+  }
   function esc(s) { var d = document.createElement("div"); d.textContent = String(s); return d.innerHTML; }
 
   // "Try A Demo Pack": a pretend opening with a card picked from what's left in the pool,
@@ -104,12 +113,13 @@
             (data.cardsPerPack > 1 ? data.cardsPerPack + " cards per pack · " : "") + data.cards.length + " different cards";
         bar.style.width = (data.totalPacks ? (data.packsRemaining / data.totalPacks) * 100 : 0) + "%";
 
+        var totalLeft = (data.tiers || []).reduce(function (n, t) { return n + t.remaining; }, 0);
         list.innerHTML = (data.tiers || []).map(function (tier, i) {
           return (
             '<li class="mpd__tier" data-tier="' + esc(String(tier.name).toLowerCase()) + '">' +
             ball(tier.name, i) +
             '<span class="mpd__tier-name">' + esc(tier.name) + "</span>" +
-            '<span class="mpd__tier-odds">' + (closed ? "&nbsp;" : pct(tier.currentOdds) + (data.cardsPerPack > 1 ? " per card" : " chance")) + "</span>" +
+            '<span class="mpd__tier-odds">' + (closed ? "&nbsp;" : pct(perPack(tier.remaining, totalLeft, data.cardsPerPack || 1)) + " Per Pack") + "</span>" +
             '<span class="mpd__tier-count">' + tier.remaining + " of " + tier.total + " left</span>" +
             "</li>"
           );
