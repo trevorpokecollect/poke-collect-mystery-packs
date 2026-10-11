@@ -34,18 +34,18 @@ const STYLE = `
 .mpp-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .mpp-tier small { opacity: .7; font-weight: 500; }
 .mpp-section { margin: 28px 0 12px; display: flex; align-items: baseline; gap: 10px; }
-.mpp-section h2 { margin: 0; font-size: 1.25rem; }
+.mpp-section h2 { margin: 0; font-size: 1.25em; }
 .mpp-section span { opacity: .7; }
 .mpp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
 .mpp-card { border: 1px solid rgba(0,0,0,.1); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,.6); }
 .mpp-card img { width: 100%; aspect-ratio: 5 / 7; object-fit: contain; border-radius: 8px; background: #f3f3f6; }
-.mpp-name { font-size: .85rem; font-weight: 600; line-height: 1.25; }
-.mpp-meta { display: flex; justify-content: space-between; font-size: .8rem; opacity: .85; }
-.mpp-badge { font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.mpp-name { font-size: .85em; font-weight: 600; line-height: 1.25; }
+.mpp-meta { display: flex; justify-content: space-between; font-size: .8em; opacity: .85; }
+.mpp-badge { font-size: .7em; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .mpp-out { opacity: .45; }
 .mpp-out .mpp-meta strong { text-decoration: line-through; }
 .mpp-fair { margin-top: 40px; }
-.mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; padding: 16px 20px; font-size: 1.15rem !important; font-weight: 800 !important; letter-spacing: .02em; text-align: center; text-decoration: none !important; }
+.mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; padding: 16px 20px; font-size: 18px !important; font-weight: 800 !important; letter-spacing: .02em; text-align: center; text-decoration: none !important; }
 .mpp-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
 `;
 

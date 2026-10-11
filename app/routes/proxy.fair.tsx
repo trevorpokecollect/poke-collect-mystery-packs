@@ -20,8 +20,8 @@ const STYLE = `
 .mpf-steps p { margin: 2px 0 0; opacity: .8; }
 .mpf-num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #e3350d; color: #fff; display: grid; place-items: center; font-weight: 800; }
 .mpf-box { padding: 16px; border-radius: 12px; border: 1px solid rgba(0,0,0,.12); background: rgba(255,255,255,.7); margin: 0 0 16px; }
-.mpf-box h2 { margin: 0 0 8px; font-size: 1.05rem; }
-.mpf-code { display: block; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; word-break: break-all; padding: 10px; border-radius: 8px; background: #f3f3f6; margin: 6px 0; }
+.mpf-box h2 { margin: 0 0 8px; font-size: 1.05em; }
+.mpf-code { display: block; font-family: ui-monospace, Menlo, monospace; font-size: .8em; word-break: break-all; padding: 10px; border-radius: 8px; background: #f3f3f6; margin: 6px 0; }
 .mpf-btn { display: inline-block; margin-top: 8px; padding: 10px 16px; border-radius: 10px; border: 0; background: #14141a; color: #fff; font-weight: 700; cursor: pointer; }
 .mpf-btn:hover { background: #e3350d; }
 .mpf-ok { color: #1f8a4c; font-weight: 700; }
