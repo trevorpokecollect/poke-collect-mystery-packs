@@ -45,7 +45,7 @@ const STYLE = `
 .mpp-out { opacity: .45; }
 .mpp-out .mpp-meta strong { text-decoration: line-through; }
 .mpp-fair { margin-top: 40px; }
-.mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 60px; padding: 16px 20px; font-size: 1.1rem; font-weight: 800; text-align: center; text-decoration: none !important; }
+.mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; padding: 16px 20px; font-size: 1.15rem !important; font-weight: 800 !important; letter-spacing: .02em; text-align: center; text-decoration: none !important; }
 .mpp-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
 `;
 
