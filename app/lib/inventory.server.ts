@@ -10,7 +10,7 @@ export interface CandidateFilter {
   productType: string;
   /** Variant option value to require, e.g. "Near Mint". Blank allows any condition. */
   condition: string;
-  /** Card language, matched against StorePass's `Language_<name>` product tag. Blank allows any. */
+  /** Card language(s), matched against StorePass's `Language_<name>` product tag. Comma-separate to allow several; blank allows any. */
   language: string;
 }
 
@@ -66,7 +66,12 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
     "inventory_quantity:>0",
   ].join(" AND ");
   const condition = filter.condition.trim().toLowerCase();
-  const languageTag = filter.language.trim() ? `language_${filter.language.trim().toLowerCase()}` : null;
+  // "English, Japanese" allows either language.
+  const languageTags = filter.language
+    .split(",")
+    .map((l) => l.trim().toLowerCase())
+    .filter(Boolean)
+    .map((l) => `language_${l}`);
 
   const out: InventoryCandidate[] = [];
   let after: string | null = null;
@@ -101,7 +106,7 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
     for (const v of conn.nodes) {
       if (v.product.status !== "ACTIVE" || v.product.productType !== filter.productType) continue;
       if (!v.inventoryItem?.tracked) continue;
-      if (languageTag && !v.product.tags.some((t) => t.trim().toLowerCase() === languageTag)) continue;
+      if (languageTags.length && !v.product.tags.some((t) => languageTags.includes(t.trim().toLowerCase()))) continue;
       if (condition && !v.selectedOptions.some((o) => o.value.trim().toLowerCase() === condition)) {
         continue;
       }

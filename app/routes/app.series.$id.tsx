@@ -367,7 +367,7 @@ export default function SeriesPage() {
               />
               <s-text-field
                 label="Language"
-                details="Matches the Language tag from StorePass. Leave blank for any language"
+                details="Matches the Language tag from StorePass. Separate several with commas (English, Japanese), or leave blank for any language"
                 value={buildDefaults.language}
                 data-build="language"
               />
