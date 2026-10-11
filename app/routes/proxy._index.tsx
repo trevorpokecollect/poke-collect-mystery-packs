@@ -12,7 +12,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       `<div class="mp-page mp-signin">
         <h1>My Packs</h1>
         <p>Log in to see and open your mystery packs, or use the link in your order email.</p>
-        <a class="button" href="{{ routes.account_login_url }}?return_url=/apps/packs">Log in</a>
+        <a class="button" href="{{ routes.account_login_url }}?return_url=/apps/packs">Log In</a>
       </div>`,
     );
   }
