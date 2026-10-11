@@ -127,45 +127,53 @@
   overflow: hidden;
 }
 .mp-stage-inner { position: relative; width: min(300px, 70vw, 42vh); aspect-ratio: 5 / 7; perspective: 1200px; }
-.mp-stage .mp-pack { position: absolute; inset: 0; cursor: default; animation: mp-shake .6s ease-in-out 2; }
-.mp-stage .mp-pack.mp-tearing { animation: none; }
-.mp-tear {
-  position: absolute; left: 0; right: 0; top: 0; height: 16%; z-index: 4;
-  background: linear-gradient(165deg, #2a0f4f, #1d0c3d); border-bottom: 2px dashed rgba(255,255,255,.7);
-  transform-origin: 100% 100%;
+/* Opening: the pack (body + a top strip built from slices) wraps the card, which starts small and low. */
+.mp-open-pack {
+  position: absolute; left: 50%; top: 0; transform: translateX(-50%); z-index: 2;
+  filter: drop-shadow(0 0 16px rgba(255, 40, 90, .35)) drop-shadow(0 14px 24px rgba(0, 0, 0, .5));
 }
-.mp-tearing .mp-tear { animation: mp-tear .7s cubic-bezier(.3,.6,.4,1) forwards; }
-.mp-tearing { animation: mp-drop .7s .55s ease-in forwards !important; }
+.mp-open-pack.mp-shaking { animation: mp-shake .6s ease-in-out infinite; }
+.mp-open-body, .mp-open-slice { position: absolute; top: 0; left: 0; }
+.mp-open-body { width: 100%; height: 100%; }
+.mp-open-face { position: absolute; top: 0; left: 0; overflow: hidden; }
+.mp-open-plain { background: linear-gradient(165deg, #2a0f4f 0%, #120a2e 48%, #3b0d1c 100%); }
+.mp-edge { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mp-open-slice .mp-edge { opacity: 0; }
+/* Shadow just under the tear, where the pack opens up */
+.mp-open-shade {
+  position: absolute; left: 0; top: 0; width: 0; height: 16%; pointer-events: none;
+  background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, .45) 55%, transparent 80%);
+}
+.mp-fleck {
+  position: absolute; width: 3px; height: 2px; border-radius: 1px; z-index: 5; pointer-events: none;
+  animation: mp-fleck .85s cubic-bezier(.2,.6,.4,1) forwards;
+}
+@keyframes mp-fleck {
+  40% { transform: translate(var(--dx), var(--dy)) rotate(calc(var(--r) / 2)); opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 1.6), 60px) rotate(var(--r)); opacity: 0; }
+}
 @keyframes mp-shake {
-  0%, 100% { transform: rotate(0); } 20% { transform: rotate(-4deg); } 40% { transform: rotate(4deg); }
-  60% { transform: rotate(-3deg); } 80% { transform: rotate(3deg); }
+  0%, 100% { transform: translateX(-50%) rotate(0); } 20% { transform: translateX(-50%) rotate(-3deg); }
+  40% { transform: translateX(-50%) rotate(3deg); } 60% { transform: translateX(-50%) rotate(-2deg); } 80% { transform: translateX(-50%) rotate(2deg); }
 }
-@keyframes mp-tear { to { transform: translate(60%, -160%) rotate(28deg); opacity: 0; } }
-@keyframes mp-drop { to { transform: translateY(120vh); } }
 
-.mp-flip {
-  position: absolute; inset: 0;
-  transform-style: preserve-3d;
-  /* No opacity here: opacity below 1 flattens preserve-3d and shows the wrong face.
-     The pack sits on top of the card until it tears away. */
-  transform: translateY(30%) scale(.85) rotateY(180deg);
+.mp-reveal-card {
+  position: absolute; inset: 0; z-index: 1; border-radius: 4.5% / 3.2%; overflow: hidden;
+  background: #fff; display: grid; place-items: center;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.25), 0 18px 40px rgba(0,0,0,.5);
 }
-.mp-flip.mp-rise { animation: mp-rise .6s .2s ease-out forwards; }
-.mp-flip.mp-flipped { animation: none; transform: translateY(0) scale(1) rotateY(0); transition: transform .8s cubic-bezier(.2,.8,.2,1); }
-@keyframes mp-rise { to { transform: translateY(0) scale(1) rotateY(180deg); } }
-.mp-face {
-  position: absolute; inset: 0; border-radius: 14px; backface-visibility: hidden; overflow: hidden;
+.mp-reveal-card img { width: 100%; height: 100%; object-fit: contain; }
+.mp-reveal-card strong { padding: 16px; text-align: center; color: #14141a; }
+/* Holo sweep across big pulls */
+.mp-reveal-card.mp-holo::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.7) 45%, rgba(160,220,255,.4) 52%, transparent 65%) -200% 0 / 300% 100% no-repeat;
+  animation: mp-shine 1.6s .2s ease-in-out 2;
 }
-.mp-face-back {
-  transform: rotateY(180deg);
-  background: repeating-linear-gradient(45deg, #1d3c8f 0 10px, #24479f 10px 20px);
-  border: 8px solid #f2c94c;
-}
-.mp-face-front { background: #fff; display: grid; place-items: center; }
-.mp-face-front img { width: 100%; height: 100%; object-fit: contain; }
-.mp-glow { position: absolute; inset: -18%; border-radius: 50%; filter: blur(30px); opacity: 0; z-index: -1; }
-.mp-flipped + .mp-glow, .mp-glow.mp-on { animation: mp-glow 1.6s ease-out forwards; }
-@keyframes mp-glow { 0% { opacity: 0; transform: scale(.6); } 40% { opacity: .95; } 100% { opacity: .6; transform: scale(1); } }
+.mp-glow { position: absolute; inset: -18%; border-radius: 50%; filter: blur(30px); opacity: 0; z-index: 0; }
+.mp-glow.mp-peek { opacity: .4; transform: translateY(-38%) scale(.55); transition: opacity .5s, transform .5s; }
+.mp-glow.mp-on { animation: mp-glow 1.6s ease-out forwards; }
+@keyframes mp-glow { 0% { opacity: .4; transform: translateY(-38%) scale(.55); } 40% { opacity: .95; } 100% { opacity: .6; transform: scale(1); } }
 
 .mp-result {
   position: absolute; left: 0; right: 0; top: calc(100% + 18px);
@@ -186,9 +194,7 @@
 @keyframes mp-fall { to { transform: translateY(110vh) rotate(720deg); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .mp-pack-foil, .mp-stage .mp-pack { animation: none; }
-  .mp-tearing { animation: none !important; opacity: 0; }
-  .mp-flip.mp-rise, .mp-flip.mp-flipped { animation: none; transition: none; transform: none; }
+  .mp-pack-foil, .mp-open-pack.mp-shaking, .mp-reveal-card.mp-holo::after { animation: none; }
   .mp-confetti { display: none; }
 }
 
@@ -203,4 +209,4 @@
   filter: drop-shadow(0 10px 18px rgba(20, 20, 26, .35));
 }
 .mp-pack-art .mp-pack-label { bottom: -2%; color: #14141a; background: #fff; border-color: rgba(20,20,26,.15); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-.mp-pack-art .mp-tear { left: 13.5%; right: 13.5%; top: 0; height: 10%; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #2a2a2e, #0d0d0f); border-bottom-color: rgba(255,255,255,.55); }
+

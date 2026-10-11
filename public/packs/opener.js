@@ -137,17 +137,182 @@
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
+  // Runs fn(progress) on every frame for ms milliseconds.
+  function tween(ms, fn, ease) {
+    return new Promise(function (resolve) {
+      var start = performance.now();
+      function step(now) {
+        var k = Math.min(1, (now - start) / ms);
+        fn(ease ? ease(k) : k);
+        if (k < 1) requestAnimationFrame(step);
+        else resolve();
+      }
+      requestAnimationFrame(step);
+    });
+  }
+  function easeInOut(k) { return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; }
+  function animate(node, frames, options) {
+    var anim = node.animate(frames, Object.assign({ fill: "forwards" }, options));
+    return anim.finished || wait(options.duration + (options.delay || 0));
+  }
+
+  // The pack bag inside the product artwork (a square image with the pack centered), as fractions.
+  var ART = { left: 0.261, top: 0.042, width: 0.478, height: 0.916 };
+  var TEAR_Y = 0.075; // tear line, just under the top seal, as a fraction of the pack height
+  var SLICES = 16; // the torn-off strip is a chain of slices so it can curl as it peels
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var uid = 0;
+
+  // A ragged tear line across the pack: a random walk with small zigzag teeth.
+  function tearLine() {
+    var points = [];
+    var drift = 0;
+    for (var i = 0; i <= 64; i++) {
+      drift = Math.max(-0.012, Math.min(0.012, drift + (Math.random() - 0.5) * 0.006));
+      var tooth = (i % 2 ? 1 : -1) * (0.001 + Math.random() * 0.004) + (Math.random() - 0.5) * 0.003;
+      var x = i / 64 + (i > 0 && i < 64 ? (Math.random() - 0.5) * 0.008 : 0);
+      points.push([x, TEAR_Y + drift + tooth]);
+    }
+    return points;
+  }
+  function yAt(points, x) {
+    for (var i = 1; i < points.length; i++) {
+      if (points[i][0] >= x) {
+        var a = points[i - 1], b = points[i];
+        return a[1] + (b[1] - a[1]) * ((x - a[0]) / (b[0] - a[0] || 1));
+      }
+    }
+    return points[points.length - 1][1];
+  }
+  function pct(v) { return (v * 100).toFixed(3) + "%"; }
+
+  // Paper-white torn edge with fibers, drawn along the tear line. side: 1 = below (pack body), -1 = above (strip).
+  function tornEdge(points, side, shown) {
+    var svg = document.createElementNS(SVGNS, "svg");
+    svg.setAttribute("class", "mp-edge");
+    svg.setAttribute("viewBox", "0 0 1000 1000");
+    svg.setAttribute("preserveAspectRatio", "none");
+    var d = points.map(function (p, i) { return (i ? "L" : "M") + (p[0] * 1000).toFixed(1) + " " + (p[1] * 1000).toFixed(1); }).join(" ");
+    var fibers = "";
+    for (var i = 0; i < 70; i++) {
+      var x = Math.random();
+      var y = yAt(points, x) * 1000;
+      var len = 2 + Math.random() * 7;
+      fibers += "M" + (x * 1000).toFixed(1) + " " + y.toFixed(1) + " l" + ((Math.random() - 0.5) * 6).toFixed(1) + " " + (side * len).toFixed(1) + " ";
+    }
+    var id = "mp-clip-" + ++uid;
+    svg.innerHTML =
+      '<defs><clipPath id="' + id + '"><rect x="0" y="0" width="' + (shown ? 1000 : 0) + '" height="1000"/></clipPath></defs>' +
+      '<g clip-path="url(#' + id + ')">' +
+      '<path d="' + d + '" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="7" transform="translate(0 ' + side * 3 + ')"/>' +
+      '<path d="' + d + '" fill="none" stroke="#f5f1e8" stroke-width="5"/>' +
+      '<path d="' + d + '" fill="none" stroke="#c9ccd6" stroke-width="1.6" transform="translate(0 ' + side * 2.4 + ')"/>' +
+      '<path d="' + fibers + '" fill="none" stroke="#eeeae0" stroke-width="1.1" stroke-linecap="round"/>' +
+      "</g>";
+    svg.reveal = svg.querySelector("rect");
+    return svg;
+  }
+
+  // Builds the pack for the opening stage: the body, and the top strip that tears off.
+  function stagePack(art, width, height) {
+    var points = tearLine();
+    var group = el("div", { class: "mp-open-pack" });
+    group.style.width = width + "px";
+    group.style.height = height + "px";
+    var paint = art
+      ? "url(\"" + art.replace(/"/g, "%22") + "\") center / " + pct(1 / ART.width) + " " + pct(1 / ART.height) + " no-repeat"
+      : "";
+
+    function face(polygon) {
+      var node = el("div", { class: "mp-open-face" + (art ? "" : " mp-open-plain") });
+      node.style.width = width + "px";
+      node.style.height = height + "px";
+      if (paint) node.style.background = paint;
+      node.style.clipPath = "polygon(" + polygon.map(function (p) { return pct(p[0]) + " " + pct(p[1]); }).join(",") + ")";
+      return node;
+    }
+
+    // Body: everything under the tear line.
+    var body = el("div", { class: "mp-open-body" });
+    var bodyFace = face([[0, 1]].concat(points, [[1, 1]]));
+    var bodyEdge = tornEdge(points, 1, false);
+    bodyFace.appendChild(bodyEdge);
+    body.appendChild(bodyFace);
+    var shade = el("div", { class: "mp-open-shade" });
+    bodyFace.appendChild(shade);
+
+    // Strip: a chain of slices, rightmost first, each nested in the one to its right so their
+    // rotations add up and the strip curls from its free left end.
+    var sliceW = width / SLICES;
+    var slices = [];
+    var parent = null;
+    for (var k = SLICES - 1; k >= 0; k--) {
+      var x0 = k / SLICES, x1 = (k + 1) / SLICES;
+      var pad = 0.6 / width; // a hairline overlap hides seams between slices
+      var lo = Math.max(0, x0 - pad), hi = Math.min(1, x1 + pad);
+      var inner = points.filter(function (p) { return p[0] > lo && p[0] < hi; }).reverse();
+      var polygon = [[lo, 0], [hi, 0], [hi, yAt(points, hi)]].concat(inner, [[lo, yAt(points, lo)]]);
+      var wrap = el("div", { class: "mp-open-slice" });
+      wrap.style.width = sliceW + "px";
+      wrap.style.height = height + "px";
+      wrap.style.left = (parent ? -sliceW : k * sliceW) + "px";
+      wrap.style.transformOrigin = "100% " + yAt(points, x1) * height + "px";
+      var sliceFace = face(polygon);
+      sliceFace.style.left = -k * sliceW + "px";
+      var edge = tornEdge(points, -1, true);
+      sliceFace.appendChild(edge);
+      wrap.appendChild(sliceFace);
+      (parent || group).appendChild(wrap);
+      slices[k] = { wrap: wrap, edge: edge, joint: x1 };
+      parent = wrap;
+    }
+    group.insertBefore(body, group.firstChild);
+
+    return { group: group, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
+  }
+
+  function fleck(pack, x, y) {
+    var piece = el("span", { class: "mp-fleck" });
+    piece.style.left = x + "px";
+    piece.style.top = y + "px";
+    piece.style.setProperty("--dx", (Math.random() * 40 - 10).toFixed(1) + "px");
+    piece.style.setProperty("--dy", (-10 - Math.random() * 30).toFixed(1) + "px");
+    piece.style.setProperty("--r", (Math.random() * 540).toFixed(0) + "deg");
+    piece.style.background = Math.random() < 0.6 ? "#f5f1e8" : "#c9ccd6";
+    pack.group.appendChild(piece);
+    setTimeout(function () { piece.remove(); }, 900);
+  }
+
+  // Tears the strip off from left to right, curling it up as it goes.
+  function tear(pack, width, height) {
+    if (navigator.vibrate) navigator.vibrate([12, 40, 12, 40, 18]);
+    var lastFleck = 0;
+    return tween(1150, function (front) {
+      pack.slices.forEach(function (slice, k) {
+        // How far the tear has run past this slice's right joint, in slices.
+        var past = Math.max(0, Math.min(1.6, (front * 1.04 - slice.joint) * SLICES + 1));
+        var bend = k === 0 ? past * 5 : past * 1.7;
+        slice.wrap.style.transform = "translateY(" + (-past * 0.9).toFixed(2) + "px) rotate(" + bend.toFixed(2) + "deg)";
+        slice.edge.style.opacity = past > 0 ? 1 : 0;
+      });
+      var torn = Math.min(1, front * 1.04);
+      pack.bodyEdge.reveal.setAttribute("width", (torn * 1000).toFixed(1));
+      pack.shade.style.width = torn * 100 + "%";
+      var now = performance.now();
+      if (front > 0.02 && front < 0.99 && now - lastFleck > 28) {
+        lastFleck = now;
+        fleck(pack, torn * width, yAt(pack.points, torn) * height);
+      }
+    }, easeInOut);
+  }
+
   function openPack(pack) {
     var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    var stagePack = packTile(pack, null);
-    stagePack.disabled = true;
-    stagePack.appendChild(el("span", { class: "mp-tear", "aria-hidden": "true" }));
 
-    var front = el("div", { class: "mp-face mp-face-front" });
-    var flip = el("div", { class: "mp-flip" }, [front, el("div", { class: "mp-face mp-face-back" })]);
+    var front = el("div", { class: "mp-reveal-card" });
     var glow = el("div", { class: "mp-glow" });
     var result = el("div", { class: "mp-result", "aria-live": "polite" });
-    var inner = el("div", { class: "mp-stage-inner" }, [glow, flip, stagePack, result]);
+    var inner = el("div", { class: "mp-stage-inner" }, [glow, front, result]);
     var skip = el("button", { class: "mp-btn mp-btn-ghost mp-skip", type: "button", text: "Close" });
     var stage = el("div", { class: "mp-stage", role: "dialog", "aria-modal": "true", "aria-label": "Opening pack" }, [inner, skip]);
     var closed = false;
@@ -162,6 +327,19 @@
     skip.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
     document.body.appendChild(stage);
+
+    // The pack is as tall as the card's final spot and as wide as the artwork's pack bag.
+    var height = inner.getBoundingClientRect().height;
+    var width = pack.packImageUrl ? height * (ART.width / ART.height) : height * 0.62;
+    var opener = stagePack(pack.packImageUrl, width, height);
+    opener.group.classList.add("mp-shaking");
+    inner.insertBefore(opener.group, result);
+
+    // Inside the pack the card sits small and low, hidden behind the wrapper.
+    var cardScale = (width * 0.86) / inner.getBoundingClientRect().width;
+    var inside = "translateY(" + ((0.56 - 0.5) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
+    var peek = "translateY(" + ((0.56 - 0.5 - 0.30) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
+    front.style.transform = inside;
 
     // Ask the server for the result while the pack shakes.
     var reveal = fetch(api + "/open" + query, {
@@ -180,17 +358,54 @@
       .then(function (values) {
         var card = values[0];
         var color = TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base;
+        var big = ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1;
         if (card.imageUrl) front.appendChild(el("img", { src: card.imageUrl, alt: card.title }));
         else front.appendChild(el("strong", { text: card.title }));
         glow.style.background = color;
+        opener.group.classList.remove("mp-shaking");
 
-        stagePack.classList.add("mp-tearing");
-        flip.classList.add("mp-rise");
-        return wait(reduced ? 0 : 1300).then(function () {
-          flip.classList.remove("mp-rise");
-          flip.classList.add("mp-flipped");
+        var sequence = reduced
+          ? Promise.resolve().then(function () {
+              opener.group.remove();
+              front.style.transform = "none";
+            })
+          : tear(opener, width, height)
+              // 1. The torn strip comes away completely and falls off.
+              .then(function () {
+                return animate(opener.root, [
+                  { transform: getComputedStyle(opener.root).transform },
+                  { transform: "translate(" + width * 0.35 + "px, " + -height * 0.16 + "px) rotate(16deg)", offset: 0.35 },
+                  { transform: "translate(" + width * 0.9 + "px, " + (window.innerHeight * 1.1) + "px) rotate(70deg)", opacity: 0 },
+                ], { duration: 1000, easing: "cubic-bezier(.3,.1,.6,1)" });
+              })
+              // 2. The card rises out of the opening, showing its top.
+              .then(function () {
+                glow.classList.add("mp-peek");
+                return animate(front, [{ transform: inside }, { transform: peek }], { duration: 650, easing: "cubic-bezier(.2,.8,.3,1)" });
+              })
+              .then(function () { return wait(350); })
+              // 3. The rest of the pack slides down off the card.
+              .then(function () {
+                var slide = animate(opener.body, [
+                  { transform: "none" },
+                  { transform: "translateY(" + (window.innerHeight + height) + "px) rotate(-3deg)" },
+                ], { duration: 900, easing: "cubic-bezier(.5,0,.75,.4)" });
+                // The card stays put while the pack slides off, then grows into place.
+                var settle = wait(650).then(function () {
+                  return animate(front, [{ transform: peek }, { transform: "translateY(-2%) scale(1.04)", offset: 0.7 }, { transform: "none" }], {
+                    duration: 800,
+                    easing: "cubic-bezier(.3,.7,.3,1)",
+                  });
+                });
+                return Promise.all([slide, settle]);
+              })
+              .then(function () { opener.group.remove(); });
+
+        return sequence.then(function () {
+          glow.classList.remove("mp-peek");
           glow.classList.add("mp-on");
-          var big = ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1;
+          front.classList.add("mp-revealed");
+          if (big) front.classList.add("mp-holo");
           if (big && !reduced) confetti(stage, color);
 
           result.appendChild(el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }));
@@ -212,6 +427,7 @@
         });
       })
       .catch(function (err) {
+        opener.group.classList.remove("mp-shaking");
         result.appendChild(el("p", { text: err.message }));
         result.classList.add("mp-show");
       });
