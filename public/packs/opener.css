@@ -317,3 +317,13 @@
 /* Keep Close clear of the phone's status bar / in-app browser bar. */
 .mp-skip { top: calc(env(safe-area-inset-top, 0px) + 14px); }
 .mp-stage { padding-top: calc(env(safe-area-inset-top, 0px) + 60px); box-sizing: border-box; }
+/* Phones: a compact Close in the corner, and the card starts below it. */
+.mp-stage { --mp-top-space: 84px; padding-top: calc(env(safe-area-inset-top, 0px) + var(--mp-top-space)); }
+.mp-stage-inner {
+  width: min(300px, 74vw, calc((100vh - var(--mp-result-space) - var(--mp-top-space) - 28px) * 5 / 7));
+  width: min(300px, 74vw, calc((100dvh - var(--mp-result-space) - var(--mp-top-space) - 28px) * 5 / 7));
+}
+@media (max-width: 600px) {
+  .mp-stage { --mp-top-space: 64px; }
+  .mp-skip { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 12px; padding: 7px 16px; font-size: .95em; }
+}
