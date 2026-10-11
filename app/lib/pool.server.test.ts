@@ -628,3 +628,22 @@ describe("vault shipping is US only", () => {
     expect(await db.shipRequest.count()).toBe(0);
   });
 });
+
+describe("vault pull notes", () => {
+  it("keeps the order note under Shopify's 5000-character limit", async () => {
+    const { noteVaultPulls } = await import("./orders.server");
+    let note = "";
+    const admin = {
+      graphql: async (query: string, { variables }: { variables: Record<string, unknown> }) => {
+        if (query.includes("PackOrderNote(")) return new Response(JSON.stringify({ data: { order: { note: "Gift for my son" } } }));
+        note = (variables.input as { note: string }).note;
+        return new Response(JSON.stringify({ data: { orderUpdate: { order: { id: "x" }, userErrors: [] } } }));
+      },
+    };
+    const cards = Array.from({ length: 300 }, (_, i) => `Mega Lopunny ex - 084/094 ${i} - ME02 Phantasmal Flames Holofoil - Near Mint (Poke)`);
+    await noteVaultPulls(admin as never, "gid://shopify/Order/1", cards);
+    expect(note.length).toBeLessThanOrEqual(5000);
+    expect(note.startsWith("Gift for my son")).toBe(true);
+    expect(note).toMatch(/more \(full list in the app\)/);
+  });
+});

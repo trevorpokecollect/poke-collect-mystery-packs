@@ -330,7 +330,26 @@ export async function noteVaultPulls(admin: Admin, orderId: string, cards: strin
     query PackOrderNote($id: ID!) { order(id: $id) { note } }`, { id: orderId });
   const existing: string = data.order?.note ?? "";
   if (existing.includes("Mystery pack pulls")) return;
-  const list = `Mystery pack pulls (in the customer's vault, not shipped with this order):\n${cards.map((c) => `- ${c}`).join("\n")}`;
+  // Shopify caps notes at 5000 characters: shorten titles, combine duplicates, and cut off with a count.
+  const counts = new Map<string, number>();
+  for (const c of cards) {
+    const short = c.replace(/ - Near Mint/g, "").replace(/\s+(Holofoil|Reverse Holofoil|Normal)(?=\s*\()/g, "");
+    counts.set(short, (counts.get(short) ?? 0) + 1);
+  }
+  const header = `Mystery pack pulls (${cards.length} cards, in the customer's vault, not shipped with this order):`;
+  const budget = 5000 - existing.length - header.length - 80;
+  const lines: string[] = [];
+  let used = 0;
+  for (const [title, n] of counts) {
+    const line = `- ${n > 1 ? `${n}x ` : ""}${title.length > 90 ? title.slice(0, 87) + "..." : title}`;
+    if (used + line.length + 1 > budget) {
+      lines.push(`- ...and ${cards.length - lines.reduce((t, l) => t + (Number(l.match(/^- (\d+)x /)?.[1]) || 1), 0)} more (full list in the app)`);
+      break;
+    }
+    lines.push(line);
+    used += line.length + 1;
+  }
+  const list = `${header}\n${lines.join("\n")}`;
   await gql(
     admin,
     `#graphql
