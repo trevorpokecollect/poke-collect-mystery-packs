@@ -1,0 +1,10 @@
+{
+  "heading": "My Mystery Packs",
+  "bodyUnopened": {
+    "one": "You have 1 unopened pack waiting. Open it online and see every card you've pulled.",
+    "other": "You have {{count}} unopened packs waiting. Open them online and see every card you've pulled."
+  },
+  "body": "See every card you've pulled from your mystery packs and track how they ship.",
+  "openPacks": "Open My Packs",
+  "viewPacks": "View My Packs"
+}
