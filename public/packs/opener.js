@@ -77,7 +77,36 @@
     ]);
   }
 
-  function render(packs) {
+  function money(amount) {
+    var n = Number(amount);
+    return isNaN(n) ? "" : "$" + n.toFixed(2);
+  }
+
+  // "Open More Packs?": every pack on sale right now, linking to its page or straight to checkout.
+  function shelf(available) {
+    if (!available || !available.length) return null;
+    return el("section", { class: "mp-more" }, [
+      el("h2", { class: "mp-more-title", text: "Open More Packs?" }),
+      el("p", { class: "mp-more-sub", text: "Grab another pack and open it the moment you check out." }),
+      el("div", { class: "mp-more-grid" }, available.map(function (a) {
+        return el("div", { class: "mp-more-item" }, [
+          el("a", { class: "mp-more-art", href: a.url, "aria-label": a.title }, [
+            a.imageUrl ? el("img", { src: a.imageUrl, alt: "", loading: "lazy" }) : null,
+          ]),
+          el("div", { class: "mp-more-info" }, [
+            el("a", { class: "mp-more-name", href: a.url, text: a.title }),
+            el("div", { class: "mp-more-meta", text: money(a.price) + " · " + a.packsLeft + " pack" + (a.packsLeft === 1 ? "" : "s") + " left" }),
+            el("div", { class: "mp-more-actions" }, [
+              el("a", { class: "mp-btn mp-btn-dark", href: a.buyUrl, text: "Buy & open" }),
+              el("a", { class: "mp-more-link", href: a.url, text: "View potential pulls" }),
+            ]),
+          ]),
+        ]);
+      })),
+    ]);
+  }
+
+  function render(packs, available) {
     root.innerHTML = "";
     var unopened = packs.filter(function (p) { return !p.opened; });
     var opened = packs.filter(function (p) { return p.opened; });
@@ -94,6 +123,8 @@
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
       root.appendChild(el("div", { class: "mp-grid" }, unopened.map(function (p) { return packTile(p, openPack); })));
     }
+    var more = shelf(available);
+    if (more) root.appendChild(more);
     root.appendChild(el("h2", { class: "mp-section-title", text: "Your pulls" }));
     root.appendChild(
       opened.length
@@ -102,22 +133,36 @@
     );
   }
 
+  // Coming from checkout, a cover hides the page until the opening stage is up, so the
+  // list (and any card already pulled on the order) never flashes before the animation.
+  function uncover() {
+    var cover = document.getElementById("mp-cover");
+    if (cover) cover.remove();
+  }
+
   function load() {
     return fetch(api + "/pulls" + query, { credentials: "same-origin" })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (data.error) throw new Error(data.error);
         var packs = data.packs || [];
-        render(packs);
         if (autoOpen) {
           autoOpen = false;
           var first = packs.filter(function (p) { return !p.opened; })[0];
-          if (first) openPack(first);
+          if (first) {
+            // The list is drawn when the stage closes (close() reloads it).
+            openPack(first);
+            uncover();
+            return;
+          }
         }
+        render(packs, data.available);
+        uncover();
       })
       .catch(function (err) {
         root.innerHTML = "";
         root.appendChild(el("p", { class: "mp-error", text: err.message || "Couldn't load your packs." }));
+        uncover();
       });
   }
 
@@ -354,7 +399,7 @@
       });
     });
 
-    Promise.all([reveal, wait(reduced ? 0 : 1200)])
+    Promise.all([reveal, wait(reduced ? 0 : 900)])
       .then(function (values) {
         var card = values[0];
         var color = TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base;

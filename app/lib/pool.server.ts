@@ -404,3 +404,20 @@ export async function seriesOdds(db: Db, shop: string, handle: string) {
     }),
   };
 }
+
+/** Live series that still have packs to sell, with how many are left. */
+export async function availableSeries(db: Db, shop: string) {
+  const series = await db.series.findMany({
+    where: { shop, status: "LIVE" },
+    orderBy: { launchedAt: "desc" },
+  });
+  const left = await db.slot.groupBy({
+    by: ["seriesId"],
+    where: { seriesId: { in: series.map((s) => s.id) }, claimed: false, voided: false },
+    _count: { _all: true },
+  });
+  const leftBy = new Map(left.map((r) => [r.seriesId, r._count._all]));
+  return series
+    .map((s) => ({ series: s, packsLeft: leftBy.get(s.id) ?? 0 }))
+    .filter((s) => s.packsLeft > 0);
+}
