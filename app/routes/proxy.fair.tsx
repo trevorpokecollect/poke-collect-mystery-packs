@@ -28,6 +28,9 @@ const STYLE = `
 .mpf-ok { color: #1f8a4c; font-weight: 700; }
 .mpf-bad { color: #c0261b; font-weight: 700; }
 .mpf-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
+/* The theme's hover fill paints the button red with red text; use a plain dark-on-hover instead. */
+.mpf-back::before, .mpf-back::after { display: none !important; }
+.mpf-back:hover, .mpf-back:focus-visible { background: #14141a !important; border-color: #14141a !important; color: #fff !important; }
 `;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {

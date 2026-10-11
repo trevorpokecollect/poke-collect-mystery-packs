@@ -51,6 +51,9 @@ const STYLE = `
 .mpp-fair-btn::before, .mpp-fair-btn::after { display: none !important; }
 .mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; padding: 16px 20px; font-size: 18px !important; font-weight: 800 !important; letter-spacing: .02em; text-align: center; text-decoration: none !important; }
 .mpp-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
+/* The theme's hover fill paints the button red with red text; use a plain dark-on-hover instead. */
+.mpp-back::before, .mpp-back::after { display: none !important; }
+.mpp-back:hover, .mpp-back:focus-visible { background: #14141a !important; border-color: #14141a !important; color: #fff !important; }
 `;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
