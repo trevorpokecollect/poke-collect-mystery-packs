@@ -8,6 +8,7 @@ import { gql } from "./orders.server";
 import { fetchCandidates, releaseUnneeded, reservePool, type CandidateFilter } from "./inventory.server";
 import {
   buildPool,
+  copiesAllowed,
   DEFAULT_TIER_RULES,
   normalizeTierRules,
   tierFor,
@@ -207,9 +208,9 @@ export function seriesTierRules(series: { tierRules: unknown }): TierRule[] {
 }
 
 /**
- * Replaces a draft series' cards with a pool picked from live inventory: one copy each,
- * inside the value range, averaging the target. Cards already in another draft or live
- * series are skipped so two pools never claim the same copy.
+ * Replaces a draft series' cards with a pool picked from live inventory, inside the value
+ * range and averaging the target: one copy of each card, or up to 3 in pools over 50 cards.
+ * Cards already in another draft or live series are skipped so two pools never claim the same copy.
  */
 export async function autoBuildPool(admin: AdminApiContext, shop: string, seriesId: string, input: AutoBuildInput) {
   validateBuildRules(input);
@@ -226,7 +227,7 @@ export async function autoBuildPool(admin: AdminApiContext, shop: string, series
     ).map((c) => c.variantId),
   );
   const candidates = (await fetchCandidates(admin, input)).filter((c) => !inUse.has(c.variantId));
-  const { cards } = buildPool(candidates, input);
+  const { cards } = buildPool(candidates, { ...input, maxCopies: copiesAllowed(input.count) });
   const tiers = seriesTierRules(series);
 
   await db.$transaction([
@@ -240,7 +241,7 @@ export async function autoBuildPool(admin: AdminApiContext, shop: string, series
         imageUrl: c.imageUrl,
         tier: tierFor(c.value, tiers),
         marketValue: c.value,
-        quantity: 1,
+        quantity: c.quantity,
         sortOrder: i,
         inventoryItemId: c.inventoryItemId,
         locationId: c.locationId,
@@ -255,7 +256,7 @@ export async function autoBuildPool(admin: AdminApiContext, shop: string, series
       },
     }),
   ]);
-  return cards.length;
+  return cards.reduce((n, c) => n + c.quantity, 0);
 }
 
 /** Saves new tier rules and re-tiers every card in a draft series by its value. */

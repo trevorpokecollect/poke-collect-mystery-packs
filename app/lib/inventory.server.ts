@@ -10,6 +10,8 @@ export interface CandidateFilter {
   productType: string;
   /** Variant option value to require, e.g. "Near Mint". Blank allows any condition. */
   condition: string;
+  /** Card language, matched against StorePass's `Language_<name>` product tag. Blank allows any. */
+  language: string;
 }
 
 export interface InventoryCandidate {
@@ -37,6 +39,7 @@ interface VariantPage {
       title: string;
       status: string;
       productType: string;
+      tags: string[];
       featuredMedia: { preview: { image: { url: string } | null } | null } | null;
     };
     inventoryItem: {
@@ -63,6 +66,7 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
     "inventory_quantity:>0",
   ].join(" AND ");
   const condition = filter.condition.trim().toLowerCase();
+  const languageTag = filter.language.trim() ? `language_${filter.language.trim().toLowerCase()}` : null;
 
   const out: InventoryCandidate[] = [];
   let after: string | null = null;
@@ -80,7 +84,7 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
               price
               selectedOptions { value }
               image { url }
-              product { id title status productType featuredMedia { preview { image { url } } } }
+              product { id title status productType tags featuredMedia { preview { image { url } } } }
               inventoryItem {
                 id
                 tracked
@@ -97,6 +101,7 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
     for (const v of conn.nodes) {
       if (v.product.status !== "ACTIVE" || v.product.productType !== filter.productType) continue;
       if (!v.inventoryItem?.tracked) continue;
+      if (languageTag && !v.product.tags.some((t) => t.trim().toLowerCase() === languageTag)) continue;
       if (condition && !v.selectedOptions.some((o) => o.value.trim().toLowerCase() === condition)) {
         continue;
       }

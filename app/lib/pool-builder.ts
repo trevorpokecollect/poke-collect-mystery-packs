@@ -39,19 +39,29 @@ export function tierFor(value: number, rules: TierRule[]): string {
 export interface Candidate {
   variantId: string;
   value: number;
+  /** Copies in stock. Defaults to 1. */
+  available?: number;
 }
 
 export interface BuildRules {
+  /** Total cards in the pool, counting copies (one card per pack). */
   count: number;
   minValue: number;
   maxValue: number;
   targetAverage: number;
+  /** Most copies of one card the pool may hold. Defaults to 1. */
+  maxCopies?: number;
 }
 
 export interface BuildResult<C extends Candidate> {
-  cards: C[];
+  cards: (C & { quantity: number })[];
   total: number;
   average: number;
+}
+
+/** Store rule: pools over 50 cards may hold up to 3 copies of a card; smaller pools hold one of each. */
+export function copiesAllowed(count: number) {
+  return count > 50 ? 3 : 1;
 }
 
 export function validateBuildRules(rules: BuildRules) {
@@ -66,9 +76,10 @@ export function validateBuildRules(rules: BuildRules) {
 const cents = (n: number) => Math.round(n * 100);
 
 /**
- * Chooses `count` distinct candidates inside the value range whose average is as close
- * to the target as the inventory allows. Starts from a random sample, then repeatedly
- * swaps a picked card for the unpicked card that best closes the gap.
+ * Chooses `count` cards inside the value range whose average is as close to the target as
+ * the inventory allows, taking up to `maxCopies` copies of a card (never more than are in
+ * stock). Starts from a random sample, then repeatedly swaps a picked copy for the unpicked
+ * copy that best closes the gap.
  */
 export function buildPool<C extends Candidate>(
   candidates: C[],
@@ -76,7 +87,11 @@ export function buildPool<C extends Candidate>(
   random: () => number = Math.random,
 ): BuildResult<C> {
   validateBuildRules(rules);
-  const eligible = candidates.filter((c) => c.value >= rules.minValue && c.value <= rules.maxValue);
+  const maxCopies = Math.max(1, Math.floor(rules.maxCopies ?? 1));
+  // One entry per copy that may go in the pool.
+  const eligible = candidates
+    .filter((c) => c.value >= rules.minValue && c.value <= rules.maxValue)
+    .flatMap((c) => Array.from({ length: Math.min(maxCopies, Math.max(1, Math.floor(c.available ?? 1))) }, () => c));
   if (eligible.length < rules.count) {
     throw new Error(
       `Only ${eligible.length} cards in stock match these rules, and the pool needs ${rules.count}.`,
@@ -128,6 +143,13 @@ export function buildPool<C extends Candidate>(
     total += cents(into.value) - cents(out.value);
   }
 
-  picked.sort((a, b) => b.value - a.value);
-  return { cards: picked, total: total / 100, average: total / 100 / rules.count };
+  // Collapse copies back into one entry per card.
+  const byVariant = new Map<string, C & { quantity: number }>();
+  for (const c of picked) {
+    const entry = byVariant.get(c.variantId);
+    if (entry) entry.quantity += 1;
+    else byVariant.set(c.variantId, { ...c, quantity: 1 });
+  }
+  const cards = [...byVariant.values()].sort((a, b) => b.value - a.value);
+  return { cards, total: total / 100, average: total / 100 / rules.count };
 }

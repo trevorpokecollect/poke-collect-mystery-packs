@@ -64,6 +64,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       targetAverage: String(build.targetAverage ?? 10),
       productType: String(build.productType ?? "Pokemon Single"),
       condition: String(build.condition ?? "Near Mint"),
+      language: String(build.language ?? "English"),
     },
     cards: series.cards.map((c) => ({
       id: c.id,
@@ -114,6 +115,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           targetAverage: num("targetAverage"),
           productType: String(form.get("productType") || "").trim(),
           condition: String(form.get("condition") || "").trim(),
+          language: String(form.get("language") || "").trim(),
         });
         return { ok: `Built a pool of ${count} cards from your inventory.` };
       }
@@ -190,7 +192,7 @@ export default function SeriesPage() {
   function autoBuild(form: HTMLElement) {
     const read = (name: string) =>
       (form.querySelector(`[data-build="${name}"]`) as HTMLInputElement | null)?.value ?? "";
-    const fields = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition"] as const;
+    const fields = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition", "language"] as const;
     const values = Object.fromEntries(fields.map((f) => [f, read(f)]));
     if (cards.length > 0 && !confirm("Replace the current card list with a new pool from your inventory?")) return;
     submit({ intent: "autoBuild", ...values }, { method: "post" });
@@ -257,8 +259,8 @@ export default function SeriesPage() {
         <s-section heading="Auto-build from inventory">
           <s-stack gap="base">
             <s-paragraph>
-              Picks one copy of each card from your in-stock inventory so the average value per pack matches your
-              target. Building again gives a different mix. At launch the cards are reserved in Shopify, so they
+              Picks cards from your in-stock inventory so the average value per pack matches your target: one copy
+              of each card, or up to 3 copies in pools over 50 cards. Building again gives a different mix. At launch the cards are reserved in Shopify, so they
               can only be won from a pack; closing the series puts unpulled cards back on sale.
             </s-paragraph>
             <s-grid gridTemplateColumns="repeat(auto-fit, minmax(160px, 1fr))" gap="base">
@@ -272,6 +274,12 @@ export default function SeriesPage() {
                 details="Leave blank for any condition"
                 value={buildDefaults.condition}
                 data-build="condition"
+              />
+              <s-text-field
+                label="Language"
+                details="Matches the Language tag from StorePass. Leave blank for any language"
+                value={buildDefaults.language}
+                data-build="language"
               />
             </s-grid>
             <s-button

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPool, DEFAULT_TIER_RULES, normalizeTierRules, tierFor } from "./pool-builder";
+import { buildPool, copiesAllowed, DEFAULT_TIER_RULES, normalizeTierRules, tierFor } from "./pool-builder";
 
 // Small deterministic RNG so failures reproduce.
 function seeded(seed: number) {
@@ -67,5 +67,25 @@ describe("buildPool", () => {
     const result = buildPool(cheap, rules, seeded(1));
     expect(result.cards).toHaveLength(100);
     expect(result.average).toBeLessThan(10);
+  });
+
+  it("takes up to 3 copies of a card in pools over 50, never more than in stock", () => {
+    expect(copiesAllowed(50)).toBe(1);
+    expect(copiesAllowed(51)).toBe(3);
+    // 60 cards with 5 copies each: a 100-card pool needs some cards more than once.
+    const stock = inventory(60).map((c) => ({ ...c, available: 5 }));
+    stock[0].available = 2;
+    const result = buildPool(stock, { ...rules, targetAverage: 8, maxCopies: copiesAllowed(100) }, seeded(4));
+    expect(result.cards.reduce((n, c) => n + c.quantity, 0)).toBe(100);
+    expect(result.cards.every((c) => c.quantity >= 1 && c.quantity <= 3)).toBe(true);
+    expect(result.cards.find((c) => c.variantId === "v0")?.quantity ?? 0).toBeLessThanOrEqual(2);
+    expect(new Set(result.cards.map((c) => c.variantId)).size).toBe(result.cards.length);
+  });
+
+  it("keeps one copy each when copies aren't allowed", () => {
+    const stock = inventory(2000).map((c) => ({ ...c, available: 4 }));
+    const result = buildPool(stock, rules, seeded(2));
+    expect(result.cards).toHaveLength(100);
+    expect(result.cards.every((c) => c.quantity === 1)).toBe(true);
   });
 });
