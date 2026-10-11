@@ -29,10 +29,10 @@
   // "Try A Demo Pack": a pretend opening with a card picked from what's left in the pool,
   // weighted by copies remaining (the live odds). Uses the same opener as My Packs.
   var openerLoading = null;
-  function loadOpener(app) {
+  function loadOpener(app, version) {
     if (window.PCPackOpener) return Promise.resolve();
     if (openerLoading) return openerLoading;
-    var v = Math.floor(Date.now() / 3600000);
+    var v = version || Math.floor(Date.now() / 3600000);
     // Wait for the stylesheet too: the opener measures the stage when it starts.
     function add(el) {
       return new Promise(function (resolve, reject) { el.onload = resolve; el.onerror = reject; document.head.appendChild(el); });
@@ -63,7 +63,7 @@
     var app = btn.getAttribute("data-app").replace(/\/$/, "");
     function run() {
       btn.disabled = true;
-      loadOpener(app).then(function () {
+      loadOpener(app, data.openerVersion).then(function () {
         var c = pickCard(cards);
         window.PCPackOpener.open({
           packImageUrl: btn.getAttribute("data-pack-image") || null,

@@ -615,7 +615,12 @@
         var card = values[0];
         var color = TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base;
         var big = ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1;
-        if (card.imageUrl) front.appendChild(el("img", { src: card.imageUrl, alt: card.title }));
+        if (card.imageUrl) {
+          // Never show a broken-image icon: swap to the card name if the image fails after all.
+          var cardImg = el("img", { src: card.imageUrl, alt: "" });
+          cardImg.onerror = function () { cardImg.replaceWith(el("strong", { text: card.title })); };
+          front.appendChild(cardImg);
+        }
         else front.appendChild(el("strong", { text: card.title }));
         glow.style.background = color;
         opener.group.classList.remove("mp-shaking");
