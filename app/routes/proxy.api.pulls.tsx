@@ -4,6 +4,7 @@ import { availableSeries, pullsForViewer } from "../lib/pool.server";
 import { packImages, packProducts } from "../lib/pack-art.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { shippingStatuses, shipStatusFor } from "../lib/shipping-status.server";
+import { packShelf } from "../lib/shelf.server";
 
 // Lists the viewer's packs. Unopened packs never include the card. Card values are
 // admin-only, so customers never see a dollar figure next to what they pulled.
@@ -27,20 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // The theme's own "You Might Also Like" row is rendered for this product (Section Rendering API).
     recommendHandle: seed ? (products.get(seed)?.handle ?? null) : null,
     // Packs on sale right now, for the "Open More Packs?" shelf.
-    available: live.flatMap(({ series, packsLeft }) => {
-      const product = products.get(series.packProductId);
-      if (!product) return [];
-      return [{
-        series: series.title,
-        title: product.title,
-        url: `/products/${product.handle}`,
-        // Checkout link for one pack, straight past the cart.
-        buyUrl: `/cart/${series.packVariantId.split("/").pop()}:1`,
-        imageUrl: product.imageUrl,
-        price: series.packPrice.toString(),
-        packsLeft,
-      }];
-    }),
+    available: packShelf(live, products),
     packs: pulls.map((p) => ({
       id: p.id,
       series: p.series.title,

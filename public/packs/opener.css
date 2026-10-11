@@ -292,3 +292,7 @@
 .mp-more-buy .mp-btn-dark { height: 52px; display: inline-flex; align-items: center; }
 .mp-qty-hint { font-size: .9em; color: #d6d2e4; }
 .mp-qty-hint-on { color: #7ee2a8; font-weight: 700; }
+
+/* Merchant preview banner (?demo=) */
+.mp-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 0 0 24px; padding: 14px 18px; border: 2px dashed #e3350d; border-radius: 12px; background: rgba(227,53,13,.06); }
+.mp-demo p { flex: 1 1 260px; margin: 0; font-size: 1.05em; font-weight: 600; }

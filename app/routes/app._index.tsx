@@ -4,6 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { getFreeShipping, saveFreeShipping } from "../lib/free-shipping.server";
+import { demoToken } from "../lib/demo.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -15,6 +16,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
   const unopened = await db.pull.count({ where: { shop: session.shop, status: "UNOPENED" } });
   return {
+    // Opens the storefront My Packs page with sample packs to open (link works for 30 days).
+    previewUrl: `https://${session.shop}/apps/packs?demo=${demoToken(session.shop)}`,
     freeShipping: { enabled: freeShipping.enabled, threshold: freeShipping.threshold },
     unopened,
     series: series.map((s) => ({
@@ -45,7 +48,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 const tone = { DRAFT: "neutral", LIVE: "success", CLOSED: "info" } as const;
 
 export default function Index() {
-  const { series, unopened, freeShipping } = useLoaderData<typeof loader>();
+  const { series, unopened, freeShipping, previewUrl } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const busy = useNavigation().state === "submitting";
@@ -119,6 +122,18 @@ export default function Index() {
               </s-button>
             ) : null}
           </s-stack>
+        </s-stack>
+      </s-section>
+
+      <s-section slot="aside" heading="Preview My Packs">
+        <s-stack direction="block" gap="base">
+          <s-paragraph>
+            See My Packs the way customers do, with sample packs from the live pool to open. Nothing
+            is ordered or drawn. Bookmark the link to come back to it.
+          </s-paragraph>
+          <s-button href={previewUrl} target="_blank">
+            Open Preview
+          </s-button>
         </s-stack>
       </s-section>
 

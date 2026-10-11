@@ -7,6 +7,9 @@
   if (!root) return;
 
   var api = root.getAttribute("data-api") || "/apps/packs/api";
+  // Merchant preview (?demo=<signed token>): sample packs from the live pool, opened locally.
+  var demo = root.getAttribute("data-demo") === "1";
+  var demoData = null;
   var params = new URLSearchParams(window.location.search);
   // Arriving from the thank-you page button (?open=1) starts opening right away, once.
   var autoOpen = params.get("open") === "1";
@@ -259,6 +262,7 @@
     var unopened = packs.filter(function (p) { return !p.opened; });
     var opened = packs.filter(function (p) { return p.opened; });
 
+    if (demo) root.appendChild(demoBanner());
     root.appendChild(el("h1", { text: "My Packs" }));
     root.appendChild(el("p", {
       class: "mp-sub",
@@ -296,9 +300,27 @@
     if (cover) cover.remove();
   }
 
-  function load() {
-    return fetch(api + "/pulls" + query, { credentials: "same-origin" })
+  function demoBanner() {
+    var reset = el("button", { class: "mp-btn", type: "button", text: "New Sample Packs" });
+    reset.addEventListener("click", function () { demoData = null; load(); });
+    return el("div", { class: "mp-demo" }, [
+      el("p", { text: "Preview mode: these are sample packs and pulls from the live pool. Opening them changes nothing, and customers never see this page." }),
+      reset,
+    ]);
+  }
+
+  function fetchPacks() {
+    if (demo && demoData) return Promise.resolve(demoData);
+    return fetch(api + (demo ? "/demo" : "/pulls") + query, { credentials: "same-origin" })
       .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (demo && !data.error) demoData = data;
+        return data;
+      });
+  }
+
+  function load() {
+    return fetchPacks()
       .then(function (data) {
         if (data.error) throw new Error(data.error);
         var packs = data.packs || [];
@@ -542,8 +564,15 @@
     var peek = "translateY(" + ((0.56 - 0.5 - 0.30) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
     front.style.transform = inside;
 
-    // Ask the server for the result while the pack shakes.
-    var reveal = fetch(api + "/open" + query, {
+    // Ask the server for the result while the pack shakes. Preview packs already carry their card.
+    var reveal = pack.demoCard
+      ? Promise.resolve(pack.demoCard).then(function (card) {
+          pack.opened = true;
+          pack.card = card;
+          pack.shipping = { state: "preparing" };
+          return card;
+        })
+      : fetch(api + "/open" + query, {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
