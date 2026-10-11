@@ -6,6 +6,7 @@ import db from "../db.server";
 import { drawForOrder } from "./pool.server";
 import { holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
 import { packsPageUrl, storefrontBase } from "./links.server";
+import { checkTopTierGone } from "./top-tier-alert.server";
 
 export interface OrderPayload {
   admin_graphql_api_id: string;
@@ -48,6 +49,12 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
       admin,
       order.admin_graphql_api_id,
       packsPageUrl(await storefrontBase(admin, shop), result.packOrder.openToken),
+    );
+  }
+
+  if (result.pulls.length > 0) {
+    await checkTopTierGone(db, admin, shop, result.pulls.map((p) => p.seriesId)).catch((error) =>
+      console.error("Top tier check failed", error),
     );
   }
 

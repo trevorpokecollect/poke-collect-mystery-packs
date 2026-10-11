@@ -63,6 +63,8 @@ model Series {
   salt          String?
   launchedAt    DateTime?
   closedAt      DateTime?
+  // Set once when the last card of the top tier is pulled (fires the Shopify Flow alert).
+  topTierGoneAt DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 

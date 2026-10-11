@@ -13,6 +13,7 @@ import {
   voidPulls,
 } from "./pool.server";
 import { releaseUnneeded, reservePool, unreserveForPulls } from "./inventory.server";
+import { checkTopTierGone } from "./top-tier-alert.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -384,5 +385,36 @@ describe("inventory reservation", () => {
     await db.series.update({ where: { id: series.id }, data: { status: "CLOSED" } });
     expect(await releaseUnneeded(db, admin, series.id)).toBe(0);
     expect(moves).toHaveLength(0);
+  });
+});
+
+describe("checkTopTierGone", () => {
+  it("fires the Flow trigger once, right after the last top-tier card is pulled", async () => {
+    const series = await makeSeries(standardPool);
+    await db.series.update({
+      where: { id: series.id },
+      data: { tierRules: [{ name: "Base", min: 0 }, { name: "Rare", min: 10 }, { name: "Chase", min: 40 }] },
+    });
+    await launchSeries(db, series.id);
+    const calls: unknown[] = [];
+    const admin = {
+      graphql: async (_q: string, opts: { variables: unknown }) => {
+        calls.push(opts.variables);
+        return { json: async () => ({ data: { flowTriggerReceive: { userErrors: [] } } }) };
+      },
+    } as unknown as Parameters<typeof checkTopTierGone>[1];
+
+    let chaseGone = false;
+    for (let i = 0; i < 10 && !chaseGone; i++) {
+      const { pulls } = await drawForOrder(db, order(1));
+      await checkTopTierGone(db, admin, SHOP, pulls.map((p) => p.seriesId));
+      const left = await db.slot.count({ where: { seriesId: series.id, claimed: false, card: { tier: "Chase" } } });
+      chaseGone = left === 0;
+      expect(calls).toHaveLength(chaseGone ? 1 : 0);
+    }
+    expect(chaseGone).toBe(true);
+    await checkTopTierGone(db, admin, SHOP, [series.id]);
+    expect(calls).toHaveLength(1);
+    expect((calls[0] as { payload: Record<string, unknown> }).payload).toMatchObject({ Tier: "Chase" });
   });
 });
