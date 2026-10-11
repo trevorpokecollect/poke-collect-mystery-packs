@@ -299,7 +299,8 @@ export async function noteMissingVaultPulls(db: PrismaClient, adminFor: (shop: s
  * (after any note already there) for staff to see on the order page.
  */
 export async function noteVaultPulls(admin: Admin, orderId: string, cards: string[]) {
-  const data = await gql(admin, `#graphql query PackOrderNote($id: ID!) { order(id: $id) { note } }`, { id: orderId });
+  const data = await gql(admin, `#graphql
+    query PackOrderNote($id: ID!) { order(id: $id) { note } }`, { id: orderId });
   const existing: string = data.order?.note ?? "";
   if (existing.includes("Mystery pack pulls")) return;
   const list = `Mystery pack pulls (in the customer's vault, not shipped with this order):\n${cards.map((c) => `- ${c}`).join("\n")}`;

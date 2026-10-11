@@ -172,14 +172,16 @@ export async function expireShipments(db: Db, adminFor: (shop: string) => Promis
 }
 
 async function orderEmail(admin: AdminApiContext, orderId: string) {
-  const data = await gql(admin, `#graphql query VaultOrderEmail($id: ID!) { order(id: $id) { email } }`, { id: orderId });
+  const data = await gql(admin, `#graphql
+    query VaultOrderEmail($id: ID!) { order(id: $id) { email } }`, { id: orderId });
   return (data.order?.email as string | null) ?? null;
 }
 
 let currency: string | null = null;
 async function shopCurrency(admin: AdminApiContext) {
   if (!currency) {
-    const data = await gql(admin, `#graphql query VaultCurrency { shop { currencyCode } }`);
+    const data = await gql(admin, `#graphql
+    query VaultCurrency { shop { currencyCode } }`);
     currency = data.shop.currencyCode as string;
   }
   return currency;

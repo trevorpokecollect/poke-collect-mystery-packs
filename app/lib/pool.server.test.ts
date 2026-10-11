@@ -491,6 +491,9 @@ function vaultAdmin() {
   const deleted: string[] = [];
   const admin = {
     graphql: async (query: string, opts: { variables: Record<string, unknown> }) => {
+      // A query written on the "#graphql" comment line is all comment; Shopify rejects it.
+      const body = query.split("\n").map((l) => l.replace(/#.*$/, "")).join("").trim();
+      if (!body) throw new Error("Empty GraphQL query (everything is on the #graphql comment line)");
       const reply = (data: unknown) => new Response(JSON.stringify({ data }));
       if (query.includes("draftOrderCreate")) {
         drafts.push({ input: opts.variables.input as Record<string, unknown> });
@@ -538,7 +541,8 @@ describe("vault", () => {
     // Each card's reserved copy is released for the draft order's own reservation.
     expect(pulls.map((p) => p.slotId)).toHaveLength(3);
     expect((await db.pull.findMany()).every((p) => p.unreservedAt)).toBe(true);
-    expect(net("item-Card 0") + net("item-Card 1") + net("item-Card 2")).toBeLessThan(0);
+    const released = Array.from({ length: 10 }, (_, i) => net(`item-Card ${i}`)).reduce((a, b) => a + b, 0);
+    expect(released).toBe(-3);
 
     // Asking again returns the same open invoice instead of a second one.
     const again = await requestShipment(db, admin, SHOP, viewer);
