@@ -590,7 +590,27 @@
       });
     });
 
-    Promise.all([reveal, wait(reduced ? 0 : 900)])
+    // Load the card image before the pack tears, so a half-loaded or broken image never flashes
+    // in the opening. Gives up after a few seconds and shows the card name instead.
+    function preload(card) {
+      if (!card.imageUrl) return Promise.resolve(card);
+      return new Promise(function (resolve) {
+        var img = new Image();
+        var done = false;
+        function finish(ok) {
+          if (done) return;
+          done = true;
+          if (!ok) card = Object.assign({}, card, { imageUrl: null });
+          resolve(card);
+        }
+        img.onload = function () { (img.decode ? img.decode() : Promise.resolve()).then(function () { finish(true); }, function () { finish(true); }); };
+        img.onerror = function () { finish(false); };
+        img.src = card.imageUrl;
+        setTimeout(function () { finish(img.complete && img.naturalWidth > 0); }, 6000);
+      });
+    }
+
+    Promise.all([reveal.then(preload), wait(reduced ? 0 : 900)])
       .then(function (values) {
         var card = values[0];
         var color = TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base;
