@@ -50,6 +50,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "productType", "condition", "language"];
   const buildOverrides = Object.fromEntries(BUILD_KEYS.filter((k) => url.searchParams.has(k)).map((k) => [k, url.searchParams.get(k) ?? ""]));
+  // ?tiers=Poke:0,Great:5.01,Ultra:10.01,Master:25.01 shows a one-click "Apply Tiers" for a draft.
+  const tierOverride = (url.searchParams.get("tiers") ?? "")
+    .split(",")
+    .map((part) => part.split(":"))
+    .filter(([name, min]) => name?.trim() && Number.isFinite(Number(min)))
+    .map(([name, min]) => ({ name: name.trim(), min: Number(min) }));
 
   return {
     series: {
@@ -64,6 +70,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     },
     tierRules,
     buildOverrides,
+    tierOverride,
     tierNames: series.tierRules ? tierRules.map((t) => t.name) : [...TIERS],
     tierCounts: [...tierCounts.entries()],
     buildDefaults: {
@@ -200,7 +207,7 @@ const money = (n: number | string) => `$${Number(n).toFixed(2)}`;
 const percent = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 export default function SeriesPage() {
-  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults, buildOverrides } =
+  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults, buildOverrides, tierOverride } =
     useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
@@ -268,6 +275,15 @@ export default function SeriesPage() {
           onClick={() => submit({ intent: "autoBuild", ...buildDefaults, ...buildOverrides }, { method: "post" })}
         >
           Rebuild Pool ({Object.entries(buildOverrides).map(([k, v]) => `${k} ${v}`).join(", ")})
+        </s-button>
+      ) : null}
+      {draft && tierOverride.length > 0 ? (
+        <s-button
+          slot="secondary-actions"
+          disabled={busy}
+          onClick={() => submit({ intent: "saveTiers", tiers: JSON.stringify(tierOverride) }, { method: "post" })}
+        >
+          Apply Tiers ({tierOverride.map((t) => `${t.name} $${t.min}+`).join(", ")})
         </s-button>
       ) : null}
       {draft ? (
