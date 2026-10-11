@@ -4,7 +4,7 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import { drawForOrder } from "./pool.server";
-import { holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
+import { setOpenLinkMetafield, shipAtPayment, tagOrder } from "./orders.server";
 import { packsPageUrl, storefrontBase } from "./links.server";
 
 export interface OrderPayload {
@@ -38,17 +38,15 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
 
   if (!result.packOrder || !admin) return;
 
-  if (!result.packOrder.held) {
-    await holdOrder(admin, order.admin_graphql_api_id);
-    await db.packOrder.update({
-      where: { orderId: order.admin_graphql_api_id },
-      data: { held: true },
-    });
+  // Orders aren't held for opening: the cards go onto the order now and ship normally, so a
+  // customer who never opens online (or misses the window) isn't delayed.
+  if (!result.packOrder.cardsAddedAt) {
     await setOpenLinkMetafield(
       admin,
       order.admin_graphql_api_id,
       packsPageUrl(await storefrontBase(admin, shop), result.packOrder.openToken),
     );
+    await shipAtPayment(db, admin, order.admin_graphql_api_id);
   }
 
   if (result.shortfall.length > 0) {
