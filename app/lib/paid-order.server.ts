@@ -16,6 +16,7 @@ export interface OrderPayload {
   checkout_token?: string | null;
   customer?: { admin_graphql_api_id?: string } | null;
   note_attributes?: { name: string; value: string }[] | null;
+  shipping_address?: { country_code?: string | null } | null;
   line_items: {
     admin_graphql_api_id: string;
     variant_id: number | null;
@@ -28,6 +29,11 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
   const vaultRequest = order.note_attributes?.find((a) => a.name === VAULT_ATTRIBUTE)?.value;
   if (vaultRequest) {
     await markShipmentPaid(db, vaultRequest, order.admin_graphql_api_id);
+    // The $5 vault rate is US only; flag shipments to other countries for the merchant.
+    const country = order.shipping_address?.country_code;
+    if (admin && country && country !== "US") {
+      await tagOrder(admin, order.admin_graphql_api_id, ["vault-international-review"]).catch((e) => console.error("Tag failed", e));
+    }
     return;
   }
 

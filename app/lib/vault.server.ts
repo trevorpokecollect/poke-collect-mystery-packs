@@ -46,6 +46,13 @@ export async function requestShipment(db: Db, admin: AdminApiContext, shop: stri
   const pulls = inVault.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
   if (pulls.length === 0) throw new PoolError("There are no cards in your vault to ship yet.");
 
+  // Vault shipping is US only: refuse up front when the customer's address on their latest pack order is abroad.
+  const latest = pulls.reduce((a, p) => (p.createdAt > a.createdAt ? p : a), pulls[0]);
+  const country = await orderCountry(admin, latest.orderId);
+  if (country && country !== "US") {
+    throw new PoolError("Ship My Cards is available for US addresses only. Email support@poke-collect.com and we'll sort out your shipment.");
+  }
+
   const fee = shippingFeeFor(pulls.length);
   const expiresAt = new Date(Date.now() + INVOICE_DAYS * 86_400_000);
   const customerId = viewer.customerId ?? pulls.find((p) => p.customerId)?.customerId ?? null;
@@ -169,6 +176,13 @@ export async function expireShipments(db: Db, adminFor: (shop: string) => Promis
       console.error(`Expiring ship request ${request.id} failed`, error);
     }
   }
+}
+
+async function orderCountry(admin: AdminApiContext, orderId: string) {
+  const data = await gql(admin, `#graphql
+    query VaultOrderCountry($id: ID!) { order(id: $id) { shippingAddress { countryCodeV2 } billingAddress { countryCodeV2 } } }`, { id: orderId });
+  const o = data.order as { shippingAddress: { countryCodeV2: string } | null; billingAddress: { countryCodeV2: string } | null } | null;
+  return o?.shippingAddress?.countryCodeV2 ?? o?.billingAddress?.countryCodeV2 ?? null;
 }
 
 async function orderEmail(admin: AdminApiContext, orderId: string) {

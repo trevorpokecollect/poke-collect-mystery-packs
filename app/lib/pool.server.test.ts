@@ -500,6 +500,7 @@ function vaultAdmin() {
         return reply({ draftOrderCreate: { draftOrder: { id: `gid://shopify/DraftOrder/${drafts.length}`, invoiceUrl: `https://pay/${drafts.length}` }, userErrors: [] } });
       }
       if (query.includes("tagsAdd")) return reply({ tagsAdd: { node: { id: "x" }, userErrors: [] } });
+      if (query.includes("VaultOrderCountry")) return reply({ order: { shippingAddress: null, billingAddress: { countryCodeV2: "US" } } });
       if (query.includes("VaultCurrency")) return reply({ shop: { currencyCode: "USD" } });
       if (query.includes("VaultOrderEmail")) return reply({ order: { email: "guest@example.com" } });
       if (query.includes("VaultDraftStatus")) return reply({ draftOrder: { id: "d", status: "OPEN", order: null } });
@@ -605,5 +606,25 @@ describe("vault reminders", () => {
     expect(await sendVaultReminders(db, async () => remindAdmin as never, later)).toBe(1);
     expect(tagged).toHaveLength(1);
     expect(await sendVaultReminders(db, async () => remindAdmin as never, later)).toBe(0);
+  });
+});
+
+describe("vault shipping is US only", () => {
+  it("refuses Ship My Cards when the customer's order address is outside the US", async () => {
+    const series = await makeReservedSeries(3);
+    const { admin } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const viewer = { customerId: "gid://shopify/Customer/1" };
+    const { pulls } = await drawForOrder(db, order(1));
+    await revealPull(db, SHOP, pulls[0].id, viewer);
+    const abroad = {
+      graphql: async (query: string, opts: { variables: Record<string, unknown> }) =>
+        query.includes("VaultOrderCountry")
+          ? new Response(JSON.stringify({ data: { order: { shippingAddress: { countryCodeV2: "DE" }, billingAddress: null } } }))
+          : admin.graphql(query, opts),
+    };
+    await expect(requestShipment(db, abroad as never, SHOP, viewer)).rejects.toThrow(/US addresses only/);
+    expect(await db.shipRequest.count()).toBe(0);
   });
 });
