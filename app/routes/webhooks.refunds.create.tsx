@@ -4,13 +4,15 @@ import db from "../db.server";
 import { ordersReadyToFinalize, voidPulls } from "../lib/pool.server";
 import { finalizeOrder, releaseHolds } from "../lib/orders.server";
 import { releaseUnneeded } from "../lib/inventory.server";
+import { syncPackStock } from "../lib/series.server";
 
 interface RefundPayload {
   order_id: number;
   refund_line_items: { quantity: number; line_item: { admin_graphql_api_id: string } }[];
 }
 
-// Refunding a pack voids its pull. Voided cards are not resold in the series.
+// Refunding a pack voids its pull. The card goes back to normal store stock (not back into the
+// pool, whose order was committed at launch), and the pack stock is re-synced to the cards left.
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, payload } = await authenticate.webhook(request);
   const refund = payload as RefundPayload;
@@ -25,7 +27,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (voided.length === 0 || !admin) return new Response();
 
   // Cards from voided packs go back on sale (auto-built pools reserve real inventory).
-  for (const seriesId of new Set(voided.map((p) => p.seriesId))) await releaseUnneeded(db, admin, seriesId);
+  // The pool is one card smaller, so match the pack's stock to it (even if the refund restocked the pack).
+  for (const seriesId of new Set(voided.map((p) => p.seriesId))) {
+    await releaseUnneeded(db, admin, seriesId);
+    await syncPackStock(admin, seriesId);
+  }
 
   // The refund may have removed the last unopened pack, or every pack.
   const live = await db.pull.count({ where: { orderId, status: { in: ["UNOPENED", "REVEALED"] } } });

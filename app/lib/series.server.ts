@@ -193,6 +193,21 @@ export async function setPackStock(admin: AdminApiContext, packVariantId: string
   );
 }
 
+/**
+ * Sets the pack's stock to the cards still left to draw. Run after refunds and cancellations:
+ * a refunded or cancelled pack's card leaves the pool, so a restocked pack would otherwise be
+ * one more pack than there are cards, and its buyer would get nothing.
+ */
+export async function syncPackStock(admin: AdminApiContext, seriesId: string) {
+  const series = await db.series.findUnique({ where: { id: seriesId } });
+  if (!series) return;
+  const left =
+    series.status === "LIVE"
+      ? await db.slot.count({ where: { seriesId, claimed: false, voided: false } })
+      : 0;
+  await setPackStock(admin, series.packVariantId, left, `sync-${seriesId}-${left}-${Date.now()}`);
+}
+
 /** Expected market value per pack and the share of the pack price it returns. */
 export function poolSummary(cards: { marketValue: { toString(): string }; quantity: number }[], packPrice: number) {
   const packs = cards.reduce((n, c) => n + c.quantity, 0);
