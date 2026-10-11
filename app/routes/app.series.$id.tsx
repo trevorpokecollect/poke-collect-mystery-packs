@@ -1,11 +1,12 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
+import { redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import {
+  createSeries,
   addCards,
   autoBuildPool,
   launch,
@@ -163,6 +164,22 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           ok: `Series closed. No more packs will be drawn.${released ? ` ${released} unpulled card${released === 1 ? " is" : "s are"} back on sale.` : ""}`,
         };
       }
+      case "rerun": {
+        // Same name, pack product, tiers and pool rules, with a fresh pool built from current inventory.
+        if (series.status !== "CLOSED") return { error: "Close this series before running it again." };
+        const next = await createSeries(admin, session.shop, {
+          title: series.title,
+          packVariantId: series.packVariantId,
+          autoOpenDays: series.autoOpenDays,
+        });
+        if (series.tierRules) {
+          await db.series.update({ where: { id: next.id }, data: { tierRules: series.tierRules as object } });
+        }
+        if (series.buildRules) {
+          await autoBuildPool(admin, session.shop, next.id, series.buildRules as unknown as Parameters<typeof autoBuildPool>[3]);
+        }
+        return redirect(`/app/series/${next.id}`);
+      }
       default:
         return { error: "Unknown action." };
     }
@@ -269,6 +286,21 @@ export default function SeriesPage() {
           }}
         >
           Close series
+        </s-button>
+      ) : series.status === "CLOSED" ? (
+        <s-button
+          slot="primary-action"
+          variant="primary"
+          disabled={busy}
+          onClick={() =>
+            confirmThen(
+              "rerun",
+              `Start a new "${series.title}" with the same pack, tiers and pool rules? A fresh pool is built from your current inventory as a draft, so you can review it before launching. Click Run Again to confirm.`,
+              () => submit({ intent: "rerun" }, { method: "post" }),
+            )
+          }
+        >
+          Run Again
         </s-button>
       ) : null}
 
