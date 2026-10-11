@@ -1,9 +1,10 @@
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
+import { useActionData, useLoaderData, useSubmit } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { getFreeShipping, saveFreeShipping } from "../lib/free-shipping.server";
+import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 import { demoToken } from "../lib/demo.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -19,6 +20,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Opens the storefront My Packs page with sample packs to open (link works for 30 days).
     previewUrl: `https://${session.shop}/apps/packs?demo=${demoToken(session.shop)}`,
     freeShipping: { enabled: freeShipping.enabled, threshold: freeShipping.threshold },
+    vaultShipping: { fee: SHIP_FEE, freeAt: FREE_SHIPPING_CARDS },
     unopened,
     series: series.map((s) => ({
       id: s.id,
@@ -48,15 +50,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 const tone = { DRAFT: "neutral", LIVE: "success", CLOSED: "info" } as const;
 
 export default function Index() {
-  const { series, unopened, freeShipping, previewUrl } = useLoaderData<typeof loader>();
+  const { series, unopened, freeShipping, vaultShipping, previewUrl } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
-  const busy = useNavigation().state === "submitting";
 
-  function saveShipping(section: HTMLElement, enabled: boolean) {
-    const field = section.querySelector("[data-threshold]") as HTMLInputElement | null;
-    submit({ enabled: String(enabled), threshold: field?.value ?? String(freeShipping.threshold) }, { method: "post" });
-  }
 
   return (
     <s-page heading="Mystery pack series">
@@ -97,31 +94,27 @@ export default function Index() {
         )}
       </s-section>
 
-      <s-section slot="aside" heading="Free shipping on packs">
+      {freeShipping.enabled ? (
+        // Packs no longer ship (cards wait in the vault), so the old "free shipping on N+ packs"
+        // discount has nothing left to do. A title-bar button turns it off.
+        <s-button slot="secondary-actions" onClick={() => submit({ enabled: "false", threshold: String(freeShipping.threshold) }, { method: "post" })}>
+          Turn Off Pack Free Shipping
+        </s-button>
+      ) : null}
+      <s-section slot="aside" heading="Shipping">
         <s-stack gap="base">
           {result && "error" in result ? <s-banner tone="critical">{result.error}</s-banner> : null}
           {result && "ok" in result ? <s-banner tone="success">{result.ok}</s-banner> : null}
           <s-paragraph>
-            {freeShipping.enabled
-              ? `On: orders with ${freeShipping.threshold} or more mystery packs ship free.`
-              : "Off."}{" "}
-            Only mystery packs count toward the total, not other items in the cart.
+            Packs don&apos;t ship. Pulled cards wait in each customer&apos;s vault on My Packs, and they ship them
+            together with Ship My Cards: ${vaultShipping.fee} flat, free on {vaultShipping.freeAt}+ cards.
           </s-paragraph>
-          <s-number-field label="Packs needed" min={1} max={100} value={String(freeShipping.threshold)} data-threshold />
-          <s-stack direction="inline" gap="small">
-            <s-button
-              variant="primary"
-              {...(busy ? { loading: true } : {})}
-              onClick={(e) => saveShipping((e.currentTarget as HTMLElement).closest("s-section")!, true)}
-            >
-              {freeShipping.enabled ? "Save" : "Turn on"}
-            </s-button>
-            {freeShipping.enabled ? (
-              <s-button onClick={(e) => saveShipping((e.currentTarget as HTMLElement).closest("s-section")!, false)}>
-                Turn off
-              </s-button>
-            ) : null}
-          </s-stack>
+          {freeShipping.enabled ? (
+            <s-paragraph>
+              The old &quot;free shipping on {freeShipping.threshold}+ packs&quot; discount is still on. It no longer does anything
+              for packs; turn it off with the button at the top.
+            </s-paragraph>
+          ) : null}
         </s-stack>
       </s-section>
 
