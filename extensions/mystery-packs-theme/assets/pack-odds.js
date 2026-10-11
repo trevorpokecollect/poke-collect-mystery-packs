@@ -33,14 +33,15 @@
     if (window.PCPackOpener) return Promise.resolve();
     if (openerLoading) return openerLoading;
     var v = Math.floor(Date.now() / 3600000);
-    openerLoading = new Promise(function (resolve, reject) {
-      var css = document.createElement("link");
-      css.rel = "stylesheet"; css.href = app + "/packs/opener.css?v=" + v;
-      document.head.appendChild(css);
-      var js = document.createElement("script");
-      js.src = app + "/packs/opener.js?v=" + v; js.onload = resolve; js.onerror = reject;
-      document.head.appendChild(js);
-    });
+    // Wait for the stylesheet too: the opener measures the stage when it starts.
+    function add(el) {
+      return new Promise(function (resolve, reject) { el.onload = resolve; el.onerror = reject; document.head.appendChild(el); });
+    }
+    var css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = app + "/packs/opener.css?v=" + v;
+    var js = document.createElement("script");
+    js.src = app + "/packs/opener.js?v=" + v;
+    openerLoading = Promise.all([add(css), add(js)]);
     return openerLoading;
   }
   function pickCard(cards) {
