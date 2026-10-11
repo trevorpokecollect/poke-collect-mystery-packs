@@ -5,6 +5,14 @@ import {useEffect, useState} from 'preact/hooks';
 // The app's Railway URL. The app proxy (/apps/packs) isn't reachable from checkout, so call the app directly.
 const APP_URL = 'https://app-production-9bd21.up.railway.app';
 const POLL_MS = 2000;
+// Orders without a product of this type never call the app.
+const PACK_PRODUCT_TYPE = 'mystery pack';
+
+function hasPack() {
+  return (shopify.lines?.value ?? []).some(
+    (line) => (line.merchandise?.product?.productType ?? '').trim().toLowerCase() === PACK_PRODUCT_TYPE,
+  );
+}
 const MAX_POLLS = 30;
 
 export default async () => {
@@ -30,6 +38,10 @@ function Extension() {
     let cancelled = false;
     let polls = 0;
     let timer;
+    if (!hasPack()) {
+      setLink({status: 'none'});
+      return undefined;
+    }
     async function poll() {
       polls += 1;
       try {
