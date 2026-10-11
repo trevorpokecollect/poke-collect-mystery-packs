@@ -53,12 +53,8 @@
           );
         }).join("");
 
-        if (fair && data.commitHash) {
-          fair.textContent = data.reveal
-            ? "Fairness check: sha256(\"" + data.reveal.salt + ":\" + the published card order) = " + data.commitHash
-            : "Every card's place in this pool was locked before the first pack was sold. Fingerprint: " + data.commitHash.slice(0, 16) + "…";
-          fair.hidden = false;
-        }
+        // The "Provably fair" link only makes sense once the pool order is committed.
+        if (fair && data.commitHash) fair.hidden = false;
       })
       .catch(function () { root.hidden = true; });
   });

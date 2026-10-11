@@ -44,7 +44,7 @@ const STYLE = `
 .mpp-badge { font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .mpp-out { opacity: .45; }
 .mpp-out .mpp-meta strong { text-decoration: line-through; }
-.mpp-fair { margin-top: 32px; font-size: .78rem; opacity: .7; word-break: break-all; }
+.mpp-fair { margin-top: 32px; font-size: .85rem; font-weight: 600; }
 .mpp-back { display: inline-block; margin-bottom: 18px; }
 `;
 
@@ -96,11 +96,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     .join("");
 
   const fairness = odds.commitHash
-    ? `<p class="mpp-fair">${
-        odds.reveal
-          ? `Fairness check: sha256("${safe(odds.reveal.salt ?? "")}:" + the published card order) = ${safe(odds.commitHash)}`
-          : `The order of every card in this pool was locked before the first pack was sold. Fingerprint: ${safe(odds.commitHash)}`
-      }</p>`
+    ? `<p class="mpp-fair"><a href="/apps/packs/fair?series=${encodeURIComponent(odds.handle)}">Provably fair: how we prove every pack is fair</a></p>`
     : "";
 
   return liquid(
