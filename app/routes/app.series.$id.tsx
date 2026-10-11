@@ -61,8 +61,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     buildDefaults: {
       count: String(build.count ?? 100),
       minValue: String(build.minValue ?? 2),
-      maxValue: String(build.maxValue ?? 100),
-      targetAverage: String(build.targetAverage ?? 10),
+      maxValue: String(build.maxValue ?? 50),
+      // Default to a 100% return: the average card value equals the pack price.
+      targetAverage: String(build.targetAverage ?? series.packPrice.toString()),
       productType: String(build.productType ?? "Pokemon Single"),
       condition: String(build.condition ?? "Near Mint"),
       language: String(build.language ?? "English"),

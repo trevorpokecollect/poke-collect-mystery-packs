@@ -20,10 +20,13 @@ function inventory(n: number, rand = seeded(7)) {
 describe("tiers", () => {
   it("assigns the highest tier the value reaches", () => {
     expect(tierFor(2, DEFAULT_TIER_RULES)).toBe("Poke");
-    expect(tierFor(9.99, DEFAULT_TIER_RULES)).toBe("Poke");
+    expect(tierFor(5, DEFAULT_TIER_RULES)).toBe("Poke");
+    expect(tierFor(5.01, DEFAULT_TIER_RULES)).toBe("Great");
     expect(tierFor(10, DEFAULT_TIER_RULES)).toBe("Great");
+    expect(tierFor(10.01, DEFAULT_TIER_RULES)).toBe("Ultra");
     expect(tierFor(25, DEFAULT_TIER_RULES)).toBe("Ultra");
-    expect(tierFor(99, DEFAULT_TIER_RULES)).toBe("Master");
+    expect(tierFor(25.01, DEFAULT_TIER_RULES)).toBe("Master");
+    expect(tierFor(50, DEFAULT_TIER_RULES)).toBe("Master");
   });
 
   it("sorts rules and rejects duplicates", () => {

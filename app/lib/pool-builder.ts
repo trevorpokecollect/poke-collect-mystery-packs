@@ -7,11 +7,12 @@ export interface TierRule {
   min: number;
 }
 
+// Poke-Collect's tiers: Poke up to $5, Great up to $10, Ultra up to $25, Master above that.
 export const DEFAULT_TIER_RULES: TierRule[] = [
   { name: "Poke", min: 0 },
-  { name: "Great", min: 10 },
-  { name: "Ultra", min: 25 },
-  { name: "Master", min: 50 },
+  { name: "Great", min: 5.01 },
+  { name: "Ultra", min: 10.01 },
+  { name: "Master", min: 25.01 },
 ];
 
 /** Parses and sorts tier rules (lowest first). Throws on anything malformed. */

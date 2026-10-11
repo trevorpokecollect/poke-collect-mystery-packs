@@ -2,9 +2,17 @@
   Mystery pack "Potential Pulls" block for the pack product page: live odds per tier and a
   "View Potential Pulls" button that opens the full card list at /apps/packs/pool.
   Finds the series from the product, so it works on any pack product without setup.
+  Renders nothing (and makes no request) unless the product's type is "Mystery Pack".
 {% endcomment %}
 {%- liquid
   assign handle = block.settings.series_handle | strip
+  assign is_pack = false
+  if product.type == 'Mystery Pack' or handle != blank
+    assign is_pack = true
+  endif
+-%}
+{%- if is_pack -%}
+{%- liquid
   if handle != blank
     assign query = 'series=' | append: handle
   else
@@ -26,6 +34,7 @@
 </div>
 {{ 'pack-odds.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'pack-odds.js' | asset_url }}" defer></script>
+{%- endif -%}
 
 {% schema %}
 {
