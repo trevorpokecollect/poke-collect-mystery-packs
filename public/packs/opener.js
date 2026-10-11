@@ -106,7 +106,7 @@
 
   // How the pulled card gets to the customer.
   function shippingInfo(vault) {
-    var fee = vault ? vault.fee : 8;
+    var fee = vault ? vault.fee : 5;
     var freeAt = vault ? vault.freeAt : 25;
     var steps = [
       ["Cards go to your vault", "Every card you pull is kept safe in your vault here. Open as many packs as you like and ship them together."],

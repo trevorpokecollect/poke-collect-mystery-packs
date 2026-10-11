@@ -178,6 +178,8 @@ model PackOrder {
   // Vault orders keep pulled cards in the customer's vault until they ask to have them shipped,
   // instead of adding them to this order. Orders from before the vault have this false.
   vault         Boolean   @default(false)
+  // Vault orders: when the pulled cards were written to the order's note (cards aren't line items).
+  pullsNotedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

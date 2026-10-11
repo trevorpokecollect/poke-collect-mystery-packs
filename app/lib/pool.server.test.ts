@@ -533,7 +533,7 @@ describe("vault", () => {
     expect(first.invoiceUrl).toBe("https://pay/1");
     expect(drafts).toHaveLength(1);
     const input = drafts[0].input as { shippingLine: { priceWithCurrency: { amount: string } }; lineItems: unknown[]; customAttributes: { value: string }[] };
-    expect(input.shippingLine.priceWithCurrency.amount).toBe("8.00");
+    expect(input.shippingLine.priceWithCurrency.amount).toBe("5.00");
     expect(input.lineItems).toHaveLength(3);
     // Each card's reserved copy is released for the draft order's own reservation.
     expect(pulls.map((p) => p.slotId)).toHaveLength(3);
@@ -557,9 +557,9 @@ describe("vault", () => {
     const { admin, drafts } = vaultAdmin();
     // Fewer than 25 cards pays the flat fee; the rule is checked directly at the threshold.
     await requestShipment(db, admin, SHOP, viewer);
-    expect((drafts[0].input as { shippingLine: { priceWithCurrency: { amount: string } } }).shippingLine.priceWithCurrency.amount).toBe("8.00");
+    expect((drafts[0].input as { shippingLine: { priceWithCurrency: { amount: string } } }).shippingLine.priceWithCurrency.amount).toBe("5.00");
     const { shippingFeeFor } = await import("./vault.server");
-    expect(shippingFeeFor(24)).toBe(8);
+    expect(shippingFeeFor(24)).toBe(5);
     expect(shippingFeeFor(25)).toBe(0);
   });
 

@@ -7,7 +7,7 @@ import { gql } from "./orders.server";
 import { rereserveForPulls, unreserveForPulls } from "./inventory.server";
 import { pullsForViewer, PoolError, type Viewer } from "./pool.server";
 
-export const SHIP_FEE = 8;
+export const SHIP_FEE = 5;
 /** Shipping is free once a single shipment has this many cards. */
 export const FREE_SHIPPING_CARDS = 25;
 /** How long an unpaid shipping invoice holds the cards before they go back to the vault. */

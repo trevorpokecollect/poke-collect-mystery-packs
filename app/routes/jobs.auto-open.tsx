@@ -2,7 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { autoOpenDue, ordersReadyToFinalize } from "../lib/pool.server";
-import { finalizeOrder } from "../lib/orders.server";
+import { finalizeOrder, noteMissingVaultPulls } from "../lib/orders.server";
 import { expireShipments } from "../lib/vault.server";
 
 // Called on a schedule (Railway cron): opens packs past their window and retries
@@ -28,5 +28,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   // Unpaid "ship my cards" invoices past their window: cards go back to the vault.
   await expireShipments(db, async (shop) => (await unauthenticated.admin(shop)).admin);
+  await noteMissingVaultPulls(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   return Response.json({ finalized: results });
 };

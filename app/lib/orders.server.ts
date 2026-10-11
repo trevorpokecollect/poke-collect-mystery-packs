@@ -258,6 +258,11 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
     ]);
   }
 
+  if (packOrder.vault && pulls.length > 0 && !packOrder.pullsNotedAt) {
+    await noteVaultPulls(admin, orderId, pulls.map((p) => `${p.slot.card.title} (${p.slot.card.tier})`));
+    await db.packOrder.update({ where: { orderId }, data: { pullsNotedAt: new Date() } });
+  }
+
   await releaseHolds(admin, orderId);
   const packVariants = new Set(
     (await db.series.findMany({ where: { shop: packOrder.shop }, select: { packVariantId: true } })).map(
@@ -267,6 +272,45 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
   await fulfillPackLines(admin, orderId, packVariants);
   await db.packOrder.update({ where: { orderId }, data: { finalized: true, held: false } });
   return true;
+}
+
+/** Notes the pulls on finalized vault orders that don't have them yet (e.g. finalized before notes existed). */
+export async function noteMissingVaultPulls(db: PrismaClient, adminFor: (shop: string) => Promise<Admin>) {
+  const orders = await db.packOrder.findMany({ where: { vault: true, finalized: true, pullsNotedAt: null }, take: 50 });
+  for (const order of orders) {
+    try {
+      const pulls = await db.pull.findMany({
+        where: { orderId: order.orderId, status: { not: "VOIDED" } },
+        include: { slot: { include: { card: true } } },
+        orderBy: [{ packIndex: "asc" }, { cardIndex: "asc" }],
+      });
+      if (pulls.length > 0) {
+        await noteVaultPulls(await adminFor(order.shop), order.orderId, pulls.map((p) => `${p.slot.card.title} (${p.slot.card.tier})`));
+      }
+      await db.packOrder.update({ where: { orderId: order.orderId }, data: { pullsNotedAt: new Date() } });
+    } catch (error) {
+      console.error(`Noting pulls on ${order.orderId} failed`, error);
+    }
+  }
+}
+
+/**
+ * Vault orders don't carry the cards as line items, so the pulls are listed in the order's note
+ * (after any note already there) for staff to see on the order page.
+ */
+export async function noteVaultPulls(admin: Admin, orderId: string, cards: string[]) {
+  const data = await gql(admin, `#graphql query PackOrderNote($id: ID!) { order(id: $id) { note } }`, { id: orderId });
+  const existing: string = data.order?.note ?? "";
+  if (existing.includes("Mystery pack pulls")) return;
+  const list = `Mystery pack pulls (in the customer's vault, not shipped with this order):\n${cards.map((c) => `- ${c}`).join("\n")}`;
+  await gql(
+    admin,
+    `#graphql
+      mutation PackOrderNoteSet($input: OrderInput!) {
+        orderUpdate(input: $input) { order { id } userErrors { field message } }
+      }`,
+    { input: { id: orderId, note: existing ? `${existing}\n\n${list}` : list } },
+  );
 }
 
 /** Stores the "open your packs" link on the order so notification templates can show it. */
