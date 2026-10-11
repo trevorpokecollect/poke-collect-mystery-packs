@@ -1,9 +1,28 @@
-.mp-odds { margin: 1.5rem 0; }
-.mp-odds__heading { margin: 0 0 .25rem; }
-.mp-odds__summary { margin: 0 0 .75rem; opacity: .8; }
-.mp-odds__tiers { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .5rem; }
-.mp-odds__tiers li { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; border: 1px solid rgba(0,0,0,.1); border-radius: 999px; }
-.mp-odds__tiers li span:last-child { margin-left: auto; opacity: .8; }
-.mp-odds__dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.mp-odds__button { width: 100%; }
-.mp-odds__note { font-size: .85em; opacity: .8; margin-top: .75rem; }
+.mpd { margin: 1.25rem 0; padding: 1.25rem; border: 1px solid rgba(0,0,0,.1); border-radius: 14px; background: rgba(255,255,255,.65); }
+.mpd__heading { margin: 0 0 .35rem; font-size: 1.25em; }
+.mpd__left { margin: 0 0 .5rem; font-size: .95em; }
+.mpd__bar { height: 8px; border-radius: 999px; background: rgba(0,0,0,.08); overflow: hidden; }
+.mpd__bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #e3350d, #ff5577); transition: width .6s ease; }
+.mpd__tiers { list-style: none; margin: 1rem 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; }
+.mpd__tier { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .2rem; padding: .75rem .4rem; border-radius: 12px; border: 1px solid rgba(0,0,0,.08); background: #fff; }
+.mpd__tier-name { font-weight: 800; text-transform: uppercase; letter-spacing: .05em; font-size: .85em; margin-top: .2rem; }
+.mpd__tier-odds { font-weight: 700; font-size: .9em; }
+.mpd__tier-count { font-size: .78em; opacity: .7; }
+.mpd__tier[data-tier="poke"] .mpd__tier-name { color: #e3350d; }
+.mpd__tier[data-tier="great"] .mpd__tier-name { color: #2f6fe0; }
+.mpd__tier[data-tier="ultra"] .mpd__tier-name { color: #b88400; }
+.mpd__tier[data-tier="master"] .mpd__tier-name { color: #7b3fe4; }
+.mpd__button { display: block; text-align: center; padding: .9rem 1rem; border-radius: 10px; background: #14141a; color: #fff !important; font-weight: 700; text-decoration: none !important; letter-spacing: .02em; }
+.mpd__button:hover { background: #e3350d; }
+.mpd__how { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,.08); }
+.mpd__subheading { margin: 0 0 .75rem; font-size: 1.05em; }
+.mpd__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.mpd__steps li { display: flex; gap: .75rem; align-items: flex-start; }
+.mpd__steps p { margin: .15rem 0 0; font-size: .9em; opacity: .8; }
+.mpd__num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #e3350d; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: .9em; }
+.mpd__ship { margin: .9rem 0 0; padding: .6rem .8rem; border-radius: 8px; background: rgba(227,53,13,.08); font-weight: 600; font-size: .9em; }
+.mpd__fair { margin: .9rem 0 0; font-size: .72em; opacity: .6; word-break: break-all; }
+@media (max-width: 480px) {
+  .mpd { padding: 1rem; }
+  .mpd__tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
