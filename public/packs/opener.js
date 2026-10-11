@@ -117,6 +117,33 @@
     ]);
   }
 
+  // The theme's own "You Might Also Like" row (its pc-product-rows section, rendered for the pack), so it
+  // matches the rest of the store. Falls back to a simple grid if the theme doesn't have it.
+  var THEME_SECTION = "pc-product-rows";
+  function themeRecommendations(handle, productId) {
+    var holder = el("div", { class: "mp-theme-recs" });
+    if (!handle) {
+      holder.appendChild(recommendations(productId));
+      return holder;
+    }
+    fetch("/products/" + encodeURIComponent(handle) + "?section_id=" + THEME_SECTION, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.text() : ""; })
+      .then(function (html) {
+        if (!html || html.indexOf("data-pr") === -1) throw new Error("no section");
+        var tpl = document.createElement("template");
+        tpl.innerHTML = html;
+        // Scripts parsed from HTML don't run; recreate them so the row fills itself in.
+        tpl.content.querySelectorAll("script").forEach(function (old) {
+          var s = document.createElement("script");
+          s.textContent = old.textContent;
+          old.replaceWith(s);
+        });
+        holder.appendChild(tpl.content);
+      })
+      .catch(function () { holder.appendChild(recommendations(productId)); });
+    return holder;
+  }
+
   // "You Might Also Like": Shopify's storefront recommendations, minus mystery packs and sold-out items.
   function recommendations(productId) {
     var section = el("section", { class: "mp-recs", hidden: "" }, [
@@ -199,7 +226,7 @@
     ]);
   }
 
-  function render(packs, available, signedIn, recommendFrom) {
+  function render(packs, available, signedIn, recommendFrom, recommendHandle) {
     root.innerHTML = "";
     var unopened = packs.filter(function (p) { return !p.opened; });
     var opened = packs.filter(function (p) { return p.opened; });
@@ -231,7 +258,7 @@
     var more = shelf(available);
     if (more) root.appendChild(more);
     root.appendChild(shippingInfo());
-    root.appendChild(recommendations(recommendFrom));
+    root.appendChild(themeRecommendations(recommendHandle, recommendFrom));
   }
 
   // Coming from checkout, a cover hides the page until the opening stage is up, so the
@@ -257,7 +284,7 @@
             return;
           }
         }
-        render(packs, data.available, data.signedIn, data.recommendFrom);
+        render(packs, data.available, data.signedIn, data.recommendFrom, data.recommendHandle);
         uncover();
       })
       .catch(function (err) {

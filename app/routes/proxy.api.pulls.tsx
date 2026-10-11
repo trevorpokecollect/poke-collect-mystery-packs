@@ -15,7 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const opened = pulls.filter((p) => p.status !== "UNOPENED");
   const [art, products, shipping] = await Promise.all([
     packImages(admin, [...new Set(pulls.map((p) => p.series.packProductId))]),
-    packProducts(admin, [...new Set(live.map((l) => l.series.packProductId))]),
+    packProducts(admin, [...new Set([...live.map((l) => l.series.packProductId), ...pulls.map((p) => p.series.packProductId)])]),
     shippingStatuses(admin, [...new Set(opened.map((p) => p.orderId))]),
   ]);
   // Seed for "You Might Also Like" (Shopify's storefront product recommendations).
@@ -24,6 +24,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Order-link visitors who aren't logged in only see that order; they can log in for the rest.
     signedIn: !!viewer.customerId,
     recommendFrom: seed ? seed.split("/").pop() : null,
+    // The theme's own "You Might Also Like" row is rendered for this product (Section Rendering API).
+    recommendHandle: seed ? (products.get(seed)?.handle ?? null) : null,
     // Packs on sale right now, for the "Open More Packs?" shelf.
     available: live.flatMap(({ series, packsLeft }) => {
       const product = products.get(series.packProductId);
