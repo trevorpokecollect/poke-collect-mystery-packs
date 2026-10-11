@@ -106,6 +106,15 @@ export async function createSeries(
   });
 }
 
+/** A draft follows its pack product's current price, so a price change shows in the economics. */
+export async function syncDraftPackPrice(admin: AdminApiContext, series: { id: string; status: string; packVariantId: string; packPrice: unknown }) {
+  if (series.status !== "DRAFT") return null;
+  const [variant] = await fetchVariants(admin, [series.packVariantId]);
+  if (!variant || Number(variant.price) === Number(series.packPrice)) return null;
+  await db.series.update({ where: { id: series.id }, data: { packPrice: variant.price } });
+  return variant.price;
+}
+
 /** Adds picked variants to the pool with default tier, value (its price) and quantity (its stock). */
 export async function addCards(admin: AdminApiContext, seriesId: string, variantIds: string[]) {
   const series = await db.series.findUniqueOrThrow({ where: { id: seriesId } });

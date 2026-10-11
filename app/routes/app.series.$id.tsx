@@ -13,8 +13,10 @@ import {
   poolSummary,
   setPackStock,
   seriesTierRules,
+  syncDraftPackPrice,
   updateTierRules,
 } from "../lib/series.server";
+import { Prisma } from "@prisma/client";
 import { releaseUnneeded } from "../lib/inventory.server";
 import { TIERS } from "../lib/tiers";
 import { PoolError } from "../lib/pool.server";
@@ -27,6 +29,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     include: { cards: { orderBy: [{ sortOrder: "asc" }] } },
   });
   if (!series) throw new Response("Not found", { status: 404 });
+  const newPrice = await syncDraftPackPrice(admin, series);
+  if (newPrice !== null) series.packPrice = new Prisma.Decimal(newPrice);
 
   const remaining = await db.slot.groupBy({
     by: ["cardId"],
