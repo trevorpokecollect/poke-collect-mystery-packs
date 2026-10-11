@@ -58,7 +58,7 @@ async function makeSeries(cards: { name: string; tier: string; value: number; qt
 }
 
 let orderSeq = 0;
-function order(quantity: number, customer = "gid://shopify/Customer/1") {
+function order(quantity: number, customer: string | null = "gid://shopify/Customer/1") {
   orderSeq++;
   return {
     shop: SHOP,
@@ -220,6 +220,27 @@ describe("revealPull", () => {
     expect(viaToken).toHaveLength(1);
     const viaAccount = await pullsForViewer(db, SHOP, { customerId: "gid://shopify/Customer/1" });
     expect(viaAccount).toHaveLength(2);
+  });
+
+  it("shows a logged-in customer their whole history when they follow an order link", async () => {
+    const series = await makeSeries(standardPool);
+    await launchSeries(db, series.id);
+    await drawForOrder(db, order(1, "gid://shopify/Customer/1"));
+    // An order placed as a guest, opened through its link while logged in.
+    const guest = await drawForOrder(db, order(1, null));
+    const both = await pullsForViewer(db, SHOP, {
+      customerId: "gid://shopify/Customer/1",
+      openToken: guest.packOrder!.openToken,
+    });
+    expect(both).toHaveLength(2);
+    await expect(
+      revealPull(db, SHOP, guest.pulls[0].id, { customerId: "gid://shopify/Customer/1" }),
+    ).rejects.toThrow(/not found/);
+    const opened = await revealPull(db, SHOP, guest.pulls[0].id, {
+      customerId: "gid://shopify/Customer/1",
+      openToken: guest.packOrder!.openToken,
+    });
+    expect(opened.card.title).toBeTruthy();
   });
 });
 

@@ -176,15 +176,21 @@ async function closeIfEmpty(tx: Db, seriesId: string) {
   }
 }
 
-/** Who is asking to see or open packs: a logged-in customer or an order link token. */
-export type Viewer = { customerId: string } | { openToken: string };
+/**
+ * Who is asking to see or open packs: a logged-in customer, an order link token, or both
+ * (a logged-in customer following an order link sees their whole history plus that order).
+ */
+export type Viewer = { customerId?: string; openToken?: string };
 
-async function orderIdsForViewer(db: Db, viewer: Viewer): Promise<string[] | null> {
-  if ("openToken" in viewer) {
+/** Pulls this viewer may see: their own (when logged in) and the order the link belongs to. */
+async function viewerScope(db: Db, viewer: Viewer): Promise<Prisma.PullWhereInput[]> {
+  const scope: Prisma.PullWhereInput[] = [];
+  if (viewer.customerId) scope.push({ customerId: viewer.customerId });
+  if (viewer.openToken) {
     const order = await db.packOrder.findUnique({ where: { openToken: viewer.openToken } });
-    return order ? [order.orderId] : [];
+    if (order) scope.push({ orderId: order.orderId });
   }
-  return null;
+  return scope;
 }
 
 const pullInclude = {
@@ -193,13 +199,13 @@ const pullInclude = {
 } as const;
 
 export async function pullsForViewer(db: Db, shop: string, viewer: Viewer) {
-  const orderIds = await orderIdsForViewer(db, viewer);
-  const where: Prisma.PullWhereInput = {
-    shop,
-    status: { not: "VOIDED" },
-    ...(orderIds ? { orderId: { in: orderIds } } : { customerId: (viewer as { customerId: string }).customerId }),
-  };
-  return db.pull.findMany({ where, include: pullInclude, orderBy: { createdAt: "desc" } });
+  const scope = await viewerScope(db, viewer);
+  if (scope.length === 0) return [];
+  return db.pull.findMany({
+    where: { shop, status: { not: "VOIDED" }, OR: scope },
+    include: pullInclude,
+    orderBy: { createdAt: "desc" },
+  });
 }
 
 /**
@@ -214,10 +220,10 @@ export async function revealPull(db: PrismaClient, shop: string, pullId: string,
     });
     if (!pull || pull.status === "VOIDED") throw new PoolError("Pack not found.");
 
-    const orderIds = await orderIdsForViewer(tx, viewer);
-    const allowed = orderIds
-      ? orderIds.includes(pull.orderId)
-      : pull.customerId === (viewer as { customerId: string }).customerId;
+    const scope = await viewerScope(tx, viewer);
+    const allowed = scope.some((s) =>
+      s.orderId ? s.orderId === pull.orderId : !!s.customerId && s.customerId === pull.customerId,
+    );
     if (!allowed) throw new PoolError("Pack not found.");
 
     if (pull.status === "UNOPENED") {

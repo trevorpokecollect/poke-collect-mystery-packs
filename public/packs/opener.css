@@ -226,3 +226,4 @@
 .mp-btn-dark { background: #e3350d; color: #fff !important; text-decoration: none !important; padding: 8px 16px; font-size: .9rem; }
 .mp-btn-dark:hover { background: #ff4a22; }
 .mp-more-link { font-size: .85rem; color: #fff !important; opacity: .8; }
+.mp-login-hint { margin: -4px 0 12px; color: var(--mp-muted); font-size: .9rem; }

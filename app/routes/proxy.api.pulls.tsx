@@ -16,6 +16,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     packProducts(admin, [...new Set(live.map((l) => l.series.packProductId))]),
   ]);
   return json({
+    // Order-link visitors who aren't logged in only see that order; they can log in for the rest.
+    signedIn: !!viewer.customerId,
     // Packs on sale right now, for the "Open More Packs?" shelf.
     available: live.flatMap(({ series, packsLeft }) => {
       const product = products.get(series.packProductId);

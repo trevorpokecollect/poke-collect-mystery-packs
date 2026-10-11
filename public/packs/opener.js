@@ -106,7 +106,7 @@
     ]);
   }
 
-  function render(packs, available) {
+  function render(packs, available, signedIn) {
     root.innerHTML = "";
     var unopened = packs.filter(function (p) { return !p.opened; });
     var opened = packs.filter(function (p) { return p.opened; });
@@ -126,6 +126,12 @@
     var more = shelf(available);
     if (more) root.appendChild(more);
     root.appendChild(el("h2", { class: "mp-section-title", text: "Your pulls" }));
+    if (signedIn === false) {
+      root.appendChild(el("p", { class: "mp-login-hint" }, [
+        document.createTextNode("Showing this order only. "),
+        el("a", { href: "/account/login?return_url=" + encodeURIComponent("/apps/packs"), text: "Log in to see all your pulls" }),
+      ]));
+    }
     root.appendChild(
       opened.length
         ? el("div", { class: "mp-grid" }, opened.map(cardTile))
@@ -156,7 +162,7 @@
             return;
           }
         }
-        render(packs, data.available);
+        render(packs, data.available, data.signedIn);
         uncover();
       })
       .catch(function (err) {
