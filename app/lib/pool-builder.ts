@@ -55,6 +55,8 @@ export interface BuildRules {
   /** At least this many cards (copies) worth `hitValue` or more. Defaults to 0. */
   minHits?: number;
   hitValue?: number;
+  /** Non-hit cards cost at most this; cards between it and `hitValue` are left out. */
+  fillerMax?: number;
 }
 
 export interface BuildResult<C extends Candidate> {
@@ -80,6 +82,9 @@ export function validateBuildRules(rules: BuildRules) {
   if (minHits > 0 && !(Number(rules.hitValue) > minValue && Number(rules.hitValue) <= maxValue)) {
     throw new Error("The hit value has to sit inside the value range.");
   }
+  if (rules.fillerMax && !(rules.fillerMax >= minValue && rules.fillerMax < Number(rules.hitValue ?? Infinity))) {
+    throw new Error("The filler max has to sit between the lowest card value and the hit value.");
+  }
 }
 
 const cents = (n: number) => Math.round(n * 100);
@@ -100,6 +105,7 @@ export function buildPool<C extends Candidate>(
   // One entry per copy that may go in the pool.
   const eligible = candidates
     .filter((c) => c.value >= rules.minValue && c.value <= rules.maxValue)
+    .filter((c) => !(rules.fillerMax && rules.hitValue) || c.value <= rules.fillerMax || c.value >= rules.hitValue)
     .flatMap((c) => Array.from({ length: Math.min(maxCopies, Math.max(1, Math.floor(c.available ?? 1))) }, () => c));
   if (eligible.length < rules.count) {
     throw new Error(

@@ -113,3 +113,11 @@ describe("buildPool minimum hits", () => {
     expect(() => buildPool(candidates, { count: 20, minValue: 0.5, maxValue: 50, targetAverage: 2, minHits: 5, hitValue: 5 })).toThrow(/Only 3 cards/);
   });
 });
+
+describe("buildPool filler max", () => {
+  it("leaves out cards between the filler max and the hit value", () => {
+    const candidates = Array.from({ length: 300 }, (_, i) => ({ variantId: `c${i}`, value: 1 + (i % 30) }));
+    const { cards } = buildPool(candidates, { count: 100, minValue: 1, maxValue: 30, targetAverage: 4, minHits: 20, hitValue: 5.01, fillerMax: 2 });
+    expect(cards.every((c) => c.value <= 2 || c.value >= 5.01)).toBe(true);
+  });
+});
