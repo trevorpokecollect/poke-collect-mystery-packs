@@ -296,3 +296,21 @@
 /* Merchant preview banner (?demo=) */
 .mp-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 0 0 24px; padding: 14px 18px; border: 2px dashed #e3350d; border-radius: 12px; background: rgba(227,53,13,.06); }
 .mp-demo p { flex: 1 1 260px; margin: 0; font-size: 1.05em; font-weight: 600; }
+
+/* Opening stage: size the card so the card plus the result (tier, name, buttons) always fit on screen,
+   and lift the card so the pair is centered. */
+.mp-stage { --mp-result-space: 250px; }
+.mp-stage-inner {
+  width: min(300px, 74vw, calc((100vh - var(--mp-result-space) - 90px) * 5 / 7));
+  width: min(300px, 74vw, calc((100dvh - var(--mp-result-space) - 90px) * 5 / 7));
+  margin-bottom: var(--mp-result-space);
+}
+.mp-result { top: calc(100% + 14px); left: 50%; right: auto; width: min(92vw, 520px); transform: translateX(-50%); }
+.mp-result h2 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 600px) {
+  .mp-stage { --mp-result-space: 230px; }
+  .mp-result .mp-tier { font-size: 1.15em; }
+  .mp-result h2 { font-size: 1.3em; margin: 4px auto; }
+  .mp-result p { margin-bottom: 10px; }
+  .mp-btn { padding: 10px 22px; font-size: 1em; }
+}
