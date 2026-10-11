@@ -132,8 +132,8 @@ export default function Index() {
 
       <s-section slot="aside" heading="Waiting to be opened">
         <s-paragraph>
-          {unopened} unopened pack{unopened === 1 ? "" : "s"}. Orders with unopened packs stay on
-          hold, and open automatically after each series&apos; auto-open window.
+          {unopened} unopened pack{unopened === 1 ? "" : "s"}. Packs open automatically after each
+          series&apos; auto-open window, and their cards go to the customer&apos;s vault.
         </s-paragraph>
       </s-section>
     </s-page>
