@@ -91,6 +91,11 @@
     return badge;
   }
 
+  function shortDate(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+  }
+
   function cardTile(pack) {
     var card = pack.card;
     return el("div", { class: "mp-card" }, [
@@ -98,7 +103,7 @@
       el("div", { class: "mp-card-title", text: card.title }),
       el("div", { class: "mp-card-meta" }, [
         el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }),
-        el("span", { text: "Order " + pack.orderName }),
+        el("span", { text: pack.pulledAt ? shortDate(pack.pulledAt) : "Order " + pack.orderName }),
       ]),
       shipBadge(pack),
     ]);
@@ -343,7 +348,10 @@
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
       root.appendChild(el("div", { class: "mp-grid" }, unopened.map(function (p) { return packTile(p, openPack); })));
     }
-    root.appendChild(el("h2", { class: "mp-section-title", text: "Your Pulls" }));
+    // The vault holds cards still with us; cards on their way or delivered move to the shipped history.
+    var inVault = opened.filter(function (p) { return !p.shipping || p.shipping.state === "vault" || p.shipping.state === "awaiting_payment"; });
+    var shipped = opened.filter(function (p) { return inVault.indexOf(p) === -1; });
+    root.appendChild(el("h2", { class: "mp-section-title", text: "Your Vault" }));
     if (signedIn === false) {
       root.appendChild(el("p", { class: "mp-login-hint" }, [
         document.createTextNode("Showing this order only. "),
@@ -351,10 +359,23 @@
       ]));
     }
     root.appendChild(
-      opened.length
-        ? el("div", { class: "mp-grid" }, opened.map(cardTile))
-        : el("p", { class: "mp-empty", text: "Nothing pulled yet." }),
+      inVault.length
+        ? el("div", { class: "mp-grid" }, inVault.map(cardTile))
+        : el("p", { class: "mp-empty", text: opened.length ? "Your Vault Is Empty. Every Card Has Shipped." : "Nothing Pulled Yet." }),
     );
+    if (shipped.length) {
+      var onTheWay = shipped.filter(function (p) { return p.shipping.state === "preparing" || p.shipping.state === "pickup_ready"; }).length;
+      var history = el("details", { class: "mp-history" }, [
+        el("summary", { class: "mp-history-summary" }, [
+          el("span", { class: "mp-section-title", text: "Shipped Cards" }),
+          el("span", { class: "mp-history-count", text: shipped.length + (shipped.length === 1 ? " Card" : " Cards") + (onTheWay ? " · " + onTheWay + " On The Way" : "") }),
+        ]),
+        el("div", { class: "mp-grid" }, shipped.map(cardTile)),
+      ]);
+      // Open it while something is still on its way, so tracking is easy to find.
+      if (onTheWay) history.open = true;
+      root.appendChild(history);
+    }
     var more = shelf(available);
     if (more) root.appendChild(more);
     root.appendChild(shippingInfo(vault));

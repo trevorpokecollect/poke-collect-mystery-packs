@@ -402,3 +402,12 @@
 .mp-hero a.mp-btn, .mp-hero a.mp-btn:hover { color: #fff !important; text-decoration: none !important; }
 .mp-hero a.mp-btn::before, .mp-hero a.mp-btn::after { display: none !important; }
 .mp-hero .mp-btn { box-sizing: border-box; }
+
+/* Shipped history under the vault: collapsed once everything has arrived. */
+.mp-history { margin: 28px 0 0; border-top: 1px solid rgba(0,0,0,.1); padding-top: 8px; }
+.mp-history-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; padding: 10px 0; }
+.mp-history-summary::-webkit-details-marker { display: none; }
+.mp-history-summary .mp-section-title { margin: 0; }
+.mp-history-summary .mp-section-title::after { content: " ▾"; font-size: .7em; opacity: .6; }
+.mp-history[open] .mp-history-summary .mp-section-title::after { content: " ▴"; }
+.mp-history-count { color: var(--mp-muted); font-size: .95em; white-space: nowrap; }

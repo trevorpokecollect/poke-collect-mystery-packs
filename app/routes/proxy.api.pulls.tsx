@@ -58,6 +58,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       series: p.series.title,
       packImageUrl: art.get(p.series.packProductId) ?? null,
       orderName: p.orderName,
+      pulledAt: p.createdAt.toISOString(),
       opened: p.status !== "UNOPENED",
       card:
         p.status === "UNOPENED"
