@@ -226,8 +226,7 @@
       buy.href = a.buyUrl.replace(/:\d+$/, ":" + qty);
       minus.disabled = qty <= 1;
       plus.disabled = qty >= max;
-      hint.textContent = qty >= 5 ? "Free shipping unlocked!" : "Add " + (5 - qty) + " more for free shipping";
-      hint.classList.toggle("mp-qty-hint-on", qty >= 5);
+      hint.textContent = "No shipping on packs. Your cards go to your vault.";
     }
     minus.addEventListener("click", function () { if (qty > 1) { qty--; update(); } });
     plus.addEventListener("click", function () { if (qty < max) { qty++; update(); } });
