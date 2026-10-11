@@ -121,3 +121,21 @@ describe("buildPool filler max", () => {
     expect(cards.every((c) => c.value <= 2 || c.value >= 5.01)).toBe(true);
   });
 });
+
+describe("buildPool two hit floors", () => {
+  it("keeps both the hit and the big-hit minimums", () => {
+    const candidates = [
+      ...Array.from({ length: 400 }, (_, i) => ({ variantId: `c${i}`, value: 1 + (i % 3) * 0.5 })),
+      ...Array.from({ length: 200 }, (_, i) => ({ variantId: `g${i}`, value: 5.5 + (i % 4) })),
+      ...Array.from({ length: 80 }, (_, i) => ({ variantId: `u${i}`, value: 10.5 + (i % 20) })),
+    ];
+    const { cards, average } = buildPool(candidates, {
+      count: 300, minValue: 1, maxValue: 35, targetAverage: 3.4,
+      minHits: 80, hitValue: 5.01, minBigHits: 25, bigHitValue: 10.01, fillerMax: 2,
+    });
+    const at = (v: number) => cards.filter((c) => c.value >= v).reduce((n, c) => n + c.quantity, 0);
+    expect(at(5.01)).toBeGreaterThanOrEqual(80);
+    expect(at(10.01)).toBeGreaterThanOrEqual(25);
+    expect(average).toBeCloseTo(3.4, 1);
+  });
+});

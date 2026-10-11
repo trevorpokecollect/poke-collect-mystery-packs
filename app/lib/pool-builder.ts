@@ -55,6 +55,9 @@ export interface BuildRules {
   /** At least this many cards (copies) worth `hitValue` or more. Defaults to 0. */
   minHits?: number;
   hitValue?: number;
+  /** A second, higher floor: at least `minBigHits` cards worth `bigHitValue` or more. */
+  minBigHits?: number;
+  bigHitValue?: number;
   /** Non-hit cards cost at most this; cards between it and `hitValue` are left out. */
   fillerMax?: number;
 }
@@ -81,6 +84,11 @@ export function validateBuildRules(rules: BuildRules) {
   if (!Number.isInteger(minHits) || minHits < 0 || minHits > count) throw new Error("Minimum hits must be a whole number up to the card count.");
   if (minHits > 0 && !(Number(rules.hitValue) > minValue && Number(rules.hitValue) <= maxValue)) {
     throw new Error("The hit value has to sit inside the value range.");
+  }
+  const minBigHits = rules.minBigHits ?? 0;
+  if (!Number.isInteger(minBigHits) || minBigHits < 0 || minBigHits > count) throw new Error("Minimum big hits must be a whole number up to the card count.");
+  if (minBigHits > 0 && !(Number(rules.bigHitValue) > minValue && Number(rules.bigHitValue) <= maxValue)) {
+    throw new Error("The big hit value has to sit inside the value range.");
   }
   if (rules.fillerMax && !(rules.fillerMax >= minValue && rules.fillerMax < Number(rules.hitValue ?? Infinity))) {
     throw new Error("The filler max has to sit between the lowest card value and the hit value.");
@@ -119,21 +127,29 @@ export function buildPool<C extends Candidate>(
     const j = Math.floor(random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  // Guaranteed hits: the first `minHits` hit copies go in, then the rest of the random order.
-  const minHits = rules.minHits ?? 0;
-  const hitCents = cents(Number(rules.hitValue ?? Infinity));
-  const isHit = (c: C) => cents(c.value) >= hitCents;
-  if (minHits > 0) {
-    const hits = shuffled.filter(isHit);
-    if (hits.length < minHits) {
-      throw new Error(`Only ${hits.length} cards in stock are worth $${rules.hitValue} or more, and the pool needs ${minHits}.`);
+  // Guaranteed hits, highest floor first: each floor's first copies go in, then the rest of
+  // the random order. A floor counts every picked card at or above its value.
+  const floors = [
+    { value: Number(rules.bigHitValue ?? Infinity), min: rules.minBigHits ?? 0 },
+    { value: Number(rules.hitValue ?? Infinity), min: rules.minHits ?? 0 },
+  ]
+    .filter((f) => f.min > 0)
+    .sort((a, b) => b.value - a.value)
+    .map((f) => ({ cents: cents(f.value), value: f.value, min: f.min, have: 0 }));
+  const chosen = new Set<C>();
+  for (const f of floors) {
+    const already = [...chosen].filter((c) => cents(c.value) >= f.cents).length;
+    const extra = shuffled.filter((c) => !chosen.has(c) && cents(c.value) >= f.cents).slice(0, Math.max(0, f.min - already));
+    if (already + extra.length < f.min) {
+      throw new Error(`Only ${already + extra.length} cards in stock are worth $${f.value} or more, and the pool needs ${f.min}.`);
     }
-    const first = new Set(hits.slice(0, minHits));
-    const ordered = [...first, ...shuffled.filter((c) => !first.has(c))];
-    shuffled.splice(0, shuffled.length, ...ordered);
+    extra.forEach((c) => chosen.add(c));
   }
+  if (chosen.size > rules.count) throw new Error("The minimum hits add up to more cards than the pool holds.");
+  shuffled.splice(0, shuffled.length, ...chosen, ...shuffled.filter((c) => !chosen.has(c)));
   const picked = shuffled.slice(0, rules.count);
-  let hitCount = picked.filter(isHit).length;
+  const countFloors = () => floors.forEach((f) => (f.have = picked.filter((c) => cents(c.value) >= f.cents).length));
+  countFloors();
   // Unpicked cards sorted by value, so the best swap partner is a binary search away.
   const pool = shuffled.slice(rules.count).sort((a, b) => a.value - b.value);
 
@@ -162,16 +178,16 @@ export function buildPool<C extends Candidate>(
     const gap = goal - total;
     const i = Math.floor(random() * picked.length);
     const out = picked[i];
-    // A hit the pool needs to keep its minimum can only be swapped for another hit.
-    const keepHit = isHit(out) && hitCount <= minHits;
+    // A card a floor needs to keep its minimum can only be swapped for one at or above that floor.
+    const floorCents = Math.max(0, ...floors.filter((f) => cents(out.value) >= f.cents && f.have <= f.min).map((f) => f.cents));
     let j = closest(cents(out.value) + gap);
-    // The nearest card may sit just under the hit value; take the cheapest hit instead.
-    if (keepHit && !isHit(pool[j])) j = lowerBound(hitCents);
-    if (j >= pool.length) continue;
+    // The nearest card may sit just under the floor; take the cheapest card at the floor instead.
+    if (j >= 0 && j < pool.length && cents(pool[j].value) < floorCents) j = lowerBound(floorCents);
+    if (j < 0 || j >= pool.length) continue;
     const into = pool[j];
     const newGap = gap - (cents(into.value) - cents(out.value));
     if (Math.abs(newGap) >= Math.abs(gap)) continue;
-    hitCount += (isHit(into) ? 1 : 0) - (isHit(out) ? 1 : 0);
+    for (const f of floors) f.have += (cents(into.value) >= f.cents ? 1 : 0) - (cents(out.value) >= f.cents ? 1 : 0);
     picked[i] = into;
     pool.splice(j, 1);
     pool.splice(lowerBound(cents(out.value)), 0, out);
