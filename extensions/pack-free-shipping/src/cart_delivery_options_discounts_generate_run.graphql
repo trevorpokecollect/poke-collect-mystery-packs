@@ -1,0 +1,23 @@
+query DeliveryInput {
+  cart {
+    lines {
+      quantity
+      merchandise {
+        ... on ProductVariant {
+          product {
+            productType
+          }
+        }
+      }
+    }
+    deliveryGroups {
+      id
+    }
+  }
+  discount {
+    discountClasses
+    metafield(namespace: "$app", key: "function-configuration") {
+      jsonValue
+    }
+  }
+}
