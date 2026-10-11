@@ -44,8 +44,9 @@ const STYLE = `
 .mpp-badge { font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .mpp-out { opacity: .45; }
 .mpp-out .mpp-meta strong { text-decoration: line-through; }
-.mpp-fair { margin-top: 32px; font-size: .85rem; font-weight: 600; }
-.mpp-back { display: inline-block; margin-bottom: 18px; }
+.mpp-fair { margin-top: 40px; }
+.mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 60px; padding: 16px 20px; font-size: 1.1rem; font-weight: 800; text-align: center; text-decoration: none !important; }
+.mpp-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
 `;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -54,7 +55,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const odds = await oddsFromQuery(shop, url);
   const product = url.searchParams.get("product");
   const back = product
-    ? `<a class="mpp-back" href="javascript:history.back()">&larr; Back to the pack</a>`
+    ? `<a class="mpp-back button button--secondary" href="javascript:history.back()">&larr; Back to the pack</a>`
     : "";
 
   if (!odds) {
@@ -96,7 +97,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     .join("");
 
   const fairness = odds.commitHash
-    ? `<p class="mpp-fair"><a href="/apps/packs/fair?series=${encodeURIComponent(odds.handle)}">Provably fair: how we prove every pack is fair</a></p>`
+    ? `<div class="mpp-fair">
+        <a class="mpp-fair-btn button button--primary" href="/apps/packs/fair?series=${encodeURIComponent(odds.handle)}">
+          <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true"><path d="M8 1 2 3.5v4C2 11 4.6 14 8 15c3.4-1 6-4 6-7.5v-4Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m5.3 8 1.9 1.9L10.9 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          Provably fair: see how we prove every pack is fair
+        </a>
+      </div>`
     : "";
 
   return liquid(

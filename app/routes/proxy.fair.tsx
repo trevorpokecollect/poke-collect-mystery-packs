@@ -26,14 +26,14 @@ const STYLE = `
 .mpf-btn:hover { background: #e3350d; }
 .mpf-ok { color: #1f8a4c; font-weight: 700; }
 .mpf-bad { color: #c0261b; font-weight: 700; }
-.mpf-back { display: inline-block; margin-bottom: 18px; }
+.mpf-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
 `;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, liquid } = await proxyContext(request);
   const url = new URL(request.url);
   const odds = await oddsFromQuery(shop, url);
-  const back = `<a class="mpf-back" href="javascript:history.back()">&larr; Back to the pack</a>`;
+  const back = `<a class="mpf-back button button--secondary" href="javascript:history.back()">&larr; Back</a>`;
 
   const steps = `<ol class="mpf-steps">
     <li><span class="mpf-num">1</span><div><strong>The pool is locked before any pack sells</strong>
@@ -60,7 +60,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         <p>Secret code (salt):</p><code class="mpf-code">${safe(odds.reveal?.salt ?? "")}</code>
         <p>Card order: ${odds.reveal?.sequence.length ?? 0} cards, published in this pack's <a href="${endpoint}" target="_blank" rel="noopener">pool data</a> as <code>reveal.sequence</code>.</p>
         <p>Formula: <code>sha256(salt + ":" + card order joined with commas)</code></p>
-        <button class="mpf-btn" type="button" data-mpf-verify>Verify the fingerprint</button>
+        <button class="mpf-btn button button--primary" type="button" data-mpf-verify>Verify the fingerprint</button>
         <p data-mpf-result></p>
       </div>
       <script>
