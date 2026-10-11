@@ -101,7 +101,7 @@
   function shippingInfo() {
     var steps = [
       ["Open every pack", "Your cards ship together with the rest of your order once every pack on it is opened. Packs you don't open are opened for you after 7 days, so nothing gets held up."],
-      ["We pack it with care", "Each card is sleeved and protected before it goes out."],
+      ["We pack it with care", "Every card is sleeved and top loaded before it goes out."],
       ["Track it here", "Each card above shows Preparing to ship, then Shipped with a tracking link. You'll also get a shipping email from us."],
       ["Local pickup", "Chose pickup at checkout? Your card is ready for pickup as soon as you open your pack."],
     ];
