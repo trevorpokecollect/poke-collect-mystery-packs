@@ -425,8 +425,6 @@ export async function seriesOdds(db: Db, shop: string, handle: string) {
         title: c.title,
         tier: c.tier,
         imageUrl: c.imageUrl,
-        // Used to order a multi-card demo pack, cheapest first.
-        marketValue: Number(c.marketValue),
         quantity: c.quantity,
         remaining: left,
         currentOdds: totalRemaining > 0 ? left / totalRemaining : 0,

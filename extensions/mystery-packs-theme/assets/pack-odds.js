@@ -69,7 +69,9 @@
         var per = data.cardsPerPack || 1;
         var pack = [];
         for (var i = 0; i < per && per > 1; i++) pack.push(pickCard(cards));
-        pack.sort(function (a, b) { return (a.marketValue || 0) - (b.marketValue || 0); });
+        // Lowest tier first (data.tiers is highest first); customers never see card values.
+        var rank = (data.tiers || []).map(function (t) { return t.name; });
+        pack.sort(function (a, b) { return rank.indexOf(b.tier) - rank.indexOf(a.tier); });
         window.PCPackOpener.open({
           packImageUrl: btn.getAttribute("data-pack-image") || null,
           series: btn.getAttribute("data-series"),
