@@ -14,7 +14,7 @@ import {
 } from "./pool.server";
 import { releaseUnneeded, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
-import { addVaultCardsToShipment, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
+import { addVaultCardsToShipment, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -489,7 +489,7 @@ function vaultAdmin() {
   const base = fakeAdmin();
   const drafts: { input: Record<string, unknown> }[] = [];
   const deleted: string[] = [];
-  const edits: { added: { variantId: string; quantity: number }[]; discounted: number; committed: boolean } = { added: [], discounted: 0, committed: false };
+  const edits: { added: { variantId: string; quantity: number }[]; discounted: number; committed: boolean; cancelled?: boolean } = { added: [], discounted: 0, committed: false };
   const admin = {
     graphql: async (query: string, opts: { variables: Record<string, unknown> }) => {
       // A query written on the "#graphql" comment line is all comment; Shopify rejects it.
@@ -508,6 +508,12 @@ function vaultAdmin() {
       if (query.includes("draftOrderComplete")) {
         return reply({ draftOrderComplete: { draftOrder: { order: { id: "gid://shopify/Order/777", name: "#777" } }, userErrors: [] } });
       }
+      if (query.includes("VaultReturnOrder(")) return reply({ order: { name: "#999", cancelledAt: edits.cancelled ? "now" : null, displayFulfillmentStatus: "UNFULFILLED" } });
+      if (query.includes("orderCancel(")) {
+        edits.cancelled = true;
+        return reply({ orderCancel: { orderCancelUserErrors: [] } });
+      }
+      if (query.includes("VaultReturnCancelled(")) return reply({ order: { cancelledAt: edits.cancelled ? "now" : null } });
       if (query.includes("orderEditBegin")) return reply({ orderEditBegin: { calculatedOrder: { id: "calc-1" }, userErrors: [] } });
       if (query.includes("orderEditAddVariant")) {
         edits.added.push({ variantId: String(opts.variables.variantId), quantity: Number(opts.variables.quantity) });
@@ -675,6 +681,36 @@ describe("vault", () => {
     expect(events).toHaveLength(1);
     expect(events[0].metric).toBe("Vault Pickup Ready");
     expect(events[0].properties).toMatchObject({ order_name: "#777", cards: 3 });
+  });
+
+  it("Return To Vault: removes an unpaid invoice, or cancels a paid unshipped order, and the cards go back reserved", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin, drafts, deleted, edits } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(2));
+    for (const p of pulls) await revealPull(db, SHOP, p.id, viewer);
+
+    // Unpaid invoice.
+    await requestShipment(db, admin, SHOP, viewer);
+    const unpaid = (drafts[0].input as { customAttributes: { value: string }[] }).customAttributes[0].value;
+    expect(await returnShipmentToVault(db, admin, SHOP, unpaid)).toEqual({ cards: 2, cancelledOrder: null });
+    expect(deleted).toEqual(["gid://shopify/DraftOrder/1"]);
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(2);
+    expect((await db.pull.findMany()).every((p) => p.unreservedAt === null && p.shipRequestId === null)).toBe(true);
+
+    // Paid, not shipped yet.
+    await requestShipment(db, admin, SHOP, viewer);
+    const paid = (drafts[1].input as { customAttributes: { value: string }[] }).customAttributes[0].value;
+    await markShipmentPaid(db, paid, "gid://shopify/Order/999");
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(0);
+    expect(await returnShipmentToVault(db, admin, SHOP, paid)).toEqual({ cards: 2, cancelledOrder: "#999" });
+    expect(edits.cancelled).toBe(true);
+    const back = await db.pull.findMany();
+    expect(back.every((p) => p.status === "REVEALED" && p.shipOrderId === null && p.shipRequestId === null && p.unreservedAt === null)).toBe(true);
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(2);
+    expect((await db.shipRequest.findUniqueOrThrow({ where: { id: paid } })).status).toBe("RETURNED");
+    await expect(returnShipmentToVault(db, admin, SHOP, paid)).rejects.toThrow(/already closed/);
   });
 
   it("ships free from the free-shipping card count", async () => {

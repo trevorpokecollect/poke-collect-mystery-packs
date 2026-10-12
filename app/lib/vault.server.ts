@@ -313,6 +313,78 @@ export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, sh
   return ids.length;
 }
 
+/**
+ * Customer service: undoes a vault shipment and puts its cards back in the customer's vault.
+ * An unpaid invoice is deleted. A paid order that hasn't shipped is cancelled in Shopify without a
+ * refund (staff refund the shipping there if they choose), its cards are restocked and reserved again.
+ */
+export async function returnShipmentToVault(db: Db, admin: AdminApiContext, shop: string, requestId: string) {
+  const request = await db.shipRequest.findFirst({ where: { id: requestId, shop } });
+  if (!request) throw new PoolError("Shipment not found.");
+  const cards = await db.pull.count({ where: { shipRequestId: request.id } });
+  if (request.status === "PENDING") {
+    await settleShipRequest(db, admin, request, "CANCELLED");
+    const after = await db.shipRequest.findUniqueOrThrow({ where: { id: request.id } });
+    if (after.status === "PAID") return returnShipmentToVault(db, admin, shop, requestId);
+    return { cards, cancelledOrder: null as string | null };
+  }
+  if (request.status !== "PAID" || !request.orderId) throw new PoolError("This shipment is already closed.");
+
+  const data = await gql(admin, `#graphql
+    query VaultReturnOrder($id: ID!) { order(id: $id) { name cancelledAt displayFulfillmentStatus } }`, { id: request.orderId });
+  const order = data.order as { name: string; cancelledAt: string | null; displayFulfillmentStatus: string } | null;
+  if (!order) throw new PoolError("The shipment's Shopify order wasn't found.");
+  if (order.displayFulfillmentStatus !== "UNFULFILLED") {
+    throw new PoolError(`${order.name} has already been fulfilled, so its cards can't go back to the vault.`);
+  }
+  if (!order.cancelledAt) {
+    await gql(
+      admin,
+      `#graphql
+        mutation VaultReturnCancel($orderId: ID!, $note: String) {
+          orderCancel(orderId: $orderId, reason: CUSTOMER, refund: false, restock: true, notifyCustomer: false, staffNote: $note) {
+            orderCancelUserErrors { field message }
+          }
+        }`,
+      { orderId: request.orderId, note: `Cards returned to the customer's vault (${cards} card${cards === 1 ? "" : "s"}).` },
+    );
+    // Cancelling runs as a job: wait for it so the restocked copies are there to reserve again.
+    for (let i = 0; i < 20; i++) {
+      const check = await gql(admin, `#graphql
+        query VaultReturnCancelled($id: ID!) { order(id: $id) { cancelledAt } }`, { id: request.orderId });
+      if (check.order?.cancelledAt) break;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  const pulls = await db.pull.findMany({ where: { shipRequestId: request.id }, select: { id: true } });
+  await rereserveForPulls(db, admin, pulls.map((p) => p.id));
+  await db.$transaction([
+    db.pull.updateMany({
+      where: { shipRequestId: request.id, status: "FULFILLING" },
+      data: { status: "REVEALED", fulfillingAt: null, shipOrderId: null },
+    }),
+    db.pull.updateMany({ where: { shipRequestId: request.id }, data: { shipRequestId: null } }),
+    db.shipRequest.update({ where: { id: request.id }, data: { status: "RETURNED" } }),
+  ]);
+  return { cards, cancelledOrder: order.name };
+}
+
+/** Recent vault shipments for the customer service page, newest first. */
+export async function recentShipments(db: Db, shop: string, take = 40) {
+  const requests = await db.shipRequest.findMany({
+    where: { shop, status: { in: ["PENDING", "PAID"] } },
+    orderBy: { createdAt: "desc" },
+    take,
+    include: { pulls: { select: { orderName: true, customerId: true } } },
+  });
+  // How many more cards each customer has waiting in the vault (for "Add Vault Cards").
+  const waiting = new Map<string, number>();
+  for (const customerId of new Set(requests.map((r) => r.customerId).filter((c): c is string => !!c))) {
+    waiting.set(customerId, (await vaultedPulls(db, shop, { customerId })).filter((p) => p.shipRequest?.status !== "PENDING").length);
+  }
+  return requests.map((r) => ({ ...r, vaultWaiting: r.customerId ? (waiting.get(r.customerId) ?? 0) : 0 }));
+}
+
 async function orderCountry(admin: AdminApiContext, orderId: string) {
   const data = await gql(admin, `#graphql
     query VaultOrderCountry($id: ID!) { order(id: $id) { shippingAddress { countryCodeV2 } billingAddress { countryCodeV2 } } }`, { id: orderId });
