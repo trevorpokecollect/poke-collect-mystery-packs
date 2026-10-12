@@ -763,7 +763,16 @@ describe("vault", () => {
     const admin = {
       graphql: async (query: string, opts: { variables: Record<string, unknown> }) =>
         query.includes("RereserveAvailable")
-          ? new Response(JSON.stringify({ data: { inventoryItem: { inventoryLevel: { quantities: [{ quantity: available }] } } } }))
+          ? new Response(
+              JSON.stringify({
+                data: {
+                  nodes: (opts.variables.ids as string[]).map((id) => ({
+                    id,
+                    inventoryLevels: { nodes: [{ location: { id: "gid://shopify/Location/1" }, quantities: [{ quantity: available }] }] },
+                  })),
+                },
+              }),
+            )
           : base.admin.graphql(query, opts),
     } as never;
     await reservePool(db, admin, series.id);
