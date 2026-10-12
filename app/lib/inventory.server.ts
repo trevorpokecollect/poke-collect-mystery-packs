@@ -388,11 +388,11 @@ export async function auditPoolInventory(db: PrismaClient, admin: Admin) {
   return { checked: groups.size, issues };
 }
 
-/** Releases reserved copies the app no longer accounts for back to available. Returns copies released. */
-export async function repairStuckReservations(db: PrismaClient, admin: Admin) {
+/** Releases reserved copies the app no longer accounts for back to available (one item, or all). Returns copies released. */
+export async function repairStuckReservations(db: PrismaClient, admin: Admin, onlyItemId?: string) {
   const { issues } = await auditPoolInventory(db, admin);
   let released = 0;
-  for (const issue of issues.filter((i) => i.stuck > 0)) {
+  for (const issue of issues.filter((i) => i.stuck > 0 && (!onlyItemId || i.inventoryItemId === onlyItemId))) {
     // The stuck copy sits under one of the pools' ledgers; try each until Shopify accepts the move.
     for (const ledger of issue.ledgers) {
       try {
