@@ -5,7 +5,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { gql } from "../lib/orders.server";
-import { addVaultCardsToShipment, recentShipments, returnShipmentToVault } from "../lib/vault.server";
+import { addVaultCardsToShipment, moveVault, recentShipments, resolveCustomer, returnShipmentToVault } from "../lib/vault.server";
 
 // Customer service for vault shipments: put a shipment's cards back in the vault (refunding any
 // shipping paid), or add cards
@@ -82,6 +82,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const added = await addVaultCardsToShipment(db, admin, session.shop, requestId);
       return { ok: added ? `Added ${added} vault card${added === 1 ? "" : "s"} to the shipment at no charge.` : "No other cards are waiting in that customer's vault." };
     }
+    if (form.get("intent") === "previewMove" || form.get("intent") === "move") {
+      const from = await resolveCustomer(admin, String(form.get("from") || ""));
+      const to = await resolveCustomer(admin, String(form.get("to") || ""));
+      const dryRun = form.get("intent") === "previewMove";
+      const moved = await moveVault(db, session.shop, from.customerId, to.customerId, { dryRun });
+      const what = `${moved.cards} vault card${moved.cards === 1 ? "" : "s"} and ${moved.unopened} unopened pack${moved.unopened === 1 ? "" : "s"} from ${moved.orders} order${moved.orders === 1 ? "" : "s"}`;
+      if (moved.cards + moved.unopened === 0) return { error: `${from.label} has nothing in their vault to move.` };
+      return dryRun
+        ? { preview: { text: `Move ${what} from ${from.label} to ${to.label}?`, from: String(form.get("from")), to: String(form.get("to")) } }
+        : { ok: `Moved ${what} from ${from.label} to ${to.label}. They'll see them under My Packs when logged in.` };
+    }
     return { error: "Unknown action." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "That didn't work. Please try again." };
@@ -116,6 +127,20 @@ export default function VaultShipments() {
         <s-stack gap="base">
           {result && "error" in result ? <s-banner tone="critical">{result.error}</s-banner> : null}
           {result && "ok" in result ? <s-banner tone="success">{result.ok}</s-banner> : null}
+          {result && "preview" in result && result.preview ? (
+            <s-banner tone="warning">
+              <s-stack gap="small">
+                <s-text>{result.preview.text}</s-text>
+                <s-button
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => submit({ intent: "move", from: result.preview!.from, to: result.preview!.to }, { method: "post" })}
+                >
+                  Confirm Move
+                </s-button>
+              </s-stack>
+            </s-banner>
+          ) : null}
           {armed ? (
             <s-banner tone="warning">
               Click Return To Vault again to confirm. Unpaid invoices are removed; paid orders that haven&apos;t shipped are
@@ -184,6 +209,26 @@ export default function VaultShipments() {
               </s-table-body>
             </s-table>
           )}
+        </s-stack>
+      </s-section>
+      <s-section heading="Move A Vault">
+        <s-stack gap="base">
+          <s-paragraph>
+            Moves a customer&apos;s vault cards and unopened packs to another customer, e.g. when they bought under a
+            different email. Enter an email address or a customer ID for each. Cards already shipping stay put.
+          </s-paragraph>
+          <s-text-field label="From (email or customer ID)" data-move="from" />
+          <s-text-field label="To (email or customer ID)" data-move="to" />
+          <s-button
+            disabled={busy}
+            onClick={(e) => {
+              const section = (e.currentTarget as HTMLElement).closest("s-section")!;
+              const read = (name: string) => (section.querySelector(`[data-move="${name}"]`) as HTMLInputElement | null)?.value ?? "";
+              submit({ intent: "previewMove", from: read("from"), to: read("to") }, { method: "post" });
+            }}
+          >
+            Preview Move
+          </s-button>
         </s-stack>
       </s-section>
     </s-page>
