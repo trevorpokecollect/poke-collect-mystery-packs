@@ -21,6 +21,7 @@ export default function App() {
         <s-link href="/app">Pack series</s-link>
         <s-link href="/app/series/new">New series</s-link>
         <s-link href="/app/vault">Vault shipments</s-link>
+        <s-link href="/app/inventory">Inventory check</s-link>
       </s-app-nav>
       <Outlet />
     </AppProvider>
