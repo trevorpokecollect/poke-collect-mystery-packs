@@ -7,8 +7,8 @@ import { json, proxyContext } from "../lib/proxy.server";
 import { packShelf } from "../lib/shelf.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 
-// Sample data for the My Packs preview (/apps/packs?demo=<token>). Cards come from the newest
-// live series so the page and the opening animation look exactly like a real customer's.
+// Sample data for the My Packs preview (/apps/packs?demo=<token>[&series=<handle>]). Cards come from
+// the given series, or the newest live series so the page and the opening animation look exactly like a real customer's.
 // Nothing here touches orders, the pool or inventory.
 const SHIPPING = [
   { state: "vault" },
@@ -25,8 +25,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const live = await availableSeries(db, shop);
+  // &series=<handle> previews one series' pool, drafts included (the series page links to it).
+  const handle = new URL(request.url).searchParams.get("series");
   const series =
-    live[0]?.series ?? (await db.series.findFirst({ where: { shop }, orderBy: { createdAt: "desc" } }));
+    (handle ? await db.series.findFirst({ where: { shop, handle } }) : null) ??
+    live[0]?.series ??
+    (await db.series.findFirst({ where: { shop }, orderBy: { createdAt: "desc" } }));
   if (!series) return json({ error: "Create a series first to preview My Packs." }, 404);
 
   const cards = await db.card.findMany({ where: { seriesId: series.id } });

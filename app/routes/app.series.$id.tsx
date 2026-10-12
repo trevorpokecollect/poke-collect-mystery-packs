@@ -11,12 +11,16 @@ import {
   autoBuildPool,
   launch,
   poolSummary,
+  queueBuylistReport,
   setPackStock,
   seriesTierRules,
+  slugify,
   syncDraftPackPrice,
   updateTierRules,
 } from "../lib/series.server";
 import { releaseUnneeded } from "../lib/inventory.server";
+import { refreshBuylistReport, type BuylistReport } from "../lib/buylist.server";
+import { demoToken } from "../lib/demo.server";
 import { TIERS } from "../lib/tiers";
 import { PoolError } from "../lib/pool.server";
 import { packsPageUrl, storefrontBase } from "../lib/links.server";
@@ -43,6 +47,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     include: { slot: { include: { card: { select: { title: true, tier: true } } } } },
   });
   const summary = poolSummary(series.cards, Number(packPrice), series.cardsPerPack);
+  // Buylist cost of the pool (computed after each build; pools built before this get one now).
+  const buylist = series.buylistReport as BuylistReport | null;
+  if (!buylist && series.cards.length > 0) queueBuylistReport(series.id);
   const tierRules = seriesTierRules(series);
   const tierCounts = new Map<string, number>();
   for (const c of series.cards) tierCounts.set(c.tier, (tierCounts.get(c.tier) ?? 0) + c.quantity);
@@ -50,7 +57,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   // A link can carry pool-rule overrides (e.g. ?targetAverage=10.99) and show a one-click
   // "Rebuild pool" in the title bar for a draft.
   const url = new URL(request.url);
-  const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "fillerMax", "productType", "condition", "language"];
+  const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "minTopHits", "topHitValue", "fillerMax", "productType", "condition", "language"];
   const buildOverrides = Object.fromEntries(BUILD_KEYS.filter((k) => url.searchParams.has(k)).map((k) => [k, url.searchParams.get(k) ?? ""]));
   // ?tiers=Poke:0,Great:5.01,Ultra:10.01,Master:25.01 shows a one-click "Apply Tiers" for a draft.
   const tierOverride = (url.searchParams.get("tiers") ?? "")
@@ -58,6 +65,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     .map((part) => part.split(":"))
     .filter(([name, min]) => name?.trim() && Number.isFinite(Number(min)))
     .map(([name, min]) => ({ name: name.trim(), min: Number(min) }));
+  // ?title=<new name> shows a one-click "Rename" (display name only; the handle and links stay).
+  const renameTo = (url.searchParams.get("title") ?? "").trim();
+  // ?rehandle=1 offers to rebuild the public link name (odds feed, fair page) from the title.
+  const rehandle = url.searchParams.get("rehandle") === "1";
 
   return {
     series: {
@@ -86,6 +97,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       hitValue: String(build.hitValue ?? 5),
       minBigHits: String(build.minBigHits ?? 0),
       bigHitValue: String(build.bigHitValue ?? 10),
+      minTopHits: String(build.minTopHits ?? 0),
+      topHitValue: String(build.topHitValue ?? 25),
       fillerMax: String(build.fillerMax ?? ""),
       productType: String(build.productType ?? "Pokemon Single"),
       condition: String(build.condition ?? "Near Mint"),
@@ -109,7 +122,21 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       status: p.status,
       createdAt: p.createdAt.toISOString(),
     })),
+    renameTo,
+    rehandle,
+    buylist: buylist
+      ? {
+          cash: buylist.cash,
+          credit: buylist.credit,
+          copies: buylist.copies,
+          matchedCopies: buylist.matchedCopies,
+          missingValue: buylist.missing.reduce((n, m) => n + m.marketValue * m.quantity, 0),
+          computedAt: buylist.computedAt,
+        }
+      : null,
     oddsUrl: `/apps/packs/api/odds/${series.handle}`,
+    // Opens My Packs with sample packs from this pool (works for drafts too); link valid 30 days.
+    demoUrl: `${packsPageUrl(await storefrontBase(admin, session.shop))}?demo=${demoToken(session.shop)}&series=${encodeURIComponent(series.handle)}`,
     packsPage: packsPageUrl(await storefrontBase(admin, session.shop)),
   };
 };
@@ -142,6 +169,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           hitValue: num("hitValue") || undefined,
           minBigHits: Math.floor(num("minBigHits") || 0),
           bigHitValue: num("bigHitValue") || undefined,
+          minTopHits: Math.floor(num("minTopHits") || 0),
+          topHitValue: num("topHitValue") || undefined,
           fillerMax: num("fillerMax") || undefined,
           productType: String(form.get("productType") || "").trim(),
           condition: String(form.get("condition") || "").trim(),
@@ -190,6 +219,35 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           ok: `Series closed. No more packs will be drawn.${released ? ` ${released} unpulled card${released === 1 ? " is" : "s are"} back on sale.` : ""}`,
         };
       }
+      case "rename": {
+        const title = String(form.get("title") || "").trim();
+        if (!title) return { error: "Give the series a name." };
+        await db.series.update({ where: { id: series.id }, data: { title } });
+        return { ok: `Renamed to ${title}.` };
+      }
+      case "rehandle": {
+        // Only before any pack sells, so links customers already have keep working.
+        if ((await db.pull.count({ where: { seriesId: series.id } })) > 0) {
+          return { error: "Packs have already sold, so the link name can't change." };
+        }
+        const base = slugify(series.title) || "series";
+        let handle = base;
+        for (let n = 2; await db.series.findFirst({ where: { shop: session.shop, handle, id: { not: series.id } } }); n++) handle = `${base}-${n}`;
+        await db.series.update({ where: { id: series.id }, data: { handle } });
+        return { ok: `Link name is now ${handle}.` };
+      }
+      case "discard": {
+        // Only a never-launched draft can be deleted; its pack product and inventory are untouched.
+        if (!editable || (await db.pull.count({ where: { seriesId: series.id } })) > 0) {
+          return { error: "Only a draft that was never launched can be discarded." };
+        }
+        await db.series.delete({ where: { id: series.id } });
+        return redirect("/app");
+      }
+      case "buylistReport": {
+        const report = await refreshBuylistReport(db, series.id);
+        return { ok: `Buylist cost updated: $${report.cash.toFixed(2)} cash for ${report.matchedCopies} of ${report.copies} cards.` };
+      }
       case "rerun": {
         // Same name, pack product, tiers and pool rules, with a fresh pool built from current inventory.
         if (series.status !== "CLOSED") return { error: "Close this series before running it again." };
@@ -219,7 +277,7 @@ const money = (n: number | string) => `$${Number(n).toFixed(2)}`;
 const percent = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 export default function SeriesPage() {
-  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults, buildOverrides, tierOverride } =
+  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults, buildOverrides, tierOverride, buylist, demoUrl, renameTo, rehandle } =
     useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
@@ -289,6 +347,23 @@ export default function SeriesPage() {
           Rebuild Pool ({Object.entries(buildOverrides).map(([k, v]) => `${k} ${v}`).join(", ")})
         </s-button>
       ) : null}
+      {rehandle ? (
+        <s-button slot="secondary-actions" disabled={busy} onClick={() => submit({ intent: "rehandle" }, { method: "post" })}>
+          Update Link Name
+        </s-button>
+      ) : null}
+      {renameTo && renameTo !== series.title ? (
+        <s-button slot="secondary-actions" disabled={busy} onClick={() => submit({ intent: "rename", title: renameTo }, { method: "post" })}>
+          Rename To {renameTo}
+        </s-button>
+      ) : null}
+      <s-button
+        slot="secondary-actions"
+        disabled={busy}
+        onClick={() => submit({ intent: "buylistReport" }, { method: "post" })}
+      >
+        Refresh Buylist Cost
+      </s-button>
       {draft && tierOverride.length > 0 ? (
         <s-button
           slot="secondary-actions"
@@ -296,6 +371,22 @@ export default function SeriesPage() {
           onClick={() => submit({ intent: "saveTiers", tiers: JSON.stringify(tierOverride) }, { method: "post" })}
         >
           Apply Tiers ({tierOverride.map((t) => `${t.name} $${t.min}+`).join(", ")})
+        </s-button>
+      ) : null}
+      {draft ? (
+        <s-button
+          slot="secondary-actions"
+          tone="critical"
+          disabled={busy}
+          onClick={() =>
+            confirmThen(
+              "discard",
+              `Discard this draft? Its card list is deleted; nothing in your store changes. Click Discard Draft again to confirm.`,
+              () => submit({ intent: "discard" }, { method: "post" }),
+            )
+          }
+        >
+          Discard Draft
         </s-button>
       ) : null}
       {draft ? (
@@ -586,6 +677,25 @@ export default function SeriesPage() {
           <s-text>Customer return: {percent(summary.returnRate)} of price</s-text>
           <s-text>Revenue if sold out: {money(summary.revenue)}</s-text>
           <s-text>Pool market value: {money(summary.totalValue)}</s-text>
+          {buylist ? (
+            <>
+              <s-text>Buylist cost (cash): {money(buylist.cash)}</s-text>
+              <s-text type="strong">
+                Profit if sold out: {money(summary.revenue - buylist.cash)} ({percent(summary.revenue ? (summary.revenue - buylist.cash) / summary.revenue : 0)} margin)
+              </s-text>
+              <s-text>
+                At store credit cost ({money(buylist.credit)}): {money(summary.revenue - buylist.credit)} profit
+              </s-text>
+              {buylist.matchedCopies < buylist.copies ? (
+                <s-text>
+                  {buylist.copies - buylist.matchedCopies} cards ({money(buylist.missingValue)} market) aren&apos;t on the buylist and are
+                  left out of the cost.
+                </s-text>
+              ) : null}
+            </>
+          ) : cards.length > 0 ? (
+            <s-text>Buylist cost: calculating… refresh in a minute.</s-text>
+          ) : null}
           {tierCounts.length > 0 ? (
             <s-text>
               Tiers: {tierCounts.map(([tier, n]) => `${tier} ${n}`).join(" · ")}
@@ -599,6 +709,9 @@ export default function SeriesPage() {
 
       <s-section slot="aside" heading="Storefront">
         <s-stack gap="small">
+          <s-button href={demoUrl} target="_blank">
+            Demo Packs From This Pool
+          </s-button>
           <s-paragraph>
             Customers open packs at <s-link href={packsPage} target="_blank">{packsPage}</s-link>. Unopened packs
             open automatically after {series.autoOpenDays === 1 ? "1 day" : `${series.autoOpenDays} days`}.

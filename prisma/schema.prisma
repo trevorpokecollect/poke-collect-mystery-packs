@@ -67,6 +67,8 @@ model Series {
   topTierGoneAt    DateTime?
   // Cards in each pack (1 for classic packs; e.g. 5 for a booster-style pack). Each card is its own slot.
   cardsPerPack     Int          @default(1)
+  // What the pool's cards would cost at our StorePass buylist offers (see lib/buylist.server.ts).
+  buylistReport    Json?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -202,6 +204,9 @@ model ShipRequest {
   orderId      String?
   cardCount    Int
   shippingFee  Decimal  @db.Decimal(10, 2)
+  // Local pickup instead of shipping; readyAt is when the "ready for pickup" email went out.
+  pickup       Boolean  @default(false)
+  readyAt      DateTime?
   expiresAt    DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

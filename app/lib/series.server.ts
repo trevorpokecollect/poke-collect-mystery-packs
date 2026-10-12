@@ -1,9 +1,10 @@
 // Admin-side series management: creating a series, filling its card pool from
 // Shopify variants, and launching it (which also sets the pack's inventory).
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import db from "../db.server";
 import { launchSeries } from "./pool.server";
+import { refreshBuylistReport } from "./buylist.server";
 import { gql } from "./orders.server";
 import { fetchCandidates, releaseUnneeded, reservePool, type CandidateFilter } from "./inventory.server";
 import {
@@ -302,10 +303,23 @@ export async function autoBuildPool(admin: AdminApiContext, shop: string, series
         reserveInventory: true,
         tierRules: tiers as unknown as Prisma.InputJsonValue,
         buildRules: { ...input } as unknown as Prisma.InputJsonValue,
+        buylistReport: Prisma.DbNull,
       },
     }),
   ]);
+  // Every build gets a buylist cost report (runs in the background; the page shows it when ready).
+  queueBuylistReport(seriesId);
   return cards.reduce((n, c) => n + c.quantity, 0);
+}
+
+const buylistRunning = new Set<string>();
+/** Starts a buylist cost report for the series unless one is already running. */
+export function queueBuylistReport(seriesId: string) {
+  if (buylistRunning.has(seriesId)) return;
+  buylistRunning.add(seriesId);
+  refreshBuylistReport(db, seriesId)
+    .catch((error) => console.error(`Buylist report for ${seriesId} failed`, error))
+    .finally(() => buylistRunning.delete(seriesId));
 }
 
 /** Saves new tier rules and re-tiers every card in a draft series by its value. */
