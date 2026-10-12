@@ -549,3 +549,66 @@ export async function notifyPickupsReady(db: Db, adminFor: (shop: string) => Pro
   }
   return sent;
 }
+
+/**
+ * Turns what staff typed into a Shopify customer: a customer ID or admin customer URL, or an
+ * email address (found through that customer's orders, since the app can't read customers directly).
+ */
+export async function resolveCustomer(admin: AdminApiContext, input: string): Promise<{ customerId: string; label: string }> {
+  const value = input.trim();
+  const id = value.match(/Customer\/(\d+)/)?.[1] ?? value.match(/customers\/(\d+)/)?.[1] ?? (/^\d+$/.test(value) ? value : null);
+  if (id) return { customerId: `gid://shopify/Customer/${id}`, label: `customer ${id}` };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) throw new PoolError(`"${value}" isn't an email address or customer ID.`);
+  const data = await gql(
+    admin,
+    `#graphql
+      query VaultCustomerByEmail($query: String!) {
+        orders(first: 5, sortKey: CREATED_AT, reverse: true, query: $query) { nodes { email customer { id } } }
+      }`,
+    { query: `email:"${value.replace(/"/g, "")}"` },
+  );
+  const match = (data.orders.nodes as { email: string | null; customer: { id: string } | null }[]).find(
+    (o) => o.customer && o.email?.toLowerCase() === value.toLowerCase(),
+  );
+  if (!match?.customer) {
+    throw new PoolError(`No orders found for ${value}. Use their customer ID instead (the number at the end of their customer page URL).`);
+  }
+  return { customerId: match.customer.id, label: value };
+}
+
+/** Vault cards and unopened packs that would move from one customer to another. */
+async function movablePulls(db: Db, shop: string, fromCustomerId: string) {
+  return db.pull.findMany({
+    where: {
+      shop,
+      customerId: fromCustomerId,
+      status: { in: ["UNOPENED", "REVEALED"] },
+      OR: [{ shipRequestId: null }, { shipRequest: { status: { notIn: ["PENDING", "PAID"] } } }],
+    },
+    select: { id: true, orderId: true, status: true },
+  });
+}
+
+/**
+ * Customer service: moves a customer's vault (opened cards still with us, plus unopened packs)
+ * to another customer, e.g. when they bought under a different email. Cards already shipping
+ * stay where they are; an open shipping invoice must be returned to the vault first.
+ */
+export async function moveVault(db: Db, shop: string, fromCustomerId: string, toCustomerId: string, { dryRun = false } = {}) {
+  if (fromCustomerId === toCustomerId) throw new PoolError("Those are the same customer.");
+  const pending = await db.shipRequest.count({ where: { shop, customerId: fromCustomerId, status: "PENDING" } });
+  if (pending) throw new PoolError("That customer has an unpaid shipping invoice. Return it to the vault first, then move the vault.");
+  const pulls = await movablePulls(db, shop, fromCustomerId);
+  const summary = {
+    cards: pulls.filter((p) => p.status === "REVEALED").length,
+    unopened: pulls.filter((p) => p.status === "UNOPENED").length,
+    orders: new Set(pulls.map((p) => p.orderId)).size,
+  };
+  if (dryRun || pulls.length === 0) return summary;
+  await db.$transaction([
+    db.pull.updateMany({ where: { id: { in: pulls.map((p) => p.id) } }, data: { customerId: toCustomerId } }),
+    db.packOrder.updateMany({ where: { orderId: { in: [...new Set(pulls.map((p) => p.orderId))] } }, data: { customerId: toCustomerId } }),
+  ]);
+  console.log(`Moved vault from ${fromCustomerId} to ${toCustomerId}: ${pulls.length} pulls`);
+  return summary;
+}

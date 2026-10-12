@@ -15,7 +15,7 @@ import {
 } from "./pool.server";
 import { releaseUnneeded, rereserveForPulls, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
-import { addVaultCardsToShipment, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
+import { addVaultCardsToShipment, moveVault, resolveCustomer, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -893,5 +893,46 @@ describe("guest orders", () => {
     const owned = await drawForOrder(db, ownedOrder);
     expect(await claimGuestOrder(db, { customerId: viewer.customerId, openToken: owned.packOrder!.openToken })).toBe(0);
     expect((await db.pull.findMany({ where: { orderId: ownedOrder.orderId } }))[0].customerId).toBe("gid://shopify/Customer/1");
+  });
+});
+
+describe("move a vault", () => {
+  it("moves vault cards and unopened packs to another customer, leaving shipping cards alone", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const from = "gid://shopify/Customer/1";
+    const to = "gid://shopify/Customer/2";
+    const shipped = await drawForOrder(db, order(1));
+    for (const p of shipped.pulls) await revealPull(db, SHOP, p.id, { customerId: from });
+    const request = (await requestShipment(db, admin, SHOP, { customerId: from })) && (await db.shipRequest.findFirstOrThrow());
+    // An unpaid invoice blocks the move until it's returned.
+    await expect(moveVault(db, SHOP, from, to)).rejects.toThrow(/unpaid shipping invoice/);
+    await markShipmentPaid(db, request.id, "gid://shopify/Order/999");
+
+    const vaulted = await drawForOrder(db, order(2));
+    await revealPull(db, SHOP, vaulted.pulls[0].id, { customerId: from });
+    expect(await moveVault(db, SHOP, from, to, { dryRun: true })).toEqual({ cards: 1, unopened: 1, orders: 1 });
+    expect(await pullsForViewer(db, SHOP, { customerId: to })).toHaveLength(0); // a preview changes nothing
+
+    expect(await moveVault(db, SHOP, from, to)).toEqual({ cards: 1, unopened: 1, orders: 1 });
+    expect(await vaultedPulls(db, SHOP, { customerId: to })).toHaveLength(1);
+    expect((await pullsForViewer(db, SHOP, { customerId: to })).map((p) => p.status).sort()).toEqual(["REVEALED", "UNOPENED"]);
+    // The card already shipping stays with the original customer.
+    expect((await db.pull.findFirstOrThrow({ where: { shipRequestId: request.id } })).customerId).toBe(from);
+    await expect(moveVault(db, SHOP, to, to)).rejects.toThrow(/same customer/);
+  });
+
+  it("finds a customer by ID, admin URL or the email on their orders", async () => {
+    const admin = {
+      graphql: async () =>
+        new Response(JSON.stringify({ data: { orders: { nodes: [{ email: "Pat@Example.com", customer: { id: "gid://shopify/Customer/77" } }] } } })),
+    } as never;
+    expect((await resolveCustomer(admin, "123")).customerId).toBe("gid://shopify/Customer/123");
+    expect((await resolveCustomer(admin, "https://admin.shopify.com/store/x/customers/456")).customerId).toBe("gid://shopify/Customer/456");
+    expect((await resolveCustomer(admin, "pat@example.com")).customerId).toBe("gid://shopify/Customer/77");
+    await expect(resolveCustomer(admin, "other@example.com")).rejects.toThrow(/No orders found/);
+    await expect(resolveCustomer(admin, "not an email")).rejects.toThrow(/isn't an email/);
   });
 });
