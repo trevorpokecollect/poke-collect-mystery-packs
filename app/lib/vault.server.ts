@@ -349,12 +349,19 @@ export async function returnShipmentToVault(db: Db, admin: AdminApiContext, shop
       { orderId: request.orderId, note: `Cards returned to the customer's vault (${cards} card${cards === 1 ? "" : "s"}); shipping refunded.` },
     );
     // Cancelling runs as a job: wait for it so the restocked copies are there to reserve again.
+    let cancelled = false;
     for (let i = 0; i < 20; i++) {
       const check = await gql(admin, `#graphql
         query VaultReturnCancelled($id: ID!) { order(id: $id) { cancelledAt } }`, { id: request.orderId });
-      if (check.order?.cancelledAt) break;
+      if (check.order?.cancelledAt) {
+        cancelled = true;
+        break;
+      }
       await new Promise((r) => setTimeout(r, 1500));
     }
+    // Return guard: never re-reserve cards the order still holds. Running it again finishes the
+    // return once Shopify has cancelled the order (the cancel step is skipped then).
+    if (!cancelled) throw new PoolError(`Shopify is still cancelling ${order.name}. Wait a minute, then click Return To Vault again.`);
   }
   const pulls = await db.pull.findMany({ where: { shipRequestId: request.id }, select: { id: true } });
   await rereserveForPulls(db, admin, pulls.map((p) => p.id));

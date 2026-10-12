@@ -203,6 +203,54 @@ async function viewerScope(db: Db, viewer: Viewer): Promise<Prisma.PullWhereInpu
   return scope;
 }
 
+/**
+ * A logged-in customer holding a guest order's link (e.g. after logging in from the opener)
+ * takes ownership of that order's packs, so they show in their vault from then on.
+ * Only packs with no customer yet are claimed; packs already tied to an account stay put.
+ */
+export async function claimGuestOrder(db: Db, viewer: Viewer) {
+  if (!viewer.customerId || !viewer.openToken) return 0;
+  const order = await db.packOrder.findUnique({ where: { openToken: viewer.openToken } });
+  if (!order || order.customerId) return 0;
+  await db.packOrder.update({ where: { orderId: order.orderId }, data: { customerId: viewer.customerId } });
+  const pulls = await db.pull.updateMany({ where: { orderId: order.orderId, customerId: null }, data: { customerId: viewer.customerId } });
+  return pulls.count;
+}
+
+/**
+ * Pack orders that came in without a customer (the webhook arrived before Shopify linked the
+ * checkout to an account): looks the customer up on the order and attaches it to the packs.
+ */
+export async function attachMissingCustomers(db: Db, adminFor: (shop: string) => Promise<{ graphql: (q: string, o?: { variables: Record<string, unknown> }) => Promise<Response> }>) {
+  const orders = await db.packOrder.findMany({
+    where: { customerId: null, createdAt: { gt: new Date(Date.now() - 60 * 86_400_000) } },
+    select: { orderId: true, shop: true },
+    take: 100,
+  });
+  let attached = 0;
+  for (const shop of new Set(orders.map((o) => o.shop))) {
+    const ids = orders.filter((o) => o.shop === shop).map((o) => o.orderId);
+    try {
+      const admin = await adminFor(shop);
+      const response = await admin.graphql(
+        `#graphql
+          query PackOrderCustomers($ids: [ID!]!) { nodes(ids: $ids) { ... on Order { id customer { id } } } }`,
+        { variables: { ids } },
+      );
+      const json = (await response.json()) as { data?: { nodes: ({ id: string; customer: { id: string } | null } | null)[] } };
+      for (const node of json.data?.nodes ?? []) {
+        if (!node?.customer) continue;
+        await db.packOrder.update({ where: { orderId: node.id }, data: { customerId: node.customer.id } });
+        await db.pull.updateMany({ where: { orderId: node.id, customerId: null }, data: { customerId: node.customer.id } });
+        attached++;
+      }
+    } catch (error) {
+      console.error(`Attaching customers for ${shop} failed`, error);
+    }
+  }
+  return attached;
+}
+
 const pullInclude = {
   slot: { include: { card: true } },
   series: { select: { title: true, handle: true, packProductId: true, cardsPerPack: true } },
@@ -210,6 +258,7 @@ const pullInclude = {
 } as const;
 
 export async function pullsForViewer(db: Db, shop: string, viewer: Viewer) {
+  await claimGuestOrder(db, viewer);
   const scope = await viewerScope(db, viewer);
   if (scope.length === 0) return [];
   return db.pull.findMany({

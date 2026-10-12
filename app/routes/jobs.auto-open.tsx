@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
-import { autoOpenDue, ordersReadyToFinalize } from "../lib/pool.server";
+import { attachMissingCustomers, autoOpenDue, ordersReadyToFinalize } from "../lib/pool.server";
 import { finalizeOrder, fulfillMissingVaultPackLines, noteMissingVaultPulls } from "../lib/orders.server";
 import { expireShipments, notifyPickupsReady, sendVaultReminders } from "../lib/vault.server";
 
@@ -14,6 +14,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   await autoOpenDue(db);
+  // Guest checkouts whose webhook arrived before Shopify linked a customer: link their packs now.
+  await attachMissingCustomers(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   const ready = await ordersReadyToFinalize(db);
   const results = [];
   for (const { orderId, shop } of ready) {

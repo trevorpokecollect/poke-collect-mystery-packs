@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { commitmentHash } from "./fairness.server";
 import {
   autoOpenDue,
+  claimGuestOrder,
   drawForOrder,
   launchSeries,
   pullsForViewer,
@@ -12,7 +13,7 @@ import {
   seriesOdds,
   voidPulls,
 } from "./pool.server";
-import { releaseUnneeded, reservePool, unreserveForPulls } from "./inventory.server";
+import { releaseUnneeded, rereserveForPulls, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { addVaultCardsToShipment, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
@@ -241,14 +242,13 @@ describe("revealPull", () => {
       openToken: guest.packOrder!.openToken,
     });
     expect(both).toHaveLength(2);
-    await expect(
-      revealPull(db, SHOP, guest.pulls[0].id, { customerId: "gid://shopify/Customer/1" }),
-    ).rejects.toThrow(/not found/);
-    const opened = await revealPull(db, SHOP, guest.pulls[0].id, {
-      customerId: "gid://shopify/Customer/1",
-      openToken: guest.packOrder!.openToken,
-    });
+    // Following the link while logged in claimed the guest order, so the account alone can open it now.
+    const opened = await revealPull(db, SHOP, guest.pulls[0].id, { customerId: "gid://shopify/Customer/1" });
     expect(opened.card.title).toBeTruthy();
+    // Someone else's account can't.
+    await expect(
+      revealPull(db, SHOP, guest.pulls[0].id, { customerId: "gid://shopify/Customer/2" }),
+    ).rejects.toThrow(/not found/);
   });
 });
 
@@ -309,7 +309,9 @@ function fakeAdmin() {
     graphql: async (_query: string, { variables }: { variables: Record<string, unknown> }) => {
       const input = variables.input as {
         changes: { quantity: number; inventoryItemId: string; from: { name: string }; to: { name: string } }[];
-      };
+      } | undefined;
+      // Anything that isn't an inventory move (e.g. the return guard's stock lookup) gets an empty answer.
+      if (!input?.changes) return new Response(JSON.stringify({ data: {} }));
       const key = String(variables.key);
       if (seenKeys.has(key)) return new Response(JSON.stringify({ data: { inventoryMoveQuantities: { userErrors: [] } } }));
       seenKeys.add(key);
@@ -754,6 +756,38 @@ describe("vault", () => {
     await inStep();
   });
 
+  it("return guard: never re-reserves a copy Shopify doesn't show as available", async () => {
+    const series = await makeReservedSeries(10);
+    const base = fakeAdmin();
+    let available = 0;
+    const admin = {
+      graphql: async (query: string, opts: { variables: Record<string, unknown> }) =>
+        query.includes("RereserveAvailable")
+          ? new Response(JSON.stringify({ data: { inventoryItem: { inventoryLevel: { quantities: [{ quantity: available }] } } } }))
+          : base.admin.graphql(query, opts),
+    } as never;
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(1));
+    await unreserveForPulls(db, admin, pulls.map((p) => p.id));
+    const card = (await db.pull.findUniqueOrThrow({ where: { id: pulls[0].id }, include: { slot: true } })).slot.cardId;
+    const item = (await db.card.findUniqueOrThrow({ where: { id: card } })).inventoryItemId!;
+    const before = base.net(item);
+
+    process.env.RESTOCK_WAIT_MS = "0";
+    try {
+      expect(await rereserveForPulls(db, admin, pulls.map((p) => p.id))).toEqual({ skipped: [pulls[0].id] });
+      expect(base.net(item)).toBe(before); // nothing moved, so nothing went negative
+      expect((await db.pull.findUniqueOrThrow({ where: { id: pulls[0].id } })).unreservedAt).not.toBeNull();
+
+      available = 1; // the restock landed
+      expect(await rereserveForPulls(db, admin, pulls.map((p) => p.id))).toEqual({ skipped: [] });
+      expect(base.net(item)).toBe(before + 1);
+    } finally {
+      delete process.env.RESTOCK_WAIT_MS;
+    }
+  });
+
   it("ships free from the free-shipping card count", async () => {
     await openedVaultOrder(10);
     const { admin, drafts } = vaultAdmin();
@@ -841,5 +875,23 @@ describe("vault pull notes", () => {
     expect(note.length).toBeLessThanOrEqual(5000);
     expect(note.startsWith("Gift for my son")).toBe(true);
     expect(note).toMatch(/more \(full list in the app\)/);
+  });
+});
+
+describe("guest orders", () => {
+  it("attach to the account of a logged-in customer holding the order link", async () => {
+    const series = await makeSeries(standardPool);
+    await launchSeries(db, series.id);
+    const guest = await drawForOrder(db, order(2, null));
+    const viewer = { customerId: "gid://shopify/Customer/55", openToken: guest.packOrder!.openToken };
+    expect(await pullsForViewer(db, SHOP, { customerId: viewer.customerId })).toHaveLength(0);
+
+    expect(await pullsForViewer(db, SHOP, viewer)).toHaveLength(2); // logging in with the link claims them
+    expect(await pullsForViewer(db, SHOP, { customerId: viewer.customerId })).toHaveLength(2);
+    // Packs already tied to an account are never moved to another one.
+    const ownedOrder = order(1);
+    const owned = await drawForOrder(db, ownedOrder);
+    expect(await claimGuestOrder(db, { customerId: viewer.customerId, openToken: owned.packOrder!.openToken })).toBe(0);
+    expect((await db.pull.findMany({ where: { orderId: ownedOrder.orderId } }))[0].customerId).toBe("gid://shopify/Customer/1");
   });
 });
