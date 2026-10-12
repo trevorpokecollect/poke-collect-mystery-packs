@@ -510,7 +510,7 @@ function vaultAdmin() {
       }
       if (query.includes("VaultReturnOrder(")) return reply({ order: { name: "#999", cancelledAt: edits.cancelled ? "now" : null, displayFulfillmentStatus: "UNFULFILLED" } });
       if (query.includes("orderCancel(")) {
-        edits.cancelled = true;
+        edits.cancelled = query.includes("originalPaymentMethodsRefund: true");
         return reply({ orderCancel: { orderCancelUserErrors: [] } });
       }
       if (query.includes("VaultReturnCancelled(")) return reply({ order: { cancelledAt: edits.cancelled ? "now" : null } });

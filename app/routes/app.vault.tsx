@@ -7,7 +7,8 @@ import db from "../db.server";
 import { gql } from "../lib/orders.server";
 import { addVaultCardsToShipment, recentShipments, returnShipmentToVault } from "../lib/vault.server";
 
-// Customer service for vault shipments: put a shipment's cards back in the vault, or add cards
+// Customer service for vault shipments: put a shipment's cards back in the vault (refunding any
+// shipping paid), or add cards
 // the customer opened later to a paid shipment that hasn't gone out yet.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -73,7 +74,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const { cards, cancelledOrder } = await returnShipmentToVault(db, admin, session.shop, requestId);
       return {
         ok: cancelledOrder
-          ? `${cards} card${cards === 1 ? " is" : "s are"} back in the vault and ${cancelledOrder} was cancelled without a refund. Refund the shipping in Shopify if you want to.`
+          ? `${cards} card${cards === 1 ? " is" : "s are"} back in the vault. ${cancelledOrder} was cancelled and its shipping payment refunded.`
           : `${cards} card${cards === 1 ? " is" : "s are"} back in the vault and the unpaid invoice was removed.`,
       };
     }
@@ -118,7 +119,7 @@ export default function VaultShipments() {
           {armed ? (
             <s-banner tone="warning">
               Click Return To Vault again to confirm. Unpaid invoices are removed; paid orders that haven&apos;t shipped are
-              cancelled in Shopify without a refund, and the cards go back to the customer&apos;s vault.
+              cancelled in Shopify and the shipping payment is refunded, and the cards go back to the customer&apos;s vault.
             </s-banner>
           ) : null}
           <s-paragraph>
