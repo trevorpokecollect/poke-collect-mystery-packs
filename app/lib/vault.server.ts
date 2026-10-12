@@ -315,8 +315,8 @@ export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, sh
 
 /**
  * Customer service: undoes a vault shipment and puts its cards back in the customer's vault.
- * An unpaid invoice is deleted. A paid order that hasn't shipped is cancelled in Shopify without a
- * refund (staff refund the shipping there if they choose), its cards are restocked and reserved again.
+ * An unpaid invoice is deleted. A paid order that hasn't shipped is cancelled in Shopify and its
+ * shipping payment refunded to the original payment method; its cards are restocked and reserved again.
  */
 export async function returnShipmentToVault(db: Db, admin: AdminApiContext, shop: string, requestId: string) {
   const request = await db.shipRequest.findFirst({ where: { id: requestId, shop } });
@@ -342,11 +342,11 @@ export async function returnShipmentToVault(db: Db, admin: AdminApiContext, shop
       admin,
       `#graphql
         mutation VaultReturnCancel($orderId: ID!, $note: String) {
-          orderCancel(orderId: $orderId, reason: CUSTOMER, refund: false, restock: true, notifyCustomer: false, staffNote: $note) {
+          orderCancel(orderId: $orderId, reason: CUSTOMER, refundMethod: { originalPaymentMethodsRefund: true }, restock: true, notifyCustomer: false, staffNote: $note) {
             orderCancelUserErrors { field message }
           }
         }`,
-      { orderId: request.orderId, note: `Cards returned to the customer's vault (${cards} card${cards === 1 ? "" : "s"}).` },
+      { orderId: request.orderId, note: `Cards returned to the customer's vault (${cards} card${cards === 1 ? "" : "s"}); shipping refunded.` },
     );
     // Cancelling runs as a job: wait for it so the restocked copies are there to reserve again.
     for (let i = 0; i < 20; i++) {
