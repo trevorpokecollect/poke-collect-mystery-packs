@@ -60,7 +60,7 @@ export async function requestShipment(
     if (!pickup && inVault.every((p) => p.shipRequestId === pending.id)) return { invoiceUrl: pending.invoiceUrl, reused: true };
     // Cards opened since the open invoice was made, or picking up instead: replace the invoice.
     const request = await db.shipRequest.findUniqueOrThrow({ where: { id: pending.id } });
-    await settleShipRequest(db, admin, request, "CANCELLED");
+    await settleShipRequest(db, admin, request, "CANCELLED", { keepReleased: true });
     return requestShipment(db, admin, shop, viewer, { pickup });
   }
 
@@ -195,6 +195,9 @@ async function settleShipRequest(
   admin: AdminApiContext,
   request: { id: string; draftOrderId: string | null },
   status: "EXPIRED" | "CANCELLED",
+  // Replacing the invoice with a new one (or an order edit): the cards go straight onto it, so
+  // they stay released instead of being re-reserved and released again.
+  { keepReleased = false }: { keepReleased?: boolean } = {},
 ) {
   if (request.draftOrderId) {
     const data = await gql(
@@ -221,8 +224,10 @@ async function settleShipRequest(
       );
     }
   }
-  const pulls = await db.pull.findMany({ where: { shipRequestId: request.id }, select: { id: true } });
-  await rereserveForPulls(db, admin, pulls.map((p) => p.id));
+  if (!keepReleased) {
+    const pulls = await db.pull.findMany({ where: { shipRequestId: request.id }, select: { id: true } });
+    await rereserveForPulls(db, admin, pulls.map((p) => p.id));
+  }
   await db.$transaction([
     db.pull.updateMany({ where: { shipRequestId: request.id }, data: { shipRequestId: null } }),
     db.shipRequest.update({ where: { id: request.id }, data: { status } }),
@@ -244,7 +249,7 @@ export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, sh
     (await vaultedPulls(db, shop, viewer)).filter((p) => p.shipRequest?.status === "PENDING").map((p) => p.shipRequestId!),
   );
   for (const id of pendingIds) {
-    await settleShipRequest(db, admin, await db.shipRequest.findUniqueOrThrow({ where: { id } }), "CANCELLED");
+    await settleShipRequest(db, admin, await db.shipRequest.findUniqueOrThrow({ where: { id } }), "CANCELLED", { keepReleased: true });
   }
   const pulls = (await vaultedPulls(db, shop, viewer)).filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
   if (pulls.length === 0) return 0;

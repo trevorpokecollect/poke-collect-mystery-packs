@@ -243,48 +243,71 @@ export async function unreserveForPulls(db: PrismaClient, admin: Admin, pullIds:
   }
 }
 
-/** The card's available count at its location, or null when Shopify doesn't say. */
-async function availableAt(admin: Admin, inventoryItemId: string, locationId: string): Promise<number | null> {
-  const data = await gql(
-    admin,
-    `#graphql
-      query RereserveAvailable($id: ID!, $locationId: ID!) {
-        inventoryItem(id: $id) { inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { quantity } } }
-      }`,
-    { id: inventoryItemId, locationId },
-  );
-  const quantity = data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity;
-  return typeof quantity === "number" ? quantity : null;
+/** Available counts keyed by `${inventoryItemId}|${locationId}`; missing when Shopify doesn't say. */
+async function availableAt(admin: Admin, items: { inventoryItemId: string; locationId: string }[]) {
+  const out = new Map<string, number>();
+  const ids = [...new Set(items.map((i) => i.inventoryItemId))];
+  for (let i = 0; i < ids.length; i += 50) {
+    const data = await gql(
+      admin,
+      `#graphql
+        query RereserveAvailable($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on InventoryItem { id inventoryLevels(first: 10) { nodes { location { id } quantities(names: ["available"]) { quantity } } } }
+          }
+        }`,
+      { ids: ids.slice(i, i + 50) },
+    );
+    for (const node of (data?.nodes ?? []) as ({ id: string; inventoryLevels: { nodes: { location: { id: string }; quantities: { quantity: number }[] }[] } } | null)[]) {
+      for (const level of node?.inventoryLevels?.nodes ?? []) {
+        const quantity = level.quantities?.[0]?.quantity;
+        if (typeof quantity === "number") out.set(`${node!.id}|${level.location.id}`, quantity);
+      }
+    }
+  }
+  return out;
 }
 
 /**
  * Puts a released copy back into reserved for each pull, e.g. when a vault shipment's invoice
  * lapses unpaid or the cards are returned to the vault. Skips pulls that were never released.
  *
- * Return guard: a copy is only re-reserved once Shopify shows it available (waiting briefly
- * for a cancelled order's restock), so re-reserving can never push a card negative. A pull that
- * still has no available copy is left released and shows on the Inventory Check page.
+ * Return guard: a copy is only re-reserved once Shopify shows it available (waiting briefly,
+ * once for the whole batch, for a cancelled order's restock), so re-reserving can never push a
+ * card negative. A pull that still has no available copy is left released and shows on the
+ * Inventory Check page.
  */
 export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds: string[]) {
-  const pulls = await db.pull.findMany({
-    where: { id: { in: pullIds }, unreservedAt: { not: null } },
-    include: { slot: { include: { card: true } } },
-  });
+  const pulls = (
+    await db.pull.findMany({
+      where: { id: { in: pullIds }, unreservedAt: { not: null } },
+      include: { slot: { include: { card: true } } },
+    })
+  ).filter((p) => reservable(p.slot.card));
   const skipped: string[] = [];
+  if (pulls.length === 0) return { skipped };
+  const keyOf = (c: Card) => `${c.inventoryItemId}|${c.locationId}`;
+  const need = new Map<string, number>();
+  for (const p of pulls) need.set(keyOf(p.slot.card), (need.get(keyOf(p.slot.card)) ?? 0) + 1);
+  const items = pulls.map((p) => ({ inventoryItemId: p.slot.card.inventoryItemId!, locationId: p.slot.card.locationId! }));
   // How long to wait for a cancelled order's restock to land before giving up on a copy.
   const restockWaitMs = Number(process.env.RESTOCK_WAIT_MS ?? 12_000);
+  const short = (counts: Map<string, number>) => [...need].some(([k, n]) => counts.has(k) && counts.get(k)! < n);
+  let available = await availableAt(admin, items);
+  for (let waited = 0; short(available) && waited < restockWaitMs; waited += 2000) {
+    await new Promise((r) => setTimeout(r, 2000));
+    available = await availableAt(admin, items);
+  }
   for (const pull of pulls) {
-    const card = pull.slot.card;
-    if (!reservable(card)) continue;
-    let available = await availableAt(admin, card.inventoryItemId, card.locationId);
-    for (let waited = 0; available !== null && available < 1 && waited < restockWaitMs; waited += 2000) {
-      await new Promise((r) => setTimeout(r, 2000));
-      available = await availableAt(admin, card.inventoryItemId, card.locationId);
-    }
-    if (available !== null && available < 1) {
-      console.error(`Return guard: no available copy of "${card.title}" to re-reserve for pull ${pull.id}`);
-      skipped.push(pull.id);
-      continue;
+    const card = pull.slot.card as Card & { inventoryItemId: string; locationId: string };
+    const key = keyOf(card);
+    if (available.has(key)) {
+      if (available.get(key)! < 1) {
+        console.error(`Return guard: no available copy of "${card.title}" to re-reserve for pull ${pull.id}`);
+        skipped.push(pull.id);
+        continue;
+      }
+      available.set(key, available.get(key)! - 1);
     }
     await moveQuantities(
       admin,
