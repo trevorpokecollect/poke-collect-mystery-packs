@@ -123,6 +123,26 @@ export default function VaultShipments() {
 
   return (
     <s-page heading="Vault Shipments">
+      <s-section heading="Move A Vault">
+        <s-stack gap="base">
+          <s-paragraph>
+            Moves a customer&apos;s vault cards and unopened packs to another customer, e.g. when they bought under a
+            different email. Enter an email address or a customer ID for each. Cards already shipping stay put.
+          </s-paragraph>
+          <s-text-field label="From (email or customer ID)" data-move="from" />
+          <s-text-field label="To (email or customer ID)" data-move="to" />
+          <s-button
+            disabled={busy}
+            onClick={(e) => {
+              const section = (e.currentTarget as HTMLElement).closest("s-section")!;
+              const read = (name: string) => (section.querySelector(`[data-move="${name}"]`) as HTMLInputElement | null)?.value ?? "";
+              submit({ intent: "previewMove", from: read("from"), to: read("to") }, { method: "post" });
+            }}
+          >
+            Preview Move
+          </s-button>
+        </s-stack>
+      </s-section>
       <s-section>
         <s-stack gap="base">
           {result && "error" in result ? <s-banner tone="critical">{result.error}</s-banner> : null}
@@ -209,26 +229,6 @@ export default function VaultShipments() {
               </s-table-body>
             </s-table>
           )}
-        </s-stack>
-      </s-section>
-      <s-section heading="Move A Vault">
-        <s-stack gap="base">
-          <s-paragraph>
-            Moves a customer&apos;s vault cards and unopened packs to another customer, e.g. when they bought under a
-            different email. Enter an email address or a customer ID for each. Cards already shipping stay put.
-          </s-paragraph>
-          <s-text-field label="From (email or customer ID)" data-move="from" />
-          <s-text-field label="To (email or customer ID)" data-move="to" />
-          <s-button
-            disabled={busy}
-            onClick={(e) => {
-              const section = (e.currentTarget as HTMLElement).closest("s-section")!;
-              const read = (name: string) => (section.querySelector(`[data-move="${name}"]`) as HTMLInputElement | null)?.value ?? "";
-              submit({ intent: "previewMove", from: read("from"), to: read("to") }, { method: "post" });
-            }}
-          >
-            Preview Move
-          </s-button>
         </s-stack>
       </s-section>
     </s-page>
