@@ -2,6 +2,7 @@
 // and moving pool cards between "available" and "reserved" so they can only be won from packs.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import type { Card, PrismaClient } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { gql } from "./orders.server";
 
 type Admin = AdminApiContext;
@@ -142,6 +143,9 @@ interface Move {
   quantity: number;
 }
 
+// Each call gets a fresh idempotency key. Shopify silently skips a move whose key it has seen
+// before, so reusing a key (e.g. when a pull is released, re-reserved, then released again)
+// would leave a copy stuck in "reserved" while the order also commits it.
 async function moveQuantities(
   admin: Admin,
   moves: Move[],
@@ -205,7 +209,7 @@ export async function reservePool(db: PrismaClient, admin: Admin, seriesId: stri
       batch.map((c) => ({ inventoryItemId: c.inventoryItemId, locationId: c.locationId, quantity: c.quantity - c.reservedQty })),
       "reserve",
       ledgerFor(seriesId),
-      `reserve-${seriesId}-${i}`,
+      `reserve-${seriesId}-${i}-${randomUUID()}`,
     );
     await db.$transaction(
       batch.map((c) => db.card.update({ where: { id: c.id }, data: { reservedQty: c.quantity } })),
@@ -230,7 +234,7 @@ export async function unreserveForPulls(db: PrismaClient, admin: Admin, pullIds:
       [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: 1 }],
       "release",
       ledgerFor(pull.seriesId),
-      `pull-${pull.id}`,
+      `pull-${pull.id}-${randomUUID()}`,
     );
     await db.$transaction([
       db.pull.update({ where: { id: pull.id }, data: { unreservedAt: new Date() } }),
@@ -256,7 +260,7 @@ export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds:
       [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: 1 }],
       "reserve",
       ledgerFor(pull.seriesId),
-      `rereserve-${pull.id}-${pull.unreservedAt!.getTime()}`,
+      `rereserve-${pull.id}-${randomUUID()}`,
     );
     await db.$transaction([
       db.pull.update({ where: { id: pull.id }, data: { unreservedAt: null } }),
@@ -290,10 +294,121 @@ export async function releaseUnneeded(db: PrismaClient, admin: Admin, seriesId: 
       [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: extra }],
       "release",
       ledgerFor(seriesId),
-      `release-${card.id}-${card.reservedQty}-${extra}`,
+      `release-${card.id}-${randomUUID()}`,
     );
     await db.card.update({ where: { id: card.id }, data: { reservedQty: { decrement: extra } } });
     released += extra;
+  }
+  return released;
+}
+
+export interface InventoryIssue {
+  inventoryItemId: string;
+  locationId: string;
+  title: string;
+  onHand: number;
+  available: number;
+  reserved: number;
+  committed: number;
+  /** Copies Shopify should hold in "reserved": the pools' reservations plus open vault invoices. */
+  expectedReserved: number;
+  /** Reserved copies nothing in the app accounts for (usually also committed to an order). */
+  stuck: number;
+  ledgers: string[];
+}
+
+/**
+ * Compares every pool card's Shopify inventory with what the app expects to be reserved and
+ * returns the items that disagree or have gone negative. Read-only.
+ */
+export async function auditPoolInventory(db: PrismaClient, admin: Admin) {
+  const cards = (await db.card.findMany({ where: { inventoryItemId: { not: null } } })).filter(reservable);
+  // Open vault invoices hold their cards in the draft order's own reservation.
+  const invoiced = await db.pull.findMany({
+    where: { shipRequest: { status: "PENDING", draftOrderId: { not: null } }, unreservedAt: { not: null } },
+    select: { slot: { select: { cardId: true } } },
+  });
+  const invoicedByCard = new Map<string, number>();
+  for (const p of invoiced) invoicedByCard.set(p.slot.cardId, (invoicedByCard.get(p.slot.cardId) ?? 0) + 1);
+
+  const groups = new Map<string, { inventoryItemId: string; locationId: string; title: string; expected: number; ledgers: Set<string> }>();
+  for (const card of cards) {
+    const key = `${card.inventoryItemId}|${card.locationId}`;
+    const group = groups.get(key) ?? { inventoryItemId: card.inventoryItemId, locationId: card.locationId, title: card.title, expected: 0, ledgers: new Set<string>() };
+    group.expected += card.reservedQty + (invoicedByCard.get(card.id) ?? 0);
+    group.ledgers.add(ledgerFor(card.seriesId));
+    groups.set(key, group);
+  }
+
+  const items = [...new Set(cards.map((c) => c.inventoryItemId))];
+  const levels = new Map<string, Record<string, number>>();
+  for (let i = 0; i < items.length; i += 50) {
+    const data = await gql(
+      admin,
+      `#graphql
+        query PoolInventoryAudit($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on InventoryItem {
+              id
+              inventoryLevels(first: 10) {
+                nodes { location { id } quantities(names: ["available", "reserved", "committed", "on_hand"]) { name quantity } }
+              }
+            }
+          }
+        }`,
+      { ids: items.slice(i, i + 50) },
+    );
+    for (const node of data.nodes as ({ id: string; inventoryLevels: { nodes: { location: { id: string }; quantities: { name: string; quantity: number }[] }[] } } | null)[]) {
+      for (const level of node?.inventoryLevels.nodes ?? []) {
+        levels.set(`${node!.id}|${level.location.id}`, Object.fromEntries(level.quantities.map((q) => [q.name, q.quantity])));
+      }
+    }
+  }
+
+  const issues: InventoryIssue[] = [];
+  for (const [key, group] of groups) {
+    const q = levels.get(key);
+    if (!q) continue;
+    const reserved = q.reserved ?? 0;
+    const issue: InventoryIssue = {
+      inventoryItemId: group.inventoryItemId,
+      locationId: group.locationId,
+      title: group.title,
+      onHand: q.on_hand ?? 0,
+      available: q.available ?? 0,
+      reserved,
+      committed: q.committed ?? 0,
+      expectedReserved: group.expected,
+      stuck: Math.max(0, reserved - group.expected),
+      ledgers: [...group.ledgers],
+    };
+    if (issue.available < 0 || issue.stuck > 0) issues.push(issue);
+  }
+  issues.sort((a, b) => a.available - b.available || b.stuck - a.stuck);
+  return { checked: groups.size, issues };
+}
+
+/** Releases reserved copies the app no longer accounts for back to available. Returns copies released. */
+export async function repairStuckReservations(db: PrismaClient, admin: Admin) {
+  const { issues } = await auditPoolInventory(db, admin);
+  let released = 0;
+  for (const issue of issues.filter((i) => i.stuck > 0)) {
+    // The stuck copy sits under one of the pools' ledgers; try each until Shopify accepts the move.
+    for (const ledger of issue.ledgers) {
+      try {
+        await moveQuantities(
+          admin,
+          [{ inventoryItemId: issue.inventoryItemId, locationId: issue.locationId, quantity: issue.stuck }],
+          "release",
+          ledger,
+          `repair-${issue.inventoryItemId}-${randomUUID()}`,
+        );
+        released += issue.stuck;
+        break;
+      } catch (error) {
+        console.error(`Repair via ${ledger} failed for ${issue.title}`, error);
+      }
+    }
   }
   return released;
 }
