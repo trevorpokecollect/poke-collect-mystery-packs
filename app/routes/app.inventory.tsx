@@ -9,13 +9,17 @@ import { auditPoolInventory, repairStuckReservations } from "../lib/inventory.se
 // so a copy can't be held for a pack and committed to an order at the same time unnoticed.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  return auditPoolInventory(db, admin);
+  // ?release=<inventory item number> releases one card's stuck reservation, like the row button.
+  const release = new URL(request.url).searchParams.get("release");
+  const released = release ? await repairStuckReservations(db, admin, `gid://shopify/InventoryItem/${release.replace(/\D/g, "")}`) : null;
+  return { ...(await auditPoolInventory(db, admin)), released };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
   try {
-    const released = await repairStuckReservations(db, admin);
+    const itemId = String((await request.formData()).get("inventoryItemId") || "") || undefined;
+    const released = await repairStuckReservations(db, admin, itemId);
     return { ok: released ? `Released ${released} stuck reservation${released === 1 ? "" : "s"} back to available.` : "Nothing needed repairing." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "That didn't work. Please try again." };
@@ -23,7 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function InventoryCheck() {
-  const { checked, issues } = useLoaderData<typeof loader>();
+  const { checked, issues, released } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const busy = useNavigation().state !== "idle";
@@ -35,6 +39,11 @@ export default function InventoryCheck() {
         <s-stack gap="base">
           {result && "error" in result ? <s-banner tone="critical">{result.error}</s-banner> : null}
           {result && "ok" in result ? <s-banner tone="success">{result.ok}</s-banner> : null}
+          {released !== null ? (
+            <s-banner tone={released ? "success" : "info"}>
+              {released ? `Released ${released} stuck reservation${released === 1 ? "" : "s"} back to available.` : "That card had nothing to release."}
+            </s-banner>
+          ) : null}
           <s-paragraph>
             Checked {checked} pool card{checked === 1 ? "" : "s"} against Shopify. A card is flagged when its available count
             is negative, or when Shopify holds more copies in reserved than the pools and open vault invoices account for.
@@ -51,6 +60,7 @@ export default function InventoryCheck() {
                   <s-table-header format="numeric">Expected Reserved</s-table-header>
                   <s-table-header format="numeric">Committed</s-table-header>
                   <s-table-header format="numeric">Available</s-table-header>
+                  <s-table-header>Fix</s-table-header>
                 </s-table-header-row>
                 <s-table-body>
                   {issues.map((i) => (
@@ -63,13 +73,20 @@ export default function InventoryCheck() {
                       <s-table-cell>
                         <s-badge tone={i.available < 0 ? "critical" : "warning"}>{i.available}</s-badge>
                       </s-table-cell>
+                      <s-table-cell>
+                        {i.stuck > 0 ? (
+                          <s-button disabled={busy} onClick={() => submit({ inventoryItemId: i.inventoryItemId }, { method: "post" })}>
+                            Release {i.stuck}
+                          </s-button>
+                        ) : null}
+                      </s-table-cell>
                     </s-table-row>
                   ))}
                 </s-table-body>
               </s-table>
               {stuck > 0 ? (
                 <s-button variant="primary" disabled={busy} onClick={() => submit({}, { method: "post" })}>
-                  Release {stuck} Stuck Reservation{stuck === 1 ? "" : "s"}
+                  Release All {stuck} Stuck Reservation{stuck === 1 ? "" : "s"}
                 </s-button>
               ) : (
                 <s-paragraph>
