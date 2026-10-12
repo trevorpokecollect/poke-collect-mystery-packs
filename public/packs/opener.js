@@ -293,11 +293,22 @@
   // "Ship My Cards": everything in the vault ships together for one flat fee.
   function shipBox(vault) {
     if (vault && vault.pending) {
+      // Cards pulled after the invoice was made aren't on it yet: Ship My Cards replaces the invoice with every vault card.
+      var extra = vault.cards || 0;
+      var total = vault.pending.cards + extra;
+      var payNote = el("p", {
+        text: extra
+          ? "You opened " + extra + " more card" + (extra === 1 ? "" : "s") + " since you started shipping. Tap below to add " + (extra === 1 ? "it" : "them") + " to the same package."
+          : "Finish checkout to pay shipping and we'll send them out.",
+      });
+      var pay = extra
+        ? shipButton("Add " + extra + " New Card" + (extra === 1 ? "" : "s") + " & Pay Shipping", payNote)
+        : el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" });
       return el("div", { class: "mp-hero-ship" }, [
-        el("strong", { class: "mp-hero-ship-title", text: vault.pending.cards + (vault.pending.cards === 1 ? " Card Is" : " Cards Are") + " Ready To Ship" }),
-        el("p", { text: "Finish checkout to pay shipping and we'll send them out." }),
-        el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
-        pickupButton(vault, null),
+        el("strong", { class: "mp-hero-ship-title", text: total + (total === 1 ? " Card Is" : " Cards Are") + " Ready To Ship" }),
+        payNote,
+        pay,
+        pickupButton(vault, payNote),
       ]);
     }
     var fee = vault ? vault.fee : 5;
@@ -312,8 +323,20 @@
           ? "Your vault ships free!"
           : "$" + fee + " flat shipping. " + left + " more card" + (left === 1 ? "" : "s") + " and it ships free.",
     });
-    var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: "Ship My Cards" });
+    var button = shipButton("Ship My Cards", note);
     if (!cards) button.disabled = true;
+    return el("div", { class: "mp-hero-ship" }, [
+      el("strong", { class: "mp-hero-ship-title", text: left === 0 && cards ? "Free Shipping Unlocked" : "Ship When You're Ready" }),
+      bar,
+      note,
+      button,
+      pickupButton(vault, note),
+    ]);
+  }
+
+  // Starts (or replaces) the shipping invoice with every card in the vault, then goes to checkout.
+  function shipButton(label, note) {
+    var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: label });
     button.addEventListener("click", function () {
       if (demo) { note.textContent = "Preview mode: shipping isn't available for sample cards."; return; }
       button.disabled = true;
@@ -326,17 +349,11 @@
         })
         .catch(function (err) {
           button.disabled = false;
-          button.textContent = "Ship My Cards";
+          button.textContent = label;
           note.textContent = err.message;
         });
     });
-    return el("div", { class: "mp-hero-ship" }, [
-      el("strong", { class: "mp-hero-ship-title", text: left === 0 && cards ? "Free Shipping Unlocked" : "Ship When You're Ready" }),
-      bar,
-      note,
-      button,
-      pickupButton(vault, note),
-    ]);
+    return button;
   }
 
   // "Pick Up In Store": sets every vault card aside on a free local pickup order, no checkout.
