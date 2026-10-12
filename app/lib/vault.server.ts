@@ -560,6 +560,21 @@ export async function resolveCustomer(db: Db, admin: AdminApiContext, input: str
   const id = value.match(/Customer\/(\d+)/)?.[1] ?? value.match(/customers\/(\d+)/)?.[1] ?? (/^\d+$/.test(value) ? value : null);
   if (id) return { customerId: `gid://shopify/Customer/${id}`, label: `customer ${id}` };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) throw new PoolError(`"${value}" isn't an email address or customer ID.`);
+  // With customer access (read_customers), look the email up directly.
+  try {
+    const found = await gql(
+      admin,
+      `#graphql
+        query VaultCustomerSearch($query: String!) { customers(first: 5, query: $query) { nodes { id defaultEmailAddress { emailAddress } } } }`,
+      { query: `email:"${value.replace(/"/g, "")}"` },
+    );
+    const customer = (found.customers?.nodes as { id: string; defaultEmailAddress: { emailAddress: string } | null }[] | undefined)?.find(
+      (c) => c.defaultEmailAddress?.emailAddress.toLowerCase() === value.toLowerCase(),
+    );
+    if (customer) return { customerId: customer.id, label: value };
+  } catch {
+    // No customer access yet: fall back to matching through the app's own pack orders.
+  }
   const data = await gql(
     admin,
     `#graphql
