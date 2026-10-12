@@ -32,7 +32,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           </div>
           <div class="mp-hero-ship">
             <strong class="mp-hero-ship-title">Welcome Back</strong>
-            <p>Your pulls wait in your vault until you ship them: $${SHIP_FEE} flat, free on ${FREE_SHIPPING_CARDS}+ cards.</p>
+            <p>Your pulls wait in your vault until you ship them: $${SHIP_FEE} flat, free on ${FREE_SHIPPING_CARDS}+ cards (US only).</p>
             <a class="mp-btn mp-vault-btn" href="{{ routes.account_login_url }}?return_url=/apps/packs">Log In</a>
             <a class="mp-btn mp-btn-ghost" href="/products/poke-collect-mystery-pack">Shop Mystery Packs</a>
           </div>
