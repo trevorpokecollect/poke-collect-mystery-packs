@@ -243,18 +243,49 @@ export async function unreserveForPulls(db: PrismaClient, admin: Admin, pullIds:
   }
 }
 
+/** The card's available count at its location, or null when Shopify doesn't say. */
+async function availableAt(admin: Admin, inventoryItemId: string, locationId: string): Promise<number | null> {
+  const data = await gql(
+    admin,
+    `#graphql
+      query RereserveAvailable($id: ID!, $locationId: ID!) {
+        inventoryItem(id: $id) { inventoryLevel(locationId: $locationId) { quantities(names: ["available"]) { quantity } } }
+      }`,
+    { id: inventoryItemId, locationId },
+  );
+  const quantity = data?.inventoryItem?.inventoryLevel?.quantities?.[0]?.quantity;
+  return typeof quantity === "number" ? quantity : null;
+}
+
 /**
  * Puts a released copy back into reserved for each pull, e.g. when a vault shipment's invoice
- * lapses unpaid and the cards return to the vault. Skips pulls that were never released.
+ * lapses unpaid or the cards are returned to the vault. Skips pulls that were never released.
+ *
+ * Return guard: a copy is only re-reserved once Shopify shows it available (waiting briefly
+ * for a cancelled order's restock), so re-reserving can never push a card negative. A pull that
+ * still has no available copy is left released and shows on the Inventory Check page.
  */
 export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds: string[]) {
   const pulls = await db.pull.findMany({
     where: { id: { in: pullIds }, unreservedAt: { not: null } },
     include: { slot: { include: { card: true } } },
   });
+  const skipped: string[] = [];
+  // How long to wait for a cancelled order's restock to land before giving up on a copy.
+  const restockWaitMs = Number(process.env.RESTOCK_WAIT_MS ?? 12_000);
   for (const pull of pulls) {
     const card = pull.slot.card;
     if (!reservable(card)) continue;
+    let available = await availableAt(admin, card.inventoryItemId, card.locationId);
+    for (let waited = 0; available !== null && available < 1 && waited < restockWaitMs; waited += 2000) {
+      await new Promise((r) => setTimeout(r, 2000));
+      available = await availableAt(admin, card.inventoryItemId, card.locationId);
+    }
+    if (available !== null && available < 1) {
+      console.error(`Return guard: no available copy of "${card.title}" to re-reserve for pull ${pull.id}`);
+      skipped.push(pull.id);
+      continue;
+    }
     await moveQuantities(
       admin,
       [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: 1 }],
@@ -267,6 +298,7 @@ export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds:
       db.card.update({ where: { id: card.id }, data: { reservedQty: { increment: 1 } } }),
     ]);
   }
+  return { skipped };
 }
 
 /**
@@ -385,7 +417,19 @@ export async function auditPoolInventory(db: PrismaClient, admin: Admin) {
     if (issue.available < 0 || issue.stuck > 0) issues.push(issue);
   }
   issues.sort((a, b) => a.available - b.available || b.stuck - a.stuck);
-  return { checked: groups.size, issues };
+
+  // Vault cards whose copy isn't held for them (the return guard found none available).
+  const unheld = await db.pull.findMany({
+    where: {
+      status: "REVEALED",
+      unreservedAt: { not: null },
+      OR: [{ shipRequestId: null }, { shipRequest: { status: { notIn: ["PENDING", "PAID"] } } }],
+      slot: { card: { inventoryItemId: { not: null } } },
+    },
+    select: { id: true, orderName: true, slot: { select: { card: { select: { title: true } } } } },
+  });
+  const unheldVaultCards = unheld.map((p) => ({ pullId: p.id, orderName: p.orderName, title: p.slot.card.title }));
+  return { checked: groups.size, issues, unheldVaultCards };
 }
 
 /** Releases reserved copies the app no longer accounts for back to available (one item, or all). Returns copies released. */

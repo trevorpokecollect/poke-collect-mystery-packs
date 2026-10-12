@@ -27,7 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function InventoryCheck() {
-  const { checked, issues, released } = useLoaderData<typeof loader>();
+  const { checked, issues, released, unheldVaultCards } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const busy = useNavigation().state !== "idle";
@@ -48,6 +48,12 @@ export default function InventoryCheck() {
             Checked {checked} pool card{checked === 1 ? "" : "s"} against Shopify. A card is flagged when its available count
             is negative, or when Shopify holds more copies in reserved than the pools and open vault invoices account for.
           </s-paragraph>
+          {unheldVaultCards.length ? (
+            <s-banner tone="warning" heading={`${unheldVaultCards.length} vault card${unheldVaultCards.length === 1 ? " isn't" : "s aren't"} held in inventory`}>
+              The return guard couldn&apos;t re-reserve these because Shopify showed no available copy. Check the shelf, then
+              adjust stock in Shopify: {unheldVaultCards.map((c) => `${c.title} (${c.orderName})`).join(", ")}.
+            </s-banner>
+          ) : null}
           {issues.length === 0 ? (
             <s-banner tone="success">Every pool card matches Shopify. Nothing is negative.</s-banner>
           ) : (
