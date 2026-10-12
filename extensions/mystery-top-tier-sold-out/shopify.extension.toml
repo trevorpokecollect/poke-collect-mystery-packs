@@ -1,0 +1,30 @@
+# Shopify Flow trigger: fires once when the last card of a mystery pack series' top tier (Master)
+# is pulled, so a workflow can email the merchant that the series is ready to roll over.
+[[extensions]]
+name = "Mystery pack top tier sold out"
+handle = "mystery-top-tier-sold-out"
+type = "flow_trigger"
+uid = "d4bc664e-cd67-4446-7184-2e19b32fb5f622978cb9"
+description = "Every top-tier (Master) card in a mystery pack series has been pulled, so it is ready to roll over."
+
+[settings]
+
+  [[settings.fields]]
+  type = "single_line_text_field"
+  key = "Series"
+  description = "Series name, e.g. Mystery Pack Series 1"
+
+  [[settings.fields]]
+  type = "single_line_text_field"
+  key = "Tier"
+  description = "The tier that ran out, e.g. Master"
+
+  [[settings.fields]]
+  type = "number_decimal"
+  key = "Packs left"
+  description = "Packs still for sale in the series"
+
+  [[settings.fields]]
+  type = "single_line_text_field"
+  key = "Admin link"
+  description = "Link to the series in the app"

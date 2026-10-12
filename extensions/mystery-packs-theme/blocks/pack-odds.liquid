@@ -1,6 +1,6 @@
 {% comment %}
-  Mystery pack "Potential Pulls" block for the pack product page: live odds per tier and a
-  "View Potential Pulls" button that opens the full card list at /apps/packs/pool.
+  Mystery pack details for the pack product page: packs left, the four tiers with their logos,
+  card counts and live odds, a "View Potential Pulls" button, and how buying and opening works.
   Finds the series from the product, so it works on any pack product without setup.
   Renders nothing (and makes no request) unless the product's type is "Mystery Pack".
 {% endcomment %}
@@ -19,18 +19,45 @@
     assign query = 'product=' | append: product.id
   endif
 -%}
-<div
-  class="mp-odds"
-  data-mp-odds
-  data-endpoint="/apps/packs/api/pool?{{ query }}"
-  hidden
-  {{ block.shopify_attributes }}
->
-  <h3 class="mp-odds__heading">{{ block.settings.heading }}</h3>
-  <p class="mp-odds__summary" data-mp-summary></p>
-  <ul class="mp-odds__tiers" data-mp-tiers></ul>
-  <a class="button button--secondary mp-odds__button" href="/apps/packs/pool?{{ query }}">{{ block.settings.button_label }}</a>
-  {% if block.settings.note != blank %}<p class="mp-odds__note">{{ block.settings.note }}</p>{% endif %}
+<div class="mpd" data-mp-odds data-endpoint="/apps/packs/api/pool?{{ query }}" {{ block.shopify_attributes }}>
+  <div class="mpd__head">
+    <h3 class="mpd__heading">{{ block.settings.heading }}</h3>
+    <p class="mpd__left" data-mp-left>Loading the pool…</p>
+    <div class="mpd__bar" aria-hidden="true"><span data-mp-bar></span></div>
+  </div>
+
+  <ul class="mpd__tiers" data-mp-tiers aria-label="Card tiers"></ul>
+
+  <div class="mpd__buttons">
+    <a class="mpd__button" href="/apps/packs/pool?{{ query }}">{{ block.settings.button_label }}</a>
+    {%- if block.settings.show_demo -%}
+      <button type="button" class="mpd__button mpd__button--demo" data-mp-demo hidden
+        data-app="{{ block.settings.app_url | default: 'https://app-production-9bd21.up.railway.app' }}"
+        data-pack-image="{%- if product.featured_image -%}{{ product.featured_image | image_url: width: 900 }}{%- endif -%}"
+        data-series="{{ product.title | escape }}">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3l14 9-14 9V3z"/></svg>
+        {{ block.settings.demo_label }}
+      </button>
+    {%- endif -%}
+  </div>
+  {%- if block.settings.show_demo -%}<p class="mpd__demo-note" data-mp-demo-note hidden>{{ block.settings.demo_note }}</p>{%- endif -%}
+
+  {%- if block.settings.show_how -%}
+    <div class="mpd__how">
+      <h4 class="mpd__subheading">{{ block.settings.how_heading }}</h4>
+      <ol class="mpd__steps">
+        <li><span class="mpd__num">1</span><div><strong>Buy Your Pack</strong><p>Your pack's cards are picked from the pool below the moment your payment clears.</p></div></li>
+        <li><span class="mpd__num">2</span><div><strong>Open It Online</strong><p>Right after checkout, tap <em>Open It Now</em> to tear the pack open and reveal your cards. They go straight to your vault.</p></div></li>
+        <li><span class="mpd__num">3</span><div><strong>Ship When You're Ready</strong><p>Packs have no shipping. Tap <em>Ship My Cards</em> in My Packs to send your whole vault at once, sleeved and top loaded.</p></div></li>
+      </ol>
+      {%- if block.settings.shipping_note != blank -%}<p class="mpd__ship"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h11v9H3z"/><path d="M14 9h4l3 3v3h-7"/><circle cx="7" cy="17" r="2"/><circle cx="17.5" cy="17" r="2"/></svg><span>{{ block.settings.shipping_note }}</span></p>{%- endif -%}
+    </div>
+  {%- endif -%}
+
+  <a class="mpd__fair" href="/apps/packs/fair?{{ query }}" data-mp-fair hidden>
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1 2 3.5v4C2 11 4.6 14 8 15c3.4-1 6-4 6-7.5v-4Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m5.3 8 1.9 1.9L10.9 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+    Provably Fair
+  </a>
 </div>
 {{ 'pack-odds.css' | asset_url | stylesheet_tag }}
 <script src="{{ 'pack-odds.js' | asset_url }}" defer></script>
@@ -38,14 +65,21 @@
 
 {% schema %}
 {
-  "name": "Mystery pack odds",
+  "name": "Mystery pack details",
   "target": "section",
   "enabled_on": { "templates": ["product"] },
   "settings": [
-    { "type": "text", "id": "heading", "label": "Heading", "default": "What's in the pack" },
+    { "type": "text", "id": "heading", "label": "Heading", "default": "What's In The Pack" },
     { "type": "text", "id": "button_label", "label": "Button label", "default": "View Potential Pulls" },
-    { "type": "textarea", "id": "note", "label": "Note", "default": "Every pack holds one card from the list, shipped to you after you open it online. Odds update as packs are opened." },
-    { "type": "text", "id": "series_handle", "label": "Series handle (optional)", "info": "Leave blank to use the series sold through this product." }
+    { "type": "checkbox", "id": "show_how", "label": "Show how it works", "default": true },
+    { "type": "text", "id": "how_heading", "label": "How it works heading", "default": "How It Works" },
+    { "type": "text", "id": "shipping_note", "label": "Shipping note", "default": "Ship Your Vault For $5 Flat, Free On 25+ Cards (US Only)." },
+    { "type": "text", "id": "series_handle", "label": "Series handle (optional)", "info": "Leave blank to use the series sold through this product." },
+    { "type": "header", "content": "Demo opening" },
+    { "type": "checkbox", "id": "show_demo", "label": "Show demo button", "info": "Lets shoppers watch a pretend pack opening with a card from the cards still in the pool. Nothing is bought or drawn.", "default": true },
+    { "type": "text", "id": "demo_label", "label": "Demo button label", "default": "Try A Demo Pack" },
+    { "type": "text", "id": "demo_note", "label": "Demo note", "default": "Demo only: cards are picked at random from what's left in the pool, using the live odds. Nothing is bought or reserved." },
+    { "type": "text", "id": "app_url", "label": "App URL (advanced)", "default": "https://app-production-9bd21.up.railway.app" }
   ]
 }
 {% endschema %}

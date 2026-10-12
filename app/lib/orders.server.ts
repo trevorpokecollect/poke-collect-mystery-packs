@@ -173,6 +173,33 @@ async function addCardsToOrder(admin: Admin, orderId: string, variantIds: string
   );
 }
 
+/**
+ * Vault orders: the pack lines never ship (cards go to the vault), so they're marked fulfilled at
+ * payment and the order doesn't sit in the unfulfilled queue. Opening packs doesn't depend on it.
+ */
+export async function fulfillVaultPackLines(db: PrismaClient, admin: Admin, orderId: string) {
+  const packOrder = await db.packOrder.findUnique({ where: { orderId } });
+  if (!packOrder?.vault || packOrder.packLinesFulfilledAt) return false;
+  const packVariants = new Set(
+    (await db.series.findMany({ where: { shop: packOrder.shop }, select: { packVariantId: true } })).map((s) => s.packVariantId),
+  );
+  await fulfillPackLines(admin, orderId, packVariants);
+  await db.packOrder.update({ where: { orderId }, data: { packLinesFulfilledAt: new Date() } });
+  return true;
+}
+
+/** Vault orders paid before pack lines were fulfilled at payment. */
+export async function fulfillMissingVaultPackLines(db: PrismaClient, adminFor: (shop: string) => Promise<Admin>) {
+  const orders = await db.packOrder.findMany({ where: { vault: true, packLinesFulfilledAt: null }, take: 50 });
+  for (const o of orders) {
+    try {
+      await fulfillVaultPackLines(db, await adminFor(o.shop), o.orderId);
+    } catch (error) {
+      console.error(`Fulfilling pack lines on ${o.orderId} failed`, error);
+    }
+  }
+}
+
 /** Marks the pack line items themselves as fulfilled: they were opened online, nothing ships for them. */
 async function fulfillPackLines(admin: Admin, orderId: string, packVariantIds: Set<string>) {
   for (const fo of await fulfillmentOrders(admin, orderId)) {
@@ -239,7 +266,8 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
     include: { slot: { include: { card: true } }, series: true },
   });
 
-  if (pulls.length > 0 && !packOrder.cardsAddedAt) {
+  // Vault orders keep their cards in the vault; only the pack lines are closed out.
+  if (pulls.length > 0 && !packOrder.cardsAddedAt && !packOrder.vault) {
     // Auto-built pools hold their cards as "reserved"; free each won copy so the edit can commit it.
     await unreserveForPulls(db, admin, pulls.map((p) => p.id));
     await addCardsToOrder(
@@ -257,6 +285,11 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
     ]);
   }
 
+  if (packOrder.vault && pulls.length > 0 && !packOrder.pullsNotedAt) {
+    await noteVaultPulls(admin, orderId, pulls.map((p) => `${p.slot.card.title} (${p.slot.card.tier})`));
+    await db.packOrder.update({ where: { orderId }, data: { pullsNotedAt: new Date() } });
+  }
+
   await releaseHolds(admin, orderId);
   const packVariants = new Set(
     (await db.series.findMany({ where: { shop: packOrder.shop }, select: { packVariantId: true } })).map(
@@ -266,6 +299,65 @@ async function finalizeLeased(db: PrismaClient, admin: Admin, orderId: string) {
   await fulfillPackLines(admin, orderId, packVariants);
   await db.packOrder.update({ where: { orderId }, data: { finalized: true, held: false } });
   return true;
+}
+
+/** Notes the pulls on finalized vault orders that don't have them yet (e.g. finalized before notes existed). */
+export async function noteMissingVaultPulls(db: PrismaClient, adminFor: (shop: string) => Promise<Admin>) {
+  const orders = await db.packOrder.findMany({ where: { vault: true, finalized: true, pullsNotedAt: null }, take: 50 });
+  for (const order of orders) {
+    try {
+      const pulls = await db.pull.findMany({
+        where: { orderId: order.orderId, status: { not: "VOIDED" } },
+        include: { slot: { include: { card: true } } },
+        orderBy: [{ packIndex: "asc" }, { cardIndex: "asc" }],
+      });
+      if (pulls.length > 0) {
+        await noteVaultPulls(await adminFor(order.shop), order.orderId, pulls.map((p) => `${p.slot.card.title} (${p.slot.card.tier})`));
+      }
+      await db.packOrder.update({ where: { orderId: order.orderId }, data: { pullsNotedAt: new Date() } });
+    } catch (error) {
+      console.error(`Noting pulls on ${order.orderId} failed`, error);
+    }
+  }
+}
+
+/**
+ * Vault orders don't carry the cards as line items, so the pulls are listed in the order's note
+ * (after any note already there) for staff to see on the order page.
+ */
+export async function noteVaultPulls(admin: Admin, orderId: string, cards: string[]) {
+  const data = await gql(admin, `#graphql
+    query PackOrderNote($id: ID!) { order(id: $id) { note } }`, { id: orderId });
+  const existing: string = data.order?.note ?? "";
+  if (existing.includes("Mystery pack pulls")) return;
+  // Shopify caps notes at 5000 characters: shorten titles, combine duplicates, and cut off with a count.
+  const counts = new Map<string, number>();
+  for (const c of cards) {
+    const short = c.replace(/ - Near Mint/g, "").replace(/\s+(Holofoil|Reverse Holofoil|Normal)(?=\s*\()/g, "");
+    counts.set(short, (counts.get(short) ?? 0) + 1);
+  }
+  const header = `Mystery pack pulls (${cards.length} cards, in the customer's vault, not shipped with this order):`;
+  const budget = 5000 - existing.length - header.length - 80;
+  const lines: string[] = [];
+  let used = 0;
+  for (const [title, n] of counts) {
+    const line = `- ${n > 1 ? `${n}x ` : ""}${title.length > 90 ? title.slice(0, 87) + "..." : title}`;
+    if (used + line.length + 1 > budget) {
+      lines.push(`- ...and ${cards.length - lines.reduce((t, l) => t + (Number(l.match(/^- (\d+)x /)?.[1]) || 1), 0)} more (full list in the app)`);
+      break;
+    }
+    lines.push(line);
+    used += line.length + 1;
+  }
+  const list = `${header}\n${lines.join("\n")}`;
+  await gql(
+    admin,
+    `#graphql
+      mutation PackOrderNoteSet($input: OrderInput!) {
+        orderUpdate(input: $input) { order { id } userErrors { field message } }
+      }`,
+    { input: { id: orderId, note: existing ? `${existing}\n\n${list}` : list } },
+  );
 }
 
 /** Stores the "open your packs" link on the order so notification templates can show it. */

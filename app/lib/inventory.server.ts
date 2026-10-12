@@ -10,7 +10,7 @@ export interface CandidateFilter {
   productType: string;
   /** Variant option value to require, e.g. "Near Mint". Blank allows any condition. */
   condition: string;
-  /** Card language, matched against StorePass's `Language_<name>` product tag. Blank allows any. */
+  /** Card language(s), matched against StorePass's `Language_<name>` product tag. Comma-separate to allow several; blank allows any. */
   language: string;
 }
 
@@ -60,13 +60,20 @@ const quote = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'
  * Shopify's variant search ignores price ranges, so the caller filters by value.
  */
 export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Promise<InventoryCandidate[]> {
+  // "Pokemon Single, Pokemon Japanese Single" draws from either product type.
+  const types = filter.productType.split(",").map((t) => t.trim()).filter(Boolean);
   const query = [
-    `product_type:${quote(filter.productType)}`,
+    types.length > 1 ? `(${types.map((t) => `product_type:${quote(t)}`).join(" OR ")})` : `product_type:${quote(types[0] ?? "")}`,
     "product_status:active",
     "inventory_quantity:>0",
   ].join(" AND ");
   const condition = filter.condition.trim().toLowerCase();
-  const languageTag = filter.language.trim() ? `language_${filter.language.trim().toLowerCase()}` : null;
+  // "English, Japanese" allows either language.
+  const languageTags = filter.language
+    .split(",")
+    .map((l) => l.trim().toLowerCase())
+    .filter(Boolean)
+    .map((l) => `language_${l}`);
 
   const out: InventoryCandidate[] = [];
   let after: string | null = null;
@@ -99,9 +106,9 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
     );
     const conn: VariantPage = data.productVariants;
     for (const v of conn.nodes) {
-      if (v.product.status !== "ACTIVE" || v.product.productType !== filter.productType) continue;
+      if (v.product.status !== "ACTIVE" || !types.includes(v.product.productType)) continue;
       if (!v.inventoryItem?.tracked) continue;
-      if (languageTag && !v.product.tags.some((t) => t.trim().toLowerCase() === languageTag)) continue;
+      if (languageTags.length && !v.product.tags.some((t) => languageTags.includes(t.trim().toLowerCase()))) continue;
       if (condition && !v.selectedOptions.some((o) => o.value.trim().toLowerCase() === condition)) {
         continue;
       }
@@ -228,6 +235,32 @@ export async function unreserveForPulls(db: PrismaClient, admin: Admin, pullIds:
     await db.$transaction([
       db.pull.update({ where: { id: pull.id }, data: { unreservedAt: new Date() } }),
       db.card.update({ where: { id: card.id }, data: { reservedQty: { decrement: 1 } } }),
+    ]);
+  }
+}
+
+/**
+ * Puts a released copy back into reserved for each pull, e.g. when a vault shipment's invoice
+ * lapses unpaid and the cards return to the vault. Skips pulls that were never released.
+ */
+export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds: string[]) {
+  const pulls = await db.pull.findMany({
+    where: { id: { in: pullIds }, unreservedAt: { not: null } },
+    include: { slot: { include: { card: true } } },
+  });
+  for (const pull of pulls) {
+    const card = pull.slot.card;
+    if (!reservable(card)) continue;
+    await moveQuantities(
+      admin,
+      [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: 1 }],
+      "reserve",
+      ledgerFor(pull.seriesId),
+      `rereserve-${pull.id}-${pull.unreservedAt!.getTime()}`,
+    );
+    await db.$transaction([
+      db.pull.update({ where: { id: pull.id }, data: { unreservedAt: null } }),
+      db.card.update({ where: { id: card.id }, data: { reservedQty: { increment: 1 } } }),
     ]);
   }
 }

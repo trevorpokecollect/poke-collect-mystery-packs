@@ -92,3 +92,70 @@ describe("buildPool", () => {
     expect(result.cards.every((c) => c.quantity === 1)).toBe(true);
   });
 });
+
+describe("buildPool minimum hits", () => {
+  it("keeps at least minHits cards at or above the hit value while hitting the average", () => {
+    const candidates = [
+      ...Array.from({ length: 400 }, (_, i) => ({ variantId: `c${i}`, value: 0.5 + (i % 4) * 0.5 })),
+      ...Array.from({ length: 80 }, (_, i) => ({ variantId: `h${i}`, value: 5 + (i % 6) })),
+      ...Array.from({ length: 20 }, (_, i) => ({ variantId: `m${i}`, value: 20 + i })),
+      // Just under the hit value, so the nearest swap is never a hit.
+      ...Array.from({ length: 30 }, (_, i) => ({ variantId: `u${i}`, value: 4.99 })),
+    ];
+    const { cards, average } = buildPool(candidates, { count: 200, minValue: 0.5, maxValue: 50, targetAverage: 2.5, minHits: 40, hitValue: 5.01 });
+    const hits = cards.filter((c) => c.value >= 5.01).reduce((n, c) => n + c.quantity, 0);
+    expect(hits).toBeGreaterThanOrEqual(40);
+    expect(average).toBeCloseTo(2.5, 1);
+  });
+
+  it("says when there aren't enough hits in stock", () => {
+    const candidates = Array.from({ length: 50 }, (_, i) => ({ variantId: `c${i}`, value: i < 3 ? 10 : 1 }));
+    expect(() => buildPool(candidates, { count: 20, minValue: 0.5, maxValue: 50, targetAverage: 2, minHits: 5, hitValue: 5 })).toThrow(/Only 3 cards/);
+  });
+});
+
+describe("buildPool filler max", () => {
+  it("leaves out cards between the filler max and the hit value", () => {
+    const candidates = Array.from({ length: 300 }, (_, i) => ({ variantId: `c${i}`, value: 1 + (i % 30) }));
+    const { cards } = buildPool(candidates, { count: 100, minValue: 1, maxValue: 30, targetAverage: 4, minHits: 20, hitValue: 5.01, fillerMax: 2 });
+    expect(cards.every((c) => c.value <= 2 || c.value >= 5.01)).toBe(true);
+  });
+});
+
+describe("buildPool two hit floors", () => {
+  it("keeps both the hit and the big-hit minimums", () => {
+    const candidates = [
+      ...Array.from({ length: 400 }, (_, i) => ({ variantId: `c${i}`, value: 1 + (i % 3) * 0.5 })),
+      ...Array.from({ length: 200 }, (_, i) => ({ variantId: `g${i}`, value: 5.5 + (i % 4) })),
+      ...Array.from({ length: 80 }, (_, i) => ({ variantId: `u${i}`, value: 10.5 + (i % 20) })),
+    ];
+    const { cards, average } = buildPool(candidates, {
+      count: 300, minValue: 1, maxValue: 35, targetAverage: 3.4,
+      minHits: 80, hitValue: 5.01, minBigHits: 25, bigHitValue: 10.01, fillerMax: 2,
+    });
+    const at = (v: number) => cards.filter((c) => c.value >= v).reduce((n, c) => n + c.quantity, 0);
+    expect(at(5.01)).toBeGreaterThanOrEqual(80);
+    expect(at(10.01)).toBeGreaterThanOrEqual(25);
+    expect(average).toBeCloseTo(3.4, 1);
+  });
+});
+
+describe("buildPool three hit floors", () => {
+  it("keeps the hit, big-hit and top-hit minimums", () => {
+    const candidates = [
+      ...Array.from({ length: 400 }, (_, i) => ({ variantId: `c${i}`, value: 1 + (i % 3) * 0.5 })),
+      ...Array.from({ length: 200 }, (_, i) => ({ variantId: `g${i}`, value: 5.5 + (i % 4) })),
+      ...Array.from({ length: 60 }, (_, i) => ({ variantId: `u${i}`, value: 10.5 + (i % 4) })),
+      ...Array.from({ length: 40 }, (_, i) => ({ variantId: `m${i}`, value: 15.5 + (i % 15) })),
+    ];
+    const { cards, average } = buildPool(candidates, {
+      count: 300, minValue: 1, maxValue: 35, targetAverage: 3.6,
+      minHits: 80, hitValue: 5.01, minBigHits: 30, bigHitValue: 10.01, minTopHits: 12, topHitValue: 15.01, fillerMax: 2,
+    });
+    const at = (v: number) => cards.filter((c) => c.value >= v).reduce((n, c) => n + c.quantity, 0);
+    expect(at(5.01)).toBeGreaterThanOrEqual(80);
+    expect(at(10.01)).toBeGreaterThanOrEqual(30);
+    expect(at(15.01)).toBeGreaterThanOrEqual(12);
+    expect(average).toBeCloseTo(3.6, 1);
+  });
+});

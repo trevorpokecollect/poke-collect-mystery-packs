@@ -1,9 +1,10 @@
 // Admin-side series management: creating a series, filling its card pool from
 // Shopify variants, and launching it (which also sets the pack's inventory).
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import db from "../db.server";
 import { launchSeries } from "./pool.server";
+import { refreshBuylistReport } from "./buylist.server";
 import { gql } from "./orders.server";
 import { fetchCandidates, releaseUnneeded, reservePool, type CandidateFilter } from "./inventory.server";
 import {
@@ -78,7 +79,7 @@ export function slugify(text: string) {
 export async function createSeries(
   admin: AdminApiContext,
   shop: string,
-  input: { title: string; packVariantId: string; autoOpenDays: number },
+  input: { title: string; packVariantId: string; autoOpenDays: number; cardsPerPack?: number },
 ) {
   const [variant] = await fetchVariants(admin, [input.packVariantId]);
   if (!variant) throw new Error("That pack product variant wasn't found.");
@@ -88,17 +89,31 @@ export async function createSeries(
   if (inUse) {
     throw new Error(`That pack is already used by "${inUse.title}". Close that series first, then reuse the pack.`);
   }
+  // A later series can reuse a title (e.g. re-running "Series 1"), so make the handle unique.
+  const base = slugify(input.title) || "series";
+  let handle = base;
+  for (let n = 2; await db.series.findUnique({ where: { shop_handle: { shop, handle } } }); n++) handle = `${base}-${n}`;
   return db.series.create({
     data: {
       shop,
       title: input.title,
-      handle: slugify(input.title),
+      handle,
       packProductId: variant.product.id,
       packVariantId: variant.id,
       packPrice: variant.price,
       autoOpenDays: input.autoOpenDays,
+      cardsPerPack: Math.min(10, Math.max(1, Math.floor(input.cardsPerPack ?? 1))),
     },
   });
+}
+
+/** A draft follows its pack product's current price, so a price change shows in the economics. */
+export async function syncDraftPackPrice(admin: AdminApiContext, series: { id: string; status: string; packVariantId: string; packPrice: unknown }) {
+  if (series.status !== "DRAFT") return null;
+  const [variant] = await fetchVariants(admin, [series.packVariantId]);
+  if (!variant || Number(variant.price) === Number(series.packPrice)) return null;
+  await db.series.update({ where: { id: series.id }, data: { packPrice: variant.price } });
+  return variant.price;
 }
 
 /** Adds picked variants to the pool with default tier, value (its price) and quantity (its stock). */
@@ -155,7 +170,7 @@ export async function launch(admin: AdminApiContext, seriesId: string) {
     await releaseUnneeded(db, admin, seriesId);
     throw error;
   }
-  const packs = await db.slot.count({ where: { seriesId } });
+  const packs = Math.floor((await db.slot.count({ where: { seriesId } })) / Math.max(1, series.cardsPerPack));
 
   await setPackStock(admin, series.packVariantId, packs, `launch-${series.id}`);
   return { series, packs };
@@ -209,17 +224,26 @@ export async function syncPackStock(admin: AdminApiContext, seriesId: string) {
   if (!series) return;
   const left =
     series.status === "LIVE"
-      ? await db.slot.count({ where: { seriesId, claimed: false, voided: false } })
+      ? Math.floor(
+          (await db.slot.count({ where: { seriesId, claimed: false, voided: false } })) / Math.max(1, series.cardsPerPack),
+        )
       : 0;
   await setPackStock(admin, series.packVariantId, left, `sync-${seriesId}-${left}-${Date.now()}`);
 }
 
 /** Expected market value per pack and the share of the pack price it returns. */
-export function poolSummary(cards: { marketValue: { toString(): string }; quantity: number }[], packPrice: number) {
-  const packs = cards.reduce((n, c) => n + c.quantity, 0);
+export function poolSummary(
+  cards: { marketValue: { toString(): string }; quantity: number }[],
+  packPrice: number,
+  cardsPerPack = 1,
+) {
+  const cardCount = cards.reduce((n, c) => n + c.quantity, 0);
+  const perPack = Math.max(1, cardsPerPack);
+  const packs = Math.floor(cardCount / perPack);
   const totalValue = cards.reduce((n, c) => n + Number(c.marketValue.toString()) * c.quantity, 0);
-  const ev = packs ? totalValue / packs : 0;
-  return { packs, totalValue, ev, returnRate: packPrice ? ev / packPrice : 0, revenue: packs * packPrice };
+  // Value of one pack = average card value x cards per pack.
+  const ev = cardCount ? (totalValue / cardCount) * perPack : 0;
+  return { packs, cardCount, cardsPerPack: perPack, totalValue, ev, returnRate: packPrice ? ev / packPrice : 0, revenue: packs * packPrice };
 }
 
 export interface AutoBuildInput extends BuildRules, CandidateFilter {}
@@ -279,10 +303,23 @@ export async function autoBuildPool(admin: AdminApiContext, shop: string, series
         reserveInventory: true,
         tierRules: tiers as unknown as Prisma.InputJsonValue,
         buildRules: { ...input } as unknown as Prisma.InputJsonValue,
+        buylistReport: Prisma.DbNull,
       },
     }),
   ]);
+  // Every build gets a buylist cost report (runs in the background; the page shows it when ready).
+  queueBuylistReport(seriesId);
   return cards.reduce((n, c) => n + c.quantity, 0);
+}
+
+const buylistRunning = new Set<string>();
+/** Starts a buylist cost report for the series unless one is already running. */
+export function queueBuylistReport(seriesId: string) {
+  if (buylistRunning.has(seriesId)) return;
+  buylistRunning.add(seriesId);
+  refreshBuylistReport(db, seriesId)
+    .catch((error) => console.error(`Buylist report for ${seriesId} failed`, error))
+    .finally(() => buylistRunning.delete(seriesId));
 }
 
 /** Saves new tier rules and re-tiers every card in a draft series by its value. */

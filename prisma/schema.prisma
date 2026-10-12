@@ -38,60 +38,66 @@ enum SeriesStatus {
 
 // One sellable run of packs with a fixed card list, e.g. "Series 1: 500 packs at $10".
 model Series {
-  id            String       @id @default(cuid())
-  shop          String
-  title         String
-  handle        String
-  status        SeriesStatus @default(DRAFT)
+  id               String       @id @default(cuid())
+  shop             String
+  title            String
+  handle           String
+  status           SeriesStatus @default(DRAFT)
   // The Shopify product variant customers buy (the pack itself).
-  packProductId String
+  packProductId    String
   // Reusable across series: only one draft or live series may use a pack at a time.
-  packVariantId String
-  packPrice     Decimal      @db.Decimal(10, 2)
+  packVariantId    String
+  packPrice        Decimal      @db.Decimal(10, 2)
   // Unopened packs are revealed automatically after this many days so orders can ship.
-  autoOpenDays  Int          @default(7)
+  autoOpenDays     Int          @default(1)
   // Auto-built pools draw from the shop's live inventory: each card's copies are moved to
   // "reserved" at launch so they can only be won from packs, and released when the series closes.
-  reserveInventory Boolean   @default(false)
+  reserveInventory Boolean      @default(false)
   // [{ name, min }] lowest first; a card's tier is the highest one its value reaches.
-  tierRules     Json?
+  tierRules        Json?
   // Last rules used to auto-build the pool, to prefill the form.
-  buildRules    Json?
+  buildRules       Json?
   // Provable fairness: sha256(salt + ordered slot list) published at launch,
   // salt published after the series closes.
-  commitHash    String?
-  salt          String?
-  launchedAt    DateTime?
-  closedAt      DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  commitHash       String?
+  salt             String?
+  launchedAt       DateTime?
+  closedAt         DateTime?
+  // Set once when the last card of the top tier is pulled (fires the Shopify Flow alert).
+  topTierGoneAt    DateTime?
+  // Cards in each pack (1 for classic packs; e.g. 5 for a booster-style pack). Each card is its own slot.
+  cardsPerPack     Int          @default(1)
+  // What the pool's cards would cost at our StorePass buylist offers (see lib/buylist.server.ts).
+  buylistReport    Json?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   cards Card[]
   slots Slot[]
   pulls Pull[]
 
-  @@index([shop, packVariantId])
   @@unique([shop, handle])
+  @@index([shop, packVariantId])
 }
 
 // A card in the pool. Each card is a hidden Shopify variant with real inventory.
 model Card {
-  id               String  @id @default(cuid())
-  seriesId         String
-  series           Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  variantId        String
-  productId        String
-  title            String
-  imageUrl         String?
-  tier             String
-  marketValue      Decimal @db.Decimal(10, 2)
-  quantity         Int
-  sortOrder        Int     @default(0)
+  id              String  @id @default(cuid())
+  seriesId        String
+  series          Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  variantId       String
+  productId       String
+  title           String
+  imageUrl        String?
+  tier            String
+  marketValue     Decimal @db.Decimal(10, 2)
+  quantity        Int
+  sortOrder       Int     @default(0)
   // Where this card's stock is reserved (auto-built pools only).
-  inventoryItemId  String?
-  locationId       String?
+  inventoryItemId String?
+  locationId      String?
   // Copies currently held in Shopify's "reserved" state for this series.
-  reservedQty      Int     @default(0)
+  reservedQty     Int     @default(0)
 
   slots Slot[]
 
@@ -101,15 +107,15 @@ model Card {
 // One physical copy of a card in a series. At launch every slot is given a
 // position in a cryptographically shuffled sequence; packs claim positions in order.
 model Slot {
-  id        String  @id @default(cuid())
-  seriesId  String
-  series    Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  cardId    String
-  card      Card    @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  position  Int?
-  claimed   Boolean @default(false)
+  id       String  @id @default(cuid())
+  seriesId String
+  series   Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  cardId   String
+  card     Card    @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  position Int?
+  claimed  Boolean @default(false)
   // Voided slots belonged to a refunded/cancelled unopened pack; the card returns to stock.
-  voided    Boolean @default(false)
+  voided   Boolean @default(false)
 
   pull Pull?
 
@@ -125,26 +131,33 @@ enum PullStatus {
 }
 
 model Pull {
-  id           String     @id @default(cuid())
-  shop         String
-  seriesId     String
-  series       Series     @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  slotId       String     @unique
-  slot         Slot       @relation(fields: [slotId], references: [id])
-  orderId      String // gid://shopify/Order/...
-  orderName    String
-  lineItemId   String // gid://shopify/LineItem/... of the pack line
-  packIndex    Int // 0-based copy within that line item's quantity
-  customerId   String? // gid://shopify/Customer/...
-  status       PullStatus @default(UNOPENED)
-  revealedAt   DateTime?
-  autoOpened   Boolean    @default(false)
-  fulfillingAt DateTime?
+  id            String       @id @default(cuid())
+  shop          String
+  seriesId      String
+  series        Series       @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  slotId        String       @unique
+  slot          Slot         @relation(fields: [slotId], references: [id])
+  orderId       String // gid://shopify/Order/...
+  orderName     String
+  lineItemId    String // gid://shopify/LineItem/... of the pack line
+  packIndex     Int // 0-based copy within that line item's quantity
+  cardIndex     Int          @default(0) // 0-based card within a multi-card pack
+  customerId    String? // gid://shopify/Customer/...
+  status        PullStatus   @default(UNOPENED)
+  revealedAt    DateTime?
+  autoOpened    Boolean      @default(false)
+  fulfillingAt  DateTime?
   // Set once this pull's reserved copy is moved back to available for the order edit.
-  unreservedAt DateTime?
-  createdAt    DateTime   @default(now())
+  unreservedAt  DateTime?
+  // Vault orders: the "ship to me" request this card is on, and the order that ships it.
+  shipRequestId String?
+  shipRequest   ShipRequest? @relation(fields: [shipRequestId], references: [id])
+  shipOrderId   String?
+  // When the customer was reminded this vaulted card is near the end of its holding period.
+  remindedAt    DateTime?
+  createdAt     DateTime     @default(now())
 
-  @@unique([lineItemId, packIndex])
+  @@unique([lineItemId, packIndex, cardIndex])
   @@index([orderId])
   @@index([customerId])
   @@index([status, createdAt])
@@ -152,22 +165,52 @@ model Pull {
 
 // Per-order bookkeeping for orders that contain packs.
 model PackOrder {
-  orderId    String   @id
-  shop       String
-  orderName  String
-  customerId String?
+  orderId              String    @id
+  shop                 String
+  orderName            String
+  customerId           String?
   // Random token for the "open your packs" link (lets guests open without logging in).
-  openToken  String   @unique
+  openToken            String    @unique
   // The checkout's token (order.checkout_token), so the thank-you page can find this order's packs.
-  checkoutToken String?
-  held         Boolean   @default(false)
+  checkoutToken        String?
+  held                 Boolean   @default(false)
   // Set right after the order edit commits, so a retry never adds the cards twice.
-  cardsAddedAt DateTime?
+  cardsAddedAt         DateTime?
   // Lease so the reveal request and the cron job never finalize the same order at once.
-  finalizingAt DateTime?
-  finalized    Boolean   @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  finalizingAt         DateTime?
+  finalized            Boolean   @default(false)
+  // Vault orders keep pulled cards in the customer's vault until they ask to have them shipped,
+  // instead of adding them to this order. Orders from before the vault have this false.
+  vault                Boolean   @default(false)
+  // Vault orders: when the pulled cards were written to the order's note (cards aren't line items).
+  pullsNotedAt         DateTime?
+  // Vault orders: when the pack lines were marked fulfilled (at payment).
+  packLinesFulfilledAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([shop, checkoutToken])
+}
+
+// A customer's "ship my cards" request: a draft order for the vaulted cards plus the shipping fee.
+model ShipRequest {
+  id           String   @id @default(cuid())
+  shop         String
+  customerId   String?
+  // PENDING until the invoice is paid; EXPIRED if it lapses (cards go back to the vault).
+  status       String   @default("PENDING")
+  draftOrderId String?
+  invoiceUrl   String?
+  orderId      String?
+  cardCount    Int
+  shippingFee  Decimal  @db.Decimal(10, 2)
+  // Local pickup instead of shipping; readyAt is when the "ready for pickup" email went out.
+  pickup       Boolean  @default(false)
+  readyAt      DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  pulls        Pull[]
+
+  @@index([shop, status])
 }

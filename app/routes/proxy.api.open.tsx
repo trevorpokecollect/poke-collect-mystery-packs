@@ -21,12 +21,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error(`Finalizing ${result.orderId} failed`, error),
       );
     }
+    const view = (c: { title: string; tier: string; imageUrl: string | null }) => ({ title: c.title, tier: c.tier, imageUrl: c.imageUrl });
     return json({
-      card: {
-        title: result.card.title,
-        tier: result.card.tier,
-        imageUrl: result.card.imageUrl,
-      },
+      // Best card (single-card packs: the card). Multi-card packs also get every card, best last.
+      card: view(result.card),
+      cards: result.cards.map(view),
     });
   } catch (error) {
     if (error instanceof PoolError) return json({ error: error.message }, 404);

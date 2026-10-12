@@ -68,8 +68,9 @@ async function handle(request: Request) {
   return reply({
     status: "ready",
     url: link.toString(),
-    packs: pulls.length,
-    unopened: pulls.filter((p) => p.status === "UNOPENED").length,
+    // A multi-card pack is several pulls sharing a line item and pack index.
+    packs: new Set(pulls.map((p) => `${p.lineItemId}:${p.packIndex}`)).size,
+    unopened: new Set(pulls.filter((p) => p.status === "UNOPENED").map((p) => `${p.lineItemId}:${p.packIndex}`)).size,
     series: pulls[0].series.title,
     packImageUrl: art.get(pulls[0].series.packProductId) ?? null,
   });

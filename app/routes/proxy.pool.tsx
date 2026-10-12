@@ -34,18 +34,26 @@ const STYLE = `
 .mpp-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .mpp-tier small { opacity: .7; font-weight: 500; }
 .mpp-section { margin: 28px 0 12px; display: flex; align-items: baseline; gap: 10px; }
-.mpp-section h2 { margin: 0; font-size: 1.25rem; }
+.mpp-section h2 { margin: 0; font-size: 1.25em; }
 .mpp-section span { opacity: .7; }
 .mpp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
 .mpp-card { border: 1px solid rgba(0,0,0,.1); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,.6); }
 .mpp-card img { width: 100%; aspect-ratio: 5 / 7; object-fit: contain; border-radius: 8px; background: #f3f3f6; }
-.mpp-name { font-size: .85rem; font-weight: 600; line-height: 1.25; }
-.mpp-meta { display: flex; justify-content: space-between; font-size: .8rem; opacity: .85; }
-.mpp-badge { font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.mpp-name { font-size: .85em; font-weight: 600; line-height: 1.25; }
+.mpp-meta { display: flex; justify-content: space-between; font-size: .8em; opacity: .85; }
+.mpp-badge { font-size: .7em; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .mpp-out { opacity: .45; }
 .mpp-out .mpp-meta strong { text-decoration: line-through; }
-.mpp-fair { margin-top: 32px; font-size: .78rem; opacity: .7; word-break: break-all; }
-.mpp-back { display: inline-block; margin-bottom: 18px; }
+.mpp-fair { margin-top: 40px; }
+.mpp-fair-btn:hover, .mpp-fair-btn:focus-visible { background: #14141a !important; border-color: #14141a !important; color: #fff !important; }
+.mpp-fair-btn:hover *, .mpp-fair-btn:focus-visible * { color: #fff !important; }
+/* The theme fills buttons with a white ::before layer on hover, which hid the white label. */
+.mpp-fair-btn::before, .mpp-fair-btn::after { display: none !important; }
+.mpp-fair-btn { display: flex !important; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 64px; padding: 16px 20px; font-size: 18px !important; font-weight: 800 !important; letter-spacing: .02em; text-align: center; text-decoration: none !important; }
+.mpp-back { display: inline-flex !important; align-items: center; gap: 6px; margin-bottom: 20px; text-decoration: none !important; }
+/* The theme's hover fill paints the button red with red text; use a plain dark-on-hover instead. */
+.mpp-back::before, .mpp-back::after { display: none !important; }
+.mpp-back:hover, .mpp-back:focus-visible { background: #14141a !important; border-color: #14141a !important; color: #fff !important; }
 `;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -54,21 +62,30 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const odds = await oddsFromQuery(shop, url);
   const product = url.searchParams.get("product");
   const back = product
-    ? `<a class="mpp-back" href="javascript:history.back()">&larr; Back to the pack</a>`
+    ? `<a class="mpp-back button button--secondary" href="javascript:history.back()">&larr; Back To The Pack</a>`
     : "";
 
   if (!odds) {
     return liquid(
       `<div class="mpp"><style>${STYLE}</style>${back}<h1>Potential Pulls</h1>
-       <p class="mpp-sub">This pack's card list isn't available yet.</p></div>`,
+       <p class="mpp-sub">This Pack's Card List Isn't Available Yet.</p></div>`,
     );
   }
 
   const closed = odds.status === "CLOSED";
+  // Chance a pack holds at least one card of a tier (multi-card packs draw several cards).
+  const per = Math.max(1, odds.cardsPerPack ?? 1);
+  const left = odds.tiers.reduce((n, t) => n + t.remaining, 0);
+  const perPack = (k: number) => {
+    if (k <= 0 || left <= 0) return 0;
+    let none = 1;
+    for (let i = 0; i < Math.min(per, left); i++) none *= Math.max(0, left - k - i) / (left - i);
+    return 1 - none;
+  };
   const tierChips = odds.tiers
     .map(
       (t) => `<div class="mpp-tier"><span class="mpp-dot" style="background:${tierColor(t.name)}"></span>${safe(t.name)}
-        <small>${closed ? `${t.total} cards` : pct(t.currentOdds)}</small></div>`,
+        <small>${closed ? `${t.total} Cards` : `${pct(perPack(t.remaining))} Per Pack`}</small></div>`,
     )
     .join("");
 
@@ -84,23 +101,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             ${c.imageUrl ? `<img src="${safe(thumb(c.imageUrl))}" alt="${safe(c.title)}" loading="lazy">` : ""}
             <div class="mpp-badge" style="color:${tierColor(c.tier)}">${safe(c.tier)}</div>
             <div class="mpp-name">${safe(c.title)}</div>
-            <div class="mpp-meta"><strong>${closed ? "" : out ? "Pulled" : pct(c.currentOdds)}</strong>
-              <span>${c.remaining} of ${c.quantity} left</span></div>
+            <div class="mpp-meta"><strong>${closed ? "" : out ? "Pulled" : `${pct(c.currentOdds)}${per > 1 ? " Per Card" : ""}`}</strong>
+              <span>${c.remaining} Of ${c.quantity} Left</span></div>
           </div>`;
         })
         .join("");
       return `<div class="mpp-section"><h2 style="color:${tierColor(t.name)}">${safe(t.name)}</h2>
-        <span>${t.remaining} of ${t.total} left${closed ? "" : ` · ${pct(t.currentOdds)} per pack`}</span></div>
+        <span>${t.remaining} Of ${t.total} Left${closed ? "" : ` · ${pct(perPack(t.remaining))} Per Pack`}</span></div>
         <div class="mpp-grid">${items}</div>`;
     })
     .join("");
 
   const fairness = odds.commitHash
-    ? `<p class="mpp-fair">${
-        odds.reveal
-          ? `Fairness check: sha256("${safe(odds.reveal.salt ?? "")}:" + the published card order) = ${safe(odds.commitHash)}`
-          : `The order of every card in this pool was locked before the first pack was sold. Fingerprint: ${safe(odds.commitHash)}`
-      }</p>`
+    ? `<div class="mpp-fair">
+        <a class="mpp-fair-btn button button--primary" href="/apps/packs/fair?series=${encodeURIComponent(odds.handle)}">
+          <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true"><path d="M8 1 2 3.5v4C2 11 4.6 14 8 15c3.4-1 6-4 6-7.5v-4Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m5.3 8 1.9 1.9L10.9 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          Provably Fair: See How We Prove Every Pack Is Fair
+        </a>
+      </div>`
     : "";
 
   return liquid(
@@ -108,8 +126,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       <h1>Potential Pulls: ${safe(odds.title)}</h1>
       <p class="mpp-sub">${
         closed
-          ? "This series is sold out."
-          : `Every pack holds one of these cards. ${odds.packsRemaining} of ${odds.totalPacks} packs left. Odds update as packs are opened.`
+          ? "This Series Is Sold Out."
+          : `Every Pack Holds ${per > 1 ? `${per} Of These Cards` : "One Of These Cards"}. ${odds.packsRemaining} Of ${odds.totalPacks} Packs Left. Odds Update As Packs Are Opened.`
       }</p>
       <div class="mpp-tiers">${tierChips}</div>
       ${sections}

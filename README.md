@@ -20,8 +20,8 @@ Plan and business notes: [Digital Mystery Packs Plan](https://claude.ai/code/art
 4. **Reveal.** Customers open packs at `https://poke-collect.com/apps/packs` (Shopify app proxy).
    Logged-in customers see their packs; guests use the link from the metafield. The browser only
    learns a card when the pack is opened, and the result was fixed at payment.
-5. **Ship.** When every pack on an order is open (or after the series' auto-open window, default 7
-   days), the app adds the won cards to the order at 100% off with an order edit, releases its hold,
+5. **Ship.** When every pack on an order is open (or after the series' auto-open window, default 1
+   day), the app adds the won cards to the order at 100% off with an order edit, releases its hold,
    and marks the pack line items fulfilled. The card then ships through your normal flow.
 6. **Refunds and cancellations** void the unshipped pulls. Voided copies are not resold, so the
    published sequence stays intact; the physical card just stays in stock.

@@ -1,0 +1,1 @@
+ALTER TABLE "Series" ADD COLUMN "topTierGoneAt" TIMESTAMP(3);

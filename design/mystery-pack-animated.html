@@ -22,7 +22,7 @@
 .a-ball2{animation-delay:calc(var(--t)*-1s + .8s)}.a-ball3{animation-delay:calc(var(--t)*-1s + 1.2s)}
 @keyframes ball{0%,40%,100%{opacity:.7}15%{opacity:1;filter:brightness(1.6)}}
 </style>
-<script>var m=location.search.match(/t=([0-9.]+)/);if(m)document.documentElement.style.setProperty('--t',m[1]);else document.querySelectorAll('[class^=a-]').forEach(function(e){e.style.animationPlayState='running'});</script>
+<script>if(/[?&]bg=0/.test(location.search))document.write('<style>html,body{background:transparent}.backdrop{display:none}</style>');var m=location.search.match(/t=([0-9.]+)/);if(m)document.documentElement.style.setProperty('--t',m[1]);else document.querySelectorAll('[class^=a-]').forEach(function(e){e.style.animationPlayState='running'});</script>
 </head><body>
 <svg width="900" height="900" viewBox="0 0 900 900" xmlns="http://www.w3.org/2000/svg">
 <defs>
@@ -45,8 +45,8 @@
 </defs>
 
 <!-- backdrop -->
-<rect width="900" height="900" fill="url(#bgGlow)"/>
-<rect width="900" height="900" fill="url(#dots)"/>
+<g class="backdrop"><rect width="900" height="900" fill="url(#bgGlow)"/>
+<rect width="900" height="900" fill="url(#dots)"/></g>
 
 <!-- bag -->
 <g filter="url(#shadow)"><rect x="235" y="38" width="430" height="824" rx="14" fill="url(#bag)"/></g>
@@ -77,7 +77,7 @@
   <text class="mono" x="634" y="128" font-size="14" font-weight="700" fill="#b4b4c0" text-anchor="end" letter-spacing="1.2">ID 0x4D50</text>
 
   <!-- logo + title (glitch: offset red / cyan copies) -->
-  <image href="https://poke-collect.com/cdn/shop/files/Typeface_Logo_Main_1.png?v=1722970271&amp;width=600" x="345" y="150" width="210" height="85.3" filter="url(#glow)"/>
+  <image href="poke-collect-logo.png" x="345" y="150" width="210" height="85.3" filter="url(#glow)"/>
   <g class="a-title"><g font-size="44" font-weight="900" text-anchor="middle" letter-spacing="1">
     <text x="447" y="292" fill="#00e5ff" opacity=".55">MYSTERY</text>
     <text x="453" y="292" fill="#ff2d55" opacity=".7">MYSTERY</text>

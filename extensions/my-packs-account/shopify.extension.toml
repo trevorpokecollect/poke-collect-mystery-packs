@@ -1,0 +1,16 @@
+# Customer account Orders page: a "My Packs" card for customers who have bought mystery packs.
+api_version = "2026-07"
+
+[[extensions]]
+name = "My Packs (customer account)"
+handle = "my-packs-account"
+uid = "2df70063-e741-86ad-2699-210832638e7bddf9281d"
+type = "ui_extension"
+
+[[extensions.targeting]]
+module = "./src/MyPacksBlock.jsx"
+target = "customer-account.order-index.block.render"
+
+[extensions.capabilities]
+# Calls the app's /api/my-packs endpoint to see whether this customer has packs.
+network_access = true

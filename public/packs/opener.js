@@ -4,9 +4,14 @@
   "use strict";
 
   var root = document.getElementById("mystery-packs");
-  if (!root) return;
+  // Loaded without the My Packs page (e.g. the product page's demo button): only the opening
+  // animation is used, through window.PCPackOpener.
+  var standalone = !root;
 
-  var api = root.getAttribute("data-api") || "/apps/packs/api";
+  var api = (root && root.getAttribute("data-api")) || "/apps/packs/api";
+  // Merchant preview (?demo=<signed token>): sample packs from the live pool, opened locally.
+  var demo = !!root && root.getAttribute("data-demo") === "1";
+  var demoData = null;
   var params = new URLSearchParams(window.location.search);
   // Arriving from the thank-you page button (?open=1) starts opening right away, once.
   var autoOpen = params.get("open") === "1";
@@ -52,17 +57,44 @@
       ? [
           el("img", { class: "mp-pack-img", src: art, alt: "" }),
           el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
-          el("span", { class: "mp-pack-label", text: "Tap to open" }),
+          el("span", { class: "mp-pack-label", text: "Tap To Open" }),
         ]
       : [
           el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
           el("span", { class: "mp-pack-brand", text: "Poke-Collect" }),
           el("span", { class: "mp-pack-emblem", "aria-hidden": "true" }),
           el("span", { class: "mp-pack-series", text: pack.series }),
-          el("span", { class: "mp-pack-label", text: "Tap to open" }),
+          el("span", { class: "mp-pack-label", text: "Tap To Open" }),
         ]);
     if (onOpen) button.addEventListener("click", function () { onOpen(pack); });
     return button;
+  }
+
+  var SHIP_LABELS = {
+    vault: "In Your Vault",
+    awaiting_payment: "Awaiting Shipping Payment",
+    preparing: "Preparing To Ship",
+    shipped: "Shipped",
+    pickup_preparing: "Preparing For Pickup",
+    pickup_ready: "Ready For Pickup",
+    picked_up: "Picked Up",
+  };
+
+  function shipBadge(pack) {
+    var ship = pack.shipping || { state: "preparing" };
+    var badge = el("span", { class: "mp-ship", "data-state": ship.state, text: SHIP_LABELS[ship.state] || SHIP_LABELS.preparing });
+    if (ship.state === "shipped" && ship.tracking && ship.tracking.url) {
+      return el("span", { class: "mp-ship-wrap" }, [
+        badge,
+        el("a", { class: "mp-track", href: ship.tracking.url, target: "_blank", rel: "noopener", text: "Track" }),
+      ]);
+    }
+    return badge;
+  }
+
+  function shortDate(iso) {
+    var d = new Date(iso);
+    return isNaN(d) ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
   }
 
   function cardTile(pack) {
@@ -72,52 +104,366 @@
       el("div", { class: "mp-card-title", text: card.title }),
       el("div", { class: "mp-card-meta" }, [
         el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }),
-        el("span", { text: pack.shipped ? "Shipping" : "Ships with order " + pack.orderName }),
+        el("span", { text: pack.pulledAt ? shortDate(pack.pulledAt) : "Order " + pack.orderName }),
       ]),
+      shipBadge(pack),
     ]);
   }
 
-  function render(packs) {
+  // How the pulled card gets to the customer.
+  function shippingInfo(vault) {
+    var fee = vault ? vault.fee : 5;
+    var freeAt = vault ? vault.freeAt : 25;
+    var steps = [
+      ["Cards Go To Your Vault", "Every card you pull is kept safe in your vault here. Open as many packs as you like and ship them together."],
+      ["Ship When You're Ready", "Tap Ship My Cards to send everything in your vault in one package: $" + fee + " flat, or free on " + freeAt + "+ cards."],
+      ["We Pack It With Care", "Every card is sleeved and top loaded before it goes out."],
+      ["Track It Here", "Each card shows Preparing To Ship, then Shipped with a tracking link. You'll also get a shipping email from us."],
+    ];
+    return el("section", { class: "mp-info" }, [
+      el("h2", { class: "mp-section-title", text: "How Your Cards Ship" }),
+      el("div", { class: "mp-info-grid" }, steps.map(function (s, i) {
+        return el("div", { class: "mp-info-item" }, [
+          el("span", { class: "mp-info-num", text: String(i + 1) }),
+          el("div", {}, [el("strong", { text: s[0] }), el("p", { text: s[1] })]),
+        ]);
+      })),
+      el("p", { class: "mp-info-note", text: "Shipping is a one-time $" + fee + " per shipment, free when you ship " + freeAt + " or more cards at once. US addresses only. Local pickup is always free at 181 Hughes Road, Suite 5, Madison, AL: tap Pick Up In Store and we'll email you when your cards are ready." }),
+    ]);
+  }
+
+  // The theme's own "You Might Also Like" row (its pc-product-rows section, rendered for the pack), so it
+  // matches the rest of the store. Falls back to a simple grid if the theme doesn't have it.
+  var THEME_SECTION = "pc-product-rows";
+  function themeRecommendations(handle, productId) {
+    var holder = el("div", { class: "mp-theme-recs" });
+    if (!handle) {
+      holder.appendChild(recommendations(productId));
+      return holder;
+    }
+    fetch("/products/" + encodeURIComponent(handle) + "?section_id=" + THEME_SECTION, { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.text() : ""; })
+      .then(function (html) {
+        if (!html || html.indexOf("data-pr") === -1) throw new Error("no section");
+        var tpl = document.createElement("template");
+        tpl.innerHTML = html;
+        // Scripts parsed from HTML don't run; recreate them so the row fills itself in.
+        tpl.content.querySelectorAll("script").forEach(function (old) {
+          var s = document.createElement("script");
+          s.textContent = old.textContent;
+          old.replaceWith(s);
+        });
+        holder.appendChild(tpl.content);
+      })
+      .catch(function () { holder.appendChild(recommendations(productId)); });
+    return holder;
+  }
+
+  // "You Might Also Like": Shopify's storefront recommendations, minus mystery packs and sold-out items.
+  function recommendations(productId) {
+    var section = el("section", { class: "mp-recs", hidden: "" }, [
+      el("h2", { class: "mp-section-title", text: "You Might Also Like" }),
+    ]);
+    var grid = el("div", { class: "mp-recs-grid" });
+    section.appendChild(grid);
+
+    function cents(p) {
+      if (p.price == null && p.variants && p.variants[0]) return Math.round(Number(p.variants[0].price) * 100);
+      return typeof p.price === "number" ? p.price : Math.round(Number(p.price) * 100);
+    }
+    function image(p) {
+      var src = p.featured_image || (p.images && p.images[0] && (p.images[0].src || p.images[0])) || null;
+      if (src && typeof src === "object") src = src.src || src.url;
+      if (!src) return null;
+      if (src.indexOf("//") === 0) src = "https:" + src;
+      return src + (src.indexOf("?") === -1 ? "?" : "&") + "width=400";
+    }
+    function show(products) {
+      var items = (products || []).filter(function (p) {
+        var type = String(p.type || p.product_type || "").toLowerCase();
+        var available = p.available !== undefined ? p.available : (p.variants || []).some(function (v) { return v.available; });
+        return type !== "mystery pack" && available !== false;
+      }).slice(0, 8);
+      if (!items.length) return false;
+      items.forEach(function (p) {
+        var url = p.url || "/products/" + p.handle;
+        var src = image(p);
+        grid.appendChild(el("a", { class: "mp-rec", href: url }, [
+          el("span", { class: "mp-rec-img" }, [src ? el("img", { src: src, alt: "", loading: "lazy" }) : null]),
+          el("span", { class: "mp-rec-title", text: p.title }),
+          el("span", { class: "mp-rec-price", text: money(cents(p) / 100) }),
+        ]));
+      });
+      section.hidden = false;
+      return true;
+    }
+    function getJson(url) {
+      return fetch(url, { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; });
+    }
+    var first = productId
+      ? getJson("/recommendations/products.json?product_id=" + encodeURIComponent(productId) + "&limit=12&intent=related")
+      : Promise.resolve(null);
+    first
+      .then(function (data) {
+        if (data && show(data.products)) return;
+        return getJson("/products.json?limit=24").then(function (d) { if (d) show(d.products); });
+      })
+      .catch(function () {});
+    return section;
+  }
+
+  function money(amount) {
+    var n = Number(amount);
+    return isNaN(n) ? "" : "$" + n.toFixed(2);
+  }
+
+  // Quantity stepper + "Buy & Open", which goes straight to checkout with that many packs.
+  function buyControls(a) {
+    var max = Math.max(1, Math.min(20, a.packsLeft));
+    var qty = 1;
+    var count = el("span", { class: "mp-qty-n", "aria-live": "polite", text: "1" });
+    var minus = el("button", { class: "mp-qty-btn", type: "button", "aria-label": "Fewer packs", text: "\u2212" });
+    var plus = el("button", { class: "mp-qty-btn", type: "button", "aria-label": "More packs", text: "+" });
+    var buy = el("a", { class: "mp-btn mp-btn-dark", href: a.buyUrl });
+    var hint = el("span", { class: "mp-qty-hint" });
+    function update() {
+      count.textContent = String(qty);
+      buy.textContent = qty > 1 ? "Buy & Open " + qty + " Packs" : "Buy & Open";
+      buy.href = a.buyUrl.replace(/:\d+$/, ":" + qty);
+      minus.disabled = qty <= 1;
+      plus.disabled = qty >= max;
+      hint.textContent = "No shipping on packs. Your cards go to your vault.";
+    }
+    minus.addEventListener("click", function () { if (qty > 1) { qty--; update(); } });
+    plus.addEventListener("click", function () { if (qty < max) { qty++; update(); } });
+    update();
+    return el("div", { class: "mp-more-buy" }, [
+      el("div", { class: "mp-more-actions" }, [
+        el("div", { class: "mp-qty", role: "group", "aria-label": "Number of packs" }, [minus, count, plus]),
+        buy,
+      ]),
+      hint,
+    ]);
+  }
+
+  // "Open More Packs?": every pack on sale right now, linking to its page or straight to checkout.
+  function shelf(available) {
+    if (!available || !available.length) return null;
+    return el("section", { class: "mp-more" }, [
+      el("h2", { class: "mp-more-title", text: "Open More Packs?" }),
+      el("p", { class: "mp-more-sub", text: "Grab Another Pack And Open It The Moment You Check Out." }),
+      el("div", { class: "mp-more-grid" }, available.map(function (a) {
+        return el("div", { class: "mp-more-item" }, [
+          el("a", { class: "mp-more-art", href: a.url, "aria-label": a.title }, [
+            a.imageUrl ? el("img", { src: a.imageUrl, alt: "", loading: "lazy" }) : null,
+          ]),
+          el("div", { class: "mp-more-info" }, [
+            el("a", { class: "mp-more-name", href: a.url, text: a.title }),
+            el("div", { class: "mp-more-meta", text: money(a.price) + " · " + a.packsLeft + " pack" + (a.packsLeft === 1 ? "" : "s") + " left" }),
+            buyControls(a),
+            el("a", { class: "mp-more-link", href: a.url, text: "View Potential Pulls" }),
+          ]),
+        ]);
+      })),
+    ]);
+  }
+
+  // Page header: title, what's going on, vault stats, and Ship My Cards, all in one banner.
+  function hero(unopened, vault) {
+    var cards = vault ? vault.cards : 0;
+    var pending = vault && vault.pending;
+    var sub = unopened
+      ? "You Have " + unopened + " Unopened Pack" + (unopened === 1 ? "" : "s") + ". Every Card You Pull Goes To Your Vault."
+      : cards || pending
+        ? "Your Pulls Wait Safely In Your Vault. Ship Them Together Whenever You're Ready."
+        : "Open Packs Online. Every Card You Pull Lands In Your Vault Until You Ship It.";
+    var stats = el("div", { class: "mp-hero-stats" }, [
+      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(cards) }), document.createTextNode((cards === 1 ? " Card" : " Cards") + " In Vault")]),
+      el("span", { class: "mp-hero-stat" }, [el("b", { text: String(unopened) }), document.createTextNode(" Unopened")]),
+    ]);
+    var text = el("div", { class: "mp-hero-text" }, [
+      el("span", { class: "mp-hero-kicker", text: "Digital Mystery Packs · Your Vault" }),
+      el("h1", { text: "My Packs" }),
+      el("p", { class: "mp-hero-sub", text: sub }),
+      stats,
+    ]);
+    return el("section", { class: "mp-hero" }, [text, shipBox(vault)]);
+  }
+
+  // "Ship My Cards": everything in the vault ships together for one flat fee.
+  function shipBox(vault) {
+    if (vault && vault.pending) {
+      return el("div", { class: "mp-hero-ship" }, [
+        el("strong", { class: "mp-hero-ship-title", text: vault.pending.cards + (vault.pending.cards === 1 ? " Card Is" : " Cards Are") + " Ready To Ship" }),
+        el("p", { text: "Finish checkout to pay shipping and we'll send them out." }),
+        el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
+        pickupButton(vault, null),
+      ]);
+    }
+    var fee = vault ? vault.fee : 5;
+    var freeAt = vault ? vault.freeAt : 25;
+    var cards = vault ? vault.cards : 0;
+    var left = Math.max(0, freeAt - cards);
+    var bar = el("span", { class: "mp-hero-bar" }, [el("span", { style: "width:" + Math.min(100, (cards / freeAt) * 100) + "%" })]);
+    var note = el("p", {
+      text: !cards
+        ? "Ship your vault for $" + fee + " flat, free on " + freeAt + "+ cards (US only)."
+        : left === 0
+          ? "Your vault ships free!"
+          : "$" + fee + " flat shipping. " + left + " more card" + (left === 1 ? "" : "s") + " and it ships free.",
+    });
+    var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: "Ship My Cards" });
+    if (!cards) button.disabled = true;
+    button.addEventListener("click", function () {
+      if (demo) { note.textContent = "Preview mode: shipping isn't available for sample cards."; return; }
+      button.disabled = true;
+      button.textContent = "Starting...";
+      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.invoiceUrl) { window.location.href = d.invoiceUrl; return; }
+          throw new Error(d.error || "Couldn't start your shipment.");
+        })
+        .catch(function (err) {
+          button.disabled = false;
+          button.textContent = "Ship My Cards";
+          note.textContent = err.message;
+        });
+    });
+    return el("div", { class: "mp-hero-ship" }, [
+      el("strong", { class: "mp-hero-ship-title", text: left === 0 && cards ? "Free Shipping Unlocked" : "Ship When You're Ready" }),
+      bar,
+      note,
+      button,
+      pickupButton(vault, note),
+    ]);
+  }
+
+  // "Pick Up In Store": sets every vault card aside on a free local pickup order, no checkout.
+  function pickupButton(vault, note) {
+    var cards = vault ? vault.cards + (vault.pending ? vault.pending.cards : 0) : 0;
+    var button = el("button", { class: "mp-pickup-btn", type: "button", text: "Or Pick Up In Store (Free)" });
+    if (!cards) button.disabled = true;
+    button.addEventListener("click", function () {
+      var say = function (text) { if (note) note.textContent = text; else button.textContent = text; };
+      if (demo) { say("Preview mode: pickup isn't available for sample cards."); return; }
+      if (!window.confirm("Set aside all " + cards + " card" + (cards === 1 ? "" : "s") + " in your vault for free local pickup?")) return;
+      button.disabled = true;
+      button.textContent = "Setting Aside...";
+      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pickup: true }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.pickupOrder) throw new Error(d.error || "Couldn't set your cards aside.");
+          window.alert(
+            "Your cards are being set aside for pickup on order " + d.pickupOrder + ". We'll email you when they're ready.\n\n" +
+            "Pick up at: " + (d.pickupAddress || "our store") + (d.pickupHours ? "\nHours: " + d.pickupHours : "") +
+            "\n\nBring your order number when you come in."
+          );
+          window.location.reload();
+        })
+        .catch(function (err) {
+          button.disabled = false;
+          button.textContent = "Or Pick Up In Store (Free)";
+          say(err.message);
+        });
+    });
+    return button;
+  }
+
+  function render(packs, available, signedIn, recommendFrom, recommendHandle, vault) {
     root.innerHTML = "";
     var unopened = packs.filter(function (p) { return !p.opened; });
     var opened = packs.filter(function (p) { return p.opened; });
 
-    root.appendChild(el("h1", { text: "My Packs" }));
-    root.appendChild(el("p", {
-      class: "mp-sub",
-      text: unopened.length
-        ? "You have " + unopened.length + " unopened pack" + (unopened.length === 1 ? "" : "s") + ". Your cards ship once every pack on the order is opened."
-        : "All your packs are open. Your cards ship with your order.",
-    }));
+    if (demo) root.appendChild(demoBanner());
+    root.appendChild(hero(unopened.length, vault));
 
     if (unopened.length) {
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
       root.appendChild(el("div", { class: "mp-grid" }, unopened.map(function (p) { return packTile(p, openPack); })));
     }
-    root.appendChild(el("h2", { class: "mp-section-title", text: "Your pulls" }));
+    // The vault holds cards still with us; cards on their way or delivered move to the shipped history.
+    var inVault = opened.filter(function (p) { return !p.shipping || p.shipping.state === "vault" || p.shipping.state === "awaiting_payment"; });
+    var shipped = opened.filter(function (p) { return inVault.indexOf(p) === -1; });
+    root.appendChild(el("h2", { class: "mp-section-title", text: "Your Vault" }));
+    if (signedIn === false) {
+      root.appendChild(el("p", { class: "mp-login-hint" }, [
+        document.createTextNode("Showing this order only. "),
+        el("a", { href: "/account/login?return_url=" + encodeURIComponent("/apps/packs"), text: "Log In To See All Your Pulls" }),
+      ]));
+    }
     root.appendChild(
-      opened.length
-        ? el("div", { class: "mp-grid" }, opened.map(cardTile))
-        : el("p", { class: "mp-empty", text: "Nothing pulled yet." }),
+      inVault.length
+        ? el("div", { class: "mp-grid" }, inVault.map(cardTile))
+        : el("p", { class: "mp-empty", text: opened.length ? "Your Vault Is Empty. Every Card Has Shipped." : "Nothing Pulled Yet." }),
     );
+    if (shipped.length) {
+      var onTheWay = shipped.filter(function (p) { return p.shipping.state === "preparing" || p.shipping.state === "pickup_ready"; }).length;
+      var history = el("details", { class: "mp-history" }, [
+        el("summary", { class: "mp-history-summary" }, [
+          el("span", { class: "mp-section-title", text: "Shipped Cards" }),
+          el("span", { class: "mp-history-count", text: shipped.length + (shipped.length === 1 ? " Card" : " Cards") + (onTheWay ? " · " + onTheWay + " On The Way" : "") }),
+        ]),
+        el("div", { class: "mp-grid" }, shipped.map(cardTile)),
+      ]);
+      // Open it while something is still on its way, so tracking is easy to find.
+      if (onTheWay) history.open = true;
+      root.appendChild(history);
+    }
+    var more = shelf(available);
+    if (more) root.appendChild(more);
+    root.appendChild(shippingInfo(vault));
+    root.appendChild(themeRecommendations(recommendHandle, recommendFrom));
+  }
+
+  // Coming from checkout, a cover hides the page until the opening stage is up, so the
+  // list (and any card already pulled on the order) never flashes before the animation.
+  function uncover() {
+    var cover = document.getElementById("mp-cover");
+    if (cover) cover.remove();
+  }
+
+  function demoBanner() {
+    var reset = el("button", { class: "mp-btn", type: "button", text: "New Sample Packs" });
+    reset.addEventListener("click", function () { demoData = null; load(); });
+    return el("div", { class: "mp-demo" }, [
+      el("p", { text: "Preview mode: these are sample packs and pulls from the live pool. Opening them changes nothing, and customers never see this page." }),
+      reset,
+    ]);
+  }
+
+  function fetchPacks() {
+    if (demo && demoData) return Promise.resolve(demoData);
+    return fetch(api + (demo ? "/demo" : "/pulls") + query, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (demo && !data.error) demoData = data;
+        return data;
+      });
   }
 
   function load() {
-    return fetch(api + "/pulls" + query, { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
+    return fetchPacks()
       .then(function (data) {
         if (data.error) throw new Error(data.error);
         var packs = data.packs || [];
-        render(packs);
         if (autoOpen) {
           autoOpen = false;
           var first = packs.filter(function (p) { return !p.opened; })[0];
-          if (first) openPack(first);
+          if (first) {
+            // The list is drawn when the stage closes (close() reloads it).
+            openPack(first);
+            uncover();
+            return;
+          }
         }
+        render(packs, data.available, data.signedIn, data.recommendFrom, data.recommendHandle, data.vault);
+        uncover();
       })
       .catch(function (err) {
         root.innerHTML = "";
         root.appendChild(el("p", { class: "mp-error", text: err.message || "Couldn't load your packs." }));
+        uncover();
       });
   }
 
@@ -137,34 +483,279 @@
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
+  // Runs fn(progress) on every frame for ms milliseconds.
+  function tween(ms, fn, ease) {
+    return new Promise(function (resolve) {
+      var start = performance.now();
+      function step(now) {
+        var k = Math.min(1, (now - start) / ms);
+        fn(ease ? ease(k) : k);
+        if (k < 1) requestAnimationFrame(step);
+        else resolve();
+      }
+      requestAnimationFrame(step);
+    });
+  }
+  function easeInOut(k) { return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; }
+  function animate(node, frames, options) {
+    var anim = node.animate(frames, Object.assign({ fill: "forwards" }, options));
+    return anim.finished || wait(options.duration + (options.delay || 0));
+  }
+
+  // The pack bag inside the product artwork (a square image with the pack centered), as fractions.
+  var ART = { left: 0.261, top: 0.042, width: 0.478, height: 0.916 };
+  var TEAR_Y = 0.075; // tear line, just under the top seal, as a fraction of the pack height
+  var SLICES = 16; // the torn-off strip is a chain of slices so it can curl as it peels
+  var SVGNS = "http://www.w3.org/2000/svg";
+  var uid = 0;
+
+  // A ragged tear line across the pack: a random walk with small zigzag teeth.
+  function tearLine() {
+    var points = [];
+    var drift = 0;
+    for (var i = 0; i <= 64; i++) {
+      drift = Math.max(-0.012, Math.min(0.012, drift + (Math.random() - 0.5) * 0.006));
+      var tooth = (i % 2 ? 1 : -1) * (0.001 + Math.random() * 0.004) + (Math.random() - 0.5) * 0.003;
+      var x = i / 64 + (i > 0 && i < 64 ? (Math.random() - 0.5) * 0.008 : 0);
+      points.push([x, TEAR_Y + drift + tooth]);
+    }
+    return points;
+  }
+  function yAt(points, x) {
+    for (var i = 1; i < points.length; i++) {
+      if (points[i][0] >= x) {
+        var a = points[i - 1], b = points[i];
+        return a[1] + (b[1] - a[1]) * ((x - a[0]) / (b[0] - a[0] || 1));
+      }
+    }
+    return points[points.length - 1][1];
+  }
+  function pct(v) { return (v * 100).toFixed(3) + "%"; }
+
+  // Paper-white torn edge with fibers, drawn along the tear line. side: 1 = below (pack body), -1 = above (strip).
+  function tornEdge(points, side, shown) {
+    var svg = document.createElementNS(SVGNS, "svg");
+    svg.setAttribute("class", "mp-edge");
+    svg.setAttribute("viewBox", "0 0 1000 1000");
+    svg.setAttribute("preserveAspectRatio", "none");
+    var d = points.map(function (p, i) { return (i ? "L" : "M") + (p[0] * 1000).toFixed(1) + " " + (p[1] * 1000).toFixed(1); }).join(" ");
+    var fibers = "";
+    for (var i = 0; i < 70; i++) {
+      var x = Math.random();
+      var y = yAt(points, x) * 1000;
+      var len = 2 + Math.random() * 7;
+      fibers += "M" + (x * 1000).toFixed(1) + " " + y.toFixed(1) + " l" + ((Math.random() - 0.5) * 6).toFixed(1) + " " + (side * len).toFixed(1) + " ";
+    }
+    var id = "mp-clip-" + ++uid;
+    svg.innerHTML =
+      '<defs><clipPath id="' + id + '"><rect x="0" y="0" width="' + (shown ? 1000 : 0) + '" height="1000"/></clipPath></defs>' +
+      '<g clip-path="url(#' + id + ')">' +
+      '<path d="' + d + '" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="7" transform="translate(0 ' + side * 3 + ')"/>' +
+      '<path d="' + d + '" fill="none" stroke="#f5f1e8" stroke-width="5"/>' +
+      '<path d="' + d + '" fill="none" stroke="#c9ccd6" stroke-width="1.6" transform="translate(0 ' + side * 2.4 + ')"/>' +
+      '<path d="' + fibers + '" fill="none" stroke="#eeeae0" stroke-width="1.1" stroke-linecap="round"/>' +
+      "</g>";
+    svg.reveal = svg.querySelector("rect");
+    return svg;
+  }
+
+  // Builds the pack for the opening stage: the body, and the top strip that tears off.
+  function stagePack(art, width, height) {
+    var points = tearLine();
+    var group = el("div", { class: "mp-open-pack" });
+    group.style.width = width + "px";
+    group.style.height = height + "px";
+    var paint = art
+      ? "url(\"" + art.replace(/"/g, "%22") + "\") center / " + pct(1 / ART.width) + " " + pct(1 / ART.height) + " no-repeat"
+      : "";
+
+    function face(polygon) {
+      var node = el("div", { class: "mp-open-face" + (art ? "" : " mp-open-plain") });
+      node.style.width = width + "px";
+      node.style.height = height + "px";
+      if (paint) node.style.background = paint;
+      node.style.clipPath = "polygon(" + polygon.map(function (p) { return pct(p[0]) + " " + pct(p[1]); }).join(",") + ")";
+      return node;
+    }
+
+    // Body: everything under the tear line.
+    var body = el("div", { class: "mp-open-body" });
+    var bodyGlow = el("div", { class: "mp-open-glow" });
+    bodyGlow.style.top = (TEAR_Y * 100).toFixed(2) + "%";
+    body.appendChild(bodyGlow);
+    var bodyFace = face([[0, 1]].concat(points, [[1, 1]]));
+    var bodyEdge = tornEdge(points, 1, false);
+    bodyFace.appendChild(bodyEdge);
+    body.appendChild(bodyFace);
+    var shade = el("div", { class: "mp-open-shade" });
+    bodyFace.appendChild(shade);
+
+    // Strip: a chain of slices, rightmost first, each nested in the one to its right so their
+    // rotations add up and the strip curls from its free left end.
+    var sliceW = width / SLICES;
+    var slices = [];
+    var parent = null;
+    for (var k = SLICES - 1; k >= 0; k--) {
+      var x0 = k / SLICES, x1 = (k + 1) / SLICES;
+      var pad = 0.6 / width; // a hairline overlap hides seams between slices
+      var lo = Math.max(0, x0 - pad), hi = Math.min(1, x1 + pad);
+      var inner = points.filter(function (p) { return p[0] > lo && p[0] < hi; }).reverse();
+      var polygon = [[lo, 0], [hi, 0], [hi, yAt(points, hi)]].concat(inner, [[lo, yAt(points, lo)]]);
+      var wrap = el("div", { class: "mp-open-slice" });
+      wrap.style.width = sliceW + "px";
+      wrap.style.height = height + "px";
+      wrap.style.left = (parent ? -sliceW : k * sliceW) + "px";
+      wrap.style.transformOrigin = "100% " + yAt(points, x1) * height + "px";
+      var sliceFace = face(polygon);
+      sliceFace.style.left = -k * sliceW + "px";
+      var edge = tornEdge(points, -1, true);
+      sliceFace.appendChild(edge);
+      wrap.appendChild(sliceFace);
+      (parent || group).appendChild(wrap);
+      slices[k] = { wrap: wrap, edge: edge, joint: x1 };
+      parent = wrap;
+    }
+    group.insertBefore(body, group.firstChild);
+
+    return { group: group, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
+  }
+
+  function fleck(pack, x, y) {
+    var piece = el("span", { class: "mp-fleck" });
+    piece.style.left = x + "px";
+    piece.style.top = y + "px";
+    piece.style.setProperty("--dx", (Math.random() * 40 - 10).toFixed(1) + "px");
+    piece.style.setProperty("--dy", (-10 - Math.random() * 30).toFixed(1) + "px");
+    piece.style.setProperty("--r", (Math.random() * 540).toFixed(0) + "deg");
+    piece.style.background = Math.random() < 0.6 ? "#f5f1e8" : "#c9ccd6";
+    pack.group.appendChild(piece);
+    setTimeout(function () { piece.remove(); }, 900);
+  }
+
+  // Tears the strip off from left to right, curling it up as it goes.
+  function tear(pack, width, height) {
+    if (navigator.vibrate) navigator.vibrate([12, 40, 12, 40, 18]);
+    var lastFleck = 0;
+    return tween(1150, function (front) {
+      pack.slices.forEach(function (slice, k) {
+        // How far the tear has run past this slice's right joint, in slices.
+        var past = Math.max(0, Math.min(1.6, (front * 1.04 - slice.joint) * SLICES + 1));
+        var bend = k === 0 ? past * 5 : past * 1.7;
+        slice.wrap.style.transform = "translateY(" + (-past * 0.9).toFixed(2) + "px) rotate(" + bend.toFixed(2) + "deg)";
+        slice.edge.style.opacity = past > 0 ? 1 : 0;
+      });
+      var torn = Math.min(1, front * 1.04);
+      pack.bodyEdge.reveal.setAttribute("width", (torn * 1000).toFixed(1));
+      pack.shade.style.width = torn * 100 + "%";
+      var now = performance.now();
+      if (front > 0.02 && front < 0.99 && now - lastFleck > 28) {
+        lastFleck = now;
+        fleck(pack, torn * width, yAt(pack.points, torn) * height);
+      }
+    }, easeInOut);
+  }
+
+  // Red-on-black "digital rain" behind the opening (katakana, digits and Poke-Collect glyphs).
+  // Returns a stop function. Skipped for reduced motion.
+  function matrixRain(stage) {
+    var canvas = el("canvas", { class: "mp-matrix", "aria-hidden": "true" });
+    stage.insertBefore(canvas, stage.firstChild);
+    var ctx = canvas.getContext("2d");
+    if (!ctx) return function () {};
+    var GLYPHS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789POKECOLLECT";
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var size, cols, drops, speeds, w, h;
+    function resize() {
+      w = stage.clientWidth; h = stage.clientHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      size = w < 600 ? 14 : 16;
+      cols = Math.ceil(w / size);
+      drops = []; speeds = [];
+      for (var i = 0; i < cols; i++) { drops.push(Math.random() * -h / size); speeds.push(0.35 + Math.random() * 0.65); }
+      ctx.fillStyle = "#050306"; ctx.fillRect(0, 0, w, h);
+    }
+    resize();
+    window.addEventListener("resize", resize);
+    var running = true, last = 0;
+    function frame(now) {
+      if (!running) return;
+      requestAnimationFrame(frame);
+      if (now - last < 33) return; // ~30 fps is plenty and easy on phones
+      last = now;
+      ctx.fillStyle = "rgba(5, 3, 6, 0.16)"; // fade the old glyphs into trails
+      ctx.fillRect(0, 0, w, h);
+      ctx.font = "700 " + size + "px ui-monospace, Menlo, monospace";
+      for (var i = 0; i < cols; i++) {
+        var y = drops[i] * size;
+        var ch = GLYPHS.charAt(Math.floor(Math.random() * GLYPHS.length));
+        // Bright head, deep red body.
+        ctx.fillStyle = Math.random() < 0.08 ? "#ffd1dc" : "#ff2d55";
+        ctx.globalAlpha = 0.85;
+        ctx.fillText(ch, i * size, y);
+        ctx.globalAlpha = 1;
+        drops[i] += speeds[i];
+        if (y > h && Math.random() > 0.975) drops[i] = Math.random() * -20;
+      }
+    }
+    requestAnimationFrame(frame);
+    return function () { running = false; window.removeEventListener("resize", resize); };
+  }
+
   function openPack(pack) {
     var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    var stagePack = packTile(pack, null);
-    stagePack.disabled = true;
-    stagePack.appendChild(el("span", { class: "mp-tear", "aria-hidden": "true" }));
 
-    var front = el("div", { class: "mp-face mp-face-front" });
-    var flip = el("div", { class: "mp-flip" }, [front, el("div", { class: "mp-face mp-face-back" })]);
+    var front = el("div", { class: "mp-reveal-card" });
     var glow = el("div", { class: "mp-glow" });
     var result = el("div", { class: "mp-result", "aria-live": "polite" });
-    var inner = el("div", { class: "mp-stage-inner" }, [glow, flip, stagePack, result]);
+    var inner = el("div", { class: "mp-stage-inner" }, [glow, front, result]);
     var skip = el("button", { class: "mp-btn mp-btn-ghost mp-skip", type: "button", text: "Close" });
     var stage = el("div", { class: "mp-stage", role: "dialog", "aria-modal": "true", "aria-label": "Opening pack" }, [inner, skip]);
+    // Multi-card packs reveal their cards one at a time, so the result area needs room for a counter
+    // and the strip of every card in the pack.
+    var multi = (pack.cardsPerPack || (pack.demoCards ? pack.demoCards.length : 1)) > 1;
+    if (multi) stage.classList.add("mp-multi");
+    var stopRain = function () {};
     var closed = false;
     function close() {
       if (closed) return;
       closed = true;
+      stopRain();
       stage.remove();
       document.removeEventListener("keydown", onKey);
-      load();
+      if (pack.onClose) pack.onClose();
+      if (!standalone) load();
     }
     function onKey(e) { if (e.key === "Escape") close(); }
     skip.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
     document.body.appendChild(stage);
+    var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reducedMotion) stopRain = matrixRain(stage);
 
-    // Ask the server for the result while the pack shakes.
-    var reveal = fetch(api + "/open" + query, {
+    // The pack is as tall as the card's final spot and as wide as the artwork's pack bag.
+    var height = inner.getBoundingClientRect().height;
+    var width = pack.packImageUrl ? height * (ART.width / ART.height) : height * 0.62;
+    var opener = stagePack(pack.packImageUrl, width, height);
+    opener.group.classList.add("mp-shaking");
+    inner.insertBefore(opener.group, result);
+
+    // Inside the pack the card sits small and low, hidden behind the wrapper.
+    var cardScale = (width * 0.86) / inner.getBoundingClientRect().width;
+    var inside = "translateY(" + ((0.56 - 0.5) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
+    var peek = "translateY(" + ((0.56 - 0.5 - 0.30) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
+    front.style.transform = inside;
+
+    // Ask the server for the result while the pack shakes. Preview packs already carry their card.
+    var reveal = pack.demoCards || pack.demoCard
+      ? Promise.resolve(pack.demoCards || [pack.demoCard]).then(function (cards) {
+          pack.opened = true;
+          pack.cards = cards;
+          pack.card = cards[cards.length - 1];
+          pack.shipping = { state: "preparing" };
+          return cards;
+        })
+      : fetch(api + "/open" + query, {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
@@ -172,50 +763,217 @@
     }).then(function (r) {
       return r.json().then(function (data) {
         if (!r.ok || data.error) throw new Error(data.error || "Couldn't open this pack.");
-        return data.card;
+        // Multi-card packs return every card, cheapest first, so the best one is revealed last.
+        return data.cards && data.cards.length ? data.cards : [data.card];
       });
     });
 
-    Promise.all([reveal, wait(reduced ? 0 : 1200)])
+    // Load the card image before the pack tears, so a half-loaded or broken image never flashes
+    // in the opening. Gives up after a few seconds and shows the card name instead.
+    function preload(card) {
+      if (!card.imageUrl) return Promise.resolve(card);
+      return new Promise(function (resolve) {
+        var img = new Image();
+        var done = false;
+        function finish(ok) {
+          if (done) return;
+          done = true;
+          if (!ok) card = Object.assign({}, card, { imageUrl: null });
+          resolve(card);
+        }
+        img.onload = function () { (img.decode ? img.decode() : Promise.resolve()).then(function () { finish(true); }, function () { finish(true); }); };
+        img.onerror = function () { finish(false); };
+        img.src = card.imageUrl;
+        setTimeout(function () { finish(img.complete && img.naturalWidth > 0); }, 6000);
+      });
+    }
+
+    function colorOf(card) { return TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base; }
+    function isBig(card) { return ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1; }
+    function showCard(card) {
+      front.textContent = "";
+      if (card.imageUrl) {
+        // Never show a broken-image icon: swap to the card name if the image fails after all.
+        var cardImg = el("img", { src: card.imageUrl, alt: "" });
+        cardImg.onerror = function () { cardImg.replaceWith(el("strong", { text: card.title })); };
+        front.appendChild(cardImg);
+      }
+      else front.appendChild(el("strong", { text: card.title }));
+    }
+
+    Promise.all([reveal.then(function (cards) { return Promise.all(cards.map(preload)); }), wait(reduced ? 0 : 900)])
       .then(function (values) {
-        var card = values[0];
-        var color = TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base;
-        if (card.imageUrl) front.appendChild(el("img", { src: card.imageUrl, alt: card.title }));
-        else front.appendChild(el("strong", { text: card.title }));
-        glow.style.background = color;
+        var cards = values[0];
+        var card = cards[0];
+        showCard(card);
+        glow.style.background = colorOf(card);
+        opener.group.classList.remove("mp-shaking");
 
-        stagePack.classList.add("mp-tearing");
-        flip.classList.add("mp-rise");
-        return wait(reduced ? 0 : 1300).then(function () {
-          flip.classList.remove("mp-rise");
-          flip.classList.add("mp-flipped");
-          glow.classList.add("mp-on");
-          var big = ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1;
-          if (big && !reduced) confetti(stage, color);
+        var sequence = reduced
+          ? Promise.resolve().then(function () {
+              opener.group.remove();
+              front.style.transform = "none";
+            })
+          : tear(opener, width, height)
+              // 1. The torn strip comes away completely and falls off.
+              .then(function () {
+                return animate(opener.root, [
+                  { transform: getComputedStyle(opener.root).transform },
+                  { transform: "translate(" + width * 0.35 + "px, " + -height * 0.16 + "px) rotate(16deg)", offset: 0.35 },
+                  { transform: "translate(" + width * 0.9 + "px, " + (window.innerHeight * 1.1) + "px) rotate(70deg)", opacity: 0 },
+                ], { duration: 1000, easing: "cubic-bezier(.3,.1,.6,1)" });
+              })
+              // 2. The card rises out of the opening, showing its top.
+              .then(function () {
+                glow.classList.add("mp-peek");
+                return animate(front, [{ transform: inside }, { transform: peek }], { duration: 650, easing: "cubic-bezier(.2,.8,.3,1)" });
+              })
+              .then(function () { return wait(350); })
+              // 3. The rest of the pack slides down off the card.
+              .then(function () {
+                var slide = animate(opener.body, [
+                  { transform: "none" },
+                  { transform: "translateY(" + (window.innerHeight + height) + "px) rotate(-3deg)" },
+                ], { duration: 900, easing: "cubic-bezier(.5,0,.75,.4)" });
+                // The card stays put while the pack slides off, then grows into place.
+                var settle = wait(650).then(function () {
+                  return animate(front, [{ transform: peek }, { transform: "translateY(-2%) scale(1.04)", offset: 0.7 }, { transform: "none" }], {
+                    duration: 800,
+                    easing: "cubic-bezier(.3,.7,.3,1)",
+                  });
+                });
+                return Promise.all([slide, settle]);
+              })
+              .then(function () { opener.group.remove(); });
 
-          result.appendChild(el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }));
-          result.appendChild(el("h2", { text: card.title }));
-          result.appendChild(el("p", { text: "Ships with your order" }));
-          var done = el("button", { class: "mp-btn", type: "button", text: "Done" });
+        // Shows card i under the counter. Every card but the last waits for a tap, then the next
+        // card flips in; the last (best) card gets the full result with every card in the pack.
+        function step(i) {
+          var c = cards[i];
+          var last = i === cards.length - 1;
+          front.classList.remove("mp-holo");
+          front.classList.add("mp-revealed");
+          if (isBig(c)) front.classList.add("mp-holo");
+          if (isBig(c) && !reduced) confetti(stage, colorOf(c));
+          glow.style.background = colorOf(c);
+
+          result.textContent = "";
+          if (multi) result.appendChild(el("span", { class: "mp-count", text: "Card " + (i + 1) + " Of " + cards.length }));
+          var tierLabel = el("span", { class: "mp-tier", "data-tier": tierKey(c.tier), text: c.tier });
+          var name = el("h2", { text: c.title });
+          result.appendChild(tierLabel);
+          result.appendChild(name);
+          if (last) return finish(c, tierLabel, name);
+
+          var next = el("button", { class: "mp-btn", type: "button", text: i === cards.length - 2 ? "Reveal Last Card" : "Next Card" });
+          var all = el("button", { class: "mp-btn mp-btn-ghost", type: "button", text: "Reveal All" });
+          result.appendChild(el("div", { class: "mp-actions" }, [next, all]));
+          result.classList.add("mp-show", "mp-quick");
+          next.focus();
+          return new Promise(function (resolve) {
+            var going = false;
+            function advance(to) {
+              if (going) return;
+              going = true;
+              front.removeEventListener("click", tapNext);
+              result.classList.remove("mp-show");
+              var nextCard = cards[to];
+              var slow = to === cards.length - 1;
+              var out = reduced ? Promise.resolve() : animate(front, [
+                { transform: "none", opacity: 1 },
+                { transform: "translateX(-70%) rotate(-14deg) scale(.7)", opacity: 0 },
+              ], { duration: 360, easing: "cubic-bezier(.5,0,.8,.4)" });
+              resolve(out.then(function () {
+                showCard(nextCard);
+                front.classList.remove("mp-holo");
+                if (reduced) return;
+                // The best card turns over a little slower.
+                return animate(front, [
+                  { transform: "rotateY(90deg) scale(.92)", opacity: 1 },
+                  { transform: "none", opacity: 1 },
+                ], { duration: slow ? 700 : 420, easing: "cubic-bezier(.2,.8,.3,1)" });
+              }).then(function () { return step(to); }));
+            }
+            function tapNext() { advance(i + 1); }
+            next.addEventListener("click", tapNext);
+            front.addEventListener("click", tapNext);
+            all.addEventListener("click", function () { advance(cards.length - 1); });
+          });
+        }
+
+        function finish(best, tierLabel, name) {
+          result.classList.remove("mp-quick");
+          result.appendChild(el("p", { text: pack.resultNote || (multi ? "All " + cards.length + " Cards Are In Your Vault" : "Added To Your Vault") }));
+          if (multi) {
+            // Every card in the pack, best last. Tapping one shows it big again.
+            var strip = el("div", { class: "mp-fan" }, cards.map(function (c, k) {
+              var thumb = el("button", { class: "mp-fan-card" + (k === cards.length - 1 ? " mp-on" : ""), type: "button", "aria-label": c.title, style: "--mp-c:" + colorOf(c) + ";--mp-k:" + (k - (cards.length - 1) / 2) },
+                [c.imageUrl ? el("img", { src: c.imageUrl, alt: "" }) : el("span", { text: c.title })]);
+              thumb.addEventListener("click", function () {
+                strip.querySelectorAll(".mp-fan-card").forEach(function (t) { t.classList.remove("mp-on"); });
+                thumb.classList.add("mp-on");
+                showCard(c);
+                front.classList.toggle("mp-holo", isBig(c));
+                glow.style.background = colorOf(c);
+                tierLabel.textContent = c.tier;
+                tierLabel.setAttribute("data-tier", tierKey(c.tier));
+                name.textContent = c.title;
+              });
+              return thumb;
+            }));
+            result.appendChild(strip);
+          }
+          var done = el("button", { class: "mp-btn", type: "button", text: pack.doneLabel || "Done" });
           done.addEventListener("click", close);
           var actions = el("div", { class: "mp-actions" }, [done]);
-          if (navigator.share) {
+          if (pack.again) {
+            var again = el("button", { class: "mp-btn mp-btn-ghost", type: "button", text: "Try Again" });
+            again.addEventListener("click", function () { close(); pack.again(); });
+            actions.appendChild(again);
+          }
+          if (navigator.share && !pack.noShare) {
             var share = el("button", { class: "mp-btn mp-btn-ghost", type: "button", text: "Share" });
             share.addEventListener("click", function () {
-              navigator.share({ title: "My mystery pack pull", text: "I pulled " + card.title + "!", url: window.location.origin + "/apps/packs" }).catch(function () {});
+              navigator.share({ title: "My mystery pack pull", text: "I pulled " + best.title + "!", url: window.location.origin + "/apps/packs" }).catch(function () {});
             });
             actions.appendChild(share);
           }
           result.appendChild(actions);
           result.classList.add("mp-show");
           done.focus();
+        }
+
+        return sequence.then(function () {
+          glow.classList.remove("mp-peek");
+          glow.classList.add("mp-on");
+          return step(0);
         });
       })
       .catch(function (err) {
+        opener.group.classList.remove("mp-shaking");
         result.appendChild(el("p", { text: err.message }));
         result.classList.add("mp-show");
       });
   }
 
-  load();
+  // Demo opening for any page: PCPackOpener.open({ packImageUrl, card: { title, tier, imageUrl }, ... }).
+  window.PCPackOpener = {
+    open: function (opts) {
+      openPack({
+        id: "demo",
+        series: opts.series || "Mystery Pack",
+        packImageUrl: opts.packImageUrl || null,
+        demoCard: opts.card,
+        // Multi-card demo: opts.cards, cheapest first.
+        demoCards: opts.cards && opts.cards.length ? opts.cards : null,
+        resultNote: opts.note,
+        doneLabel: opts.doneLabel,
+        again: opts.again,
+        noShare: true,
+        onClose: opts.onClose,
+      });
+    },
+  };
+
+  if (!standalone) load();
 })();

@@ -1,0 +1,2 @@
+ALTER TABLE "ShipRequest" ADD COLUMN "pickup" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "ShipRequest" ADD COLUMN "readyAt" TIMESTAMP(3);
