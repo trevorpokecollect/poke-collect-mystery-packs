@@ -924,15 +924,22 @@ describe("move a vault", () => {
     await expect(moveVault(db, SHOP, to, to)).rejects.toThrow(/same customer/);
   });
 
-  it("finds a customer by ID, admin URL or the email on their orders", async () => {
+  it("finds a customer by ID, admin URL, or the email on their pack orders", async () => {
+    await db.packOrder.create({
+      data: { orderId: "gid://shopify/Order/31", shop: SHOP, orderName: "#31", customerId: "gid://shopify/Customer/77", openToken: "tok-31" },
+    });
     const admin = {
-      graphql: async () =>
-        new Response(JSON.stringify({ data: { orders: { nodes: [{ email: "Pat@Example.com", customer: { id: "gid://shopify/Customer/77" } }] } } })),
+      graphql: async (_q: string, opts: { variables: { query: string } }) =>
+        new Response(
+          JSON.stringify({
+            data: { orders: { nodes: opts.variables.query.includes("pat@") ? [{ id: "gid://shopify/Order/31", email: "Pat@Example.com" }] : [] } },
+          }),
+        ),
     } as never;
-    expect((await resolveCustomer(admin, "123")).customerId).toBe("gid://shopify/Customer/123");
-    expect((await resolveCustomer(admin, "https://admin.shopify.com/store/x/customers/456")).customerId).toBe("gid://shopify/Customer/456");
-    expect((await resolveCustomer(admin, "pat@example.com")).customerId).toBe("gid://shopify/Customer/77");
-    await expect(resolveCustomer(admin, "other@example.com")).rejects.toThrow(/No orders found/);
-    await expect(resolveCustomer(admin, "not an email")).rejects.toThrow(/isn't an email/);
+    expect((await resolveCustomer(db, admin, "123")).customerId).toBe("gid://shopify/Customer/123");
+    expect((await resolveCustomer(db, admin, "https://admin.shopify.com/store/x/customers/456")).customerId).toBe("gid://shopify/Customer/456");
+    expect((await resolveCustomer(db, admin, "pat@example.com")).customerId).toBe("gid://shopify/Customer/77");
+    await expect(resolveCustomer(db, admin, "other@example.com")).rejects.toThrow(/copy the number/);
+    await expect(resolveCustomer(db, admin, "not an email")).rejects.toThrow(/isn't an email/);
   });
 });

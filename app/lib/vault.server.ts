@@ -552,9 +552,10 @@ export async function notifyPickupsReady(db: Db, adminFor: (shop: string) => Pro
 
 /**
  * Turns what staff typed into a Shopify customer: a customer ID or admin customer URL, or an
- * email address (found through that customer's orders, since the app can't read customers directly).
+ * email address. The app can't read customers, so an email is matched through that person's
+ * orders to the customer the app recorded on their pack orders and vault shipments.
  */
-export async function resolveCustomer(admin: AdminApiContext, input: string): Promise<{ customerId: string; label: string }> {
+export async function resolveCustomer(db: Db, admin: AdminApiContext, input: string): Promise<{ customerId: string; label: string }> {
   const value = input.trim();
   const id = value.match(/Customer\/(\d+)/)?.[1] ?? value.match(/customers\/(\d+)/)?.[1] ?? (/^\d+$/.test(value) ? value : null);
   if (id) return { customerId: `gid://shopify/Customer/${id}`, label: `customer ${id}` };
@@ -562,18 +563,28 @@ export async function resolveCustomer(admin: AdminApiContext, input: string): Pr
   const data = await gql(
     admin,
     `#graphql
-      query VaultCustomerByEmail($query: String!) {
-        orders(first: 5, sortKey: CREATED_AT, reverse: true, query: $query) { nodes { email customer { id } } }
+      query VaultOrdersByEmail($query: String!) {
+        orders(first: 50, sortKey: CREATED_AT, reverse: true, query: $query) { nodes { id email } }
       }`,
     { query: `email:"${value.replace(/"/g, "")}"` },
   );
-  const match = (data.orders.nodes as { email: string | null; customer: { id: string } | null }[]).find(
-    (o) => o.customer && o.email?.toLowerCase() === value.toLowerCase(),
-  );
-  if (!match?.customer) {
-    throw new PoolError(`No orders found for ${value}. Use their customer ID instead (the number at the end of their customer page URL).`);
+  const orderIds = (data.orders.nodes as { id: string; email: string | null }[])
+    .filter((o) => o.email?.toLowerCase() === value.toLowerCase())
+    .map((o) => o.id);
+  const known = orderIds.length
+    ? (
+        await Promise.all([
+          db.packOrder.findFirst({ where: { orderId: { in: orderIds }, customerId: { not: null } }, select: { customerId: true } }),
+          db.shipRequest.findFirst({ where: { orderId: { in: orderIds }, customerId: { not: null } }, select: { customerId: true } }),
+        ])
+      ).find((r) => r?.customerId)?.customerId
+    : null;
+  if (!known) {
+    throw new PoolError(
+      `Couldn't match ${value} to a customer from their pack orders. Open them in Shopify (Customers), copy the number at the end of the page address, and enter that instead.`,
+    );
   }
-  return { customerId: match.customer.id, label: value };
+  return { customerId: known, label: value };
 }
 
 /** Vault cards and unopened packs that would move from one customer to another. */

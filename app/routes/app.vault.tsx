@@ -83,8 +83,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return { ok: added ? `Added ${added} vault card${added === 1 ? "" : "s"} to the shipment at no charge.` : "No other cards are waiting in that customer's vault." };
     }
     if (form.get("intent") === "previewMove" || form.get("intent") === "move") {
-      const from = await resolveCustomer(admin, String(form.get("from") || ""));
-      const to = await resolveCustomer(admin, String(form.get("to") || ""));
+      const from = await resolveCustomer(db, admin, String(form.get("from") || ""));
+      const to = await resolveCustomer(db, admin, String(form.get("to") || ""));
       const dryRun = form.get("intent") === "previewMove";
       const moved = await moveVault(db, session.shop, from.customerId, to.customerId, { dryRun });
       const what = `${moved.cards} vault card${moved.cards === 1 ? "" : "s"} and ${moved.unopened} unopened pack${moved.unopened === 1 ? "" : "s"} from ${moved.orders} order${moved.orders === 1 ? "" : "s"}`;
