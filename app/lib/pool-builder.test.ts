@@ -139,3 +139,23 @@ describe("buildPool two hit floors", () => {
     expect(average).toBeCloseTo(3.4, 1);
   });
 });
+
+describe("buildPool three hit floors", () => {
+  it("keeps the hit, big-hit and top-hit minimums", () => {
+    const candidates = [
+      ...Array.from({ length: 400 }, (_, i) => ({ variantId: `c${i}`, value: 1 + (i % 3) * 0.5 })),
+      ...Array.from({ length: 200 }, (_, i) => ({ variantId: `g${i}`, value: 5.5 + (i % 4) })),
+      ...Array.from({ length: 60 }, (_, i) => ({ variantId: `u${i}`, value: 10.5 + (i % 4) })),
+      ...Array.from({ length: 40 }, (_, i) => ({ variantId: `m${i}`, value: 15.5 + (i % 15) })),
+    ];
+    const { cards, average } = buildPool(candidates, {
+      count: 300, minValue: 1, maxValue: 35, targetAverage: 3.6,
+      minHits: 80, hitValue: 5.01, minBigHits: 30, bigHitValue: 10.01, minTopHits: 12, topHitValue: 15.01, fillerMax: 2,
+    });
+    const at = (v: number) => cards.filter((c) => c.value >= v).reduce((n, c) => n + c.quantity, 0);
+    expect(at(5.01)).toBeGreaterThanOrEqual(80);
+    expect(at(10.01)).toBeGreaterThanOrEqual(30);
+    expect(at(15.01)).toBeGreaterThanOrEqual(12);
+    expect(average).toBeCloseTo(3.6, 1);
+  });
+});

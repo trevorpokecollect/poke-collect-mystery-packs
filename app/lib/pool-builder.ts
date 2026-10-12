@@ -58,6 +58,9 @@ export interface BuildRules {
   /** A second, higher floor: at least `minBigHits` cards worth `bigHitValue` or more. */
   minBigHits?: number;
   bigHitValue?: number;
+  /** A third, highest floor: at least `minTopHits` cards worth `topHitValue` or more. */
+  minTopHits?: number;
+  topHitValue?: number;
   /** Non-hit cards cost at most this; cards between it and `hitValue` are left out. */
   fillerMax?: number;
 }
@@ -89,6 +92,11 @@ export function validateBuildRules(rules: BuildRules) {
   if (!Number.isInteger(minBigHits) || minBigHits < 0 || minBigHits > count) throw new Error("Minimum big hits must be a whole number up to the card count.");
   if (minBigHits > 0 && !(Number(rules.bigHitValue) > minValue && Number(rules.bigHitValue) <= maxValue)) {
     throw new Error("The big hit value has to sit inside the value range.");
+  }
+  const minTopHits = rules.minTopHits ?? 0;
+  if (!Number.isInteger(minTopHits) || minTopHits < 0 || minTopHits > count) throw new Error("Minimum top hits must be a whole number up to the card count.");
+  if (minTopHits > 0 && !(Number(rules.topHitValue) > minValue && Number(rules.topHitValue) <= maxValue)) {
+    throw new Error("The top hit value has to sit inside the value range.");
   }
   if (rules.fillerMax && !(rules.fillerMax >= minValue && rules.fillerMax < Number(rules.hitValue ?? Infinity))) {
     throw new Error("The filler max has to sit between the lowest card value and the hit value.");
@@ -130,6 +138,7 @@ export function buildPool<C extends Candidate>(
   // Guaranteed hits, highest floor first: each floor's first copies go in, then the rest of
   // the random order. A floor counts every picked card at or above its value.
   const floors = [
+    { value: Number(rules.topHitValue ?? Infinity), min: rules.minTopHits ?? 0 },
     { value: Number(rules.bigHitValue ?? Infinity), min: rules.minBigHits ?? 0 },
     { value: Number(rules.hitValue ?? Infinity), min: rules.minHits ?? 0 },
   ]

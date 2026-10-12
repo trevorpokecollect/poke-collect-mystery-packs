@@ -10,7 +10,7 @@ import { autoBuildPool, createSeries } from "../lib/series.server";
 // Prefilled from a link, e.g. /app/series/new?title=…&variant=<gid>&copyFrom=<seriesId>&productType=…&language=
 // creates a series for another pack with the same tiers and pool rules as an existing one
 // (rule overrides in the query), then builds its pool, as a draft to review before launch.
-const OVERRIDES = ["productType", "language", "condition", "count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "fillerMax"] as const;
+const OVERRIDES = ["productType", "language", "condition", "count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "minTopHits", "topHitValue", "fillerMax"] as const;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -47,7 +47,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (source.tierRules) await db.series.update({ where: { id: series.id }, data: { tierRules: source.tierRules as object } });
       if (source.buildRules) {
         const rules = { ...(source.buildRules as Record<string, unknown>) };
-        const NUMERIC = new Set(["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "fillerMax"]);
+        const NUMERIC = new Set(["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "minTopHits", "topHitValue", "fillerMax"]);
         for (const k of OVERRIDES) {
           if (!form.has(k)) continue;
           rules[k] = NUMERIC.has(k) ? Number(form.get(k)) : String(form.get(k) ?? "");
