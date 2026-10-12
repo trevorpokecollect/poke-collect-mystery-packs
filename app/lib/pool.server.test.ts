@@ -300,14 +300,19 @@ describe("seriesOdds", () => {
   });
 });
 
-// Records inventory moves instead of calling Shopify.
+// Records inventory moves instead of calling Shopify. Like Shopify, a move whose idempotency
+// key was already used is accepted but does nothing.
 function fakeAdmin() {
   const moves: { from: string; to: string; quantity: number; item: string; key: string }[] = [];
+  const seenKeys = new Set<string>();
   const admin = {
     graphql: async (_query: string, { variables }: { variables: Record<string, unknown> }) => {
       const input = variables.input as {
         changes: { quantity: number; inventoryItemId: string; from: { name: string }; to: { name: string } }[];
       };
+      const key = String(variables.key);
+      if (seenKeys.has(key)) return new Response(JSON.stringify({ data: { inventoryMoveQuantities: { userErrors: [] } } }));
+      seenKeys.add(key);
       for (const c of input.changes) {
         moves.push({ from: c.from.name, to: c.to.name, quantity: c.quantity, item: c.inventoryItemId, key: String(variables.key) });
       }
@@ -711,6 +716,42 @@ describe("vault", () => {
     expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(2);
     expect((await db.shipRequest.findUniqueOrThrow({ where: { id: paid } })).status).toBe("RETURNED");
     await expect(returnShipmentToVault(db, admin, SHOP, paid)).rejects.toThrow(/already closed/);
+  });
+
+  it("keeps Shopify's reserved count in step with the app through repeated ship, return and add cycles", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin, drafts, net } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(3));
+    for (const p of pulls) await revealPull(db, SHOP, p.id, viewer);
+    // Reserved copies in Shopify must always equal what the app's cards say is reserved.
+    const inStep = async () => {
+      for (const card of await db.card.findMany({ where: { seriesId: series.id } })) {
+        expect(net(card.inventoryItemId!)).toBe(card.reservedQty);
+      }
+    };
+    const requestId = (i: number) => (drafts[i].input as { customAttributes: { value: string }[] }).customAttributes[0].value;
+
+    await requestShipment(db, admin, SHOP, viewer); // release #1
+    await inStep();
+    await returnShipmentToVault(db, admin, SHOP, requestId(0)); // unpaid invoice back to the vault
+    await inStep();
+    await requestShipment(db, admin, SHOP, viewer); // release #2 of the same pulls
+    await inStep();
+    await markShipmentPaid(db, requestId(1), "gid://shopify/Order/999");
+    await returnShipmentToVault(db, admin, SHOP, requestId(1)); // paid order cancelled, cards back
+    await inStep();
+    await requestShipment(db, admin, SHOP, viewer); // release #3
+    await inStep();
+    await markShipmentPaid(db, requestId(2), "gid://shopify/Order/1000");
+    // More cards opened later, then folded into the paid shipment.
+    const more = await drawForOrder(db, order(2));
+    for (const p of more.pulls) await revealPull(db, SHOP, p.id, viewer);
+    await requestShipment(db, admin, SHOP, viewer); // a second invoice the add will cancel
+    await inStep();
+    expect(await addVaultCardsToShipment(db, admin, SHOP, requestId(2))).toBe(2);
+    await inStep();
   });
 
   it("ships free from the free-shipping card count", async () => {
