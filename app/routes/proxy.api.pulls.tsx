@@ -68,7 +68,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               tier: p.slot.card.tier,
               imageUrl: p.slot.card.imageUrl,
             },
-      // preparing | shipped | pickup_ready | picked_up, with tracking once shipped.
+      // preparing | shipped | pickup_preparing | pickup_ready | picked_up, with tracking once shipped.
       shipping:
         p.status === "UNOPENED"
           ? null

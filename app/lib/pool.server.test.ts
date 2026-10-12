@@ -14,7 +14,7 @@ import {
 } from "./pool.server";
 import { releaseUnneeded, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
-import { expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
+import { addVaultCardsToShipment, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -489,6 +489,7 @@ function vaultAdmin() {
   const base = fakeAdmin();
   const drafts: { input: Record<string, unknown> }[] = [];
   const deleted: string[] = [];
+  const edits: { added: { variantId: string; quantity: number }[]; discounted: number; committed: boolean } = { added: [], discounted: 0, committed: false };
   const admin = {
     graphql: async (query: string, opts: { variables: Record<string, unknown> }) => {
       // A query written on the "#graphql" comment line is all comment; Shopify rejects it.
@@ -504,6 +505,22 @@ function vaultAdmin() {
       if (query.includes("VaultCurrency")) return reply({ shop: { currencyCode: "USD" } });
       if (query.includes("VaultOrderEmail")) return reply({ order: { email: "guest@example.com" } });
       if (query.includes("VaultDraftStatus")) return reply({ draftOrder: { id: "d", status: "OPEN", order: null } });
+      if (query.includes("draftOrderComplete")) {
+        return reply({ draftOrderComplete: { draftOrder: { order: { id: "gid://shopify/Order/777", name: "#777" } }, userErrors: [] } });
+      }
+      if (query.includes("orderEditBegin")) return reply({ orderEditBegin: { calculatedOrder: { id: "calc-1" }, userErrors: [] } });
+      if (query.includes("orderEditAddVariant")) {
+        edits.added.push({ variantId: String(opts.variables.variantId), quantity: Number(opts.variables.quantity) });
+        return reply({ orderEditAddVariant: { calculatedLineItem: { id: `cli-${edits.added.length}` }, userErrors: [] } });
+      }
+      if (query.includes("orderEditAddLineItemDiscount")) {
+        edits.discounted++;
+        return reply({ orderEditAddLineItemDiscount: { userErrors: [] } });
+      }
+      if (query.includes("orderEditCommit")) {
+        edits.committed = true;
+        return reply({ orderEditCommit: { order: { id: "o" }, userErrors: [] } });
+      }
       if (query.includes("draftOrderDelete")) {
         deleted.push(String((opts.variables.input as { id: string }).id));
         return reply({ draftOrderDelete: { deletedId: "d", userErrors: [] } });
@@ -512,7 +529,7 @@ function vaultAdmin() {
     },
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { admin: admin as any, drafts, deleted, net: base.net };
+  return { admin: admin as any, drafts, deleted, edits, net: base.net };
 }
 
 describe("vault", () => {
@@ -556,6 +573,108 @@ describe("vault", () => {
     const shipped = await db.pull.findMany();
     expect(shipped.every((p) => p.status === "FULFILLING" && p.shipOrderId === "gid://shopify/Order/999")).toBe(true);
     await expect(requestShipment(db, admin, SHOP, viewer)).rejects.toThrow(/no cards in your vault/);
+  });
+
+  it("replaces an open invoice with one for every card when more cards are opened", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin, drafts, deleted } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const first = await drawForOrder(db, order(1));
+    await revealPull(db, SHOP, first.pulls[0].id, viewer);
+    await requestShipment(db, admin, SHOP, viewer);
+    expect((drafts[0].input as { lineItems: unknown[] }).lineItems).toHaveLength(1);
+
+    const second = await drawForOrder(db, order(2));
+    for (const p of second.pulls) await revealPull(db, SHOP, p.id, viewer);
+    const again = await requestShipment(db, admin, SHOP, viewer);
+    expect(again).toEqual({ invoiceUrl: "https://pay/2", reused: false });
+    expect(deleted).toEqual(["gid://shopify/DraftOrder/1"]);
+    const lines = (drafts[1].input as { lineItems: { quantity: number }[] }).lineItems;
+    expect(lines.reduce((n, l) => n + l.quantity, 0)).toBe(3);
+    const requests = await db.shipRequest.findMany({ orderBy: { createdAt: "asc" } });
+    expect(requests.map((r) => r.status)).toEqual(["CANCELLED", "PENDING"]);
+    expect(await db.pull.count({ where: { shipRequestId: requests[1].id, unreservedAt: { not: null } } })).toBe(3);
+  });
+
+  it("adds cards opened after payment to the paid, unshipped vault order at no charge", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin, drafts, edits, deleted } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const first = await drawForOrder(db, order(1));
+    await revealPull(db, SHOP, first.pulls[0].id, viewer);
+    await requestShipment(db, admin, SHOP, viewer);
+    const requestId = (drafts[0].input as { customAttributes: { value: string }[] }).customAttributes[0].value;
+    await markShipmentPaid(db, requestId, "gid://shopify/Order/999");
+
+    const second = await drawForOrder(db, order(2));
+    for (const p of second.pulls) await revealPull(db, SHOP, p.id, viewer);
+    // The customer already asked to ship these on a second invoice; it's cancelled, not charged.
+    await requestShipment(db, admin, SHOP, viewer);
+    expect(await addVaultCardsToShipment(db, admin, SHOP, requestId)).toBe(2);
+    expect(deleted).toEqual(["gid://shopify/DraftOrder/2"]);
+    expect(edits.added.reduce((n, a) => n + a.quantity, 0)).toBe(2);
+    expect(edits.discounted).toBe(edits.added.length);
+    expect(edits.committed).toBe(true);
+    const pulls = await db.pull.findMany();
+    expect(pulls.every((p) => p.status === "FULFILLING" && p.shipOrderId === "gid://shopify/Order/999" && p.shipRequestId === requestId)).toBe(true);
+    expect(pulls.every((p) => p.unreservedAt)).toBe(true);
+    expect((await db.shipRequest.findUniqueOrThrow({ where: { id: requestId } })).cardCount).toBe(3);
+    expect(await addVaultCardsToShipment(db, admin, SHOP, requestId)).toBe(0);
+  });
+
+  it("sets every vault card aside on a free local pickup order, replacing an open invoice", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin, drafts, deleted } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(3));
+    for (const p of pulls) await revealPull(db, SHOP, p.id, viewer);
+    await requestShipment(db, admin, SHOP, viewer);
+
+    const result = await requestShipment(db, admin, SHOP, viewer, { pickup: true });
+    expect(result).toEqual({ invoiceUrl: null, reused: false, pickupOrder: "#777" });
+    expect(deleted).toEqual(["gid://shopify/DraftOrder/1"]);
+    const input = drafts[1].input as { tags: string[]; shippingLine: { title: string; priceWithCurrency: { amount: string } }; lineItems: { quantity: number }[] };
+    expect(input.tags).toContain("vault-pickup");
+    expect(input.shippingLine).toMatchObject({ title: "Local Pickup", priceWithCurrency: { amount: "0.00" } });
+    expect(input.lineItems.reduce((n, l) => n + l.quantity, 0)).toBe(3);
+    const after = await db.pull.findMany();
+    expect(after.every((p) => p.status === "FULFILLING" && p.shipOrderId === "gid://shopify/Order/777")).toBe(true);
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(0);
+    const request = await db.shipRequest.findFirstOrThrow({ where: { status: "PAID" } });
+    expect(request.pickup).toBe(true);
+
+    // Staff tag the order "pickup-ready": the customer gets one Klaviyo email, then never again.
+    const { notifyPickupsReady } = await import("./vault.server");
+    let tags: string[] = [];
+    const tagAdmin = {
+      graphql: async (query: string, opts: { variables: Record<string, unknown> }) =>
+        query.includes("PickupOrder(")
+          ? new Response(JSON.stringify({ data: { order: { name: "#777", email: "fan@example.com", tags, cancelledAt: null } } }))
+          : admin.graphql(query, opts),
+    };
+    const events: { metric: string; properties: Record<string, unknown> }[] = [];
+    const realFetch = globalThis.fetch;
+    process.env.KLAVIYO_PRIVATE_KEY = "test-key";
+    globalThis.fetch = (async (_url: string, init: { body: string }) => {
+      const a = JSON.parse(init.body).data.attributes;
+      events.push({ metric: a.metric.data.attributes.name, properties: a.properties });
+      return new Response("{}", { status: 202 });
+    }) as never;
+    try {
+      expect(await notifyPickupsReady(db, async () => tagAdmin as never)).toBe(0);
+      tags = ["vault-pickup", "pickup-ready"];
+      expect(await notifyPickupsReady(db, async () => tagAdmin as never)).toBe(1);
+      expect(await notifyPickupsReady(db, async () => tagAdmin as never)).toBe(0);
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.KLAVIYO_PRIVATE_KEY;
+    }
+    expect(events).toHaveLength(1);
+    expect(events[0].metric).toBe("Vault Pickup Ready");
+    expect(events[0].properties).toMatchObject({ order_name: "#777", cards: 3 });
   });
 
   it("ships free from the free-shipping card count", async () => {

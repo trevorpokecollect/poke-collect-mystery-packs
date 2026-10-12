@@ -240,6 +240,7 @@
 .mp-ship::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .mp-ship[data-state="shipped"], .mp-ship[data-state="picked_up"] { background: #e7f6ec; color: #1f7a45; }
 .mp-ship[data-state="pickup_ready"] { background: #e8f0ff; color: #2456c4; }
+.mp-ship[data-state="pickup_preparing"] { background: #fff4e0; color: #9a5b00; }
 .mp-track { font-size: .8em; font-weight: 600; color: var(--mp-ink); }
 
 /* How your card ships */
@@ -393,6 +394,9 @@
 .mp-hero-bar span { display: block; height: 100%; border-radius: inherit; background: #fff; }
 .mp-hero .mp-vault-btn { width: 100%; text-align: center; justify-content: center; display: inline-flex; box-shadow: 0 6px 16px rgba(226,47,57,.4); }
 .mp-hero .mp-vault-btn[disabled] { opacity: .5; }
+.mp-pickup-btn { display: block; width: 100%; margin-top: 8px; padding: 8px 12px; background: transparent; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; color: inherit; font: inherit; font-size: .9em; font-weight: 700; cursor: pointer; }
+.mp-pickup-btn:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.5); color: inherit; }
+.mp-pickup-btn[disabled] { opacity: .5; cursor: default; }
 .mp-hero .mp-btn-ghost { width: 100%; text-align: center; text-decoration: none; display: inline-flex; justify-content: center; }
 @media (max-width: 749px) {
   .mp-hero { grid-template-columns: 1fr; padding: 22px 18px; border-radius: 16px; margin-top: 0; }

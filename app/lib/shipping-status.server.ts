@@ -1,8 +1,9 @@
 // Where each pulled card is in delivery, read from the order's fulfillments in Shopify.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import { gql } from "./orders.server";
+import { PICKUP_READY_TAG, PICKUP_TAG } from "./vault.server";
 
-export type ShipState = "preparing" | "shipped" | "pickup_ready" | "picked_up";
+export type ShipState = "preparing" | "shipped" | "pickup_preparing" | "pickup_ready" | "picked_up";
 
 export interface ShipStatus {
   state: ShipState;
@@ -11,6 +12,7 @@ export interface ShipStatus {
 
 interface OrderNode {
   id: string;
+  tags?: string[];
   fulfillmentOrders: {
     nodes: {
       status: string;
@@ -33,7 +35,9 @@ interface OrderNode {
 export async function shippingStatuses(admin: AdminApiContext | undefined, orderIds: string[]) {
   const out = new Map<string, ShipStatus>();
   const pickupOrders = new Set<string>();
-  if (!admin || orderIds.length === 0) return { statuses: out, pickupOrders };
+  // Pickup orders whose cards are set out: Shopify pickup orders, or vault pickups staff tagged ready.
+  const readyPickups = new Set<string>();
+  if (!admin || orderIds.length === 0) return { statuses: out, pickupOrders, readyPickups };
   for (let i = 0; i < orderIds.length; i += 50) {
     try {
       const data = await gql<{ nodes: (OrderNode | null)[] }>(
@@ -43,6 +47,7 @@ export async function shippingStatuses(admin: AdminApiContext | undefined, order
             nodes(ids: $ids) {
               ... on Order {
                 id
+                tags
                 fulfillmentOrders(first: 10) {
                   nodes {
                     status
@@ -62,8 +67,10 @@ export async function shippingStatuses(admin: AdminApiContext | undefined, order
       );
       for (const order of data.nodes) {
         if (!order?.id) continue;
-        const pickup = order.fulfillmentOrders.nodes.some((fo) => fo.deliveryMethod?.methodType === "PICK_UP");
+        const shopifyPickup = order.fulfillmentOrders.nodes.some((fo) => fo.deliveryMethod?.methodType === "PICK_UP");
+        const pickup = shopifyPickup || !!order.tags?.includes(PICKUP_TAG);
         if (pickup) pickupOrders.add(order.id);
+        if (shopifyPickup || order.tags?.includes(PICKUP_READY_TAG)) readyPickups.add(order.id);
         for (const f of order.fulfillments) {
           if (f.status === "CANCELLED" || f.status === "ERROR" || f.status === "FAILURE") continue;
           for (const li of f.fulfillmentLineItems.nodes) {
@@ -80,7 +87,7 @@ export async function shippingStatuses(admin: AdminApiContext | undefined, order
       console.error("Could not load shipping status", error);
     }
   }
-  return { statuses: out, pickupOrders };
+  return { statuses: out, pickupOrders, readyPickups };
 }
 
 export function shipStatusFor(
@@ -90,7 +97,7 @@ export function shipStatusFor(
 ): ShipStatus {
   return (
     result.statuses.get(`${orderId}|${variantId}`) ?? {
-      state: result.pickupOrders.has(orderId) ? "pickup_ready" : "preparing",
+      state: result.pickupOrders.has(orderId) ? (result.readyPickups.has(orderId) ? "pickup_ready" : "pickup_preparing") : "preparing",
       tracking: null,
     }
   );

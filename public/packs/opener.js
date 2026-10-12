@@ -75,6 +75,7 @@
     awaiting_payment: "Awaiting Shipping Payment",
     preparing: "Preparing To Ship",
     shipped: "Shipped",
+    pickup_preparing: "Preparing For Pickup",
     pickup_ready: "Ready For Pickup",
     picked_up: "Picked Up",
   };
@@ -127,7 +128,7 @@
           el("div", {}, [el("strong", { text: s[0] }), el("p", { text: s[1] })]),
         ]);
       })),
-      el("p", { class: "mp-info-note", text: "Shipping is a one-time $" + fee + " per shipment, free when you ship " + freeAt + " or more cards at once. US addresses only." }),
+      el("p", { class: "mp-info-note", text: "Shipping is a one-time $" + fee + " per shipment, free when you ship " + freeAt + " or more cards at once. US addresses only. Local pickup is always free at 181 Hughes Road, Suite 5, Madison, AL: tap Pick Up In Store and we'll email you when your cards are ready." }),
     ]);
   }
 
@@ -296,6 +297,7 @@
         el("strong", { class: "mp-hero-ship-title", text: vault.pending.cards + (vault.pending.cards === 1 ? " Card Is" : " Cards Are") + " Ready To Ship" }),
         el("p", { text: "Finish checkout to pay shipping and we'll send them out." }),
         el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
+        pickupButton(vault, null),
       ]);
     }
     var fee = vault ? vault.fee : 5;
@@ -333,7 +335,39 @@
       bar,
       note,
       button,
+      pickupButton(vault, note),
     ]);
+  }
+
+  // "Pick Up In Store": sets every vault card aside on a free local pickup order, no checkout.
+  function pickupButton(vault, note) {
+    var cards = vault ? vault.cards + (vault.pending ? vault.pending.cards : 0) : 0;
+    var button = el("button", { class: "mp-pickup-btn", type: "button", text: "Or Pick Up In Store (Free)" });
+    if (!cards) button.disabled = true;
+    button.addEventListener("click", function () {
+      var say = function (text) { if (note) note.textContent = text; else button.textContent = text; };
+      if (demo) { say("Preview mode: pickup isn't available for sample cards."); return; }
+      if (!window.confirm("Set aside all " + cards + " card" + (cards === 1 ? "" : "s") + " in your vault for free local pickup?")) return;
+      button.disabled = true;
+      button.textContent = "Setting Aside...";
+      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pickup: true }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.pickupOrder) throw new Error(d.error || "Couldn't set your cards aside.");
+          window.alert(
+            "Your cards are being set aside for pickup on order " + d.pickupOrder + ". We'll email you when they're ready.\n\n" +
+            "Pick up at: " + (d.pickupAddress || "our store") + (d.pickupHours ? "\nHours: " + d.pickupHours : "") +
+            "\n\nBring your order number when you come in."
+          );
+          window.location.reload();
+        })
+        .catch(function (err) {
+          button.disabled = false;
+          button.textContent = "Or Pick Up In Store (Free)";
+          say(err.message);
+        });
+    });
+    return button;
   }
 
   function render(packs, available, signedIn, recommendFrom, recommendHandle, vault) {

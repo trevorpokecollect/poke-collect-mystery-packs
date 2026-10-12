@@ -4,7 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { getFreeShipping, saveFreeShipping } from "../lib/free-shipping.server";
-import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
+import { addVaultCardsToShipment, FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 import { demoToken } from "../lib/demo.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -16,7 +16,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     include: { _count: { select: { slots: true, pulls: true } } },
   });
   const unopened = await db.pull.count({ where: { shop: session.shop, status: "UNOPENED", cardIndex: 0 } });
+  // /app?addVaultCards=<ship request id> offers to add a customer's other vault cards to their
+  // paid, unshipped vault order (for cards opened after they paid).
+  const addVaultCards = new URL(request.url).searchParams.get("addVaultCards");
   return {
+    addVaultCards,
     // Opens the storefront My Packs page with sample packs to open (link works for 30 days).
     previewUrl: `https://${session.shop}/apps/packs?demo=${demoToken(session.shop)}`,
     freeShipping: { enabled: freeShipping.enabled, threshold: freeShipping.threshold },
@@ -34,8 +38,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const form = await request.formData();
+  if (form.get("intent") === "addVaultCards") {
+    try {
+      const added = await addVaultCardsToShipment(db, admin, session.shop, String(form.get("requestId")));
+      return { ok: added ? `Added ${added} card${added === 1 ? "" : "s"} to the shipment at no charge.` : "No other cards in that customer's vault." };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Couldn't add the cards." };
+    }
+  }
   try {
     await saveFreeShipping(admin, {
       enabled: form.get("enabled") === "true",
@@ -50,7 +62,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 const tone = { DRAFT: "neutral", LIVE: "success", CLOSED: "info" } as const;
 
 export default function Index() {
-  const { series, unopened, freeShipping, vaultShipping, previewUrl } = useLoaderData<typeof loader>();
+  const { series, unopened, freeShipping, vaultShipping, previewUrl, addVaultCards } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
 
@@ -94,6 +106,11 @@ export default function Index() {
         )}
       </s-section>
 
+      {addVaultCards ? (
+        <s-button slot="secondary-actions" onClick={() => submit({ intent: "addVaultCards", requestId: addVaultCards }, { method: "post" })}>
+          Add Vault Cards To Shipment
+        </s-button>
+      ) : null}
       {freeShipping.enabled ? (
         // Packs no longer ship (cards wait in the vault), so the old "free shipping on N+ packs"
         // discount has nothing left to do. A title-bar button turns it off.
