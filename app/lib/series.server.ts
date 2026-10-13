@@ -83,11 +83,13 @@ export async function createSeries(
 ) {
   const [variant] = await fetchVariants(admin, [input.packVariantId]);
   if (!variant) throw new Error("That pack product variant wasn't found.");
+  // A pack can hold one draft at a time. The draft may sit alongside the pack's live series
+  // (so the next pool is ready before this one sells out); launch waits for that series to close.
   const inUse = await db.series.findFirst({
-    where: { shop, packVariantId: variant.id, status: { in: ["DRAFT", "LIVE"] } },
+    where: { shop, packVariantId: variant.id, status: "DRAFT" },
   });
   if (inUse) {
-    throw new Error(`That pack is already used by "${inUse.title}". Close that series first, then reuse the pack.`);
+    throw new Error(`That pack already has a draft, "${inUse.title}". Launch or discard it first.`);
   }
   // A later series can reuse a title (e.g. re-running "Series 1"), so make the handle unique.
   const base = slugify(input.title) || "series";
@@ -152,6 +154,10 @@ export async function addCards(admin: AdminApiContext, seriesId: string, variant
  */
 export async function launch(admin: AdminApiContext, seriesId: string) {
   const draft = await db.series.findUniqueOrThrow({ where: { id: seriesId } });
+  const live = await db.series.findFirst({
+    where: { shop: draft.shop, packVariantId: draft.packVariantId, status: "LIVE", id: { not: draft.id } },
+  });
+  if (live) throw new Error(`"${live.title}" is still selling on this pack. Close it before launching this draft.`);
   if (draft.reserveInventory && draft.status === "DRAFT") {
     const short = await unavailableCards(admin, seriesId);
     if (short.length > 0) {
