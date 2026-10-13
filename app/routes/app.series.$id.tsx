@@ -256,6 +256,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           title: series.title,
           packVariantId: series.packVariantId,
           autoOpenDays: series.autoOpenDays,
+          cardsPerPack: series.cardsPerPack,
         });
         if (series.tierRules) {
           await db.series.update({ where: { id: next.id }, data: { tierRules: series.tierRules as object } });
