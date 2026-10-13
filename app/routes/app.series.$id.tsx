@@ -250,7 +250,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       }
       case "rerun": {
         // Same name, pack product, tiers and pool rules, with a fresh pool built from current inventory.
-        if (series.status !== "CLOSED") return { error: "Close this series before running it again." };
+        // From a live series this drafts the next pool early; it launches once this one is closed.
+        if (series.status === "DRAFT") return { error: "This series is still a draft." };
         const next = await createSeries(admin, session.shop, {
           title: series.title,
           packVariantId: series.packVariantId,
@@ -421,6 +422,21 @@ export default function SeriesPage() {
           }}
         >
           Close series
+        </s-button>
+      ) : null}
+      {series.status === "LIVE" ? (
+        <s-button
+          slot="secondary-actions"
+          disabled={busy}
+          onClick={() =>
+            confirmThen(
+              "rerun",
+              `Draft the next "${series.title}" now, with the same pack, tiers and pool rules? A fresh pool is built from your current inventory as a draft. Nothing is reserved, and this series keeps selling; the draft can launch once this series is closed. Click Draft Next Series again to confirm.`,
+              () => submit({ intent: "rerun" }, { method: "post" }),
+            )
+          }
+        >
+          Draft Next Series
         </s-button>
       ) : series.status === "CLOSED" ? (
         <s-button
