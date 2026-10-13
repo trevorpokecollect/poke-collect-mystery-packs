@@ -226,8 +226,17 @@ export async function setPackStock(admin: AdminApiContext, packVariantId: string
  * one more pack than there are cards, and its buyer would get nothing.
  */
 export async function syncPackStock(admin: AdminApiContext, seriesId: string) {
-  const series = await db.series.findUnique({ where: { id: seriesId } });
+  let series = await db.series.findUnique({ where: { id: seriesId } });
   if (!series) return;
+  // A closed series shares its pack with the series selling now (e.g. a refund on a Series 1 pack
+  // after Series 2 launched), so sync the pack to the live series instead of zeroing it.
+  if (series.status !== "LIVE") {
+    const live = await db.series.findFirst({
+      where: { shop: series.shop, packVariantId: series.packVariantId, status: "LIVE" },
+    });
+    if (live) series = live;
+  }
+  seriesId = series.id;
   const left =
     series.status === "LIVE"
       ? Math.floor(
