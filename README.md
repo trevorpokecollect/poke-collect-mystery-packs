@@ -1,7 +1,8 @@
 # Poke-Collect Mystery Packs
 
 A Shopify app that sells digital mystery packs on poke-collect.com. Customers buy a pack, open it
-online with an animation, and the physical card they pulled ships with their order.
+online with an animation, and the physical cards they pull wait in their vault until they ship them
+("Ship My Cards") or pick them up in store.
 
 Plan and business notes: [Digital Mystery Packs Plan](https://claude.ai/code/artifact/d02beb28-a388-4c13-b031-cb13fbc803b8)
 
