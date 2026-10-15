@@ -52,7 +52,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           if (!form.has(k)) continue;
           rules[k] = NUMERIC.has(k) ? Number(form.get(k)) : String(form.get(k) ?? "");
         }
-        await autoBuildPool(admin, session.shop, series.id, rules as unknown as Parameters<typeof autoBuildPool>[3]);
+        try {
+          await autoBuildPool(admin, session.shop, series.id, rules as unknown as Parameters<typeof autoBuildPool>[3]);
+        } catch (error) {
+          // Don't leave an empty draft behind; it would block the next try for this pack.
+          await db.series.delete({ where: { id: series.id } });
+          throw error;
+        }
       }
     }
     return redirect(`/app/series/${series.id}`);

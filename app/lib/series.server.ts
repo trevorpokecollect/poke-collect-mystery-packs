@@ -87,8 +87,12 @@ export async function createSeries(
   // (so the next pool is ready before this one sells out); launch waits for that series to close.
   const inUse = await db.series.findFirst({
     where: { shop, packVariantId: variant.id, status: "DRAFT" },
+    include: { _count: { select: { cards: true } } },
   });
-  if (inUse) {
+  // An empty draft (e.g. left by a pool build that failed) holds nothing, so it gives way.
+  if (inUse && inUse._count.cards === 0) {
+    await db.series.delete({ where: { id: inUse.id } });
+  } else if (inUse) {
     throw new Error(`That pack already has a draft, "${inUse.title}". Launch or discard it first.`);
   }
   // A later series can reuse a title (e.g. re-running "Series 1"), so make the handle unique.
