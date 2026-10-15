@@ -262,7 +262,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           await db.series.update({ where: { id: next.id }, data: { tierRules: series.tierRules as object } });
         }
         if (series.buildRules) {
-          await autoBuildPool(admin, session.shop, next.id, series.buildRules as unknown as Parameters<typeof autoBuildPool>[3]);
+          try {
+            await autoBuildPool(admin, session.shop, next.id, series.buildRules as unknown as Parameters<typeof autoBuildPool>[3]);
+          } catch (error) {
+            // Don't leave an empty draft behind; it would block the next try for this pack.
+            await db.series.delete({ where: { id: next.id } });
+            throw error;
+          }
         }
         return redirect(`/app/series/${next.id}`);
       }
