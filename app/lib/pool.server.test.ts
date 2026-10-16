@@ -15,6 +15,7 @@ import {
 } from "./pool.server";
 import { releaseUnneeded, rereserveForPulls, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
+import { latestTopTierPull, recentPulls } from "./recent-pulls.server";
 import { addVaultCardsToShipment, moveVault, resolveCustomer, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -950,5 +951,40 @@ describe("move a vault", () => {
     expect((await resolveCustomer(db, admin, "pat@example.com")).customerId).toBe("gid://shopify/Customer/77");
     await expect(resolveCustomer(db, admin, "other@example.com")).rejects.toThrow(/copy the number/);
     await expect(resolveCustomer(db, admin, "not an email")).rejects.toThrow(/isn't an email/);
+  });
+});
+
+describe("recent pulls feed", () => {
+  it("lists only revealed pulls, newest first, and finds the newest top-tier pull", async () => {
+    const series = await makeSeries(
+      [
+        { name: "Base", tier: "Base", value: 5, qty: 3 },
+        { name: "Chase", tier: "Chase", value: 50, qty: 3 },
+      ],
+      "series-feed",
+    );
+    await db.series.update({
+      where: { id: series.id },
+      data: { tierRules: [{ name: "Base", min: 0 }, { name: "Chase", min: 25.01 }] },
+    });
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(4));
+    const viewer = { customerId: "gid://shopify/Customer/1" };
+
+    expect(await recentPulls(db, SHOP)).toEqual([]);
+    expect(await latestTopTierPull(db, SHOP)).toBeNull();
+
+    for (const p of pulls.slice(0, 3)) await revealPull(db, SHOP, p.id, viewer);
+    const feed = await recentPulls(db, SHOP, { productId: "gid://shopify/Product/1" });
+    expect(feed).toHaveLength(3);
+    expect(feed.map((f) => f.pulledAt)).toEqual([...feed.map((f) => f.pulledAt)].sort().reverse());
+    // Never exposes who pulled it or what it's worth.
+    expect(Object.keys(feed[0]).sort()).toEqual(["card", "id", "imageUrl", "pack", "productId", "pulledAt", "tier", "topTier"]);
+    expect(await recentPulls(db, SHOP, { productId: "gid://shopify/Product/999" })).toEqual([]);
+
+    const chase = feed.filter((f) => f.tier === "Chase");
+    expect(feed.every((f) => f.topTier === (f.tier === "Chase"))).toBe(true);
+    const top = await latestTopTierPull(db, SHOP);
+    expect(top?.id ?? null).toBe(chase[0]?.id ?? null);
   });
 });
