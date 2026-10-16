@@ -365,7 +365,7 @@ export interface InventoryIssue {
   available: number;
   reserved: number;
   committed: number;
-  /** Copies Shopify should hold in "reserved": the pools' reservations plus open vault invoices. */
+  /** Copies Shopify should hold in "reserved": the pools' reservations. */
   expectedReserved: number;
   /** Reserved copies nothing in the app accounts for (usually also committed to an order). */
   stuck: number;
@@ -380,19 +380,12 @@ export interface InventoryIssue {
  */
 export async function auditPoolInventory(db: PrismaClient, admin: Admin) {
   const cards = (await db.card.findMany({ where: { inventoryItemId: { not: null } } })).filter(reservable);
-  // Open vault invoices hold their cards in the draft order's own reservation.
-  const invoiced = await db.pull.findMany({
-    where: { shipRequest: { status: "PENDING", draftOrderId: { not: null } }, unreservedAt: { not: null } },
-    select: { slot: { select: { cardId: true } } },
-  });
-  const invoicedByCard = new Map<string, number>();
-  for (const p of invoiced) invoicedByCard.set(p.slot.cardId, (invoicedByCard.get(p.slot.cardId) ?? 0) + 1);
-
+  // Open vault invoices hold their cards on the draft order, which Shopify counts as committed, not reserved.
   const groups = new Map<string, { inventoryItemId: string; locationId: string; title: string; expected: number; ledgers: Set<string> }>();
   for (const card of cards) {
     const key = `${card.inventoryItemId}|${card.locationId}`;
     const group = groups.get(key) ?? { inventoryItemId: card.inventoryItemId, locationId: card.locationId, title: card.title, expected: 0, ledgers: new Set<string>() };
-    group.expected += card.reservedQty + (invoicedByCard.get(card.id) ?? 0);
+    group.expected += card.reservedQty;
     group.ledgers.add(ledgerFor(card.seriesId));
     groups.set(key, group);
   }

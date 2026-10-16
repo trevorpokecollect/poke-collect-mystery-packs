@@ -46,7 +46,7 @@ export default function InventoryCheck() {
           ) : null}
           <s-paragraph>
             Checked {checked} pool card{checked === 1 ? "" : "s"} against Shopify. A card is flagged when its available count
-            is negative, when Shopify holds more copies in reserved than the pools and open vault invoices account for, or
+            is negative, when Shopify holds more copies in reserved than the pools account for, or
             when it holds fewer (Short), meaning a copy owed to a pack could also sell.
           </s-paragraph>
           {unheldVaultCards.length ? (
