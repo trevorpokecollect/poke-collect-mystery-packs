@@ -369,6 +369,8 @@ export interface InventoryIssue {
   expectedReserved: number;
   /** Reserved copies nothing in the app accounts for (usually also committed to an order). */
   stuck: number;
+  /** Copies the app counts on being reserved that Shopify isn't holding, so a pack could win a card that can also sell. */
+  short: number;
   ledgers: string[];
 }
 
@@ -435,11 +437,12 @@ export async function auditPoolInventory(db: PrismaClient, admin: Admin) {
       committed: q.committed ?? 0,
       expectedReserved: group.expected,
       stuck: Math.max(0, reserved - group.expected),
+      short: Math.max(0, group.expected - reserved),
       ledgers: [...group.ledgers],
     };
-    if (issue.available < 0 || issue.stuck > 0) issues.push(issue);
+    if (issue.available < 0 || issue.stuck > 0 || issue.short > 0) issues.push(issue);
   }
-  issues.sort((a, b) => a.available - b.available || b.stuck - a.stuck);
+  issues.sort((a, b) => a.available - b.available || b.short - a.short || b.stuck - a.stuck);
 
   // Vault cards whose copy isn't held for them (the return guard found none available).
   const unheld = await db.pull.findMany({
