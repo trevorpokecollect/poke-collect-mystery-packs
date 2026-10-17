@@ -46,7 +46,8 @@ export default function InventoryCheck() {
           ) : null}
           <s-paragraph>
             Checked {checked} pool card{checked === 1 ? "" : "s"} against Shopify. A card is flagged when its available count
-            is negative, or when Shopify holds more copies in reserved than the pools and open vault invoices account for.
+            is negative, when Shopify holds more copies in reserved than the pools account for, or
+            when it holds fewer (Short), meaning a copy owed to a pack could also sell.
           </s-paragraph>
           {unheldVaultCards.length ? (
             <s-banner tone="warning" heading={`${unheldVaultCards.length} vault card${unheldVaultCards.length === 1 ? " isn't" : "s aren't"} held in inventory`}>
@@ -84,6 +85,8 @@ export default function InventoryCheck() {
                           <s-button disabled={busy} onClick={() => submit({ inventoryItemId: i.inventoryItemId }, { method: "post" })}>
                             Release {i.stuck}
                           </s-button>
+                        ) : i.short > 0 ? (
+                          <s-badge tone="critical">Short {i.short}</s-badge>
                         ) : null}
                       </s-table-cell>
                     </s-table-row>
@@ -96,8 +99,8 @@ export default function InventoryCheck() {
                 </s-button>
               ) : (
                 <s-paragraph>
-                  These cards have no stuck reservations to release. A negative count here comes from on-hand or order
-                  changes outside the app, so adjust it in Shopify.
+                  These cards have no stuck reservations to release. A negative count or a Short card comes from on-hand,
+                  order or reservation changes outside the app, so adjust it in Shopify.
                 </s-paragraph>
               )}
             </>
