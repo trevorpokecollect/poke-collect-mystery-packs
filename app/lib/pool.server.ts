@@ -198,7 +198,8 @@ async function viewerScope(db: Db, viewer: Viewer): Promise<Prisma.PullWhereInpu
   if (viewer.customerId) scope.push({ customerId: viewer.customerId });
   if (viewer.openToken) {
     const order = await db.packOrder.findUnique({ where: { openToken: viewer.openToken } });
-    if (order) scope.push({ orderId: order.orderId });
+    // Cards traded or sold to another player since then belong to their new owner, not the order link.
+    if (order) scope.push({ orderId: order.orderId, transferredAt: null });
   }
   return scope;
 }
@@ -375,6 +376,13 @@ export async function voidPulls(
         }
       }
       toVoid.push(pull);
+    }
+    // A card that changed owners (trade or sale) since the order is not taken from its new owner:
+    // it is flagged for staff, and the refund is settled as money only.
+    const moved = toVoid.filter((p) => p.transferredAt);
+    if (moved.length) {
+      await tx.pull.updateMany({ where: { id: { in: moved.map((p) => p.id) } }, data: { refundFlaggedAt: new Date() } });
+      toVoid.splice(0, toVoid.length, ...toVoid.filter((p) => !p.transferredAt));
     }
     if (toVoid.length === 0) return [];
     await tx.pull.updateMany({

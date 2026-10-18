@@ -286,6 +286,7 @@
       el("h1", { text: "My Packs" }),
       el("p", { class: "mp-hero-sub", text: sub }),
       stats,
+      vault && vault.market ? el("a", { class: "mp-btn mp-btn-ghost mp-market-link", href: "/apps/packs/market", text: "Trade & Sell Vault Cards" }) : null,
     ]);
     return el("section", { class: "mp-hero" }, [text, shipBox(vault)]);
   }

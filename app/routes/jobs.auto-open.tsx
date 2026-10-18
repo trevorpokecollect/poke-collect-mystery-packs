@@ -4,6 +4,7 @@ import { unauthenticated } from "../shopify.server";
 import { attachMissingCustomers, autoOpenDue, ordersReadyToFinalize } from "../lib/pool.server";
 import { finalizeOrder, fulfillMissingVaultPackLines, noteMissingVaultPulls } from "../lib/orders.server";
 import { expireShipments, notifyPickupsReady, sendVaultReminders } from "../lib/vault.server";
+import { expireCheckouts, expireOffers, payOutSellers } from "../lib/market.server";
 
 // Called on a schedule (Railway cron): opens packs past their window and retries
 // any order that is ready to ship but wasn't finalized yet.
@@ -36,5 +37,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await sendVaultReminders(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   // Local pickup orders staff tagged "pickup-ready": email the customer once (Klaviyo).
   await notifyPickupsReady(db, async (shop) => (await unauthenticated.admin(shop)).admin);
+  // Vault Marketplace: lapse old offers, release unpaid buyer invoices, pay sellers past the hold.
+  await expireOffers(db);
+  await expireCheckouts(db, async (shop) => (await unauthenticated.admin(shop)).admin);
+  await payOutSellers(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   return Response.json({ finalized: results });
 };

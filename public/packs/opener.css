@@ -415,3 +415,5 @@
 .mp-history-summary .mp-section-title::after { content: " ▾"; font-size: .7em; opacity: .6; }
 .mp-history[open] .mp-history-summary .mp-section-title::after { content: " ▴"; }
 .mp-history-count { color: var(--mp-muted); font-size: .95em; white-space: nowrap; }
+
+.mp-market-link { display: inline-block; margin-top: 14px; text-decoration: none !important; }

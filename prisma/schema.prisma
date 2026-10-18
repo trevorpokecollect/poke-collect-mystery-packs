@@ -155,7 +155,15 @@ model Pull {
   shipOrderId   String?
   // When the customer was reminded this vaulted card is near the end of its holding period.
   remindedAt    DateTime?
+  // Vault marketplace: shown on the Trade Board, and when it last changed owners by trade or sale.
+  openToTrade   Boolean      @default(false)
+  transferredAt DateTime?
+  // The pack order was refunded after this card changed owners: staff decide, the card is not voided.
+  refundFlaggedAt DateTime?
   createdAt     DateTime     @default(now())
+  tradeItems    TradeItem[]
+  listings      Listing[]
+  transfers     PullTransfer[]
 
   @@unique([lineItemId, packIndex, cardIndex])
   @@index([orderId])
@@ -213,4 +221,127 @@ model ShipRequest {
   pulls        Pull[]
 
   @@index([shop, status])
+}
+
+// ---- Vault marketplace: players trade or sell vault cards to each other (never to the store) ----
+
+model MarketSettings {
+  shop           String   @id
+  // Off until the merchant turns it on in the admin; selling has its own switch.
+  enabled        Boolean  @default(false)
+  sellingEnabled Boolean  @default(false)
+  // Kept from each sale before the seller's store credit.
+  feePercent     Decimal  @default(10) @db.Decimal(5, 2)
+  updatedAt      DateTime @updatedAt
+}
+
+// A player's public trade name. Real names and emails are never shown to other players.
+model Trader {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  tradeName  String
+  nameKey    String // lowercased, for uniqueness
+  createdAt  DateTime @default(now())
+
+  @@unique([shop, customerId])
+  @@unique([shop, nameKey])
+}
+
+enum TradeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+  REVERSED
+}
+
+// An offer from one player to another: cards given for cards received, final once accepted.
+model Trade {
+  id             String      @id @default(cuid())
+  shop           String
+  fromCustomerId String
+  toCustomerId   String
+  status         TradeStatus @default(PENDING)
+  note           String?
+  // The offer this one counters (that one is declined when this is sent).
+  counterOfId    String?
+  expiresAt      DateTime
+  respondedAt    DateTime?
+  reversedAt     DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  items          TradeItem[]
+
+  @@index([shop, status])
+  @@index([fromCustomerId])
+  @@index([toCustomerId])
+}
+
+model TradeItem {
+  id      String @id @default(cuid())
+  tradeId String
+  trade   Trade  @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  pullId  String
+  pull    Pull   @relation(fields: [pullId], references: [id])
+  // GIVE: the proposer's card. GET: the card the proposer asks for.
+  side    String
+
+  @@index([pullId])
+}
+
+enum ListingStatus {
+  ACTIVE // on the Trade Board with a price
+  CHECKOUT // a buyer holds an unpaid invoice for it
+  SOLD
+  CANCELLED
+}
+
+// A vault card a player has put up for sale to other players. The buyer pays through a Shopify
+// invoice; the seller gets store credit (price minus the fee) once the hold period passes.
+model Listing {
+  id                String        @id @default(cuid())
+  shop              String
+  pullId            String
+  pull              Pull          @relation(fields: [pullId], references: [id])
+  sellerCustomerId  String
+  price             Decimal       @db.Decimal(10, 2)
+  status            ListingStatus @default(ACTIVE)
+  buyerCustomerId   String?
+  draftOrderId      String?
+  invoiceUrl        String?
+  checkoutExpiresAt DateTime?
+  orderId           String?
+  orderName         String?
+  soldAt            DateTime?
+  // HELD until payoutDueAt, then PAID as store credit. FLAGGED (refund/chargeback) or CANCELLED (sale reversed) stop it.
+  payoutStatus      String?
+  payoutAmount      Decimal?      @db.Decimal(10, 2)
+  payoutDueAt       DateTime?
+  paidOutAt         DateTime?
+  flagReason        String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([shop, status])
+  @@index([pullId])
+  @@index([sellerCustomerId])
+  @@index([payoutStatus, payoutDueAt])
+}
+
+// Every change of owner made by the marketplace, for staff and reversals.
+model PullTransfer {
+  id             String   @id @default(cuid())
+  shop           String
+  pullId         String
+  pull           Pull     @relation(fields: [pullId], references: [id])
+  fromCustomerId String
+  toCustomerId   String
+  reason         String // TRADE | SALE | REVERSAL
+  tradeId        String?
+  listingId      String?
+  createdAt      DateTime @default(now())
+
+  @@index([pullId])
 }

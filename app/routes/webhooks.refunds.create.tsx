@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ordersReadyToFinalize, voidPulls } from "../lib/pool.server";
+import { flagMarketOrder } from "../lib/market.server";
 import { finalizeOrder, releaseHolds } from "../lib/orders.server";
 import { releaseUnneeded } from "../lib/inventory.server";
 import { syncPackStock } from "../lib/series.server";
@@ -17,6 +18,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, payload } = await authenticate.webhook(request);
   const refund = payload as RefundPayload;
   const orderId = `gid://shopify/Order/${refund.order_id}`;
+
+  // A refunded Vault Marketplace purchase: hold the seller's credit for staff to decide.
+  await flagMarketOrder(db, orderId, "The buyer was refunded.");
 
   const perLine = new Map<string, number>();
   for (const item of refund.refund_line_items) {

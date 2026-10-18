@@ -1,0 +1,73 @@
+/* Vault Marketplace page. Builds on opener.css (loaded first) for the hero, cards and buttons. */
+.mk-page .mp-hero-ship p { margin: 6px 0 10px; }
+.mk-back { display: inline-block; width: auto !important; margin-top: 14px; text-decoration: none !important; }
+.mk-fine { font-size: .82em; opacity: .75; margin: 10px 0 0 !important; }
+.mk-fine-dark { font-size: .82em; color: var(--mp-muted); margin: 4px 0 0; }
+.mk-rules { margin-top: 32px; text-align: center; }
+
+.mk-input {
+  font: inherit; font-size: .95em; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--mp-line);
+  background: #fff; color: var(--mp-ink); min-width: 0;
+}
+.mk-name { display: grid; gap: 8px; }
+.mk-name .mk-input { width: 100%; box-sizing: border-box; }
+
+.mk-flash { margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; background: #fdecea; }
+.mk-flash-ok { background: #e8f6ee; color: #1e6b43; }
+
+.mk-tabs { display: flex; gap: 8px; margin: 0 0 18px; border-bottom: 1px solid var(--mp-line); overflow-x: auto; }
+.mk-tab {
+  appearance: none; border: 0; background: none; font: inherit; font-family: var(--mp-heading); font-size: 1.15em; font-weight: 700;
+  padding: 10px 14px; color: var(--mp-muted); border-bottom: 3px solid transparent; cursor: pointer; white-space: nowrap;
+}
+.mk-tab-on { color: var(--mp-ink); border-bottom-color: #e3350d; }
+
+.mk-toolbar { margin: 0 0 16px; }
+.mk-search { width: 100%; max-width: 360px; box-sizing: border-box; }
+
+.mk-card .mp-btn { width: 100%; padding: 9px 12px; font-size: .9em; }
+.mk-buy { background: #e3350d; color: #fff; }
+.mk-buy:hover { background: #ff4a22; }
+.mk-secondary { background: #14141a; color: #fff; }
+.mk-from { font-size: .82em; color: var(--mp-muted); }
+.mk-link { appearance: none; border: 0; background: none; padding: 4px 0; font: inherit; font-size: .88em; font-weight: 600; color: var(--mp-muted); text-decoration: underline; cursor: pointer; }
+.mk-badge { align-self: flex-start; padding: 3px 10px; border-radius: 999px; font-size: .75em; font-weight: 700; background: #f1f1f4; color: var(--mp-muted); }
+.mk-badge-soft { background: #fff4e5; color: #9a5b00; }
+.mk-toggle { display: flex; align-items: center; gap: 6px; font-size: .9em; font-weight: 600; cursor: pointer; }
+.mk-sell-wrap { display: grid; gap: 6px; border-top: 1px solid var(--mp-line); padding-top: 8px; }
+.mk-sell { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.mk-sell .mp-btn { grid-column: 1 / -1; }
+.mk-dollar { font-weight: 700; color: var(--mp-muted); }
+.mk-price { width: 100%; box-sizing: border-box; }
+
+.mk-offers { display: grid; gap: 14px; }
+.mk-offer { border: 1px solid var(--mp-line); border-radius: 14px; padding: 16px; background: var(--mp-surface); }
+.mk-offer-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 12px; }
+.mk-note { font-style: italic; color: var(--mp-muted); }
+.mk-offer-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.mk-side-label { font-family: var(--mp-heading); font-weight: 700; margin-bottom: 6px; }
+.mk-mini-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.mk-mini { width: 84px; display: grid; gap: 4px; font-size: .75em; line-height: 1.2; }
+.mk-mini img { width: 100%; aspect-ratio: 5 / 7; object-fit: contain; border-radius: 6px; background: #f4f4f7; }
+.mk-offer-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+.mk-offer-actions .mp-btn { padding: 9px 16px; }
+
+.mk-modal { position: fixed; inset: 0; z-index: 9999; background: rgba(10, 10, 16, .6); display: grid; place-items: center; padding: 16px; }
+.mk-modal-body { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: #fff; border-radius: 16px; padding: 20px; box-sizing: border-box; }
+.mk-modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.mk-modal-head h2 { margin: 0; font-family: var(--mp-heading); font-size: 1.4em; }
+.mk-pick-title { font-family: var(--mp-heading); margin: 18px 0 8px; font-size: 1.05em; }
+.mk-pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.mk-pick {
+  appearance: none; border: 2px solid var(--mp-line); border-radius: 10px; background: #fff; padding: 6px; display: grid; gap: 4px;
+  font: inherit; font-size: .75em; line-height: 1.2; text-align: left; cursor: pointer;
+}
+.mk-pick img { width: 100%; aspect-ratio: 5 / 7; object-fit: contain; border-radius: 6px; background: #f4f4f7; }
+.mk-pick-on { border-color: #e3350d; box-shadow: 0 0 0 2px rgba(227, 53, 13, .2); }
+.mk-modal-foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 18px; }
+.mk-modal-foot .mp-vault-btn[disabled] { opacity: .5; cursor: default; }
+
+@media (max-width: 640px) {
+  .mk-offer-sides { grid-template-columns: 1fr; }
+  .mk-modal-foot { grid-template-columns: 1fr; }
+}
