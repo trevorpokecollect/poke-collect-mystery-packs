@@ -6,6 +6,9 @@
   var root = document.getElementById("vault-market");
   if (!root) return;
   var api = root.getAttribute("data-api") || "/apps/packs/api/market";
+  // Staff preview link (?demo=<token>): sample cards, and buttons only show what would happen.
+  var demo = root.getAttribute("data-demo");
+  if (demo) api += "?demo=" + encodeURIComponent(demo);
   var state = null;
   var tab = "board";
   var search = "";
@@ -34,7 +37,7 @@
   }
 
   function load() {
-    return fetch(api + (search ? "?q=" + encodeURIComponent(search) : ""), { credentials: "same-origin" })
+    return fetch(api + (search ? (demo ? "&" : "?") + "q=" + encodeURIComponent(search) : ""), { credentials: "same-origin" })
       .then(function (r) { return r.json(); })
       .then(function (data) {
         state = data;
@@ -47,6 +50,12 @@
   }
 
   function post(body, button) {
+    if (demo) {
+      flash = { text: "Preview Only: Nothing Was Saved. On The Live Page This " + (body.action === "buy" ? "Opens Checkout." : "Would Go Through.") };
+      builder = null;
+      render();
+      return Promise.reject(new Error("demo"));
+    }
     if (button) button.disabled = true;
     return fetch(api, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
@@ -66,7 +75,7 @@
     return post(body, button).then(function () {
       flash = message ? { text: message } : null;
       return load();
-    });
+    }).catch(function () {});
   }
 
   // ---------- Header ----------
@@ -352,6 +361,7 @@
       root.appendChild(el("p", { class: "mp-empty", text: "Log In To Trade." }));
       return;
     }
+    if (demo) root.appendChild(el("p", { class: "mk-flash mk-demo", role: "note", text: "Staff Preview With Sample Cards. Customers Can't See This Page Until You Turn Trading On." }));
     root.appendChild(hero());
     if (flash) root.appendChild(el("p", { class: flash.error ? "mp-error mk-flash" : "mk-flash mk-flash-ok", role: "status", text: flash.text }));
     root.appendChild(tabs());

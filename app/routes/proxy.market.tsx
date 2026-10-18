@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { proxyContext } from "../lib/proxy.server";
 import { marketSettings } from "../lib/market.server";
+import { validDemoToken } from "../lib/demo.server";
 
 // The Vault Marketplace page at /apps/packs/market, inside the store theme like My Packs.
 const VERSION = (process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now())).slice(0, 12);
@@ -13,6 +14,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shell = (body: string) =>
     liquid(`${styles}<div class="mp-page mk-page">${body}</div>`);
 
+  // Staff preview (?demo=<signed token> from the admin): sample cards, nothing saved, works while the marketplace is off.
+  const demo = new URL(request.url).searchParams.get("demo");
+  if (validDemoToken(shop, demo)) {
+    return liquid(
+      `${styles}<div class="mp-page mk-page" id="vault-market" data-api="/apps/packs/api/market" data-demo="${demo}"></div>
+       <script src="${assets}/packs/market.js?v=${VERSION}" defer></script>`,
+    );
+  }
   if (!(await marketSettings(db, shop)).enabled) {
     return shell(`<section class="mp-hero"><div class="mp-hero-text"><span class="mp-hero-kicker">Digital Mystery Packs</span><h1>Vault Marketplace</h1><p class="mp-hero-sub">Coming Soon.</p></div></section>`);
   }

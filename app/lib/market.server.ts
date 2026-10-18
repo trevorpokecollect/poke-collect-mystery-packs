@@ -726,3 +726,58 @@ export async function marketActivity(db: Db, shop: string, take = 50) {
 export async function clearRefundFlag(db: Db, shop: string, pullId: string) {
   await db.pull.updateMany({ where: { id: pullId, shop }, data: { refundFlaggedAt: null } });
 }
+
+// ---------- Staff preview (/apps/packs/market?demo=<token>) ----------
+
+const DEMO_TRADERS = ["AshK", "MistyM", "BrockRocks", "GaryOak22"];
+
+/**
+ * Sample Vault Marketplace data from the newest series' cards (real names and images), so staff
+ * can see the page in the store theme. Nothing here reads or changes any customer's vault.
+ */
+export async function marketDemo(db: Db, shop: string) {
+  const settings = await marketSettings(db, shop);
+  const series = await db.series.findFirst({ where: { shop, status: { not: "DRAFT" } }, orderBy: { createdAt: "desc" } })
+    ?? (await db.series.findFirst({ where: { shop }, orderBy: { createdAt: "desc" } }));
+  const cards = series ? await db.card.findMany({ where: { seriesId: series.id, imageUrl: { not: null } }, take: 60 }) : [];
+  // Spread the sample across tiers so every badge color shows.
+  const tiers = [...new Set(cards.map((c) => c.tier))];
+  const ordered = cards.slice().sort((a, b) => tiers.indexOf(a.tier) - tiers.indexOf(b.tier) || a.title.localeCompare(b.title));
+  const spread = tiers.length ? Array.from({ length: cards.length }, (_, i) => ordered.filter((c) => c.tier === tiers[i % tiers.length])[Math.floor(i / tiers.length)]).filter(Boolean) : [];
+  const view = (c: (typeof cards)[number], i: number) => ({ pullId: `demo-${i}`, title: c.title, imageUrl: c.imageUrl, tier: c.tier, series: series!.title });
+  const sample = spread.slice(0, 14).map(view);
+  const price = (i: number) => [4, 12.5, 25, 8, 40, 3][i % 6];
+  const mine = sample.slice(0, 4);
+  const board = sample.slice(4, 12).map((c, i) => ({
+    ...c,
+    trader: DEMO_TRADERS[i % DEMO_TRADERS.length],
+    openToTrade: i % 3 !== 2,
+    listing: i % 2 === 0 || i % 3 === 2 ? { id: `demo-listing-${i}`, price: price(i) } : null,
+  }));
+  const extra = sample.slice(12, 14);
+  const expires = new Date(Date.now() + 5 * DAY);
+  return {
+    enabled: true,
+    signedIn: true,
+    demo: true,
+    selling: true,
+    feePercent: settings.feePercent,
+    rules: { waitDays: TRADE_WAIT_DAYS, offerDays: OFFER_DAYS, payoutDays: PAYOUT_HOLD_DAYS, maxCards: MAX_SIDE_CARDS, maxOffers: MAX_OPEN_OFFERS, minPrice: MIN_PRICE, maxPrice: MAX_PRICE },
+    notes: OFFER_NOTES,
+    tradeName: "PreviewTrader",
+    cards: mine.map((c, i) => ({
+      ...c,
+      openToTrade: i === 0 || i === 1,
+      locked: i === 3 ? "Tradable In 9 Days" : null,
+      listing: i === 0 ? { id: "demo-mine-0", price: 20, status: "ACTIVE" } : null,
+      inOffer: i === 1,
+    })),
+    board,
+    offers: mine.length > 2 && board.length > 1
+      ? [
+          { id: "demo-offer-in", incoming: true, with: "MistyM", note: OFFER_NOTES[0], expiresAt: expires, youGive: [mine[2]], youGet: [board[1], ...extra.slice(0, 1)] },
+          { id: "demo-offer-out", incoming: false, with: "AshK", note: null, expiresAt: expires, youGive: [mine[1]], youGet: [board[0]] },
+        ]
+      : [],
+  };
+}

@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
+import { validDemoToken } from "../lib/demo.server";
 import {
   boardCards,
   cancelListing,
@@ -14,6 +15,7 @@ import {
   MAX_SIDE_CARDS,
   METRICS,
   MIN_PRICE,
+  marketDemo,
   myMarketCards,
   myOffers,
   notify,
@@ -32,6 +34,8 @@ import {
 // Only trade names are shown for other players, and pack card values are never included.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
+  // Staff preview link: sample data, shown even while the marketplace is off.
+  if (validDemoToken(shop, new URL(request.url).searchParams.get("demo"))) return json(await marketDemo(db, shop));
   const settings = await marketSettings(db, shop);
   if (!settings.enabled) return json({ enabled: false });
   if (!viewer?.customerId) return json({ enabled: true, signedIn: false });
@@ -73,6 +77,7 @@ type Body = {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, viewer, admin } = await proxyContext(request);
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  if (validDemoToken(shop, new URL(request.url).searchParams.get("demo"))) return json({ ok: true, demo: true });
   const me = viewer?.customerId;
   if (!me) return json({ error: "Log in to trade." }, 401);
   const body = (await request.json().catch(() => ({}))) as Body;

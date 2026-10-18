@@ -12,6 +12,7 @@ import {
   expireCheckouts,
   expireOffers,
   flagMarketOrder,
+  marketDemo,
   myMarketCards,
   myOffers,
   payOutSellers,
@@ -312,5 +313,19 @@ describe("selling", () => {
     const { admin } = fakeAdmin();
     await requestShipment(db, admin, SHOP, { customerId: BEN });
     expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).status).toBe("CANCELLED");
+  });
+});
+
+describe("staff preview", () => {
+  it("builds sample data from series cards without touching any vault, even while off", async () => {
+    await vaultCards(BEN, 1);
+    await db.card.updateMany({ data: { imageUrl: "https://cdn/card.png" } });
+    await updateMarketSettings(db, SHOP, { enabled: false });
+    const demo = await marketDemo(db, SHOP);
+    expect(demo.cards.length).toBeGreaterThan(0);
+    expect(demo.board.length).toBeGreaterThan(0);
+    expect(demo.offers).toHaveLength(2);
+    expect(JSON.stringify(demo)).not.toMatch(/gid:\/\/shopify\/Customer|marketValue/);
+    expect(await db.trade.count()).toBe(0);
   });
 });
