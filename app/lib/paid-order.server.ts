@@ -8,6 +8,7 @@ import { fulfillVaultPackLines, holdOrder, setOpenLinkMetafield, tagOrder } from
 import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
+import { completeSale, MARKET_ATTRIBUTE, METRICS, notify } from "./market.server";
 
 export interface OrderPayload {
   admin_graphql_api_id: string;
@@ -34,6 +35,14 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
     if (admin && country && country !== "US") {
       await tagOrder(admin, order.admin_graphql_api_id, ["vault-international-review"]).catch((e) => console.error("Tag failed", e));
     }
+    return;
+  }
+
+  // A paid Vault Marketplace purchase: the card moves to the buyer's vault.
+  const marketListing = order.note_attributes?.find((a) => a.name === MARKET_ATTRIBUTE)?.value;
+  if (marketListing) {
+    const sold = await completeSale(db, marketListing, order.admin_graphql_api_id, order.name);
+    if (sold) await notify(admin, sold.sellerCustomerId, METRICS.cardSold, { price: Number(sold.price).toFixed(2), payoutAmount: Number(sold.payoutAmount).toFixed(2) });
     return;
   }
 

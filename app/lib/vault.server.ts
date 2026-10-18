@@ -6,6 +6,7 @@ import type { PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
 import { rereserveForPulls, unreserveForPulls } from "./inventory.server";
 import { pullsForViewer, PoolError, type Viewer } from "./pool.server";
+import { beingBought, withdrawFromMarket } from "./market.server";
 
 export const SHIP_FEE = 5;
 /** Shipping is free once a single shipment has this many cards. */
@@ -64,7 +65,10 @@ export async function requestShipment(
     return requestShipment(db, admin, shop, viewer, { pickup });
   }
 
-  const pulls = inVault.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
+  const free = inVault.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
+  // A card another player is paying for right now stays behind.
+  const buying = await beingBought(db, free.map((p) => p.id));
+  const pulls = free.filter((p) => !buying.has(p.id));
   if (pulls.length === 0) throw new PoolError(`There are no cards in your vault to ${pickup ? "pick up" : "ship"} yet.`);
 
   // Vault shipping is US only: refuse up front when the customer's address on their latest pack order is abroad.
@@ -91,6 +95,8 @@ export async function requestShipment(
     await db.shipRequest.update({ where: { id: request.id }, data: { status: "CANCELLED" } });
     throw new PoolError("Your vault just changed. Please try again.");
   }
+  // Shipping cards takes them off the Vault Marketplace (offers and listings withdrawn).
+  await withdrawFromMarket(db, pulls.map((p) => p.id));
 
   try {
     await unreserveForPulls(db, admin, pulls.map((p) => p.id));
@@ -251,7 +257,9 @@ export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, sh
   for (const id of pendingIds) {
     await settleShipRequest(db, admin, await db.shipRequest.findUniqueOrThrow({ where: { id } }), "CANCELLED", { keepReleased: true });
   }
-  const pulls = (await vaultedPulls(db, shop, viewer)).filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
+  const free = (await vaultedPulls(db, shop, viewer)).filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
+  const buying = await beingBought(db, free.map((p) => p.id));
+  const pulls = free.filter((p) => !buying.has(p.id));
   if (pulls.length === 0) return 0;
   const ids = pulls.map((p) => p.id);
   const claimed = await db.pull.updateMany({ where: { id: { in: ids }, status: "REVEALED" }, data: { shipRequestId: request.id } });
@@ -259,6 +267,7 @@ export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, sh
     await db.pull.updateMany({ where: { id: { in: ids } }, data: { shipRequestId: null } });
     throw new PoolError("The vault just changed. Please try again.");
   }
+  await withdrawFromMarket(db, ids);
   try {
     await unreserveForPulls(db, admin, ids);
     const begin = await gql(
@@ -411,7 +420,7 @@ async function orderEmail(admin: AdminApiContext, orderId: string) {
 }
 
 let currency: string | null = null;
-async function shopCurrency(admin: AdminApiContext) {
+export async function shopCurrency(admin: AdminApiContext) {
   if (!currency) {
     const data = await gql(admin, `#graphql
     query VaultCurrency { shop { currencyCode } }`);
@@ -492,7 +501,7 @@ export async function sendVaultReminders(db: Db, adminFor: (shop: string) => Pro
 }
 
 /** Sends a Klaviyo event (triggers a Klaviyo flow) when KLAVIYO_PRIVATE_KEY is set; otherwise does nothing. */
-async function klaviyoEvent(email: string, metric: string, properties: Record<string, unknown>) {
+export async function klaviyoEvent(email: string, metric: string, properties: Record<string, unknown>) {
   const key = process.env.KLAVIYO_PRIVATE_KEY;
   if (!key) return;
   const response = await fetch("https://a.klaviyo.com/api/events/", {
@@ -638,7 +647,8 @@ export async function moveVault(db: Db, shop: string, fromCustomerId: string, to
   if (dryRun || pulls.length === 0) return summary;
   await db.$transaction([
     db.pull.updateMany({ where: { id: { in: pulls.map((p) => p.id) } }, data: { customerId: toCustomerId } }),
-    db.packOrder.updateMany({ where: { orderId: { in: [...new Set(pulls.map((p) => p.orderId))] } }, data: { customerId: toCustomerId } }),
+    // Only orders this customer bought: a card they got by trade keeps its original buyer's order.
+    db.packOrder.updateMany({ where: { orderId: { in: [...new Set(pulls.map((p) => p.orderId))] }, customerId: fromCustomerId }, data: { customerId: toCustomerId } }),
   ]);
   console.log(`Moved vault from ${fromCustomerId} to ${toCustomerId}: ${pulls.length} pulls`);
   return summary;

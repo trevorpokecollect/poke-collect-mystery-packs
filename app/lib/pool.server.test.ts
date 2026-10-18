@@ -33,6 +33,11 @@ beforeAll(() => {
 });
 afterAll(() => db.$disconnect());
 beforeEach(async () => {
+  // Marketplace rows point at pulls (left over when the marketplace tests ran first).
+  await db.pullTransfer.deleteMany();
+  await db.tradeItem.deleteMany();
+  await db.trade.deleteMany();
+  await db.listing.deleteMany();
   await db.pull.deleteMany();
   await db.shipRequest.deleteMany();
   await db.packOrder.deleteMany();
