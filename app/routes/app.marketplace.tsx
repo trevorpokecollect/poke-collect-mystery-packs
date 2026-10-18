@@ -4,6 +4,7 @@ import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-ro
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import { demoToken } from "../lib/demo.server";
 import {
   clearRefundFlag,
   marketActivity,
@@ -20,7 +21,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const [settings, activity] = await Promise.all([marketSettings(db, session.shop), marketActivity(db, session.shop)]);
   const row = await db.marketSettings.findUnique({ where: { shop: session.shop } });
-  return { settings: { ...settings, sellingSwitch: row?.sellingEnabled ?? false }, activity: JSON.parse(JSON.stringify(activity)) as typeof activity };
+  return {
+    previewUrl: `https://${session.shop}/apps/packs/market?demo=${demoToken(session.shop)}`,
+    settings: { ...settings, sellingSwitch: row?.sellingEnabled ?? false }, activity: JSON.parse(JSON.stringify(activity)) as typeof activity };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -62,7 +65,7 @@ const payoutLabel: Record<string, string> = { HELD: "Held", PAYING: "Paying", PA
 const payoutTone = { HELD: "info", PAYING: "info", PAID: "success", FLAGGED: "critical", CANCELLED: "neutral" } as const;
 
 export default function Marketplace() {
-  const { settings, activity } = useLoaderData<typeof loader>();
+  const { settings, activity, previewUrl } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const busy = useNavigation().state !== "idle";
@@ -86,9 +89,14 @@ export default function Marketplace() {
             <s-checkbox name="enabled" label="Trading on (Trade Board and offers on the storefront)" defaultChecked={settings.enabled} />
             <s-checkbox name="selling" label="Selling on (players list cards for a price; needs trading on)" defaultChecked={settings.sellingSwitch} />
             <s-number-field name="fee" label="Fee kept from each sale (%)" min={0} max={50} step={0.5} defaultValue={String(settings.feePercent)} />
-            <s-button type="submit" variant="primary" disabled={busy}>
-              Save Settings
-            </s-button>
+            <s-stack direction="inline" gap="small">
+              <s-button type="submit" variant="primary" disabled={busy}>
+                Save Settings
+              </s-button>
+              <s-button href={previewUrl} target="_blank">
+                Preview Marketplace
+              </s-button>
+            </s-stack>
           </s-stack>
         </form>
       </s-section>

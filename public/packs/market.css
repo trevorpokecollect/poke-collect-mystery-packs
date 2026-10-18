@@ -71,3 +71,4 @@
   .mk-offer-sides { grid-template-columns: 1fr; }
   .mk-modal-foot { grid-template-columns: 1fr; }
 }
+.mk-demo { background: #fff4e5; color: #7a4a00; font-weight: 600; }
