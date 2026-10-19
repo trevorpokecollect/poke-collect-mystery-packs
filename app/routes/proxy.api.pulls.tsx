@@ -14,6 +14,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer, admin } = await proxyContext(request);
   if (!viewer) return json({ error: "Log in to see your packs." }, 401);
 
+  // Everything after the first query runs at once: this call is on the critical path of My Packs
+  // and the account page's My Vault tab.
   const [pulls, live] = await Promise.all([pullsForViewer(db, shop, viewer), availableSeries(db, shop)]);
   const opened = pulls.filter((p) => p.status !== "UNOPENED");
   const vaultOrders = new Set(
@@ -27,12 +29,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // In the vault: opened on a vault order and not shipping yet.
   const inVault = (p: (typeof pulls)[number]) => p.status === "REVEALED" && vaultOrders.has(p.orderId);
   const pending = opened.find((p) => inVault(p) && p.shipRequest?.status === "PENDING")?.shipRequest ?? null;
-  // Vault cards up on Vault Market can't ship until they're taken down, so they're shown apart.
-  const listed = await listedOnMarket(db, shop, opened.filter(inVault).map((p) => p.id));
-  const [art, products, shipping] = await Promise.all([
+  // Vault cards sit in the store, so only cards on their way out need Shopify's fulfillment status.
+  const leaving = opened.filter((p) => !inVault(p));
+  const [listed, art, products, shipping, market] = await Promise.all([
+    // Vault cards up on Vault Market can't ship until they're taken down, so they're shown apart.
+    listedOnMarket(db, shop, opened.filter(inVault).map((p) => p.id)),
     packImages(admin, [...new Set(pulls.map((p) => p.series.packProductId))]),
     packProducts(admin, [...new Set([...live.map((l) => l.series.packProductId), ...pulls.map((p) => p.series.packProductId)])]),
-    shippingStatuses(admin, [...new Set(opened.map((p) => p.shipOrderId ?? p.orderId))]),
+    shippingStatuses(admin, [...new Set(leaving.map((p) => p.shipOrderId ?? p.orderId))]),
+    // Logged-in customers get a link to the Vault Marketplace once the merchant turns it on.
+    hasMarketAccess(db, admin, shop, viewer.customerId),
   ]);
   // Seed for "You Might Also Like" (Shopify's storefront product recommendations).
   const seed = live[0]?.series.packProductId ?? pulls[0]?.series.packProductId ?? null;
@@ -49,8 +55,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       cards: opened.filter((p) => inVault(p) && p.shipRequest?.status !== "PENDING").length,
       fee: SHIP_FEE,
       freeAt: FREE_SHIPPING_CARDS,
-      // Logged-in customers get a link to the Vault Marketplace once the merchant turns it on.
-      market: await hasMarketAccess(db, admin, shop, viewer.customerId),
+      market,
       pending: pending ? { cards: opened.filter((p) => p.shipRequestId === pending.id).length, invoiceUrl: pending.invoiceUrl } : null,
     },
     // Unopened multi-card packs show once (opening reveals all their cards); opened cards list one by one.

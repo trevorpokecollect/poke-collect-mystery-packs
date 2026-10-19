@@ -10,6 +10,13 @@ import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 // Changes with every deploy so phones fetch the new opener files instead of a cached copy.
 const VERSION = (process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now())).slice(0, 12);
 
+// Same type as Vault Market, so My Packs reads as part of the same vault.
+const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">`;
+
+// Placeholder hero and card slots, shown until the packs arrive (the opener replaces it).
+const SKELETON = `<div class="mp-skel" aria-busy="true" aria-label="Loading your packs"><div class="mp-skel-hero"></div><div class="mp-skel-title"></div><div class="mp-grid">${'<div class="mp-skel-card"></div>'.repeat(6)}</div></div>`;
+
 const COVER = `<div id="mp-cover" style="position:fixed;inset:0;z-index:9998;display:grid;place-items:center;background:radial-gradient(circle at 50% 45%,#2b2140 0%,#0b0a12 70%);color:#c9c6d8;font:600 15px/1.4 system-ui,sans-serif;letter-spacing:.04em">Getting your pack ready…</div>`;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -22,7 +29,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   if (!viewer && !demo) {
     return liquid(
-      `<link rel="stylesheet" href="${assets}/packs/opener.css?v=${VERSION}">
+      `${FONTS}
+      <link rel="stylesheet" href="${assets}/packs/opener.css?v=${VERSION}">
       <div class="mp-page mp-signin">
         <section class="mp-hero">
           <div class="mp-hero-text">
@@ -41,11 +49,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     );
   }
 
+  // Starts loading the packs while the opener script is still downloading (opener.js picks it up).
+  // Same request the opener would make: ?open=1 is dropped, a guest's ?k= order token is kept.
+  const first = `<script>(function(){var q=new URLSearchParams(location.search);q.delete("open");q=q.toString();
+    window.__mpFirstPulls=fetch("/apps/packs/api/${demo ? "demo" : "pulls"}"+(q?"?"+q:""),{credentials:"same-origin"}).then(function(r){return r.json();});
+    window.__mpFirstPulls.catch(function(){});})();</script>`;
+
   return liquid(
     `${opening ? COVER : ""}
+     ${first}
      <link rel="preload" href="${assets}/packs/opener.js?v=${VERSION}" as="script">
+     ${FONTS}
      <link rel="stylesheet" href="${assets}/packs/opener.css?v=${VERSION}">
-     <div class="mp-page" id="mystery-packs" data-api="/apps/packs/api"${demo ? ' data-demo="1"' : ""}></div>
+     <div class="mp-page" id="mystery-packs" data-api="/apps/packs/api"${demo ? ' data-demo="1"' : ""}>${SKELETON}</div>
      <script src="${assets}/packs/opener.js?v=${VERSION}" defer></script>`,
   );
 };
