@@ -33,7 +33,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     db.pull.groupBy({ by: ["customerId"], where: { shop, status: "REVEALED", shipRequestId: null, createdAt: { lt: holdEnds } } }),
   ]);
   const byDay = await db.$queryRaw<{ day: Date; cards: bigint }[]>`
-    SELECT date_trunc('day', "createdAt" + make_interval(days => ${TRADE_WAIT_DAYS})) AS day, count(*) AS cards
+    SELECT date_trunc('day', "createdAt" + make_interval(days => ${TRADE_WAIT_DAYS}::int)) AS day, count(*) AS cards
     FROM "Pull" WHERE shop = ${shop} AND status = 'REVEALED' AND "shipRequestId" IS NULL AND "createdAt" >= ${holdEnds}
     GROUP BY 1 ORDER BY 1`;
   return Response.json({
