@@ -1,6 +1,6 @@
 // Vault Market: players trade vault cards with each other, sell them to each other, and browse
 // each other's binders. Cards never leave the vault here; a trade or sale only changes the owner.
-// A small hash router: #/ (market), #/collectors, #/u/<name>, #/binder, #/offers.
+// A small hash router: #/ (market), #/collectors, #/u/<name>, #/matches, #/wishlist, #/binder, #/offers.
 (function () {
   "use strict";
 
@@ -20,6 +20,9 @@
   var flash = null;
   var modal = null; // { type: "card", card } | { type: "offer", ... } | { type: "name" }
   var showcaseEdit = null; // Set of pull ids while editing the showcase
+  var matchesCache = null;
+  var catalogQuery = "";
+  var catalogResults = null;
 
   // ---------- Helpers ----------
 
@@ -77,6 +80,8 @@
     if (parts[0] === "collectors") return { name: "collectors" };
     if (parts[0] === "binder") return { name: "binder" };
     if (parts[0] === "offers") return { name: "offers" };
+    if (parts[0] === "matches") return { name: "matches" };
+    if (parts[0] === "wishlist") return { name: "wishlist" };
     return { name: "market" };
   }
 
@@ -94,6 +99,9 @@
   function load() {
     return getJSON({}).then(function (data) {
       state = data;
+      state.wishlist = state.wishlist || [];
+      state.feed = state.feed || [];
+      matchesCache = null;
       collectorsCache = null;
       collectionCache = {};
       render();
@@ -132,6 +140,33 @@
       modal = null;
       return load();
     }).catch(function () {});
+  }
+
+  function wished(cardKey) {
+    return state.wishlist.some(function (w) { return w.cardKey === cardKey; });
+  }
+
+  function wishButton(card) {
+    if (!card.cardKey) return null;
+    var on = wished(card.cardKey);
+    return el("button", {
+      class: "vm-btn vm-btn-ghost vm-btn-wide" + (on ? " vm-wish-on" : ""),
+      type: "button",
+      "aria-pressed": on ? "true" : "false",
+      text: on ? "★ On Your Wishlist" : "☆ Add To Wishlist",
+      onclick: function (e) {
+        if (!state.tradeName) return needName();
+        act({ action: on ? "unwish" : "wish", cardKey: card.cardKey }, e.currentTarget, on ? "Removed From Your Wishlist." : "Added To Your Wishlist. We'll Email You When One Goes Up.");
+      },
+    });
+  }
+
+  function ago(d) {
+    var mins = Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / 60000));
+    if (mins < 60) return mins + "m Ago";
+    var hours = Math.round(mins / 60);
+    if (hours < 48) return hours + "h Ago";
+    return Math.round(hours / 24) + "d Ago";
   }
 
   function needName() {
@@ -175,6 +210,8 @@
     return el("div", { class: "vm-tags" }, [
       card.listing && state.selling ? el("span", { class: "vm-tag vm-tag-sale", text: money(card.listing.price) }) : null,
       card.openToTrade ? el("span", { class: "vm-tag vm-tag-trade", text: "For Trade" }) : null,
+      card.wantedBy ? el("span", { class: "vm-tag vm-tag-wanted", text: "Wanted By " + card.wantedBy }) : null,
+      card.cardKey && card.trader && wished(card.cardKey) ? el("span", { class: "vm-tag vm-tag-wish", text: "★ On Your Wishlist" }) : null,
     ]);
   }
 
@@ -207,6 +244,8 @@
     var links = [
       ["market", "#/", "Market"],
       ["collectors", "#/collectors", "Collectors"],
+      ["matches", "#/matches", "Matches"],
+      ["wishlist", "#/wishlist", "Wishlist"],
       ["binder", "#/binder", "My Binder"],
       ["offers", "#/offers", "Offers"],
     ];
@@ -301,6 +340,7 @@
         heroFan(board),
       ]),
       !state.tradeName ? welcome() : null,
+      feedStrip(),
       el("div", { class: "vm-filters" }, [
         search,
         el("div", { class: "vm-chips", role: "group", "aria-label": "Show" }, [
@@ -317,6 +357,31 @@
       shown.length
         ? el("div", { class: "vm-grid" }, shown.map(function (c) { return tile(c); }))
         : el("p", { class: "vm-empty", text: board.length ? "No Cards Match These Filters." : "Nothing Is Up Yet. Mark Cards In Your Binder Open To Trade To Get Things Started." }),
+    ]);
+  }
+
+  // Live From The Vault: the latest listings, sales and trades. Never prices.
+  function feedStrip() {
+    if (!state.feed.length) return null;
+    return el("section", { class: "vm-feed", "aria-label": "Latest activity" }, [
+      el("div", { class: "vm-feed-head" }, [el("span", { class: "vm-live", "aria-hidden": "true" }), el("span", { class: "vm-label", text: "Live From The Vault" })]),
+      el("div", { class: "vm-feed-row" }, state.feed.map(function (ev) {
+        var line = ev.type === "trade"
+          ? [el("a", { href: profileHash(ev.who), text: "@" + ev.who }), " Traded With ", el("a", { href: profileHash(ev.from), text: "@" + ev.from })]
+          : ev.type === "sold"
+            ? [el("a", { href: profileHash(ev.who), text: "@" + ev.who }), " Bought From ", el("a", { href: profileHash(ev.from), text: "@" + ev.from })]
+            : [el("a", { href: profileHash(ev.who), text: "@" + ev.who }), " Listed A Card"];
+        return el("div", { class: "vm-feed-item" }, [
+          el("div", { class: "vm-feed-cards" }, ev.cards.slice(0, 2).map(function (c) {
+            return c.imageUrl ? el("img", { src: c.imageUrl, alt: "", loading: "lazy" }) : null;
+          })),
+          el("div", { class: "vm-feed-text" }, [
+            el("p", {}, line),
+            el("p", { class: "vm-fine", text: ev.cards[0].title }),
+            el("p", { class: "vm-fine", text: ago(ev.at) }),
+          ]),
+        ]);
+      })),
     ]);
   }
 
@@ -586,6 +651,131 @@
     ]);
   }
 
+  // ---------- Trade Matches ----------
+
+  function matchesView() {
+    if (!state.tradeName) return el("main", { class: "vm-main" }, [welcome()]);
+    if (!matchesCache) {
+      getJSON({ view: "matches" }).then(function (list) { matchesCache = list; render(); }).catch(function () { matchesCache = []; render(); });
+      return el("main", { class: "vm-main" }, [el("p", { class: "vm-empty", text: "Finding Matches…" })]);
+    }
+    return el("main", { class: "vm-main" }, [
+      el("div", { class: "vm-page-head" }, [
+        el("p", { class: "vm-eyebrow", text: "Trade Matches" }),
+        el("h1", { class: "vm-page-title", text: "Collectors You Should Trade With" }),
+        el("p", { class: "vm-page-text", text: "Built From Wishlists. A Perfect Match Has A Card You Want And Wants A Card You Have." }),
+      ]),
+      matchesCache.length
+        ? el("div", { class: "vm-matches" }, matchesCache.map(matchCard))
+        : el("div", { class: "vm-empty-box" }, [
+            el("p", { text: state.wishlist.length ? "No Matches Yet. New Cards Go Up All The Time, So Check Back Soon." : "Add Cards To Your Wishlist And Matches Show Up Here." }),
+            el("a", { class: "vm-btn vm-btn-ghost", href: "#/wishlist", text: "Build Your Wishlist" }),
+          ]),
+    ]);
+  }
+
+  function matchCard(m) {
+    function strip(label, cards, empty) {
+      return el("div", { class: "vm-match-side" }, [
+        el("div", { class: "vm-label", text: label }),
+        cards.length
+          ? el("div", { class: "vm-offer-cards" }, cards.map(function (c) {
+              return el("button", { class: "vm-offer-card", type: "button", onclick: function () { modal = { type: "card", card: c }; render(); } }, [art(c, "small"), el("span", { text: c.title })]);
+            }))
+          : el("p", { class: "vm-fine", text: empty }),
+      ]);
+    }
+    return el("article", { class: "vm-offer vm-match" + (m.perfect ? " vm-match-perfect" : "") }, [
+      el("header", { class: "vm-offer-head" }, [
+        el("a", { class: "vm-owner vm-owner-big", href: profileHash(m.trader), text: "@" + m.trader }),
+        m.perfect ? el("span", { class: "vm-tag vm-tag-perfect", text: "Perfect Match" }) : null,
+      ]),
+      el("div", { class: "vm-offer-sides" }, [
+        strip("They Have From Your Wishlist", m.theyHave, "Nothing From Your Wishlist Is Up Yet."),
+        el("span", { class: "vm-swap", "aria-hidden": "true", text: "⇄" }),
+        strip("They Want From Your Binder", m.theyWant, "None Of Your Tradable Cards Are On Their Wishlist."),
+      ]),
+      el("div", { class: "vm-offer-actions" }, [
+        m.theyHave.length
+          ? el("button", { class: "vm-btn vm-btn-signal", type: "button", text: "Propose This Trade", onclick: function () {
+              openOffer({ trader: m.trader, get: m.theyHave.map(function (c) { return c.pullId; }), give: m.theyWant.map(function (c) { return c.pullId; }) });
+            } })
+          : null,
+        el("a", { class: "vm-link", href: profileHash(m.trader), text: "Open Their Binder" }),
+      ]),
+    ]);
+  }
+
+  // ---------- Wishlist ----------
+
+  function wishlistView() {
+    if (!state.tradeName) return el("main", { class: "vm-main" }, [welcome()]);
+    var input = el("input", { id: "vm-catalog", class: "vm-input vm-search", type: "search", placeholder: "Search Every Card That's Been In A Pack", value: catalogQuery, "aria-label": "Search cards to add" });
+    var timer = null;
+    input.addEventListener("input", function () {
+      catalogQuery = input.value;
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        if (!catalogQuery.trim()) { catalogResults = null; render(); focusCatalog(); return; }
+        getJSON({ view: "catalog", name: catalogQuery.trim(), q: catalogQuery.trim() }).then(function (list) {
+          catalogResults = list;
+          render();
+          focusCatalog();
+        }).catch(function () {});
+      }, 250);
+    });
+    return el("main", { class: "vm-main" }, [
+      el("div", { class: "vm-page-head" }, [
+        el("p", { class: "vm-eyebrow", text: "Wishlist" }),
+        el("h1", { class: "vm-page-title", text: "Cards You're Looking For" }),
+        el("p", { class: "vm-page-text", text: "We'll Email You When A Card On Your Wishlist Goes Up For Trade Or Sale, And Collectors See That It's Wanted." }),
+      ]),
+      el("div", { class: "vm-filters" }, [input]),
+      catalogResults
+        ? el("section", { class: "vm-catalog" }, [
+            el("div", { class: "vm-label", text: catalogResults.length ? "Add To Your Wishlist" : "No Cards Match" }),
+            el("div", { class: "vm-pick-grid vm-catalog-grid" }, catalogResults.map(function (c) {
+              var on = wished(c.cardKey);
+              return el("button", {
+                class: "vm-pick" + (on ? " vm-pick-on" : ""),
+                type: "button",
+                "aria-pressed": on ? "true" : "false",
+                onclick: function (e) { act({ action: on ? "unwish" : "wish", cardKey: c.cardKey }, e.currentTarget, on ? "Removed From Your Wishlist." : "Added To Your Wishlist."); },
+              }, [art(c, "small"), el("span", { class: "vm-pick-title", text: (on ? "★ " : "+ ") + c.title })]);
+            })),
+          ])
+        : null,
+      el("h2", { class: "vm-section-title vm-gap", text: "Your Wishlist (" + state.wishlist.length + ")" }),
+      state.wishlist.length
+        ? el("div", { class: "vm-grid" }, state.wishlist.map(function (w) {
+            return el("article", { class: "vm-tile" }, [
+              art(w),
+              el("div", { class: "vm-tile-body" }, [
+                el("h3", { class: "vm-tile-title", text: w.title }),
+                w.available
+                  ? el("button", { class: "vm-btn vm-btn-small vm-btn-signal", type: "button", text: w.available + " Up Now", onclick: function () {
+                      filters.q = w.title;
+                      filters.kind = "all";
+                      filters.tier = "all";
+                      go("#/");
+                    } })
+                  : el("span", { class: "vm-tag vm-tag-locked", text: "None Up Yet" }),
+                el("button", { class: "vm-link", type: "button", text: "Remove", onclick: function (e) { act({ action: "unwish", cardKey: w.cardKey }, e.currentTarget, "Removed From Your Wishlist."); } }),
+              ]),
+            ]);
+          }))
+        : el("p", { class: "vm-empty", text: "Search Above, Or Tap Add To Wishlist On Any Card In The Market." }),
+    ]);
+  }
+
+  function focusCatalog() {
+    var again = document.getElementById("vm-catalog");
+    if (again) {
+      again.focus();
+      try { again.setSelectionRange(again.value.length, again.value.length); } catch (e) { /* some inputs refuse a selection */ }
+    }
+  }
+
   // ---------- Offers ----------
 
   function offersView() {
@@ -676,6 +866,8 @@
         card.trader ? el("p", { class: "vm-muted" }, ["In ", el("a", { class: "vm-owner vm-owner-big", href: profileHash(card.trader), text: "@" + card.trader }), "'s Binder"]) : null,
         tags(card),
         actions.length ? el("div", { class: "vm-lightbox-actions" }, actions) : null,
+        !mine ? wishButton(card) : null,
+        card.wantedBy ? el("p", { class: "vm-fine", text: card.wantedBy + (card.wantedBy === 1 ? " Collector Has" : " Collectors Have") + " This On Their Wishlist." }) : null,
         state.selling && card.listing && !mine
           ? el("p", { class: "vm-fine", text: "Buying Moves The Card Into Your Vault. Nothing Ships Until You Ship Your Vault." })
           : null,
@@ -823,6 +1015,8 @@
     root.appendChild(
       r.name === "collectors" ? collectorsView()
         : r.name === "collection" ? collectionView(r.who)
+          : r.name === "matches" ? matchesView()
+          : r.name === "wishlist" ? wishlistView()
           : r.name === "binder" ? binderView()
             : r.name === "offers" ? offersView()
               : marketView(),

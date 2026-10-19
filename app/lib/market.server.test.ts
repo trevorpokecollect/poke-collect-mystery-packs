@@ -4,7 +4,10 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { drawForOrder, launchSeries, pullsForViewer, revealPull, voidPulls } from "./pool.server";
 import {
+  activityFeed,
+  addWish,
   boardCards,
+  catalog,
   collectionFor,
   collectors,
   cancelOffer,
@@ -18,14 +21,18 @@ import {
   myMarketCards,
   myOffers,
   payOutSellers,
+  removeWish,
   respondToOffer,
+  sendWishlistAlerts,
   reverseSale,
   reverseTrade,
   setCollectionSettings,
   setOpenToTrade,
   setTradeName,
   startPurchase,
+  tradeMatches,
   updateMarketSettings,
+  wishlist,
 } from "./market.server";
 import { moveVault, requestShipment, vaultedPulls } from "./vault.server";
 
@@ -45,6 +52,7 @@ beforeAll(() => {
 });
 afterAll(() => db.$disconnect());
 beforeEach(async () => {
+  await db.wishItem.deleteMany();
   await db.pullTransfer.deleteMany();
   await db.tradeItem.deleteMany();
   await db.trade.deleteMany();
@@ -367,5 +375,52 @@ describe("collections", () => {
     expect(await collectors(db, SHOP, ANN)).toEqual([]);
     await setCollectionSettings(db, SHOP, BEN, { showCollection: true });
     expect((await collectors(db, SHOP, ANN))[0]).toMatchObject({ name: "Ben", trades: 1, cards: 1, shared: true });
+  });
+});
+
+describe("wishlist and matches", () => {
+  const variantOf = async (pullId: string) =>
+    (await db.pull.findUniqueOrThrow({ where: { id: pullId }, include: { slot: { include: { card: true } } } })).slot.card.variantId;
+
+  it("finds cards in the catalog, counts wanters, and builds perfect matches", async () => {
+    const [a1] = await vaultCards(ANN, 1);
+    const [b1] = await vaultCards(BEN, 1);
+    await setOpenToTrade(db, SHOP, BEN, b1, true);
+    await setOpenToTrade(db, SHOP, ANN, a1, true);
+    expect((await catalog(db, SHOP, "card 1")).length).toBeGreaterThan(0);
+
+    await addWish(db, SHOP, ANN, await variantOf(b1));
+    expect((await boardCards(db, SHOP, CAL)).find((c) => c.pullId === b1)?.wantedBy).toBe(1);
+    expect((await wishlist(db, SHOP, ANN))[0].available).toBe(1);
+
+    let matches = await tradeMatches(db, SHOP, ANN);
+    expect(matches[0]).toMatchObject({ trader: "Ben", perfect: false });
+    await addWish(db, SHOP, BEN, await variantOf(a1));
+    matches = await tradeMatches(db, SHOP, ANN);
+    expect(matches[0].perfect).toBe(true);
+    expect(matches[0].theyWant.map((c) => c.pullId)).toEqual([a1]);
+
+    await removeWish(db, SHOP, ANN, await variantOf(b1));
+    expect(await wishlist(db, SHOP, ANN)).toEqual([]);
+  });
+
+  it("alerts each wisher once per copy, never the owner", async () => {
+    const [b1] = await vaultCards(BEN, 1);
+    await addWish(db, SHOP, ANN, await variantOf(b1));
+    await setOpenToTrade(db, SHOP, BEN, b1, true);
+    expect(await sendWishlistAlerts(db, undefined, SHOP, b1)).toBe(1);
+    expect(await sendWishlistAlerts(db, undefined, SHOP, b1)).toBe(0);
+  });
+
+  it("feed shows trades and listings without prices", async () => {
+    const [a1] = await vaultCards(ANN, 1);
+    const [b1, b2] = await vaultCards(BEN, 2);
+    await setOpenToTrade(db, SHOP, BEN, b1, true);
+    await createListing(db, SHOP, BEN, b2, 30);
+    const offer = await createOffer(db, SHOP, ANN, { give: [a1], get: [b1] });
+    await respondToOffer(db, SHOP, BEN, offer.id, "accept");
+    const feed = await activityFeed(db, SHOP);
+    expect(feed.map((e) => e.type).sort()).toEqual(["listed", "trade"]);
+    expect(JSON.stringify(feed)).not.toMatch(/price|30\.00|"30"/);
   });
 });

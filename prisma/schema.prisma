@@ -349,3 +349,19 @@ model PullTransfer {
 
   @@index([pullId])
 }
+
+// A card a player is looking for, by the single's Shopify variant (the same card across series).
+model WishItem {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  variantId  String
+  title      String
+  imageUrl   String?
+  // Pulls already emailed about, so each newly available copy alerts once.
+  alertedPullIds String[] @default([])
+  createdAt  DateTime @default(now())
+
+  @@unique([shop, customerId, variantId])
+  @@index([shop, variantId])
+}
