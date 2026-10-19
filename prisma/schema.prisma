@@ -252,6 +252,9 @@ model Trader {
   showCollection Boolean @default(false)
   // Up to 6 pull ids pinned at the top of their collection page.
   showcase   String[] @default([])
+  // Which Vault Market Terms version they agreed to, and when (needed before selling, buying or trading).
+  termsVersion    String?
+  termsAcceptedAt DateTime?
   createdAt  DateTime @default(now())
 
   @@unique([shop, customerId])
