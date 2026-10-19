@@ -4,8 +4,9 @@ import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { PICKUP_LOCATION, requestShipment } from "../lib/vault.server";
 
-// "Ship my cards": starts a shipment for everything in the viewer's vault and returns the
-// invoice link where they pay the shipping fee (or check out free on large shipments).
+// "Ship my cards": starts a shipment for the viewer's vault cards and returns the invoice link
+// where they pay the shipping fee (or check out free on large shipments). { pullIds } limits it
+// to the cards the customer picked; without it the whole vault goes.
 // With { pickup: true } the cards are set aside on a free local pickup order instead.
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, viewer, admin } = await proxyContext(request);
@@ -14,8 +15,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!admin) return json({ error: "Shipping isn't available right now. Please try again." }, 503);
 
   try {
-    const body = (await request.json().catch(() => ({}))) as { pickup?: boolean };
-    const { invoiceUrl, pickupOrder } = await requestShipment(db, admin, shop, viewer, { pickup: body.pickup === true });
+    const body = (await request.json().catch(() => ({}))) as { pickup?: boolean; pullIds?: unknown };
+    const pullIds = Array.isArray(body.pullIds) ? body.pullIds.filter((id): id is string => typeof id === "string").slice(0, 1000) : undefined;
+    const { invoiceUrl, pickupOrder } = await requestShipment(db, admin, shop, viewer, { pickup: body.pickup === true, pullIds });
     return json(pickupOrder ? { pickupOrder, pickupAddress: PICKUP_LOCATION.address, pickupHours: PICKUP_LOCATION.hours } : { invoiceUrl });
   } catch (error) {
     if (error instanceof PoolError) return json({ error: error.message }, 400);

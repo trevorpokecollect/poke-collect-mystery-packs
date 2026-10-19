@@ -417,3 +417,15 @@
 .mp-history-count { color: var(--mp-muted); font-size: .95em; white-space: nowrap; }
 
 .mp-market-link { display: inline-block; margin-top: 14px; text-decoration: none !important; }
+
+/* Vault cards are tapped to pick which ones ship or get picked up. */
+.mp-card-pick { position: relative; cursor: pointer; transition: opacity .15s, box-shadow .15s, border-color .15s; }
+.mp-card-pick[aria-checked="false"] { opacity: .55; }
+.mp-card-pick[aria-checked="true"] { border-color: #e3350d; box-shadow: 0 0 0 1px #e3350d; }
+.mp-card-pick:focus-visible { outline: 3px solid var(--mp-ink); outline-offset: 3px; }
+.mp-pick-check { position: absolute; top: 16px; right: 16px; z-index: 1; width: 26px; height: 26px; border-radius: 50%; background: var(--mp-surface); border: 2px solid var(--mp-line); box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.mp-card-pick[aria-checked="true"] .mp-pick-check { background: #e3350d; border-color: #e3350d; }
+.mp-card-pick[aria-checked="true"] .mp-pick-check::after { content: ""; position: absolute; left: 7px; top: 2px; width: 6px; height: 12px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
+.mp-pick-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: -4px 0 14px; color: var(--mp-muted); font-size: .92em; }
+.mp-pick-bar button { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--mp-ink); text-decoration: underline; cursor: pointer; }
+.mp-pick-bar button:disabled { opacity: .4; cursor: default; text-decoration: none; }

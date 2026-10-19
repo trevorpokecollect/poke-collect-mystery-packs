@@ -2,7 +2,7 @@
 // "Ship my cards" makes one draft order for the vaulted cards (free) plus a flat shipping fee;
 // paying its invoice creates a normal order that ships like any other.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
 import { rereserveForPulls, unreserveForPulls } from "./inventory.server";
 import { pullsForViewer, PoolError, type Viewer } from "./pool.server";
@@ -47,25 +47,35 @@ export async function vaultedPulls(db: Db, shop: string, viewer: Viewer) {
 /**
  * Starts (or returns the open) shipment for the viewer's vaulted cards and returns the invoice
  * link to pay shipping. Each card's reserved copy is handed to the draft order's own reservation.
+ * With `pullIds`, only those vault cards go; the rest stay in the vault.
  */
 export async function requestShipment(
   db: Db,
   admin: AdminApiContext,
   shop: string,
   viewer: Viewer,
-  { pickup = false }: { pickup?: boolean } = {},
+  { pickup = false, pullIds }: { pickup?: boolean; pullIds?: string[] } = {},
 ): Promise<{ invoiceUrl: string | null; reused: boolean; pickupOrder?: string }> {
+  const chosen = pullIds ? new Set(pullIds) : null;
   const inVault = await vaultedPulls(db, shop, viewer);
+  const wanted = chosen ? inVault.filter((p) => chosen.has(p.id)) : inVault;
+  if (chosen && inVault.length && !wanted.length) throw new PoolError(`Pick at least one card to ${pickup ? "pick up" : "ship"}.`);
   const pending = inVault.find((p) => p.shipRequest?.status === "PENDING")?.shipRequest;
   if (pending?.invoiceUrl) {
-    if (!pickup && inVault.every((p) => p.shipRequestId === pending.id)) return { invoiceUrl: pending.invoiceUrl, reused: true };
-    // Cards opened since the open invoice was made, or picking up instead: replace the invoice.
+    const onInvoice = inVault.filter((p) => p.shipRequestId === pending.id);
+    if (!pickup && wanted.length === onInvoice.length && wanted.every((p) => p.shipRequestId === pending.id)) {
+      return { invoiceUrl: pending.invoiceUrl, reused: true };
+    }
+    // A different set of cards, or picking up instead: replace the invoice.
     const request = await db.shipRequest.findUniqueOrThrow({ where: { id: pending.id } });
     await settleShipRequest(db, admin, request, "CANCELLED", { keepReleased: true });
-    return requestShipment(db, admin, shop, viewer, { pickup });
+    // Cards left off the new shipment go back to the vault, reserved again.
+    const left = onInvoice.filter((p) => chosen && !chosen.has(p.id)).map((p) => p.id);
+    if (left.length) await rereserveForPulls(db, admin, left);
+    return requestShipment(db, admin, shop, viewer, { pickup, pullIds });
   }
 
-  const free = inVault.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
+  const free = wanted.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
   // A card another player is paying for right now stays behind.
   const buying = await beingBought(db, free.map((p) => p.id));
   const pulls = free.filter((p) => !buying.has(p.id));
@@ -391,9 +401,9 @@ export async function returnShipmentToVault(db: Db, admin: AdminApiContext, shop
 }
 
 /** Recent vault shipments for the customer service page, newest first. */
-export async function recentShipments(db: Db, shop: string, take = 40) {
+export async function recentShipments(db: Db, shop: string, { take = 40, where = {} }: { take?: number; where?: Prisma.ShipRequestWhereInput } = {}) {
   const requests = await db.shipRequest.findMany({
-    where: { shop, status: { in: ["PENDING", "PAID"] } },
+    where: { ...where, shop, status: { in: ["PENDING", "PAID"] } },
     orderBy: { createdAt: "desc" },
     take,
     include: { pulls: { select: { orderName: true, customerId: true } } },

@@ -116,7 +116,7 @@
     var freeAt = vault ? vault.freeAt : 25;
     var steps = [
       ["Cards Go To Your Vault", "Every card you pull is kept safe in your vault here. Open as many packs as you like and ship them together."],
-      ["Ship When You're Ready", "Tap Ship My Cards to send everything in your vault in one package: $" + fee + " flat, or free on " + freeAt + "+ cards."],
+      ["Ship When You're Ready", "Tap the cards in your vault you want, then Ship My Cards to send them in one package: $" + fee + " flat, or free on " + freeAt + "+ cards."],
       ["We Pack It With Care", "Every card is sleeved and top loaded before it goes out."],
       ["Track It Here", "Each card shows Preparing To Ship, then Shipped with a tracking link. You'll also get a shipping email from us."],
     ];
@@ -128,7 +128,7 @@
           el("div", {}, [el("strong", { text: s[0] }), el("p", { text: s[1] })]),
         ]);
       })),
-      el("p", { class: "mp-info-note", text: "Shipping is a one-time $" + fee + " per shipment, free when you ship " + freeAt + " or more cards at once. US addresses only. Local pickup is always free at 181 Hughes Road, Suite 5, Madison, AL: tap Pick Up In Store and we'll email you when your cards are ready." }),
+      el("p", { class: "mp-info-note", text: "Shipping is a one-time $" + fee + " per shipment, free when you ship " + freeAt + " or more cards at once. US addresses only. Local pickup is always free at 181 Hughes Road, Suite 5, Madison, AL: pick your cards, tap Pick Up In Store and we'll email you when they're ready." }),
     ]);
   }
 
@@ -288,64 +288,85 @@
       stats,
       vault && vault.market ? el("a", { class: "mp-btn mp-btn-ghost mp-market-link", href: "/apps/packs/market", text: "Trade & Sell Vault Cards" }) : null,
     ]);
-    return el("section", { class: "mp-hero" }, [text, shipBox(vault)]);
+    shipVault = vault;
+    shipEl = shipBox(vault);
+    return el("section", { class: "mp-hero" }, [text, shipEl]);
   }
 
-  // "Ship My Cards": everything in the vault ships together for one flat fee.
+  // Vault cards the customer can pick to ship or pick up, and which ones are picked (by card id).
+  var pickable = [];
+  var picked = {};
+  var pickSyncs = [];
+  var shipEl = null;
+  var shipVault = null;
+
+  function pickedIds() {
+    return pickable.filter(function (p) { return picked[p.id]; }).map(function (p) { return p.id; });
+  }
+
+  function cardsWord(n) {
+    return n + (n === 1 ? " Card" : " Cards");
+  }
+
+  // Redraws the ship box and every tile's check after the picks change.
+  function onPickChange() {
+    pickSyncs.forEach(function (sync) { sync(); });
+    if (!shipEl) return;
+    var next = shipBox(shipVault);
+    shipEl.replaceWith(next);
+    shipEl = next;
+  }
+
+  // "Ship My Cards": the picked vault cards ship together for one flat fee.
   function shipBox(vault) {
-    // Cards opened after the open invoice was made aren't on it: offer one invoice for everything.
-    if (vault && vault.pending && vault.cards > 0) {
-      var all = vault.pending.cards + vault.cards;
-      var newNote = el("p", {
-        text: vault.cards + " newer card" + (vault.cards === 1 ? " isn't" : "s aren't") + " on your shipping invoice yet. Update it to ship all " + all + " cards together" +
-          (all >= vault.freeAt ? " for free." : " for $" + vault.fee + "."),
-      });
-      return el("div", { class: "mp-hero-ship" }, [
-        el("strong", { class: "mp-hero-ship-title", text: "Ship All " + all + " Cards Together" }),
-        newNote,
-        shipButton("Update Shipment & Pay", newNote, true),
-        pickupButton(vault, newNote),
-      ]);
-    }
-    if (vault && vault.pending) {
-      return el("div", { class: "mp-hero-ship" }, [
-        el("strong", { class: "mp-hero-ship-title", text: vault.pending.cards + (vault.pending.cards === 1 ? " Card Is" : " Cards Are") + " Ready To Ship" }),
-        el("p", { text: "Finish checkout to pay shipping and we'll send them out." }),
-        el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
-        pickupButton(vault, null),
-      ]);
-    }
     var fee = vault ? vault.fee : 5;
     var freeAt = vault ? vault.freeAt : 25;
-    var cards = vault ? vault.cards : 0;
-    var left = Math.max(0, freeAt - cards);
-    var bar = el("span", { class: "mp-hero-bar" }, [el("span", { style: "width:" + Math.min(100, (cards / freeAt) * 100) + "%" })]);
+    var all = pickable.length;
+    var ids = pickedIds();
+    var n = ids.length;
+    // Picked exactly the cards on the open invoice: just pay it.
+    var onInvoice = pickable.filter(function (p) { return p.shipping && p.shipping.state === "awaiting_payment"; });
+    var payOpen = vault && vault.pending && vault.pending.invoiceUrl && onInvoice.length === n && onInvoice.every(function (p) { return picked[p.id]; });
+    if (payOpen) {
+      var payNote = el("p", { text: "Finish checkout to pay shipping and we'll send them out." + (all > n ? " Tap your other vault cards to add them to this shipment." : "") });
+      return el("div", { class: "mp-hero-ship" }, [
+        el("strong", { class: "mp-hero-ship-title", text: cardsWord(n) + (n === 1 ? " Is" : " Are") + " Ready To Ship" }),
+        payNote,
+        el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
+        pickupButton(ids, payNote),
+      ]);
+    }
+    var left = Math.max(0, freeAt - n);
+    var bar = el("span", { class: "mp-hero-bar" }, [el("span", { style: "width:" + Math.min(100, (n / freeAt) * 100) + "%" })]);
     var note = el("p", {
-      text: !cards
+      text: !all
         ? "Ship your vault for $" + fee + " flat, free on " + freeAt + "+ cards (US only)."
-        : left === 0
-          ? "Your vault ships free!"
-          : "$" + fee + " flat shipping. " + left + " more card" + (left === 1 ? "" : "s") + " and it ships free.",
+        : !n
+          ? "Tap the cards in your vault you want to ship or pick up."
+          : (left === 0
+              ? (n === all ? "Your vault ships free!" : "These " + n + " cards ship free!")
+              : "$" + fee + " flat shipping. " + left + " more card" + (left === 1 ? "" : "s") + " and it ships free.") +
+            (vault && vault.pending ? " This replaces your open shipping invoice." : ""),
     });
-    var button = shipButton("Ship My Cards", note, !!cards);
+    var label = !all ? "Ship My Cards" : !n ? "Ship Selected Cards" : n === all && all > 1 ? "Ship All " + all + " Cards" : "Ship " + cardsWord(n);
     return el("div", { class: "mp-hero-ship" }, [
-      el("strong", { class: "mp-hero-ship-title", text: left === 0 && cards ? "Free Shipping Unlocked" : "Ship When You're Ready" }),
+      el("strong", { class: "mp-hero-ship-title", text: all && !n ? "Pick Cards To Ship" : left === 0 && n ? "Free Shipping Unlocked" : "Ship When You're Ready" }),
       bar,
       note,
-      button,
-      pickupButton(vault, note),
+      shipButton(label, note, ids),
+      pickupButton(ids, note),
     ]);
   }
 
-  // Starts (or replaces) the shipping invoice for every vault card, then goes to checkout.
-  function shipButton(label, note, enabled) {
+  // Starts (or replaces) the shipping invoice for the picked vault cards, then goes to checkout.
+  function shipButton(label, note, ids) {
     var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: label });
-    if (!enabled) button.disabled = true;
+    if (!ids.length) button.disabled = true;
     button.addEventListener("click", function () {
       if (demo) { note.textContent = "Preview mode: shipping isn't available for sample cards."; return; }
       button.disabled = true;
       button.textContent = "Starting...";
-      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" })
+      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pullIds: ids }) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d.invoiceUrl) { window.location.href = d.invoiceUrl; return; }
@@ -360,18 +381,18 @@
     return button;
   }
 
-  // "Pick Up In Store": sets every vault card aside on a free local pickup order, no checkout.
-  function pickupButton(vault, note) {
-    var cards = vault ? vault.cards + (vault.pending ? vault.pending.cards : 0) : 0;
+  // "Pick Up In Store": sets the picked vault cards aside on a free local pickup order, no checkout.
+  function pickupButton(ids, note) {
+    var cards = ids.length;
     var button = el("button", { class: "mp-pickup-btn", type: "button", text: "Or Pick Up In Store (Free)" });
     if (!cards) button.disabled = true;
     button.addEventListener("click", function () {
       var say = function (text) { if (note) note.textContent = text; else button.textContent = text; };
       if (demo) { say("Preview mode: pickup isn't available for sample cards."); return; }
-      if (!window.confirm("Set aside all " + cards + " card" + (cards === 1 ? "" : "s") + " in your vault for free local pickup?")) return;
+      if (!window.confirm("Set aside " + (cards === pickable.length && cards > 1 ? "all " : "") + cards + " card" + (cards === 1 ? "" : "s") + " from your vault for free local pickup?")) return;
       button.disabled = true;
       button.textContent = "Setting Aside...";
-      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pickup: true }) })
+      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pickup: true, pullIds: ids }) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (!d.pickupOrder) throw new Error(d.error || "Couldn't set your cards aside.");
@@ -391,10 +412,57 @@
     return button;
   }
 
+  // A vault card the customer taps to add to (or leave out of) their shipment.
+  function pickTile(pack) {
+    var tile = cardTile(pack);
+    tile.classList.add("mp-card-pick");
+    tile.setAttribute("role", "checkbox");
+    tile.setAttribute("tabindex", "0");
+    tile.setAttribute("aria-label", "Ship " + pack.card.title);
+    tile.insertBefore(el("span", { class: "mp-pick-check", "aria-hidden": "true" }), tile.firstChild);
+    pickSyncs.push(function () { tile.setAttribute("aria-checked", picked[pack.id] ? "true" : "false"); });
+    tile.addEventListener("click", function (e) {
+      if (e.target.closest && e.target.closest("a")) return;
+      if (picked[pack.id]) delete picked[pack.id];
+      else picked[pack.id] = true;
+      onPickChange();
+    });
+    tile.addEventListener("keydown", function (e) {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); tile.click(); }
+    });
+    return tile;
+  }
+
+  // "3 Of 5 Cards Selected · Select All · Clear" above the vault grid.
+  function pickBar() {
+    var count = el("span");
+    var selectAll = el("button", { type: "button", text: "Select All" });
+    var clear = el("button", { type: "button", text: "Clear" });
+    selectAll.addEventListener("click", function () { pickable.forEach(function (p) { picked[p.id] = true; }); onPickChange(); });
+    clear.addEventListener("click", function () { picked = {}; onPickChange(); });
+    pickSyncs.push(function () {
+      var n = pickedIds().length;
+      count.textContent = n + " Of " + cardsWord(pickable.length) + " Selected To Ship";
+      selectAll.disabled = n === pickable.length;
+      clear.disabled = n === 0;
+    });
+    return el("div", { class: "mp-pick-bar" }, [count, selectAll, clear]);
+  }
+
   function render(packs, available, signedIn, recommendFrom, recommendHandle, vault) {
     root.innerHTML = "";
     var unopened = packs.filter(function (p) { return !p.opened; });
     var opened = packs.filter(function (p) { return p.opened; });
+
+    // The vault holds cards still with us; cards on their way or delivered move to the shipped history.
+    var inVault = opened.filter(function (p) { return !p.shipping || p.shipping.state === "vault" || p.shipping.state === "awaiting_payment"; });
+    var shipped = opened.filter(function (p) { return inVault.indexOf(p) === -1; });
+    // Every vault card starts picked, unless an invoice is open: then just the cards on it.
+    pickable = inVault;
+    picked = {};
+    pickSyncs = [];
+    var onInvoice = inVault.filter(function (p) { return p.shipping && p.shipping.state === "awaiting_payment"; });
+    (onInvoice.length ? onInvoice : inVault).forEach(function (p) { picked[p.id] = true; });
 
     if (demo) root.appendChild(demoBanner());
     root.appendChild(hero(unopened.length, vault));
@@ -403,9 +471,6 @@
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
       root.appendChild(el("div", { class: "mp-grid" }, unopened.map(function (p) { return packTile(p, openPack); })));
     }
-    // The vault holds cards still with us; cards on their way or delivered move to the shipped history.
-    var inVault = opened.filter(function (p) { return !p.shipping || p.shipping.state === "vault" || p.shipping.state === "awaiting_payment"; });
-    var shipped = opened.filter(function (p) { return inVault.indexOf(p) === -1; });
     root.appendChild(el("h2", { class: "mp-section-title", text: "Your Vault" }));
     if (signedIn === false) {
       root.appendChild(el("p", { class: "mp-login-hint" }, [
@@ -414,9 +479,10 @@
         el("a", { href: "/account/login?return_url=" + encodeURIComponent("/apps/packs" + (params.get("k") ? "?k=" + encodeURIComponent(params.get("k")) : "")), text: "Log In To Save These To Your Vault" }),
       ]));
     }
+    if (inVault.length > 1) root.appendChild(pickBar());
     root.appendChild(
       inVault.length
-        ? el("div", { class: "mp-grid" }, inVault.map(cardTile))
+        ? el("div", { class: "mp-grid" }, inVault.map(pickTile))
         : el("p", { class: "mp-empty", text: opened.length ? "Your Vault Is Empty. Every Card Has Shipped." : "Nothing Pulled Yet." }),
     );
     if (shipped.length) {
@@ -432,6 +498,7 @@
       if (onTheWay) history.open = true;
       root.appendChild(history);
     }
+    pickSyncs.forEach(function (sync) { sync(); });
     var more = shelf(available);
     if (more) root.appendChild(more);
     root.appendChild(shippingInfo(vault));
