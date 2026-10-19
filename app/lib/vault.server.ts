@@ -2,7 +2,7 @@
 // "Ship my cards" makes one draft order for the vaulted cards (free) plus a flat shipping fee;
 // paying its invoice creates a normal order that ships like any other.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
 import { rereserveForPulls, unreserveForPulls } from "./inventory.server";
 import { pullsForViewer, PoolError, type Viewer } from "./pool.server";
@@ -391,9 +391,9 @@ export async function returnShipmentToVault(db: Db, admin: AdminApiContext, shop
 }
 
 /** Recent vault shipments for the customer service page, newest first. */
-export async function recentShipments(db: Db, shop: string, take = 40) {
+export async function recentShipments(db: Db, shop: string, { take = 40, where = {} }: { take?: number; where?: Prisma.ShipRequestWhereInput } = {}) {
   const requests = await db.shipRequest.findMany({
-    where: { shop, status: { in: ["PENDING", "PAID"] } },
+    where: { ...where, shop, status: { in: ["PENDING", "PAID"] } },
     orderBy: { createdAt: "desc" },
     take,
     include: { pulls: { select: { orderName: true, customerId: true } } },
