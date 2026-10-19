@@ -1,31 +1,61 @@
-// Vault Marketplace page: players trade vault cards with each other, or sell them to each other.
-// Cards never leave the vault here; a trade or sale only changes which player owns them.
+// Vault Market: players trade vault cards with each other, sell them to each other, and browse
+// each other's binders. Cards never leave the vault here; a trade or sale only changes the owner.
+// A small hash router: #/ (market), #/collectors, #/u/<name>, #/binder, #/offers.
 (function () {
   "use strict";
 
   var root = document.getElementById("vault-market");
   if (!root) return;
-  var api = root.getAttribute("data-api") || "/apps/packs/api/market";
+  var base = root.getAttribute("data-api") || "/apps/packs/api/market";
   // Staff preview link (?demo=<token>): sample cards, and buttons only show what would happen.
   var demo = root.getAttribute("data-demo");
-  if (demo) api += "?demo=" + encodeURIComponent(demo);
-  var state = null;
-  var tab = "board";
-  var search = "";
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var state = null; // main payload: me, cards (my vault), board, offers, rules
+  var collectorsCache = null;
+  var collectionCache = {};
+  var filters = { q: "", kind: "all", tier: "all", sort: "new" };
+  var binderFilter = "all";
+  var binderPage = 0;
   var flash = null;
+  var modal = null; // { type: "card", card } | { type: "offer", ... } | { type: "name" }
+  var showcaseEdit = null; // Set of pull ids while editing the showcase
+
+  // ---------- Helpers ----------
 
   function el(tag, attrs, children) {
     var node = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (key) {
-      if (key === "text") node.textContent = attrs[key];
-      else if (key === "class") node.className = attrs[key];
-      else if (key.indexOf("on") === 0 && typeof attrs[key] === "function") node.addEventListener(key.slice(2), attrs[key]);
-      else if (attrs[key] !== false && attrs[key] != null) node.setAttribute(key, attrs[key] === true ? "" : attrs[key]);
+      var v = attrs[key];
+      if (v === false || v == null) return;
+      if (key === "text") node.textContent = v;
+      else if (key === "class") node.className = v;
+      else if (key.indexOf("on") === 0 && typeof v === "function") node.addEventListener(key.slice(2), v);
+      else node.setAttribute(key, v === true ? "" : v);
     });
     (children || []).forEach(function (child) {
-      if (child) node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+      if (child == null || child === false) return;
+      node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
     });
     return node;
+  }
+
+  function url(params) {
+    var q = [];
+    if (demo) q.push("demo=" + encodeURIComponent(demo));
+    Object.keys(params || {}).forEach(function (k) {
+      if (params[k]) q.push(k + "=" + encodeURIComponent(params[k]));
+    });
+    return base + (q.length ? "?" + q.join("&") : "");
+  }
+
+  function getJSON(params) {
+    return fetch(url(params), { credentials: "same-origin" }).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) throw new Error(data.error || "Something went wrong.");
+        return data;
+      });
+    });
   }
 
   function money(n) {
@@ -36,28 +66,53 @@
     return String(tier || "").trim().toLowerCase();
   }
 
+  function since(d) {
+    return new Date(d).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+  }
+
+  function route() {
+    var h = (window.location.hash || "#/").replace(/^#/, "");
+    var parts = h.split("/").filter(Boolean);
+    if (parts[0] === "u" && parts[1]) return { name: "collection", who: decodeURIComponent(parts[1]) };
+    if (parts[0] === "collectors") return { name: "collectors" };
+    if (parts[0] === "binder") return { name: "binder" };
+    if (parts[0] === "offers") return { name: "offers" };
+    return { name: "market" };
+  }
+
+  function go(hash) {
+    if (window.location.hash === hash) render();
+    else window.location.hash = hash;
+  }
+
+  function profileHash(name) {
+    return "#/u/" + encodeURIComponent(name);
+  }
+
+  // ---------- Data ----------
+
   function load() {
-    return fetch(api + (search ? (demo ? "&" : "?") + "q=" + encodeURIComponent(search) : ""), { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        state = data;
-        render();
-      })
-      .catch(function () {
-        root.innerHTML = "";
-        root.appendChild(el("p", { class: "mp-error", text: "Couldn't load the marketplace. Please refresh the page." }));
-      });
+    return getJSON({}).then(function (data) {
+      state = data;
+      collectorsCache = null;
+      collectionCache = {};
+      render();
+    }).catch(function (error) {
+      root.innerHTML = "";
+      root.appendChild(el("p", { class: "vm-error vm-pad", text: error.message || "Couldn't load the market. Please refresh the page." }));
+    });
   }
 
   function post(body, button) {
     if (demo) {
-      flash = { text: "Preview Only: Nothing Was Saved. On The Live Page This " + (body.action === "buy" ? "Opens Checkout." : "Would Go Through.") };
-      builder = null;
+      flash = { text: "Preview Only: Nothing Was Saved. On The Live Site This " + (body.action === "buy" ? "Opens Checkout." : "Would Go Through.") };
+      modal = null;
+      showcaseEdit = null;
       render();
       return Promise.reject(new Error("demo"));
     }
     if (button) button.disabled = true;
-    return fetch(api, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    return fetch(url({}), { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
       .then(function (res) {
         if (!res.ok) throw new Error(res.data.error || "Something went wrong. Please try again.");
@@ -74,233 +129,607 @@
   function act(body, button, message) {
     return post(body, button).then(function () {
       flash = message ? { text: message } : null;
+      modal = null;
       return load();
     }).catch(function () {});
   }
 
-  // ---------- Header ----------
-
-  function hero() {
-    var r = state.rules;
-    var sub = state.selling
-      ? "Trade Cards With Other Players, Or Sell Them For Store Credit. Cards Stay Safe In The Vault The Whole Time."
-      : "Trade Cards With Other Players. Cards Stay Safe In The Vault The Whole Time.";
-    var text = el("div", { class: "mp-hero-text" }, [
-      el("span", { class: "mp-hero-kicker", text: "Digital Mystery Packs · Vault Marketplace" }),
-      el("h1", { text: "Trade & Sell Vault Cards" }),
-      el("p", { class: "mp-hero-sub", text: sub }),
-      el("a", { class: "mp-btn mp-btn-ghost mk-back", href: "/apps/packs", text: "Back To My Packs" }),
-    ]);
-    var box = el("div", { class: "mp-hero-ship" }, [
-      el("strong", { class: "mp-hero-ship-title", text: state.tradeName ? "Trading As " + state.tradeName : "Pick A Trade Name" }),
-      el("p", { text: state.tradeName ? "Other Players See This Name, Never Your Real Name Or Email." : "Other Players See Your Trade Name, Never Your Real Name Or Email." }),
-      nameForm(),
-      el("p", { class: "mk-fine", text: "Cards can be traded " + r.waitDays + " days after their pack order. Offers last " + r.offerDays + " days." }),
-    ]);
-    return el("section", { class: "mp-hero" }, [text, box]);
+  function needName() {
+    modal = { type: "name" };
+    render();
   }
 
-  function nameForm() {
-    var input = el("input", { class: "mk-input", type: "text", maxlength: "20", placeholder: "Trade Name", value: state.tradeName || "" });
-    var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: state.tradeName ? "Change Name" : "Save Name" });
-    button.addEventListener("click", function () {
-      act({ action: "setName", name: input.value }, button, "Trade Name Saved.");
-    });
-    return el("div", { class: "mk-name" }, [input, button]);
-  }
+  // ---------- Card art with holo tilt ----------
 
-  function tabs() {
-    var incoming = state.offers.filter(function (o) { return o.incoming; }).length;
-    var items = [
-      ["board", "Trade Board"],
-      ["mine", "My Cards"],
-      ["offers", "Offers" + (incoming ? " (" + incoming + ")" : "")],
-    ];
-    return el("div", { class: "mk-tabs", role: "tablist" }, items.map(function (t) {
-      return el("button", {
-        class: "mk-tab" + (tab === t[0] ? " mk-tab-on" : ""),
-        type: "button",
-        role: "tab",
-        "aria-selected": tab === t[0] ? "true" : "false",
-        text: t[1],
-        onclick: function () { tab = t[0]; flash = null; render(); },
+  function art(card, size) {
+    var img = card.imageUrl
+      ? el("img", { src: card.imageUrl, alt: card.title, loading: "lazy", draggable: "false" })
+      : el("span", { class: "vm-art-blank", text: card.title });
+    var glare = el("span", { class: "vm-glare", "aria-hidden": "true" });
+    var node = el("div", { class: "vm-art" + (size ? " vm-art-" + size : ""), "data-tier": tierKey(card.tier) }, [img, glare]);
+    if (!reduceMotion) {
+      node.addEventListener("pointermove", function (e) {
+        var r = node.getBoundingClientRect();
+        var x = (e.clientX - r.left) / r.width;
+        var y = (e.clientY - r.top) / r.height;
+        node.style.setProperty("--rx", ((0.5 - y) * 14).toFixed(2) + "deg");
+        node.style.setProperty("--ry", ((x - 0.5) * 16).toFixed(2) + "deg");
+        node.style.setProperty("--gx", (x * 100).toFixed(1) + "%");
+        node.style.setProperty("--gy", (y * 100).toFixed(1) + "%");
+        node.classList.add("vm-art-live");
       });
+      node.addEventListener("pointerleave", function () {
+        node.classList.remove("vm-art-live");
+        node.style.removeProperty("--rx");
+        node.style.removeProperty("--ry");
+      });
+    }
+    return node;
+  }
+
+  function tierPill(tier) {
+    return el("span", { class: "vm-tier", "data-tier": tierKey(tier), text: tier });
+  }
+
+  function tags(card) {
+    return el("div", { class: "vm-tags" }, [
+      card.listing && state.selling ? el("span", { class: "vm-tag vm-tag-sale", text: money(card.listing.price) }) : null,
+      card.openToTrade ? el("span", { class: "vm-tag vm-tag-trade", text: "For Trade" }) : null,
+    ]);
+  }
+
+  // A card in a grid: big art, then name, tier, owner and what it's up for. Clicking opens the card view.
+  function tile(card, opts) {
+    opts = opts || {};
+    var open = function () {
+      modal = { type: "card", card: card };
+      render();
+    };
+    return el("article", { class: "vm-tile" }, [
+      el("button", { class: "vm-tile-hit", type: "button", "aria-label": "View " + card.title, onclick: open }, [art(card)]),
+      el("div", { class: "vm-tile-body" }, [
+        el("h3", { class: "vm-tile-title", text: card.title }),
+        el("div", { class: "vm-tile-meta" }, [
+          tierPill(card.tier),
+          card.trader && !opts.hideOwner
+            ? el("a", { class: "vm-owner", href: profileHash(card.trader), text: "@" + card.trader })
+            : null,
+        ]),
+        tags(card),
+      ]),
+    ]);
+  }
+
+  // ---------- Top bar ----------
+
+  function topBar(current) {
+    var incoming = state.offers.filter(function (o) { return o.incoming; }).length;
+    var links = [
+      ["market", "#/", "Market"],
+      ["collectors", "#/collectors", "Collectors"],
+      ["binder", "#/binder", "My Binder"],
+      ["offers", "#/offers", "Offers"],
+    ];
+    return el("header", { class: "vm-top" }, [
+      el("a", { class: "vm-logo", href: "#/" }, [
+        el("span", { class: "vm-logo-mark", text: "Vault Market" }),
+        el("span", { class: "vm-logo-by", text: "By Poke-Collect" }),
+      ]),
+      el("nav", { class: "vm-nav", "aria-label": "Vault Market" }, links.map(function (l) {
+        return el("a", { class: "vm-nav-link" + (current === l[0] ? " vm-nav-on" : ""), href: l[1], "aria-current": current === l[0] ? "page" : false }, [
+          l[2],
+          l[0] === "offers" && incoming ? el("span", { class: "vm-count", text: String(incoming) }) : null,
+        ]);
+      })),
+      el("div", { class: "vm-top-right" }, [
+        state.tradeName
+          ? el("a", { class: "vm-me", href: profileHash(state.tradeName) }, [el("span", { class: "vm-monogram", text: state.tradeName.charAt(0).toUpperCase() }), "@" + state.tradeName])
+          : el("button", { class: "vm-btn vm-btn-small", type: "button", text: "Pick A Trade Name", onclick: needName }),
+        el("a", { class: "vm-top-link", href: "/apps/packs", text: "My Packs" }),
+      ]),
+    ]);
+  }
+
+  // ---------- Market ----------
+
+  function marketView() {
+    var board = state.board.slice();
+    var tiers = [];
+    board.forEach(function (c) { if (tiers.indexOf(c.tier) < 0) tiers.push(c.tier); });
+    var q = filters.q.toLowerCase();
+    var shown = board.filter(function (c) {
+      if (q && c.title.toLowerCase().indexOf(q) < 0 && String(c.trader).toLowerCase().indexOf(q) < 0) return false;
+      if (filters.kind === "trade" && !c.openToTrade) return false;
+      if (filters.kind === "sale" && !c.listing) return false;
+      if (filters.tier !== "all" && c.tier !== filters.tier) return false;
+      return true;
+    });
+    if (filters.sort === "priceUp" || filters.sort === "priceDown") {
+      shown = shown.filter(function (c) { return c.listing; });
+      shown.sort(function (a, b) { return filters.sort === "priceUp" ? a.listing.price - b.listing.price : b.listing.price - a.listing.price; });
+    } else if (filters.sort === "name") {
+      shown.sort(function (a, b) { return a.title.localeCompare(b.title); });
+    }
+    var collectorCount = {};
+    board.forEach(function (c) { collectorCount[c.trader] = 1; });
+
+    var search = el("input", { id: "vm-search", class: "vm-input vm-search", type: "search", placeholder: "Search Cards Or Collectors", value: filters.q, "aria-label": "Search cards or collectors" });
+    search.addEventListener("input", function () {
+      filters.q = search.value;
+      var pos = search.selectionStart;
+      render();
+      var again = document.getElementById("vm-search");
+      if (again) {
+        again.focus();
+        try { again.setSelectionRange(pos, pos); } catch (e) { /* some inputs refuse a selection */ }
+      }
+    });
+
+    function chip(group, value, label) {
+      var on = filters[group] === value;
+      return el("button", {
+        class: "vm-chip" + (on ? " vm-chip-on" : ""),
+        type: "button",
+        "aria-pressed": on ? "true" : "false",
+        "data-tier": group === "tier" && value !== "all" ? tierKey(value) : false,
+        text: label,
+        onclick: function () { filters[group] = value; render(); },
+      });
+    }
+    var sort = el("select", { id: "vm-sort", class: "vm-input vm-select", "aria-label": "Sort" }, [
+      ["new", "Newest"],
+      ["name", "Name A–Z"],
+    ].concat(state.selling ? [["priceUp", "Price: Low To High"], ["priceDown", "Price: High To Low"]] : []).map(function (o) {
+      return el("option", { value: o[0], text: o[1], selected: filters.sort === o[0] });
+    }));
+    sort.addEventListener("change", function () { filters.sort = sort.value; render(); });
+
+    return el("main", { class: "vm-main" }, [
+      el("section", { class: "vm-hero" }, [
+        el("div", { class: "vm-hero-copy" }, [
+          el("p", { class: "vm-eyebrow", text: "Player To Player" }),
+          el("h1", { class: "vm-hero-title" }, ["Every Card Here Is ", el("em", { text: "In A Real Vault." })]),
+          el("p", { class: "vm-hero-text", text: state.selling
+            ? "Trade With Other Collectors Or Buy Straight From Their Binders. Cards Change Hands Inside The Poke-Collect Vault, So Nothing Gets Lost In The Mail."
+            : "Trade With Other Collectors. Cards Change Hands Inside The Poke-Collect Vault, So Nothing Gets Lost In The Mail." }),
+          el("dl", { class: "vm-hero-stats" }, [
+            stat(board.length, "Cards Up"),
+            stat(Object.keys(collectorCount).length, "Collectors"),
+            stat(board.filter(function (c) { return c.openToTrade; }).length, "Open To Trade"),
+          ]),
+        ]),
+        heroFan(board),
+      ]),
+      !state.tradeName ? welcome() : null,
+      el("div", { class: "vm-filters" }, [
+        search,
+        el("div", { class: "vm-chips", role: "group", "aria-label": "Show" }, [
+          chip("kind", "all", "All"),
+          chip("kind", "trade", "For Trade"),
+          state.selling ? chip("kind", "sale", "For Sale") : null,
+        ]),
+        tiers.length > 1
+          ? el("div", { class: "vm-chips", role: "group", "aria-label": "Tier" }, [chip("tier", "all", "Every Tier")].concat(tiers.map(function (t) { return chip("tier", t, t); })))
+          : null,
+        sort,
+      ]),
+      el("p", { class: "vm-result-count", text: shown.length + (shown.length === 1 ? " Card" : " Cards") }),
+      shown.length
+        ? el("div", { class: "vm-grid" }, shown.map(function (c) { return tile(c); }))
+        : el("p", { class: "vm-empty", text: board.length ? "No Cards Match These Filters." : "Nothing Is Up Yet. Mark Cards In Your Binder Open To Trade To Get Things Started." }),
+    ]);
+  }
+
+  function stat(n, label) {
+    return el("div", { class: "vm-stat" }, [el("dt", { text: label }), el("dd", { text: String(n) })]);
+  }
+
+  // Three cards fanned in the hero: the board's newest art.
+  function heroFan(board) {
+    var picks = board.filter(function (c) { return c.imageUrl; }).slice(0, 3);
+    if (!picks.length) return null;
+    return el("div", { class: "vm-fan", "aria-hidden": "true" }, picks.map(function (c, i) {
+      return el("img", { class: "vm-fan-card vm-fan-" + i, src: c.imageUrl, alt: "" });
     }));
   }
 
-  function cardFace(card, extra) {
-    return el("div", { class: "mp-card mk-card" }, [
-      card.imageUrl ? el("img", { src: card.imageUrl, alt: card.title, loading: "lazy" }) : null,
-      el("div", { class: "mp-card-title", text: card.title }),
-      el("div", { class: "mp-card-meta" }, [
-        el("span", { class: "mp-tier", "data-tier": tierKey(card.tier), text: card.tier }),
-        el("span", { text: card.series || "" }),
+  function welcome() {
+    return el("section", { class: "vm-welcome" }, [
+      el("div", {}, [
+        el("h2", { text: "Pick A Trade Name To Start" }),
+        el("p", { text: "Other Collectors See Your Trade Name, Never Your Real Name Or Email. You Need One To Trade, Buy Or Share Your Binder." }),
       ]),
-    ].concat(extra || []));
+      el("button", { class: "vm-btn vm-btn-signal", type: "button", text: "Pick A Trade Name", onclick: needName }),
+    ]);
   }
 
-  // ---------- Trade Board ----------
+  // ---------- Collectors ----------
 
-  function board() {
-    var input = el("input", { class: "mk-input mk-search", type: "search", placeholder: "Search Cards", value: search });
-    input.addEventListener("change", function () { search = input.value.trim(); load(); });
-    var cards = state.board;
-    var grid = cards.length
-      ? el("div", { class: "mp-grid" }, cards.map(function (c) {
-          var actions = [el("div", { class: "mk-from", text: "From " + c.trader })];
-          if (c.listing) {
-            actions.push(el("button", {
-              class: "mp-btn mk-buy",
-              type: "button",
-              text: "Buy For " + money(c.listing.price),
-              onclick: function (e) {
-                if (!state.tradeName) return needName();
-                post({ action: "buy", listingId: c.listing.id }, e.currentTarget).then(function (data) {
-                  window.location.href = data.invoiceUrl;
-                }).catch(function () {});
-              },
-            }));
-          }
-          if (c.openToTrade) {
-            actions.push(el("button", {
-              class: "mp-btn mk-secondary",
-              type: "button",
-              text: "Offer A Trade",
-              onclick: function () {
-                if (!state.tradeName) return needName();
-                openBuilder({ trader: c.trader, get: [c.pullId] });
-              },
-            }));
-          }
-          return cardFace(c, actions);
-        }))
-      : el("p", { class: "mp-empty", text: search ? "No Cards Match Your Search." : "No Cards On The Trade Board Yet. Mark Your Own Cards Open To Trade To Get Things Started." });
-    return el("div", {}, [el("div", { class: "mk-toolbar" }, [input]), grid]);
+  function collectorsView() {
+    if (!collectorsCache) {
+      getJSON({ view: "collectors" }).then(function (list) {
+        collectorsCache = list;
+        render();
+      }).catch(function () { collectorsCache = []; render(); });
+      return el("main", { class: "vm-main" }, [el("p", { class: "vm-empty", text: "Loading Collectors…" })]);
+    }
+    return el("main", { class: "vm-main" }, [
+      el("div", { class: "vm-page-head" }, [
+        el("p", { class: "vm-eyebrow", text: "Collectors" }),
+        el("h1", { class: "vm-page-title", text: "Browse Binders" }),
+        el("p", { class: "vm-page-text", text: "Open A Collector's Binder To See What They Have. Some Share Their Whole Vault; Others Only Show The Cards They've Put Up." }),
+      ]),
+      collectorsCache.length
+        ? el("div", { class: "vm-collectors" }, collectorsCache.map(function (c) {
+            return el("a", { class: "vm-collector", href: profileHash(c.name) }, [
+              el("div", { class: "vm-collector-fan" }, c.preview.map(function (p, i) {
+                return p.imageUrl ? el("img", { class: "vm-mini-fan vm-mini-fan-" + i, src: p.imageUrl, alt: "", loading: "lazy" }) : null;
+              })),
+              el("div", { class: "vm-collector-body" }, [
+                el("div", { class: "vm-collector-name" }, [el("span", { class: "vm-monogram", text: c.name.charAt(0).toUpperCase() }), "@" + c.name]),
+                el("div", { class: "vm-collector-stats" }, [
+                  el("span", {}, [el("b", { text: String(c.cards) }), c.shared ? " In Binder" : " Up For Trade Or Sale"]),
+                  el("span", {}, [el("b", { text: String(c.trades) }), c.trades === 1 ? " Trade" : " Trades"]),
+                ]),
+                el("div", { class: "vm-collector-foot" }, [
+                  c.shared ? el("span", { class: "vm-tag vm-tag-shared", text: "Full Binder" }) : null,
+                  el("span", { class: "vm-fine", text: "Since " + since(c.since) }),
+                ]),
+              ]),
+            ]);
+          }))
+        : el("p", { class: "vm-empty", text: "No Collectors Yet." }),
+    ]);
   }
 
-  function needName() {
-    flash = { error: true, text: "Pick a trade name first." };
-    render();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // ---------- One collection (binder) ----------
+
+  function collectionView(who) {
+    var key = who.toLowerCase();
+    var data = collectionCache[key];
+    if (!data) {
+      getJSON({ view: "collection", name: who }).then(function (d) {
+        collectionCache[key] = d;
+        render();
+      }).catch(function (error) {
+        collectionCache[key] = { error: error.message };
+        render();
+      });
+      return el("main", { class: "vm-main" }, [el("p", { class: "vm-empty", text: "Opening Binder…" })]);
+    }
+    if (data.error) return el("main", { class: "vm-main" }, [el("p", { class: "vm-empty", text: data.error })]);
+
+    var cards = data.cards.filter(function (c) {
+      if (binderFilter === "trade") return c.openToTrade;
+      if (binderFilter === "sale") return c.listing;
+      return true;
+    });
+    var perPage = window.matchMedia && window.matchMedia("(min-width: 980px)").matches ? 18 : 9;
+    var pages = Math.max(1, Math.ceil(cards.length / perPage));
+    if (binderPage >= pages) binderPage = pages - 1;
+    var slice = cards.slice(binderPage * perPage, binderPage * perPage + perPage);
+    var sheets = [];
+    for (var s = 0; s < perPage / 9; s++) sheets.push(slice.slice(s * 9, s * 9 + 9));
+
+    function binderChip(value, label) {
+      return el("button", {
+        class: "vm-chip" + (binderFilter === value ? " vm-chip-on" : ""),
+        type: "button",
+        "aria-pressed": binderFilter === value ? "true" : "false",
+        text: label,
+        onclick: function () { binderFilter = value; binderPage = 0; render(); },
+      });
+    }
+
+    var canOffer = !data.own && data.cards.some(function (c) { return c.openToTrade; });
+    var owned = function (c) { return Object.assign({}, c, { trader: data.own ? null : data.name }); };
+    return el("main", { class: "vm-main" }, [
+      el("section", { class: "vm-profile" }, [
+        el("span", { class: "vm-monogram vm-monogram-big", text: data.name.charAt(0).toUpperCase() }),
+        el("div", { class: "vm-profile-copy" }, [
+          el("p", { class: "vm-eyebrow", text: data.own ? "Your Binder" : data.shared ? "Full Binder" : "Cards Up For Trade Or Sale" }),
+          el("h1", { class: "vm-page-title", text: "@" + data.name }),
+          el("p", { class: "vm-page-text", text: "Collecting Since " + since(data.since) + " · " + data.trades + (data.trades === 1 ? " Completed Trade" : " Completed Trades") }),
+        ]),
+        el("dl", { class: "vm-profile-stats" }, [
+          stat(data.stats.cards, "Cards"),
+          stat(data.stats.forTrade, "For Trade"),
+          state.selling ? stat(data.stats.forSale, "For Sale") : null,
+          stat(data.stats.sets, data.stats.sets === 1 ? "Set" : "Sets"),
+        ]),
+        canOffer
+          ? el("button", { class: "vm-btn vm-btn-signal vm-profile-cta", type: "button", text: "Offer A Trade", onclick: function () {
+              if (!state.tradeName) return needName();
+              openOffer({ trader: data.name, get: [] });
+            } })
+          : null,
+      ]),
+      data.own ? ownBinderSettings() : null,
+      data.showcase.length
+        ? el("section", { class: "vm-showcase" }, [
+            el("h2", { class: "vm-section-title", text: "Showcase" }),
+            el("div", { class: "vm-showcase-row" }, data.showcase.map(function (c) { return tile(owned(c), { hideOwner: true }); })),
+          ])
+        : null,
+      el("section", { class: "vm-binder-wrap" }, [
+        el("div", { class: "vm-binder-head" }, [
+          el("h2", { class: "vm-section-title", text: "Binder" }),
+          el("div", { class: "vm-chips" }, [binderChip("all", "Everything"), binderChip("trade", "For Trade"), state.selling ? binderChip("sale", "For Sale") : null]),
+        ]),
+        cards.length
+          ? el("div", { class: "vm-binder" }, sheets.filter(function (sheet, i) { return i === 0 || sheet.length; }).map(function (sheet) {
+              var pockets = [];
+              for (var i = 0; i < 9; i++) {
+                var c = sheet[i];
+                pockets.push(c
+                  ? el("div", { class: "vm-pocket" }, [tile(owned(c), { hideOwner: true })])
+                  : el("div", { class: "vm-pocket vm-pocket-empty", "aria-hidden": "true" }));
+              }
+              return el("div", { class: "vm-sheet" }, pockets);
+            }))
+          : el("p", { class: "vm-empty", text: "No Cards Here Yet." }),
+        pages > 1
+          ? el("div", { class: "vm-pager" }, [
+              el("button", { class: "vm-btn vm-btn-ghost", type: "button", text: "Previous Page", disabled: binderPage === 0, onclick: function () { binderPage--; render(); } }),
+              el("span", { class: "vm-pager-n", text: "Page " + (binderPage + 1) + " Of " + pages }),
+              el("button", { class: "vm-btn vm-btn-ghost", type: "button", text: "Next Page", disabled: binderPage >= pages - 1, onclick: function () { binderPage++; render(); } }),
+            ])
+          : null,
+      ]),
+    ]);
   }
 
-  // ---------- My Cards ----------
+  function ownBinderSettings() {
+    var me = state.me || {};
+    var share = el("input", { id: "vm-share", type: "checkbox", checked: !!me.showCollection });
+    share.addEventListener("change", function () {
+      act({ action: "collection", showCollection: share.checked }, share, share.checked ? "Your Whole Binder Is Now Visible To Other Collectors." : "Only Cards You Put Up Are Visible Now.");
+    });
+    return el("section", { class: "vm-own" }, [
+      el("label", { class: "vm-switch", for: "vm-share" }, [share, el("span", { class: "vm-switch-ui", "aria-hidden": "true" }), el("span", {}, [
+        el("strong", { text: "Share My Whole Binder" }),
+        el("span", { class: "vm-muted", text: " When Off, Other Collectors Only See Cards You Put Up For Trade Or Sale." }),
+      ])]),
+      el("div", { class: "vm-own-actions" }, [
+        el("button", { class: "vm-btn vm-btn-ghost vm-btn-small", type: "button", text: "Edit Showcase", onclick: function () {
+          showcaseEdit = new Set(me.showcase || []);
+          go("#/binder");
+        } }),
+        el("a", { class: "vm-link", href: "#/binder", text: "Manage Trades And Listings" }),
+      ]),
+    ]);
+  }
 
-  function mine() {
-    if (!state.cards.length) return el("p", { class: "mp-empty", text: "Your Vault Is Empty. Cards You Pull Show Up Here." });
-    return el("div", { class: "mp-grid" }, state.cards.map(function (c) {
-      var extra = [];
-      if (c.locked) {
-        extra.push(el("span", { class: "mk-badge", text: c.locked }));
-        if (c.listing && c.listing.status === "CHECKOUT") extra.push(el("div", { class: "mk-from", text: "Listed For " + money(c.listing.price) }));
-        return cardFace(c, extra);
-      }
-      var toggle = el("input", { type: "checkbox", checked: c.openToTrade });
+  // ---------- My Binder (manage) ----------
+
+  function binderView() {
+    if (!state.tradeName) return el("main", { class: "vm-main" }, [welcome()]);
+    var editing = !!showcaseEdit;
+    return el("main", { class: "vm-main" }, [
+      el("div", { class: "vm-page-head vm-page-head-row" }, [
+        el("div", {}, [
+          el("p", { class: "vm-eyebrow", text: "My Binder" }),
+          el("h1", { class: "vm-page-title", text: editing ? "Pick Your Showcase" : "Put Cards Up" }),
+          el("p", { class: "vm-page-text", text: editing
+            ? "Tap Up To " + state.rules.maxShowcase + " Cards To Pin Them At The Top Of Your Binder Page."
+            : "Mark Cards Open To Trade" + (state.selling ? " Or Set A Price To Sell Them" : "") + ". Cards Can Change Hands " + state.rules.waitDays + " Days After Their Pack Order." }),
+        ]),
+        editing
+          ? el("div", { class: "vm-own-actions" }, [
+              el("button", { class: "vm-btn vm-btn-signal", type: "button", text: "Save Showcase (" + showcaseEdit.size + ")", onclick: function (e) {
+                var picked = Array.from(showcaseEdit);
+                act({ action: "collection", showcase: picked }, e.currentTarget, "Showcase Saved.").then(function () { showcaseEdit = null; });
+              } }),
+              el("button", { class: "vm-link", type: "button", text: "Cancel", onclick: function () { showcaseEdit = null; render(); } }),
+            ])
+          : el("div", { class: "vm-own-actions" }, [
+              el("button", { class: "vm-btn vm-btn-ghost", type: "button", text: "Edit Showcase", onclick: function () { showcaseEdit = new Set((state.me && state.me.showcase) || []); render(); } }),
+              el("a", { class: "vm-btn vm-btn-ghost", href: profileHash(state.tradeName), text: "View My Binder Page" }),
+            ]),
+      ]),
+      state.cards.length
+        ? el("div", { class: "vm-grid vm-grid-manage" }, state.cards.map(function (c) { return editing ? pickTile(c) : manageTile(c); }))
+        : el("p", { class: "vm-empty", text: "Your Vault Is Empty. Cards You Pull From Mystery Packs Show Up Here." }),
+    ]);
+  }
+
+  function pickTile(c) {
+    var on = showcaseEdit.has(c.pullId);
+    return el("button", {
+      class: "vm-pick" + (on ? " vm-pick-on" : ""),
+      type: "button",
+      "aria-pressed": on ? "true" : "false",
+      onclick: function () {
+        if (on) showcaseEdit.delete(c.pullId);
+        else if (showcaseEdit.size < state.rules.maxShowcase) showcaseEdit.add(c.pullId);
+        render();
+      },
+    }, [art(c), el("span", { class: "vm-pick-title", text: c.title })]);
+  }
+
+  function manageTile(c) {
+    var controls = [];
+    if (c.locked) {
+      controls.push(el("span", { class: "vm-tag vm-tag-locked", text: c.locked }));
+    } else {
+      var toggle = el("input", { id: "vm-trade-" + c.pullId, type: "checkbox", checked: c.openToTrade });
       toggle.addEventListener("change", function () {
-        if (!state.tradeName && toggle.checked) { toggle.checked = false; return needName(); }
         act({ action: "openToTrade", pullId: c.pullId, on: toggle.checked }, toggle);
       });
-      extra.push(el("label", { class: "mk-toggle" }, [toggle, " Open To Trade"]));
-      if (c.inOffer) extra.push(el("span", { class: "mk-badge mk-badge-soft", text: "In Your Offer" }));
-      if (state.selling) extra.push(sellForm(c));
-      return cardFace(c, extra);
-    }));
+      controls.push(el("label", { class: "vm-switch vm-switch-small", for: "vm-trade-" + c.pullId }, [toggle, el("span", { class: "vm-switch-ui", "aria-hidden": "true" }), el("strong", { text: "Open To Trade" })]));
+      if (c.inOffer) controls.push(el("span", { class: "vm-tag vm-tag-locked", text: "In Your Offer" }));
+      if (state.selling) controls.push(sellForm(c));
+    }
+    return el("article", { class: "vm-tile vm-tile-manage" }, [
+      el("button", { class: "vm-tile-hit", type: "button", "aria-label": "View " + c.title, onclick: function () { modal = { type: "card", card: c, mine: true }; render(); } }, [art(c)]),
+      el("div", { class: "vm-tile-body" }, [
+        el("h3", { class: "vm-tile-title", text: c.title }),
+        el("div", { class: "vm-tile-meta" }, [tierPill(c.tier)]),
+        el("div", { class: "vm-manage" }, controls),
+      ]),
+    ]);
   }
 
   function sellForm(c) {
     var r = state.rules;
-    var price = el("input", { class: "mk-input mk-price", type: "number", min: String(r.minPrice), max: String(r.maxPrice), step: "0.01", placeholder: "Price", value: c.listing ? c.listing.price.toFixed(2) : "" });
-    var list = el("button", { class: "mp-btn mk-secondary", type: "button", text: c.listing ? "Update Price" : "List For Sale" });
+    var price = el("input", { id: "vm-price-" + c.pullId, class: "vm-input vm-price", type: "number", min: String(r.minPrice), max: String(r.maxPrice), step: "0.01", placeholder: "0.00", value: c.listing ? Number(c.listing.price).toFixed(2) : "", "aria-label": "Price for " + c.title });
+    var list = el("button", { class: "vm-btn vm-btn-small", type: "button", text: c.listing ? "Update" : "Sell" });
     list.addEventListener("click", function () {
-      if (!state.tradeName) return needName();
-      act({ action: "list", pullId: c.pullId, price: Number(price.value) }, list, "Listed On The Trade Board.");
+      act({ action: "list", pullId: c.pullId, price: Number(price.value) }, list, "Listed In The Market.");
     });
-    var parts = [
-      el("div", { class: "mk-sell" }, [el("span", { class: "mk-dollar", text: "$" }), price, list]),
-    ];
-    if (c.listing) {
-      parts.unshift(el("span", { class: "mk-badge mk-badge-soft", text: "For Sale" }));
-      parts.push(el("button", {
-        class: "mk-link",
-        type: "button",
-        text: "Remove Listing",
-        onclick: function (e) { act({ action: "unlist", listingId: c.listing.id }, e.currentTarget, "Listing Removed."); },
-      }));
-    }
-    var fee = state.feePercent;
-    parts.push(el("p", { class: "mk-fine-dark", text: "You get " + (100 - fee) + "% as store credit, " + state.rules.payoutDays + " days after it sells." }));
-    return el("div", { class: "mk-sell-wrap" }, parts);
+    return el("div", { class: "vm-sell" }, [
+      el("div", { class: "vm-sell-row" }, [el("span", { class: "vm-dollar", text: "$" }), price, list]),
+      c.listing
+        ? el("button", { class: "vm-link", type: "button", text: "Stop Selling", onclick: function (e) { act({ action: "unlist", listingId: c.listing.id }, e.currentTarget, "Listing Removed."); } })
+        : null,
+      el("span", { class: "vm-fine", text: "You Get " + (100 - state.feePercent) + "% As Store Credit, " + r.payoutDays + " Days After It Sells." }),
+    ]);
   }
 
   // ---------- Offers ----------
 
-  function offers() {
-    if (!state.offers.length) return el("p", { class: "mp-empty", text: "No Open Offers." });
-    return el("div", { class: "mk-offers" }, state.offers.map(function (o) {
-      var buttons = o.incoming
-        ? [
-            el("button", { class: "mp-btn mk-buy", type: "button", text: "Accept Trade", onclick: function (e) { act({ action: "accept", tradeId: o.id }, e.currentTarget, "Trade Done! The Cards Are In Your Vault."); } }),
-            el("button", { class: "mp-btn mk-secondary", type: "button", text: "Counter Offer", onclick: function () {
-              openBuilder({ trader: o.with, get: o.youGet.map(function (c) { return c.pullId; }), give: o.youGive.map(function (c) { return c.pullId; }), counterOfId: o.id, counterCards: o.youGet });
-            } }),
-            el("button", { class: "mk-link", type: "button", text: "Decline", onclick: function (e) { act({ action: "decline", tradeId: o.id }, e.currentTarget, "Offer Declined."); } }),
-          ]
-        : [el("button", { class: "mk-link", type: "button", text: "Cancel Offer", onclick: function (e) { act({ action: "cancel", tradeId: o.id }, e.currentTarget, "Offer Cancelled."); } })];
-      return el("div", { class: "mk-offer" }, [
-        el("div", { class: "mk-offer-head" }, [
-          el("strong", { text: o.incoming ? "Offer From " + o.with : "Your Offer To " + o.with }),
-          o.note ? el("span", { class: "mk-note", text: "“" + o.note + "”" }) : null,
-          el("span", { class: "mk-fine-dark", text: "Expires " + new Date(o.expiresAt).toLocaleDateString() }),
-        ]),
-        el("div", { class: "mk-offer-sides" }, [side("You Give", o.youGive), side("You Get", o.youGet)]),
-        el("div", { class: "mk-offer-actions" }, buttons),
-      ]);
-    }));
+  function offersView() {
+    var incoming = state.offers.filter(function (o) { return o.incoming; });
+    var outgoing = state.offers.filter(function (o) { return !o.incoming; });
+    return el("main", { class: "vm-main" }, [
+      el("div", { class: "vm-page-head" }, [
+        el("p", { class: "vm-eyebrow", text: "Offers" }),
+        el("h1", { class: "vm-page-title", text: "Trade Offers" }),
+        el("p", { class: "vm-page-text", text: "Offers Last " + state.rules.offerDays + " Days. A Trade Happens The Moment It's Accepted, And It's Final." }),
+      ]),
+      el("h2", { class: "vm-section-title", text: "Sent To You" }),
+      incoming.length ? el("div", { class: "vm-offers" }, incoming.map(offerCard)) : el("p", { class: "vm-empty", text: "No Offers Right Now." }),
+      el("h2", { class: "vm-section-title", text: "Sent By You" }),
+      outgoing.length ? el("div", { class: "vm-offers" }, outgoing.map(offerCard)) : el("p", { class: "vm-empty", text: "You Haven't Sent Any Offers." }),
+    ]);
   }
 
-  function side(label, cards) {
-    return el("div", { class: "mk-side" }, [
-      el("div", { class: "mk-side-label", text: label }),
-      el("div", { class: "mk-mini-row" }, cards.map(function (c) {
-        return el("div", { class: "mk-mini" }, [
-          c.imageUrl ? el("img", { src: c.imageUrl, alt: "", loading: "lazy" }) : null,
+  function offerCard(o) {
+    var buttons = o.incoming
+      ? [
+          el("button", { class: "vm-btn vm-btn-signal", type: "button", text: "Accept Trade", onclick: function (e) { act({ action: "accept", tradeId: o.id }, e.currentTarget, "Trade Done! The Cards Are In Your Binder."); } }),
+          el("button", { class: "vm-btn vm-btn-ghost", type: "button", text: "Counter Offer", onclick: function () {
+            openOffer({
+              trader: o.with,
+              get: o.youGet.map(function (c) { return c.pullId; }),
+              give: o.youGive.map(function (c) { return c.pullId; }),
+              counterOfId: o.id,
+              counterCards: o.youGet,
+            });
+          } }),
+          el("button", { class: "vm-link", type: "button", text: "Decline", onclick: function (e) { act({ action: "decline", tradeId: o.id }, e.currentTarget, "Offer Declined."); } }),
+        ]
+      : [el("button", { class: "vm-link", type: "button", text: "Cancel Offer", onclick: function (e) { act({ action: "cancel", tradeId: o.id }, e.currentTarget, "Offer Cancelled."); } })];
+    return el("article", { class: "vm-offer" }, [
+      el("header", { class: "vm-offer-head" }, [
+        el("a", { class: "vm-owner vm-owner-big", href: profileHash(o.with), text: "@" + o.with }),
+        o.note ? el("span", { class: "vm-note", text: "“" + o.note + "”" }) : null,
+        el("span", { class: "vm-fine", text: "Expires " + new Date(o.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) }),
+      ]),
+      el("div", { class: "vm-offer-sides" }, [
+        offerSide("You Give", o.youGive),
+        el("span", { class: "vm-swap", "aria-hidden": "true", text: "⇄" }),
+        offerSide("You Get", o.youGet),
+      ]),
+      el("div", { class: "vm-offer-actions" }, buttons),
+    ]);
+  }
+
+  function offerSide(label, cards) {
+    return el("div", { class: "vm-offer-side" }, [
+      el("div", { class: "vm-label", text: label }),
+      el("div", { class: "vm-offer-cards" }, cards.map(function (c) {
+        return el("button", { class: "vm-offer-card", type: "button", onclick: function () { modal = { type: "card", card: c }; render(); } }, [
+          art(c, "small"),
           el("span", { text: c.title }),
         ]);
       })),
     ]);
   }
 
+  // ---------- Card view (lightbox) ----------
+
+  function cardModal(card, mine) {
+    var actions = [];
+    if (!mine && card.listing && state.selling) {
+      actions.push(el("button", { class: "vm-btn vm-btn-signal vm-btn-wide", type: "button", text: "Buy For " + money(card.listing.price), onclick: function (e) {
+        if (!state.tradeName) return needName();
+        post({ action: "buy", listingId: card.listing.id }, e.currentTarget).then(function (data) {
+          window.location.href = data.invoiceUrl;
+        }).catch(function () {});
+      } }));
+    }
+    if (!mine && card.openToTrade && card.trader) {
+      actions.push(el("button", { class: "vm-btn vm-btn-wide", type: "button", text: "Offer A Trade", onclick: function () {
+        if (!state.tradeName) return needName();
+        openOffer({ trader: card.trader, get: [card.pullId] });
+      } }));
+    }
+    var more = card.trader
+      ? state.board.filter(function (c) { return c.trader === card.trader && c.pullId !== card.pullId; }).slice(0, 4)
+      : [];
+    return el("div", { class: "vm-lightbox-body" }, [
+      el("div", { class: "vm-lightbox-art" }, [art(card, "large")]),
+      el("div", { class: "vm-lightbox-info" }, [
+        el("div", { class: "vm-tile-meta" }, [tierPill(card.tier), el("span", { class: "vm-muted", text: card.series || "" })]),
+        el("h2", { class: "vm-lightbox-title", text: card.title }),
+        card.trader ? el("p", { class: "vm-muted" }, ["In ", el("a", { class: "vm-owner vm-owner-big", href: profileHash(card.trader), text: "@" + card.trader }), "'s Binder"]) : null,
+        tags(card),
+        actions.length ? el("div", { class: "vm-lightbox-actions" }, actions) : null,
+        state.selling && card.listing && !mine
+          ? el("p", { class: "vm-fine", text: "Buying Moves The Card Into Your Vault. Nothing Ships Until You Ship Your Vault." })
+          : null,
+        more.length
+          ? el("div", { class: "vm-more" }, [
+              el("div", { class: "vm-label", text: "More From @" + card.trader }),
+              el("div", { class: "vm-more-row" }, more.map(function (c) {
+                return el("button", { class: "vm-more-card", type: "button", "aria-label": c.title, onclick: function () { modal = { type: "card", card: c }; render(); } }, [art(c, "small")]);
+              })),
+            ])
+          : null,
+      ]),
+    ]);
+  }
+
   // ---------- Offer builder ----------
 
-  var builder = null;
-
-  function openBuilder(opts) {
-    builder = {
+  function openOffer(opts) {
+    modal = {
+      type: "offer",
       trader: opts.trader,
       get: new Set(opts.get || []),
       give: new Set(opts.give || []),
       counterOfId: opts.counterOfId || null,
       counterCards: opts.counterCards || [],
       note: "",
+      theirs: null,
     };
     render();
+    // Everything they have open to trade, not just what's showing in the market.
+    getJSON({ view: "collection", name: opts.trader }).then(function (d) {
+      if (modal && modal.type === "offer") {
+        modal.theirs = d.cards.filter(function (c) { return c.openToTrade; });
+        render();
+      }
+    }).catch(function () {
+      if (modal && modal.type === "offer") { modal.theirs = []; render(); }
+    });
   }
 
-  function builderPanel() {
+  function offerModal(m) {
     var r = state.rules;
-    // Their cards: everything this player has open to trade, plus the cards from the offer being countered.
-    var theirs = state.board.filter(function (c) { return c.trader === builder.trader && c.openToTrade; });
-    builder.counterCards.forEach(function (c) {
+    var theirs = (m.theirs || state.board.filter(function (c) { return c.trader === m.trader && c.openToTrade; })).slice();
+    m.counterCards.forEach(function (c) {
       if (!theirs.some(function (t) { return t.pullId === c.pullId; })) theirs.push(c);
     });
-    var mine = state.cards.filter(function (c) { return !c.locked && (!c.inOffer || builder.give.has(c.pullId)); });
+    var mine = state.cards.filter(function (c) { return !c.locked && (!c.inOffer || m.give.has(c.pullId)); });
 
-    function pickGrid(cards, set) {
-      if (!cards.length) return el("p", { class: "mp-empty", text: "No Cards Available." });
-      return el("div", { class: "mk-pick-grid" }, cards.map(function (c) {
+    function picks(cards, set) {
+      if (!cards.length) return el("p", { class: "vm-empty", text: "No Cards Available." });
+      return el("div", { class: "vm-pick-grid" }, cards.map(function (c) {
         var on = set.has(c.pullId);
         return el("button", {
-          class: "mk-pick" + (on ? " mk-pick-on" : ""),
+          class: "vm-pick" + (on ? " vm-pick-on" : ""),
           type: "button",
           "aria-pressed": on ? "true" : "false",
           onclick: function () {
@@ -308,68 +737,118 @@
             else if (set.size < r.maxCards) set.add(c.pullId);
             render();
           },
-        }, [c.imageUrl ? el("img", { src: c.imageUrl, alt: "" }) : null, el("span", { text: c.title })]);
+        }, [art(c, "small"), el("span", { class: "vm-pick-title", text: c.title })]);
       }));
     }
 
-    var note = el("select", { class: "mk-input" }, [el("option", { value: "", text: "No Note" })].concat(state.notes.map(function (n) {
-      return el("option", { value: n, text: n, selected: builder.note === n });
+    var note = el("select", { id: "vm-note", class: "vm-input vm-select", "aria-label": "Add a note" }, [el("option", { value: "", text: "No Note" })].concat(state.notes.map(function (n) {
+      return el("option", { value: n, text: n, selected: m.note === n });
     })));
-    note.addEventListener("change", function () { builder.note = note.value; });
-    var thisTrader = builder.trader;
-    var send = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: builder.counterOfId ? "Send Counter Offer" : "Send Offer", disabled: !builder.give.size || !builder.get.size });
+    note.addEventListener("change", function () { m.note = note.value; });
+    var send = el("button", { class: "vm-btn vm-btn-signal", type: "button", text: m.counterOfId ? "Send Counter Offer" : "Send Offer", disabled: !m.give.size || !m.get.size });
     send.addEventListener("click", function () {
-      post({
-        action: "offer",
-        give: Array.from(builder.give),
-        get: Array.from(builder.get),
-        note: builder.note || null,
-        counterOfId: builder.counterOfId,
-      }, send).then(function () {
-        builder = null;
-        tab = "offers";
-        flash = { text: "Offer Sent To " + thisTrader + "." };
+      var to = m.trader;
+      post({ action: "offer", give: Array.from(m.give), get: Array.from(m.get), note: m.note || null, counterOfId: m.counterOfId }, send).then(function () {
+        modal = null;
+        flash = { text: "Offer Sent To @" + to + "." };
+        window.location.hash = "#/offers";
         return load();
       }).catch(function () {});
     });
 
-    return el("div", { class: "mk-modal", role: "dialog", "aria-modal": "true", "aria-label": "Offer A Trade" }, [
-      el("div", { class: "mk-modal-body" }, [
-        el("div", { class: "mk-modal-head" }, [
-          el("h2", { text: (builder.counterOfId ? "Counter Offer To " : "Offer A Trade To ") + builder.trader }),
-          el("button", { class: "mk-link", type: "button", text: "Close", onclick: function () { builder = null; render(); } }),
+    return el("div", { class: "vm-builder" }, [
+      el("h2", { class: "vm-builder-title", text: (m.counterOfId ? "Counter Offer To @" : "Offer A Trade To @") + m.trader }),
+      el("div", { class: "vm-builder-cols" }, [
+        el("section", {}, [
+          el("div", { class: "vm-label", text: "You Get (" + m.get.size + ")" }),
+          m.theirs === null && !theirs.length ? el("p", { class: "vm-empty", text: "Loading Their Cards…" }) : picks(theirs, m.get),
         ]),
-        el("h3", { class: "mk-pick-title", text: "You Get (" + builder.get.size + ")" }),
-        pickGrid(theirs, builder.get),
-        el("h3", { class: "mk-pick-title", text: "You Give (" + builder.give.size + ")" }),
-        pickGrid(mine, builder.give),
-        el("div", { class: "mk-modal-foot" }, [note, send]),
-        el("p", { class: "mk-fine-dark", text: "Up to " + r.maxCards + " cards on each side. The trade happens the moment they accept, and it's final." }),
+        el("section", {}, [
+          el("div", { class: "vm-label", text: "You Give (" + m.give.size + ")" }),
+          picks(mine, m.give),
+        ]),
+      ]),
+      el("div", { class: "vm-builder-foot" }, [note, send]),
+      el("p", { class: "vm-fine", text: "Up To " + r.maxCards + " Cards On Each Side. The Trade Happens The Moment They Accept, And It's Final." }),
+    ]);
+  }
+
+  function nameModal() {
+    var input = el("input", { id: "vm-name", class: "vm-input", type: "text", maxlength: "20", placeholder: "Trade Name", value: state.tradeName || "", "aria-label": "Trade name" });
+    var save = el("button", { class: "vm-btn vm-btn-signal", type: "button", text: "Save Trade Name" });
+    save.addEventListener("click", function () { act({ action: "setName", name: input.value }, save, "Welcome To The Vault Market, @" + input.value.trim() + "."); });
+    setTimeout(function () { input.focus(); }, 0);
+    return el("div", { class: "vm-name-box" }, [
+      el("h2", { class: "vm-builder-title", text: state.tradeName ? "Change Your Trade Name" : "Pick A Trade Name" }),
+      el("p", { class: "vm-muted", text: "3 To 20 Letters, Numbers, Spaces, Dashes Or Underscores. Other Collectors See This, Never Your Real Name Or Email." }),
+      input,
+      save,
+    ]);
+  }
+
+  function modalLayer() {
+    if (!modal) return null;
+    var body = modal.type === "card" ? cardModal(modal.card, modal.mine) : modal.type === "offer" ? offerModal(modal) : nameModal();
+    var layer = el("div", { class: "vm-modal", role: "dialog", "aria-modal": "true" }, [
+      el("div", { class: "vm-modal-panel vm-modal-" + modal.type }, [
+        el("button", { class: "vm-close", type: "button", "aria-label": "Close", text: "×", onclick: function () { modal = null; render(); } }),
+        body,
       ]),
     ]);
+    layer.addEventListener("click", function (e) {
+      if (e.target === layer) { modal = null; render(); }
+    });
+    return layer;
   }
 
   // ---------- Page ----------
 
   function render() {
+    var scroll = window.scrollY;
+    var r = route();
     root.innerHTML = "";
     if (!state || !state.enabled) {
-      root.appendChild(el("p", { class: "mp-empty", text: "The Vault Marketplace Is Coming Soon." }));
+      root.appendChild(el("p", { class: "vm-empty vm-pad", text: "The Vault Market Is Coming Soon." }));
       return;
     }
-    if (!state.signedIn) {
-      root.appendChild(el("p", { class: "mp-empty", text: "Log In To Trade." }));
-      return;
+    var ownPage = r.name === "collection" && state.tradeName && r.who.toLowerCase() === state.tradeName.toLowerCase();
+    root.appendChild(topBar(ownPage ? "binder" : r.name === "collection" ? "collectors" : r.name));
+    if (demo) root.appendChild(el("p", { class: "vm-banner", role: "note", text: "Staff Preview With Sample Cards. Customers Can't See The Vault Market Until You Turn Trading On." }));
+    if (flash) {
+      root.appendChild(el("p", { class: "vm-flash" + (flash.error ? " vm-flash-error" : ""), role: "status" }, [
+        el("span", { text: flash.text }),
+        el("button", { class: "vm-link", type: "button", text: "Dismiss", onclick: function () { flash = null; render(); } }),
+      ]));
     }
-    if (demo) root.appendChild(el("p", { class: "mk-flash mk-demo", role: "note", text: "Staff Preview With Sample Cards. Customers Can't See This Page Until You Turn Trading On." }));
-    root.appendChild(hero());
-    if (flash) root.appendChild(el("p", { class: flash.error ? "mp-error mk-flash" : "mk-flash mk-flash-ok", role: "status", text: flash.text }));
-    root.appendChild(tabs());
-    root.appendChild(tab === "board" ? board() : tab === "mine" ? mine() : offers());
-    root.appendChild(el("p", { class: "mk-fine-dark mk-rules", text: "Trades and sales are between players only. Poke-Collect doesn't buy cards back. Card values are never shown, so agree on what feels fair to you." }));
-    if (builder) root.appendChild(builderPanel());
+    root.appendChild(
+      r.name === "collectors" ? collectorsView()
+        : r.name === "collection" ? collectionView(r.who)
+          : r.name === "binder" ? binderView()
+            : r.name === "offers" ? offersView()
+              : marketView(),
+    );
+    root.appendChild(el("footer", { class: "vm-foot" }, [
+      el("p", { text: "Trades And Sales Are Between Collectors Only. Poke-Collect Doesn't Buy Cards Back, And Card Values Are Never Shown, So Agree On What Feels Fair To You." }),
+      el("a", { class: "vm-link", href: "/", text: "Back To Poke-Collect" }),
+    ]));
+    var layer = modalLayer();
+    if (layer) root.appendChild(layer);
+    document.body.classList.toggle("vm-locked", !!layer);
+    window.scrollTo(0, scroll);
   }
 
-  root.appendChild(el("p", { class: "mp-empty", text: "Loading The Marketplace…" }));
+  window.addEventListener("hashchange", function () {
+    modal = null;
+    binderPage = 0;
+    binderFilter = "all";
+    if (route().name !== "binder") showcaseEdit = null;
+    render();
+    window.scrollTo(0, 0);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && modal) { modal = null; render(); }
+  });
+
+  root.appendChild(el("p", { class: "vm-empty vm-pad", text: "Opening The Vault…" }));
   load();
 })();

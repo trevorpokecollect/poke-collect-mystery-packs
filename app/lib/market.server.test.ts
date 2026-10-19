@@ -5,6 +5,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { drawForOrder, launchSeries, pullsForViewer, revealPull, voidPulls } from "./pool.server";
 import {
   boardCards,
+  collectionFor,
+  collectors,
   cancelOffer,
   completeSale,
   createListing,
@@ -19,6 +21,7 @@ import {
   respondToOffer,
   reverseSale,
   reverseTrade,
+  setCollectionSettings,
   setOpenToTrade,
   setTradeName,
   startPurchase,
@@ -321,11 +324,48 @@ describe("staff preview", () => {
     await vaultCards(BEN, 1);
     await db.card.updateMany({ data: { imageUrl: "https://cdn/card.png" } });
     await updateMarketSettings(db, SHOP, { enabled: false });
-    const demo = await marketDemo(db, SHOP);
+    const demo = (await marketDemo(db, SHOP)) as { cards: unknown[]; board: unknown[]; offers: unknown[] };
     expect(demo.cards.length).toBeGreaterThan(0);
     expect(demo.board.length).toBeGreaterThan(0);
     expect(demo.offers).toHaveLength(2);
     expect(JSON.stringify(demo)).not.toMatch(/gid:\/\/shopify\/Customer|marketValue/);
     expect(await db.trade.count()).toBe(0);
+  });
+});
+
+describe("collections", () => {
+  it("shows only cards put up unless the player shares their whole binder", async () => {
+    const [b1, b2, b3] = await vaultCards(BEN, 3);
+    await setOpenToTrade(db, SHOP, BEN, b1, true);
+    await createListing(db, SHOP, BEN, b2, 9);
+
+    const limited = await collectionFor(db, SHOP, "ben", ANN);
+    expect(limited.shared).toBe(false);
+    expect(limited.cards.map((c) => c.pullId).sort()).toEqual([b1, b2].sort());
+    expect(JSON.stringify(limited)).not.toMatch(/marketValue|gid:\/\/shopify\/Customer/);
+
+    await setCollectionSettings(db, SHOP, BEN, { showCollection: true, showcase: [b3] });
+    const full = await collectionFor(db, SHOP, "Ben", ANN);
+    expect(full.cards).toHaveLength(3);
+    expect(full.showcase.map((c) => c.pullId)).toEqual([b3]);
+    expect(full.stats).toMatchObject({ cards: 3, forTrade: 1, forSale: 1 });
+
+    // The owner always sees everything; a showcase must be their own cards.
+    const [a1] = await vaultCards(ANN, 1);
+    await expect(setCollectionSettings(db, SHOP, BEN, { showcase: [a1] })).rejects.toThrow(/your own vault/);
+    await expect(collectionFor(db, SHOP, "nobody", ANN)).rejects.toThrow(/No collector/);
+  });
+
+  it("lists collectors with something to see, with completed trades", async () => {
+    const [a1] = await vaultCards(ANN, 1);
+    const [b1] = await vaultCards(BEN, 1);
+    await setOpenToTrade(db, SHOP, BEN, b1, true);
+    expect((await collectors(db, SHOP, ANN)).map((c) => c.name)).toEqual(["Ben"]);
+    const offer = await createOffer(db, SHOP, ANN, { give: [a1], get: [b1] });
+    await respondToOffer(db, SHOP, BEN, offer.id, "accept");
+    // Ben now holds a1 but it isn't up and his binder isn't shared, so he drops off the list.
+    expect(await collectors(db, SHOP, ANN)).toEqual([]);
+    await setCollectionSettings(db, SHOP, BEN, { showCollection: true });
+    expect((await collectors(db, SHOP, ANN))[0]).toMatchObject({ name: "Ben", trades: 1, cards: 1, shared: true });
   });
 });

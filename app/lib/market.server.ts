@@ -727,34 +727,188 @@ export async function clearRefundFlag(db: Db, shop: string, pullId: string) {
   await db.pull.updateMany({ where: { id: pullId, shop }, data: { refundFlaggedAt: null } });
 }
 
+// ---------- Collections (opt-in) and collectors ----------
+
+export const MAX_SHOWCASE = 6;
+
+export async function setCollectionSettings(
+  db: Db,
+  shop: string,
+  customerId: string,
+  input: { showCollection?: boolean; showcase?: string[] },
+) {
+  await requireEnabled(db, shop);
+  await requireTrader(db, shop, customerId);
+  const data: { showCollection?: boolean; showcase?: string[] } = {};
+  if (input.showCollection !== undefined) data.showCollection = input.showCollection;
+  if (input.showcase) {
+    const ids = [...new Set(input.showcase)].slice(0, MAX_SHOWCASE);
+    const owned = await db.pull.count({ where: { id: { in: ids }, shop, customerId, status: "REVEALED" } });
+    if (owned !== ids.length) throw new PoolError("Pick cards from your own vault for your showcase.");
+    data.showcase = ids;
+  }
+  return db.trader.update({ where: { shop_customerId: { shop, customerId } }, data });
+}
+
+/** Completed trades per customer (either side of an accepted trade). */
+async function tradeCounts(db: Db, shop: string, customerIds: string[]) {
+  const counts = new Map<string, number>();
+  if (customerIds.length === 0) return counts;
+  const trades = await db.trade.findMany({
+    where: { shop, status: "ACCEPTED", OR: [{ fromCustomerId: { in: customerIds } }, { toCustomerId: { in: customerIds } }] },
+    select: { fromCustomerId: true, toCustomerId: true },
+  });
+  for (const t of trades) {
+    for (const id of [t.fromCustomerId, t.toCustomerId]) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** The vault cards that count as a player's collection: opened, in the vault, not shipping. */
+async function collectionPulls(db: Db, shop: string, customerIds: string[]) {
+  const pulls = await db.pull.findMany({
+    where: { shop, customerId: { in: customerIds }, status: "REVEALED" },
+    include: marketInclude,
+    orderBy: { createdAt: "desc" },
+  });
+  const vault = await vaultOrderIds(db, pulls.map((p) => p.orderId));
+  return pulls.filter((p) => vault.has(p.orderId) && !(p.shipRequestId && LIVE_SHIP.includes(p.shipRequest?.status ?? "")));
+}
+
+/**
+ * One player's collection page. A shared collection shows every vault card; otherwise only the
+ * cards they put up for trade or sale. Their own page always shows everything.
+ */
+export async function collectionFor(db: Db, shop: string, tradeName: string, viewerId: string, now = new Date()) {
+  const settings = await marketSettings(db, shop);
+  const trader = await db.trader.findUnique({ where: { shop_nameKey: { shop, nameKey: tradeName.trim().toLowerCase() } } });
+  if (!trader) throw new PoolError("No collector by that name.");
+  const own = trader.customerId === viewerId;
+  const pulls = await collectionPulls(db, shop, [trader.customerId]);
+  const view = pulls
+    .map((p) => {
+      const listing = settings.sellingEnabled ? p.listings.find((l) => l.status === "ACTIVE") : undefined;
+      const locked = lockReason(p, true, now);
+      return {
+        ...cardView(p),
+        openToTrade: p.openToTrade && !locked,
+        listing: listing && !locked ? { id: listing.id, price: Number(listing.price) } : null,
+      };
+    })
+    .filter((c) => own || trader.showCollection || c.openToTrade || c.listing);
+  const showcase = trader.showcase.map((id) => view.find((c) => c.pullId === id)).filter((c) => !!c);
+  const trades = (await tradeCounts(db, shop, [trader.customerId])).get(trader.customerId) ?? 0;
+  return {
+    name: trader.tradeName,
+    own,
+    shared: trader.showCollection,
+    since: trader.createdAt,
+    trades,
+    stats: {
+      cards: view.length,
+      sets: new Set(view.map((c) => c.series)).size,
+      forTrade: view.filter((c) => c.openToTrade).length,
+      forSale: view.filter((c) => c.listing).length,
+    },
+    showcase,
+    cards: view,
+  };
+}
+
+/** Players with something to look at: a shared collection or cards up for trade or sale. */
+export async function collectors(db: Db, shop: string, viewerId: string, now = new Date()) {
+  const settings = await marketSettings(db, shop);
+  const traders = await db.trader.findMany({ where: { shop, customerId: { not: viewerId } } });
+  if (traders.length === 0) return [];
+  const pulls = await collectionPulls(db, shop, traders.map((t) => t.customerId));
+  const trades = await tradeCounts(db, shop, traders.map((t) => t.customerId));
+  return traders
+    .map((t) => {
+      const mine = pulls.filter((p) => p.customerId === t.customerId);
+      const up = mine.filter((p) => !lockReason(p, true, now) && (p.openToTrade || (settings.sellingEnabled && p.listings.some((l) => l.status === "ACTIVE"))));
+      const visible = t.showCollection ? mine : up;
+      const pinned = t.showcase.map((id) => visible.find((p) => p.id === id)).filter((p) => !!p);
+      const preview = [...pinned, ...visible.filter((p) => !pinned.includes(p))].slice(0, 3);
+      return {
+        name: t.tradeName,
+        shared: t.showCollection,
+        since: t.createdAt,
+        trades: trades.get(t.customerId) ?? 0,
+        cards: visible.length,
+        forTrade: up.length,
+        preview: preview.map((p) => ({ title: p.slot.card.title, imageUrl: p.slot.card.imageUrl })),
+      };
+    })
+    .filter((c) => c.cards > 0)
+    .sort((a, b) => b.forTrade - a.forTrade || b.cards - a.cards);
+}
+
 // ---------- Staff preview (/apps/packs/market?demo=<token>) ----------
 
 const DEMO_TRADERS = ["AshK", "MistyM", "BrockRocks", "GaryOak22"];
 
 /**
  * Sample Vault Marketplace data from the newest series' cards (real names and images), so staff
- * can see the page in the store theme. Nothing here reads or changes any customer's vault.
+ * can see the page in its real setting. Nothing here reads or changes any customer's vault.
+ * `view` mirrors the live API: the main page, the collector list, or one collection.
  */
-export async function marketDemo(db: Db, shop: string) {
+export async function marketDemo(db: Db, shop: string, { view = "", name = "" } = {}) {
   const settings = await marketSettings(db, shop);
-  const series = await db.series.findFirst({ where: { shop, status: { not: "DRAFT" } }, orderBy: { createdAt: "desc" } })
+  const series = (await db.series.findFirst({ where: { shop, status: { not: "DRAFT" } }, orderBy: { createdAt: "desc" } }))
     ?? (await db.series.findFirst({ where: { shop }, orderBy: { createdAt: "desc" } }));
-  const cards = series ? await db.card.findMany({ where: { seriesId: series.id, imageUrl: { not: null } }, take: 60 }) : [];
+  const cards = series ? await db.card.findMany({ where: { seriesId: series.id, imageUrl: { not: null } }, orderBy: { title: "asc" }, take: 120 }) : [];
   // Spread the sample across tiers so every badge color shows.
   const tiers = [...new Set(cards.map((c) => c.tier))];
-  const ordered = cards.slice().sort((a, b) => tiers.indexOf(a.tier) - tiers.indexOf(b.tier) || a.title.localeCompare(b.title));
-  const spread = tiers.length ? Array.from({ length: cards.length }, (_, i) => ordered.filter((c) => c.tier === tiers[i % tiers.length])[Math.floor(i / tiers.length)]).filter(Boolean) : [];
-  const view = (c: (typeof cards)[number], i: number) => ({ pullId: `demo-${i}`, title: c.title, imageUrl: c.imageUrl, tier: c.tier, series: series!.title });
-  const sample = spread.slice(0, 14).map(view);
-  const price = (i: number) => [4, 12.5, 25, 8, 40, 3][i % 6];
-  const mine = sample.slice(0, 4);
-  const board = sample.slice(4, 12).map((c, i) => ({
-    ...c,
-    trader: DEMO_TRADERS[i % DEMO_TRADERS.length],
-    openToTrade: i % 3 !== 2,
-    listing: i % 2 === 0 || i % 3 === 2 ? { id: `demo-listing-${i}`, price: price(i) } : null,
-  }));
-  const extra = sample.slice(12, 14);
+  const byTier = tiers.map((t) => cards.filter((c) => c.tier === t));
+  const spread: typeof cards = [];
+  for (let i = 0; spread.length < cards.length; i++) {
+    for (const list of byTier) if (list[i]) spread.push(list[i]);
+    if (i > cards.length) break;
+  }
+  const sample = spread.map((c, i) => ({ pullId: `demo-${i}`, title: c.title, imageUrl: c.imageUrl, tier: c.tier, series: series!.title }));
+  const price = (i: number) => [4, 12.5, 25, 8, 40, 3, 15, 6][i % 8];
+  const mine = sample.slice(0, 8);
+  const theirs = sample.slice(8, 60);
+  const owned = DEMO_TRADERS.map((trader, t) =>
+    theirs.filter((_, i) => i % DEMO_TRADERS.length === t).map((c, i) => ({
+      ...c,
+      trader,
+      openToTrade: i % 3 !== 2,
+      listing: i % 2 === 0 || i % 3 === 2 ? { id: `demo-listing-${t}-${i}`, price: price(i + t) } : null,
+    })),
+  );
+  // AshK and GaryOak22 share their whole vault; the others only show cards they put up.
+  const shared = (t: number) => t === 0 || t === 3;
+  const up = (c: { openToTrade: boolean; listing: unknown }) => c.openToTrade || !!c.listing;
+  const board = owned.flatMap((list, t) => list.filter((c, i) => up(c) && (shared(t) ? i % 2 === 0 : true)));
+  const since = (t: number) => new Date(Date.now() - (40 + t * 23) * DAY);
+  const tradesDone = [12, 5, 0, 31];
+
+  const collection = (who: string) => {
+    if (who.toLowerCase() === "previewtrader") {
+      return { name: "PreviewTrader", own: true, shared: true, since: new Date(Date.now() - 12 * DAY), trades: 3,
+        stats: { cards: mine.length, sets: 1, forTrade: 2, forSale: 1 }, showcase: mine.slice(0, 3),
+        cards: mine.map((c, i) => ({ ...c, openToTrade: i < 2, listing: i === 0 ? { id: "demo-mine-0", price: 20 } : null })) };
+    }
+    const t = DEMO_TRADERS.findIndex((n) => n.toLowerCase() === who.toLowerCase());
+    if (t < 0) throw new PoolError("No collector by that name.");
+    const visible = owned[t].filter((c) => shared(t) || up(c)).map((c) => ({ ...c, openToTrade: c.openToTrade, listing: c.listing }));
+    return {
+      name: DEMO_TRADERS[t], own: false, shared: shared(t), since: since(t), trades: tradesDone[t],
+      stats: { cards: visible.length, sets: 1, forTrade: visible.filter((c) => c.openToTrade).length, forSale: visible.filter((c) => c.listing).length },
+      showcase: shared(t) ? visible.slice(0, 6) : [],
+      cards: visible,
+    };
+  };
+  if (view === "collection") return collection(name);
+  if (view === "collectors") {
+    return DEMO_TRADERS.map((n) => {
+      const c = collection(n);
+      return { name: n, shared: c.shared, since: c.since, trades: c.trades, cards: c.stats.cards, forTrade: c.cards.filter(up).length,
+        preview: c.cards.slice(0, 3).map((x) => ({ title: x.title, imageUrl: x.imageUrl })) };
+    });
+  }
+
   const expires = new Date(Date.now() + 5 * DAY);
   return {
     enabled: true,
@@ -762,20 +916,21 @@ export async function marketDemo(db: Db, shop: string) {
     demo: true,
     selling: true,
     feePercent: settings.feePercent,
-    rules: { waitDays: TRADE_WAIT_DAYS, offerDays: OFFER_DAYS, payoutDays: PAYOUT_HOLD_DAYS, maxCards: MAX_SIDE_CARDS, maxOffers: MAX_OPEN_OFFERS, minPrice: MIN_PRICE, maxPrice: MAX_PRICE },
+    rules: { waitDays: TRADE_WAIT_DAYS, offerDays: OFFER_DAYS, payoutDays: PAYOUT_HOLD_DAYS, maxCards: MAX_SIDE_CARDS, maxOffers: MAX_OPEN_OFFERS, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, maxShowcase: MAX_SHOWCASE },
     notes: OFFER_NOTES,
     tradeName: "PreviewTrader",
+    me: { tradeName: "PreviewTrader", showCollection: true, showcase: mine.slice(0, 3).map((c) => c.pullId) },
     cards: mine.map((c, i) => ({
       ...c,
-      openToTrade: i === 0 || i === 1,
-      locked: i === 3 ? "Tradable In 9 Days" : null,
+      openToTrade: i < 2,
+      locked: i === 7 ? "Tradable In 9 Days" : null,
       listing: i === 0 ? { id: "demo-mine-0", price: 20, status: "ACTIVE" } : null,
       inOffer: i === 1,
     })),
     board,
-    offers: mine.length > 2 && board.length > 1
+    offers: mine.length > 2 && board.length > 2
       ? [
-          { id: "demo-offer-in", incoming: true, with: "MistyM", note: OFFER_NOTES[0], expiresAt: expires, youGive: [mine[2]], youGet: [board[1], ...extra.slice(0, 1)] },
+          { id: "demo-offer-in", incoming: true, with: "MistyM", note: OFFER_NOTES[0], expiresAt: expires, youGive: [mine[2]], youGet: [board[1], board[2]] },
           { id: "demo-offer-out", incoming: false, with: "AshK", note: null, expiresAt: expires, youGive: [mine[1]], youGet: [board[0]] },
         ]
       : [],
