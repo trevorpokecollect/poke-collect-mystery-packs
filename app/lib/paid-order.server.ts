@@ -9,6 +9,7 @@ import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
 import { completeSale, MARKET_ATTRIBUTE, METRICS, notify } from "./market.server";
+import { deleteCheckoutVariant } from "./market-checkout.server";
 import { settleCreditCodes } from "./credit.server";
 
 export interface OrderPayload {
@@ -47,6 +48,9 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
   const marketListing = order.note_attributes?.find((a) => a.name === MARKET_ATTRIBUTE)?.value;
   if (marketListing) {
     const sold = await completeSale(db, marketListing, order.admin_graphql_api_id, order.name);
+    // The checkout's one-off "Vault Card" variant isn't needed once it's paid.
+    const paidListing = await db.listing.findUnique({ where: { id: marketListing }, select: { checkoutVariantId: true } });
+    if (admin && paidListing?.checkoutVariantId) await deleteCheckoutVariant(admin, shop, paidListing.checkoutVariantId);
     if (sold) await notify(admin, sold.sellerCustomerId, METRICS.cardSold, { price: Number(sold.price).toFixed(2), payoutAmount: Number(sold.payoutAmount).toFixed(2) });
     return;
   }

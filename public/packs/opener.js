@@ -275,6 +275,37 @@
     ]);
   }
 
+  // "Your Card Sold": Vault Market sales from the last 14 days, until the customer hides them.
+  function salesNotice(sales) {
+    var hidden = {};
+    try { hidden = JSON.parse(window.localStorage.getItem("mp-sales-seen") || "{}") || {}; } catch (e) { hidden = {}; }
+    var fresh = (sales || []).filter(function (s) { return !hidden[s.id]; });
+    if (!fresh.length) return null;
+    var credit = fresh.reduce(function (n, s) { return n + s.credit; }, 0);
+    var box = el("section", { class: "mp-sold", role: "status" }, [
+      el("div", { class: "mp-sold-head" }, [
+        el("strong", { text: fresh.length === 1 ? "Your Card Sold!" : fresh.length + " Of Your Cards Sold!" }),
+        el("span", { text: "$" + credit.toFixed(2) + " In Vault Credit Was Added To Your Wallet." }),
+      ]),
+      el("div", { class: "mp-sold-list" }, fresh.map(function (s) {
+        return el("div", { class: "mp-sold-item" }, [
+          s.imageUrl ? el("img", { src: s.imageUrl, alt: "", loading: "lazy" }) : null,
+          el("span", { class: "mp-sold-title", text: s.title }),
+          el("span", { class: "mp-sold-price", text: "Sold For $" + s.price.toFixed(2) }),
+        ]);
+      })),
+      el("div", { class: "mp-sold-actions" }, [
+        el("a", { class: "mp-btn mp-vault-btn", href: "/apps/packs/market#/wallet", text: "Open My Wallet" }),
+        el("button", { class: "mp-pickup-btn", type: "button", text: "Dismiss", onclick: function () {
+          fresh.forEach(function (s) { hidden[s.id] = 1; });
+          try { window.localStorage.setItem("mp-sales-seen", JSON.stringify(hidden)); } catch (e) { /* private mode */ }
+          box.remove();
+        } }),
+      ]),
+    ]);
+    return box;
+  }
+
   // Page header: title, what's going on, vault stats, and Ship My Cards, all in one banner.
   function hero(unopened, vault, listedCount) {
     var cards = vault ? vault.cards : 0;
@@ -520,6 +551,8 @@
 
     if (demo) root.appendChild(demoBanner());
     root.appendChild(hero(unopened.length, vault, listedCards.length));
+    var soldBox = salesNotice(vault && vault.sales);
+    if (soldBox) root.appendChild(soldBox);
 
     if (unopened.length) {
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));

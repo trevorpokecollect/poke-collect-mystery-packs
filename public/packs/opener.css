@@ -741,3 +741,16 @@
 
 /* While the opening stage is up, the page under it stops drawing. */
 .mp-stage-open .mp-page { visibility: hidden; }
+
+/* "Your Card Sold" notice (Vault Market sales) */
+.mp-sold { margin: 18px 0 8px; padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #0f2a24, #13213a); color: #fff; border: 1px solid rgba(103, 213, 192, .45); display: grid; gap: 14px; }
+.mp-sold-head { display: grid; gap: 4px; }
+.mp-sold-head strong { font-size: 1.25em; color: #67d5c0; }
+.mp-sold-head span { opacity: .9; }
+.mp-sold-list { display: grid; gap: 10px; }
+.mp-sold-item { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; min-width: 0; }
+.mp-sold-item img { width: 44px; height: 62px; object-fit: cover; border-radius: 6px; }
+.mp-sold-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mp-sold-price { font-weight: 700; color: #f2c35b; white-space: nowrap; }
+.mp-sold-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.mp-sold-actions .mp-btn, .mp-sold-actions .mp-pickup-btn { width: auto; margin: 0; }

@@ -4,6 +4,7 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
+import { createCheckoutVariant, deleteCheckoutVariant } from "./market-checkout.server";
 import { PoolError } from "./pool.server";
 import { klaviyoEvent, shopCurrency } from "./vault.server";
 import { addCredit, spendCredit } from "./credit.server";
@@ -499,13 +500,34 @@ export async function startPurchase(db: Db, admin: AdminApiContext, shop: string
       data: { status: "CHECKOUT", buyerCustomerId, checkoutExpiresAt: new Date(now.getTime() + CHECKOUT_MINUTES * 60_000) },
     });
     if (!claimed.count) throw new PoolError("Someone else is buying that card right now.");
-    return { reuse: null, listing, title: l.pull.slot.card.title };
+    return { reuse: null, listing, title: l.pull.slot.card.title, imageUrl: l.pull.slot.card.imageUrl };
   });
   if (held.reuse) return { invoiceUrl: held.reuse };
 
+  let variantId: string | null = null;
   try {
     const seller = await traderFor(db, shop, held.listing.sellerCustomerId);
     const currencyCode = await shopCurrency(admin);
+    // The card's picture at checkout comes from a one-off variant; a plain custom line is the fallback.
+    variantId = await createCheckoutVariant(admin, shop, {
+      listingId: held.listing.id,
+      title: held.title,
+      price: Number(held.listing.price),
+      imageUrl: held.imageUrl ?? null,
+    }).catch((error) => {
+      console.error("Vault Card variant failed; using a custom line", error);
+      return null;
+    });
+    const line = variantId
+      ? { variantId, quantity: 1, customAttributes: [{ key: "Seller", value: seller?.tradeName ?? "Player" }] }
+      : {
+          title: `Vault Card: ${held.title}`,
+          quantity: 1,
+          originalUnitPriceWithCurrency: { amount: Number(held.listing.price).toFixed(2), currencyCode },
+          requiresShipping: false,
+          taxable: true,
+          customAttributes: [{ key: "Seller", value: seller?.tradeName ?? "Player" }],
+        };
     const data = await gql(
       admin,
       `#graphql
@@ -518,27 +540,19 @@ export async function startPurchase(db: Db, admin: AdminApiContext, shop: string
           tags: [MARKET_TAG],
           note: `Vault Marketplace: ${held.title} from ${seller?.tradeName ?? "a player"}. The card moves to the buyer's vault; nothing ships.`,
           customAttributes: [{ key: MARKET_ATTRIBUTE, value: held.listing.id }],
-          lineItems: [
-            {
-              title: `Vault Card: ${held.title}`,
-              quantity: 1,
-              originalUnitPriceWithCurrency: { amount: Number(held.listing.price).toFixed(2), currencyCode },
-              requiresShipping: false,
-              taxable: true,
-              customAttributes: [{ key: "Seller", value: seller?.tradeName ?? "Player" }],
-            },
-          ],
+          lineItems: [line],
         },
       },
     );
     const draft = data.draftOrderCreate.draftOrder as { id: string; invoiceUrl: string };
-    await db.listing.update({ where: { id: held.listing.id }, data: { draftOrderId: draft.id, invoiceUrl: draft.invoiceUrl } });
+    await db.listing.update({ where: { id: held.listing.id }, data: { draftOrderId: draft.id, invoiceUrl: draft.invoiceUrl, checkoutVariantId: variantId } });
     return { invoiceUrl: draft.invoiceUrl };
   } catch (error) {
     await db.listing.update({
       where: { id: held.listing.id },
-      data: { status: "ACTIVE", buyerCustomerId: null, checkoutExpiresAt: null, draftOrderId: null, invoiceUrl: null },
+      data: { status: "ACTIVE", buyerCustomerId: null, checkoutExpiresAt: null, draftOrderId: null, invoiceUrl: null, checkoutVariantId: null },
     });
+    await deleteCheckoutVariant(admin, shop, variantId);
     throw error;
   }
 }
@@ -597,6 +611,24 @@ export async function flagMarketOrder(db: Db, orderId: string, reason: string) {
     data: { flagReason: `${reason} Reverse the sale to take the seller's credit back.` },
   });
   return held.count + paid.count;
+}
+
+/** "Your card sold" notices for My Packs and the account page: the seller's sales in the last 14 days. */
+export async function recentSales(db: Db, shop: string, sellerCustomerId: string, now = new Date()) {
+  const sales = await db.listing.findMany({
+    where: { shop, sellerCustomerId, status: "SOLD", soldAt: { gte: new Date(now.getTime() - 14 * 86_400_000) }, payoutStatus: { in: ["PAID", "HELD"] } },
+    include: { pull: { include: { slot: { include: { card: true } } } } },
+    orderBy: { soldAt: "desc" },
+    take: 10,
+  });
+  return sales.map((l) => ({
+    id: l.id,
+    title: l.pull.slot.card.title,
+    imageUrl: l.pull.slot.card.imageUrl,
+    price: Number(l.price),
+    credit: Number(l.payoutAmount ?? 0),
+    soldAt: l.soldAt!.toISOString(),
+  }));
 }
 
 /** Staff: sends a sold card back to the seller (e.g. the buyer was refunded) and cancels the credit. */
@@ -661,8 +693,9 @@ export async function expireCheckouts(db: Db, adminFor: (shop: string) => Promis
       }
       await db.listing.updateMany({
         where: { id: listing.id, status: "CHECKOUT" },
-        data: { status: "ACTIVE", buyerCustomerId: null, checkoutExpiresAt: null, draftOrderId: null, invoiceUrl: null },
+        data: { status: "ACTIVE", buyerCustomerId: null, checkoutExpiresAt: null, draftOrderId: null, invoiceUrl: null, checkoutVariantId: null },
       });
+      await deleteCheckoutVariant(admin, listing.shop, listing.checkoutVariantId);
     } catch (error) {
       console.error(`Expiring market checkout ${listing.id} failed`, error);
     }
