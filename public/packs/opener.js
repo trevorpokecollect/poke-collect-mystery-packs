@@ -530,7 +530,7 @@
       root.appendChild(el("p", { class: "mp-login-hint" }, [
         document.createTextNode("Showing this order only. "),
         // Keep the order link through login so this order's packs join the account's vault.
-        el("a", { href: "/account/login?return_url=" + encodeURIComponent("/apps/packs" + (params.get("k") ? "?k=" + encodeURIComponent(params.get("k")) : "")), text: "Log In To Save These To Your Vault" }),
+        el("a", { href: "/customer_authentication/login?return_to=" + encodeURIComponent("/apps/packs" + (params.get("k") ? "?k=" + encodeURIComponent(params.get("k")) : "")), text: "Log In To Save These To Your Vault" }),
       ]));
     }
     if (!inVault.length) {
