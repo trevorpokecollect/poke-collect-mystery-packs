@@ -549,3 +549,16 @@
 @media (prefers-reduced-motion: reduce) {
   .mp-swipe-dot, .mp-reveal-card.mp-charging, .mp-glow.mp-charge, .mp-rays, .mp-result .mp-swipe-text, .mp-result .mp-tap { animation: none; }
 }
+
+/* Digital tear: a glowing red laser line, a bright head that runs along the cut, red sparks. */
+.mp-edge { filter: drop-shadow(0 0 2px #ff2d55) drop-shadow(0 0 5px rgba(255,45,85,.8)); }
+.mp-edge-bits { animation: mp-bits .18s steps(2) infinite; }
+@keyframes mp-bits { 50% { opacity: .2; } }
+.mp-laser {
+  position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; z-index: 6; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, #fff 0 25%, #ff2d55 45%, rgba(255,45,85,0) 70%);
+  box-shadow: 0 0 14px 6px rgba(255,45,85,.75); transition: opacity .12s;
+}
+.mp-laser.mp-on { opacity: 1; }
+.mp-fleck { width: 3px; height: 3px; border-radius: 0; box-shadow: 0 0 4px #ff2d55; }
+@media (prefers-reduced-motion: reduce) { .mp-edge-bits { animation: none; } }

@@ -647,28 +647,29 @@
   }
   function pct(v) { return (v * 100).toFixed(3) + "%"; }
 
-  // Paper-white torn edge with fibers, drawn along the tear line. side: 1 = below (pack body), -1 = above (strip).
+  // Red laser trace along the tear line, to match the pack's digital look. side: 1 = below (pack
+  // body), -1 = above (strip). The glow comes from a CSS drop-shadow on the line.
   function tornEdge(points, side, shown) {
     var svg = document.createElementNS(SVGNS, "svg");
     svg.setAttribute("class", "mp-edge");
     svg.setAttribute("viewBox", "0 0 1000 1000");
     svg.setAttribute("preserveAspectRatio", "none");
     var d = points.map(function (p, i) { return (i ? "L" : "M") + (p[0] * 1000).toFixed(1) + " " + (p[1] * 1000).toFixed(1); }).join(" ");
-    var fibers = "";
-    for (var i = 0; i < 70; i++) {
+    // Scan-line pixels just off the cut, like the edge is still rendering.
+    var bits = "";
+    for (var i = 0; i < 40; i++) {
       var x = Math.random();
-      var y = yAt(points, x) * 1000;
-      var len = 2 + Math.random() * 7;
-      fibers += "M" + (x * 1000).toFixed(1) + " " + y.toFixed(1) + " l" + ((Math.random() - 0.5) * 6).toFixed(1) + " " + (side * len).toFixed(1) + " ";
+      var y = yAt(points, x) * 1000 + side * (3 + Math.random() * 6);
+      bits += "M" + (x * 1000).toFixed(1) + " " + y.toFixed(1) + " h" + (3 + Math.random() * 9).toFixed(1) + " ";
     }
     var id = "mp-clip-" + ++uid;
     svg.innerHTML =
       '<defs><clipPath id="' + id + '"><rect x="0" y="0" width="' + (shown ? 1000 : 0) + '" height="1000"/></clipPath></defs>' +
       '<g clip-path="url(#' + id + ')">' +
-      '<path d="' + d + '" fill="none" stroke="rgba(0,0,0,.55)" stroke-width="7" transform="translate(0 ' + side * 3 + ')"/>' +
-      '<path d="' + d + '" fill="none" stroke="#f5f1e8" stroke-width="5"/>' +
-      '<path d="' + d + '" fill="none" stroke="#c9ccd6" stroke-width="1.6" transform="translate(0 ' + side * 2.4 + ')"/>' +
-      '<path d="' + fibers + '" fill="none" stroke="#eeeae0" stroke-width="1.1" stroke-linecap="round"/>' +
+      '<path d="' + d + '" fill="none" stroke="rgba(255,45,85,.45)" stroke-width="9" stroke-linejoin="miter"/>' +
+      '<path d="' + d + '" fill="none" stroke="#ff2d55" stroke-width="4" stroke-linejoin="miter"/>' +
+      '<path d="' + d + '" fill="none" stroke="#ffe3ea" stroke-width="1.2" stroke-linejoin="miter"/>' +
+      '<path class="mp-edge-bits" d="' + bits + '" fill="none" stroke="#ff2d55" stroke-width="1.6"/>' +
       "</g>";
     svg.reveal = svg.querySelector("rect");
     return svg;
@@ -736,8 +737,10 @@
       parent = wrap;
     }
     group.insertBefore(body, group.firstChild);
+    var laser = el("span", { class: "mp-laser" });
+    group.appendChild(laser);
 
-    return { group: group, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
+    return { group: group, laser: laser, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
   }
 
   function fleck(pack, x, y) {
@@ -747,7 +750,7 @@
     piece.style.setProperty("--dx", (Math.random() * 40 - 10).toFixed(1) + "px");
     piece.style.setProperty("--dy", (-10 - Math.random() * 30).toFixed(1) + "px");
     piece.style.setProperty("--r", (Math.random() * 540).toFixed(0) + "deg");
-    piece.style.background = Math.random() < 0.6 ? "#f5f1e8" : "#c9ccd6";
+    piece.style.background = Math.random() < 0.65 ? "#ff2d55" : "#ffe3ea";
     pack.group.appendChild(piece);
     setTimeout(function () { piece.remove(); }, 900);
   }
@@ -765,6 +768,15 @@
     var torn = Math.min(1, front * 1.04);
     pack.bodyEdge.reveal.setAttribute("width", (torn * 1000).toFixed(1));
     pack.shade.style.width = torn * 100 + "%";
+    var headY = yAt(pack.points, torn) * height;
+    pack.laser.style.transform = "translate(" + (torn * width).toFixed(1) + "px, " + headY.toFixed(1) + "px)";
+    pack.laser.classList.toggle("mp-on", front > 0.005 && front < 0.995);
+    // The pack's 3D thickness is cut away above the tear too, so no shadow of the top stays behind.
+    if (pack.layers) {
+      var cut = pct(TEAR_Y + 0.016);
+      var clip = front > 0.005 ? "polygon(0 " + cut + ", " + pct(torn) + " " + cut + ", " + pct(torn) + " 0, 100% 0, 100% 100%, 0 100%)" : "";
+      pack.layers.forEach(function (node) { node.style.clipPath = clip; });
+    }
     var now = performance.now();
     if (front > 0.02 && front < 0.99 && Math.abs(front - (pack.lastFront || 0)) > 0.004 && now - (pack.lastFleck || 0) > 28) {
       pack.lastFleck = now;
@@ -926,6 +938,7 @@
       holder.appendChild(slab);
     }
     holder.appendChild(el("div", { class: "mp-pack-back" }));
+    opener.layers = Array.prototype.slice.call(holder.querySelectorAll(".mp-pack-layer, .mp-pack-back"));
     holder.appendChild(opener.group);
     inner.insertBefore(holder, result);
     if (!reduced) {
@@ -943,6 +956,7 @@
     var inside = "translateY(" + ((0.56 - 0.5) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
     var peek = "translateY(" + ((0.56 - 0.5 - 0.30) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
     front.style.transform = inside;
+    if (!reduced) front.style.visibility = "hidden";
 
     // Ask the server for the result while the pack drops in. Preview packs already carry their card.
     var reveal = pack.demoCards || pack.demoCard
@@ -1187,6 +1201,7 @@
           : swipeToOpen()
               // The pack turns to face the customer before the card comes out.
               .then(function () { return tilt.flat(); })
+              .then(function () { front.style.visibility = ""; })
               // 1. The torn strip comes away completely and falls off.
               .then(function () {
                 return animate(opener.root, [
