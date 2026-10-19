@@ -4,7 +4,10 @@ import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { validDemoToken } from "../lib/demo.server";
 import {
+  activityFeed,
+  addWish,
   boardCards,
+  catalog,
   cancelListing,
   cancelOffer,
   createListing,
@@ -25,12 +28,16 @@ import {
   OFFER_DAYS,
   OFFER_NOTES,
   PAYOUT_HOLD_DAYS,
+  removeWish,
   respondToOffer,
+  sendWishlistAlerts,
   setCollectionSettings,
   setOpenToTrade,
   setTradeName,
   startPurchase,
+  tradeMatches,
   traderFor,
+  wishlist,
   TRADE_WAIT_DAYS,
 } from "../lib/market.server";
 
@@ -54,6 +61,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!settings.enabled) return json({ enabled: false });
   if (!viewer?.customerId) return json({ enabled: true, signedIn: false });
   if (view === "collectors") return json(await collectors(db, shop, viewer.customerId));
+  if (view === "matches") return json(await tradeMatches(db, shop, viewer.customerId));
+  if (view === "catalog") return json(await catalog(db, shop, params.get("q")?.slice(0, 60) ?? ""));
   if (view === "collection") {
     try {
       return json(await collectionFor(db, shop, name, viewer.customerId));
@@ -63,12 +72,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
   const q = params.get("q")?.slice(0, 60) ?? "";
-  const [me, cards, board, offers] = await Promise.all([
+  const [me, cards, board, offers, feed] = await Promise.all([
     traderFor(db, shop, viewer.customerId),
     myMarketCards(db, shop, viewer.customerId),
     boardCards(db, shop, viewer.customerId, { q }),
     myOffers(db, shop, viewer.customerId),
+    activityFeed(db, shop),
   ]);
+  const wishes = await wishlist(db, shop, viewer.customerId, board);
   return json({
     enabled: true,
     signedIn: true,
@@ -81,6 +92,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     cards,
     board,
     offers,
+    wishlist: wishes,
+    feed,
   });
 };
 
@@ -98,6 +111,7 @@ type Body = {
   counterOfId?: string | null;
   showCollection?: boolean;
   showcase?: string[];
+  cardKey?: string;
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -120,9 +134,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ ok: true });
       case "openToTrade":
         await setOpenToTrade(db, shop, me, String(body.pullId), body.on === true);
+        if (body.on === true) await sendWishlistAlerts(db, admin, shop, String(body.pullId));
         return json({ ok: true });
       case "list":
         await createListing(db, shop, me, String(body.pullId), Number(body.price));
+        await sendWishlistAlerts(db, admin, shop, String(body.pullId));
+        return json({ ok: true });
+      case "wish":
+        await addWish(db, shop, me, String(body.cardKey));
+        return json({ ok: true });
+      case "unwish":
+        await removeWish(db, shop, me, String(body.cardKey));
         return json({ ok: true });
       case "unlist":
         await cancelListing(db, shop, me, String(body.listingId));

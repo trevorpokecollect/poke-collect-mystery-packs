@@ -39,6 +39,7 @@ export const METRICS = {
   offerDeclined: "Trade Offer Declined",
   cardSold: "Vault Card Sold",
   payout: "Vault Sale Payout",
+  wishAvailable: "Wishlist Card Available",
 };
 
 const DAY = 86_400_000;
@@ -133,7 +134,7 @@ async function vaultOrderIds(db: Db | Tx, orderIds: string[]) {
 
 function cardView(pull: MarketPull) {
   const card = pull.slot.card;
-  return { pullId: pull.id, title: card.title, imageUrl: card.imageUrl, tier: card.tier, series: pull.series.title };
+  return { pullId: pull.id, cardKey: card.variantId, title: card.title, imageUrl: card.imageUrl, tier: card.tier, series: pull.series.title };
 }
 
 /** The viewer's vault cards with their marketplace state. */
@@ -144,12 +145,14 @@ export async function myMarketCards(db: Db, shop: string, customerId: string, no
     orderBy: { createdAt: "desc" },
   });
   const vault = await vaultOrderIds(db, pulls.map((p) => p.orderId));
+  const wanted = await wishers(db, shop, pulls.map((p) => p.slot.card.variantId));
   return pulls
     .filter((p) => vault.has(p.orderId) && !(p.shipRequestId && LIVE_SHIP.includes(p.shipRequest?.status ?? "")))
     .map((p) => {
       const listing = p.listings.find((l) => l.status === "ACTIVE" || l.status === "CHECKOUT");
       return {
         ...cardView(p),
+        wantedBy: (wanted.get(p.slot.card.variantId) ?? []).filter((id) => id !== customerId).length,
         openToTrade: p.openToTrade,
         locked: lockReason(p, true, now),
         listing: listing ? { id: listing.id, price: Number(listing.price), status: listing.status } : null,
@@ -177,12 +180,14 @@ export async function boardCards(db: Db, shop: string, viewerId: string, { q = "
   const tradable = pulls.filter((p) => p.customerId && vault.has(p.orderId) && !lockReason(p, true, now));
   const traders = await db.trader.findMany({ where: { shop, customerId: { in: [...new Set(tradable.map((p) => p.customerId!))] } } });
   const names = new Map(traders.map((t) => [t.customerId, t.tradeName]));
+  const wanted = await wishers(db, shop, tradable.map((p) => p.slot.card.variantId));
   return tradable
     .filter((p) => names.has(p.customerId!))
     .map((p) => {
       const listing = settings.sellingEnabled ? p.listings.find((l) => l.status === "ACTIVE") : undefined;
       return {
         ...cardView(p),
+        wantedBy: (wanted.get(p.slot.card.variantId) ?? []).filter((id) => id !== p.customerId).length,
         trader: names.get(p.customerId!)!,
         openToTrade: p.openToTrade,
         listing: listing ? { id: listing.id, price: Number(listing.price) } : null,
@@ -843,6 +848,138 @@ export async function collectors(db: Db, shop: string, viewerId: string, now = n
     .sort((a, b) => b.forTrade - a.forTrade || b.cards - a.cards);
 }
 
+// ---------- Wishlist, trade matches, activity ----------
+
+export const MAX_WISHES = 100;
+
+/** Who wants each card: variantId -> customer ids with it on their wishlist. */
+async function wishers(db: Db | Tx, shop: string, variantIds: string[]) {
+  const map = new Map<string, string[]>();
+  if (variantIds.length === 0) return map;
+  const rows = await db.wishItem.findMany({ where: { shop, variantId: { in: [...new Set(variantIds)] } }, select: { variantId: true, customerId: true } });
+  for (const r of rows) map.set(r.variantId, [...(map.get(r.variantId) ?? []), r.customerId]);
+  return map;
+}
+
+/** Cards a player can add to their wishlist: every single that has been in a pack series here. */
+export async function catalog(db: Db, shop: string, q: string, take = 40) {
+  const cards = await db.card.findMany({
+    where: { series: { shop }, ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}) },
+    select: { variantId: true, title: true, imageUrl: true, tier: true },
+    orderBy: { title: "asc" },
+    distinct: ["variantId"],
+    take,
+  });
+  return cards.map((c) => ({ cardKey: c.variantId, title: c.title, imageUrl: c.imageUrl, tier: c.tier }));
+}
+
+export async function addWish(db: Db, shop: string, customerId: string, variantId: string) {
+  await requireEnabled(db, shop);
+  await requireTrader(db, shop, customerId);
+  const card = await db.card.findFirst({ where: { variantId, series: { shop } }, orderBy: { id: "desc" } });
+  if (!card) throw new PoolError("That card isn't in the catalog.");
+  const count = await db.wishItem.count({ where: { shop, customerId } });
+  if (count >= MAX_WISHES) throw new PoolError(`Your wishlist holds up to ${MAX_WISHES} cards.`);
+  return db.wishItem.upsert({
+    where: { shop_customerId_variantId: { shop, customerId, variantId } },
+    create: { shop, customerId, variantId, title: card.title, imageUrl: card.imageUrl },
+    update: {},
+  });
+}
+
+export async function removeWish(db: Db, shop: string, customerId: string, variantId: string) {
+  await db.wishItem.deleteMany({ where: { shop, customerId, variantId } });
+}
+
+/** The viewer's wishlist, each with how many copies are up right now (not their own). */
+export async function wishlist(db: Db, shop: string, customerId: string, board?: { cardKey: string; trader: string }[]) {
+  const items = await db.wishItem.findMany({ where: { shop, customerId }, orderBy: { createdAt: "desc" } });
+  const up = board ?? (await boardCards(db, shop, customerId));
+  return items.map((w) => ({
+    cardKey: w.variantId,
+    title: w.title,
+    imageUrl: w.imageUrl,
+    available: up.filter((c) => c.cardKey === w.variantId).length,
+  }));
+}
+
+/**
+ * Trade Matches: other players who have a card on the viewer's wishlist up for trade, and what
+ * of the viewer's tradable cards is on that player's wishlist. Both sides = a perfect match.
+ */
+export async function tradeMatches(db: Db, shop: string, customerId: string, now = new Date()) {
+  const [mine, board, myWishes] = await Promise.all([
+    myMarketCards(db, shop, customerId, now),
+    boardCards(db, shop, customerId, { now }),
+    db.wishItem.findMany({ where: { shop, customerId }, select: { variantId: true } }),
+  ]);
+  const want = new Set(myWishes.map((w) => w.variantId));
+  const tradable = mine.filter((c) => !c.locked);
+  const traders = await db.trader.findMany({ where: { shop, tradeName: { in: [...new Set(board.map((c) => c.trader))] } } });
+  const theirWishes = await db.wishItem.findMany({ where: { shop, customerId: { in: traders.map((t) => t.customerId) } }, select: { customerId: true, variantId: true } });
+  const matches = traders.map((t) => {
+    const wants = new Set(theirWishes.filter((w) => w.customerId === t.customerId).map((w) => w.variantId));
+    return {
+      trader: t.tradeName,
+      theyHave: board.filter((c) => c.trader === t.tradeName && c.openToTrade && want.has(c.cardKey)),
+      theyWant: tradable.filter((c) => wants.has(c.cardKey)),
+    };
+  });
+  return matches
+    .filter((m) => m.theyHave.length || m.theyWant.length)
+    .map((m) => ({ ...m, perfect: m.theyHave.length > 0 && m.theyWant.length > 0 }))
+    .sort((a, b) => Number(b.perfect) - Number(a.perfect) || b.theyHave.length + b.theyWant.length - (a.theyHave.length + a.theyWant.length));
+}
+
+/** Recent marketplace happenings for the feed. No prices: listings, sales and trades only. */
+export async function activityFeed(db: Db, shop: string, take = 24) {
+  const settings = await marketSettings(db, shop);
+  const [listings, trades, traders] = await Promise.all([
+    settings.sellingEnabled
+      ? db.listing.findMany({ where: { shop }, include: { pull: { include: { slot: { include: { card: true } } } } }, orderBy: { createdAt: "desc" }, take })
+      : Promise.resolve([]),
+    db.trade.findMany({
+      where: { shop, status: "ACCEPTED" },
+      include: { items: { include: { pull: { include: { slot: { include: { card: true } } } } } } },
+      orderBy: { respondedAt: "desc" },
+      take,
+    }),
+    db.trader.findMany({ where: { shop } }),
+  ]);
+  const name = (id: string | null) => traders.find((t) => t.customerId === id)?.tradeName ?? "A Collector";
+  const card = (p: { slot: { card: { title: string; imageUrl: string | null } } }) => ({ title: p.slot.card.title, imageUrl: p.slot.card.imageUrl });
+  const events = [
+    ...listings.map((l) => ({ type: "listed", at: l.createdAt, who: name(l.sellerCustomerId), cards: [card(l.pull)] })),
+    ...listings.filter((l) => l.status === "SOLD" && l.soldAt).map((l) => ({ type: "sold", at: l.soldAt!, who: name(l.buyerCustomerId), from: name(l.sellerCustomerId), cards: [card(l.pull)] })),
+    ...trades.map((t) => ({
+      type: "trade",
+      at: t.respondedAt ?? t.updatedAt,
+      who: name(t.fromCustomerId),
+      from: name(t.toCustomerId),
+      cards: t.items.map((i) => card(i.pull)),
+    })),
+  ];
+  return events.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, take);
+}
+
+/**
+ * Wishlist alerts: cards that just went up for trade or sale email the players who want them,
+ * once per copy. Called after a card is marked open to trade or listed.
+ */
+export async function sendWishlistAlerts(db: Db, admin: AdminApiContext | undefined, shop: string, pullId: string) {
+  const pull = await db.pull.findUnique({ where: { id: pullId }, include: { slot: { include: { card: true } } } });
+  if (!pull?.customerId) return 0;
+  const owner = await traderFor(db, shop, pull.customerId);
+  const wishes = await db.wishItem.findMany({
+    where: { shop, variantId: pull.slot.card.variantId, customerId: { not: pull.customerId }, NOT: { alertedPullIds: { has: pullId } } },
+  });
+  for (const w of wishes) {
+    await db.wishItem.update({ where: { id: w.id }, data: { alertedPullIds: { push: pullId } } });
+    await notify(admin, w.customerId, METRICS.wishAvailable, { card: pull.slot.card.title, imageUrl: pull.slot.card.imageUrl, from: owner?.tradeName });
+  }
+  return wishes.length;
+}
+
 // ---------- Staff preview (/apps/packs/market?demo=<token>) ----------
 
 const DEMO_TRADERS = ["AshK", "MistyM", "BrockRocks", "GaryOak22"];
@@ -865,7 +1002,7 @@ export async function marketDemo(db: Db, shop: string, { view = "", name = "" } 
     for (const list of byTier) if (list[i]) spread.push(list[i]);
     if (i > cards.length) break;
   }
-  const sample = spread.map((c, i) => ({ pullId: `demo-${i}`, title: c.title, imageUrl: c.imageUrl, tier: c.tier, series: series!.title }));
+  const sample = spread.map((c, i) => ({ pullId: `demo-${i}`, cardKey: c.variantId, title: c.title, imageUrl: c.imageUrl, tier: c.tier, series: series!.title, wantedBy: [0, 2, 0, 1, 5, 0, 3][i % 7] }));
   const price = (i: number) => [4, 12.5, 25, 8, 40, 3, 15, 6][i % 8];
   const mine = sample.slice(0, 8);
   const theirs = sample.slice(8, 60);
@@ -900,7 +1037,22 @@ export async function marketDemo(db: Db, shop: string, { view = "", name = "" } 
       cards: visible,
     };
   };
+  // PreviewTrader wants a few cards that are up, plus one that isn't; two collectors want PreviewTrader's cards.
+  const wishCards = [board[1], board[5], board[9], board[14], sample[70] ?? sample[sample.length - 1]].filter(Boolean);
+  const matches = () => {
+    const wants: Record<string, typeof mine> = { MistyM: [mine[3], mine[4]], BrockRocks: [mine[5]] };
+    return DEMO_TRADERS.map((trader) => ({
+      trader,
+      theyHave: board.filter((c) => c.trader === trader && c.openToTrade && wishCards.some((w) => w.cardKey === c.cardKey)),
+      theyWant: (wants[trader] ?? []).filter(Boolean),
+    }))
+      .filter((m) => m.theyHave.length || m.theyWant.length)
+      .map((m) => ({ ...m, perfect: m.theyHave.length > 0 && m.theyWant.length > 0 }))
+      .sort((a, b) => Number(b.perfect) - Number(a.perfect));
+  };
   if (view === "collection") return collection(name);
+  if (view === "matches") return matches();
+  if (view === "catalog") return catalog(db, shop, name);
   if (view === "collectors") {
     return DEMO_TRADERS.map((n) => {
       const c = collection(n);
@@ -928,6 +1080,13 @@ export async function marketDemo(db: Db, shop: string, { view = "", name = "" } 
       inOffer: i === 1,
     })),
     board,
+    wishlist: wishCards.map((c) => ({ cardKey: c.cardKey, title: c.title, imageUrl: c.imageUrl, available: board.filter((b) => b.cardKey === c.cardKey).length })),
+    feed: board.slice(0, 10).map((c, i) => {
+      const at = new Date(Date.now() - (i * 47 + 6) * 60_000);
+      if (i % 3 === 1) return { type: "trade", at, who: c.trader, from: DEMO_TRADERS[(i + 1) % 4], cards: [c, board[i + 10] ?? c] };
+      if (i % 4 === 2) return { type: "sold", at, who: DEMO_TRADERS[(i + 2) % 4], from: c.trader, cards: [c] };
+      return { type: "listed", at, who: c.trader, cards: [c] };
+    }),
     offers: mine.length > 2 && board.length > 2
       ? [
           { id: "demo-offer-in", incoming: true, with: "MistyM", note: OFFER_NOTES[0], expiresAt: expires, youGive: [mine[2]], youGet: [board[1], board[2]] },
