@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import db from "../db.server";
-import { marketSettings, updateMarketSettings } from "../lib/market.server";
+import { marketSettings, TRADE_WAIT_DAYS, updateMarketSettings } from "../lib/market.server";
 
 // Staff switch for Vault Market settings from outside the admin (e.g. the soft launch):
 // POST /jobs/market-settings?shop=<shop> with the cron secret and a JSON body of
@@ -26,14 +26,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (body.accessTag !== undefined) input.accessTag = body.accessTag ? String(body.accessTag).trim() : null;
   if (Object.keys(input).length) await updateMarketSettings(db, shop, input);
 
-  const holdEnds = new Date(Date.now() - 14 * 86_400_000);
+  const holdEnds = new Date(Date.now() - TRADE_WAIT_DAYS * 86_400_000);
   const [inVault, tradable, owners] = await Promise.all([
     db.pull.count({ where: { shop, status: "REVEALED", shipRequestId: null } }),
     db.pull.count({ where: { shop, status: "REVEALED", shipRequestId: null, createdAt: { lt: holdEnds } } }),
     db.pull.groupBy({ by: ["customerId"], where: { shop, status: "REVEALED", shipRequestId: null, createdAt: { lt: holdEnds } } }),
   ]);
   const byDay = await db.$queryRaw<{ day: Date; cards: bigint }[]>`
-    SELECT date_trunc('day', "createdAt" + interval '14 days') AS day, count(*) AS cards
+    SELECT date_trunc('day', "createdAt" + make_interval(days => ${TRADE_WAIT_DAYS})) AS day, count(*) AS cards
     FROM "Pull" WHERE shop = ${shop} AND status = 'REVEALED' AND "shipRequestId" IS NULL AND "createdAt" >= ${holdEnds}
     GROUP BY 1 ORDER BY 1`;
   return Response.json({

@@ -248,7 +248,7 @@ export default function Marketplace() {
                         {payoutLabel[s.payoutStatus ?? ""] ?? "—"}
                         {s.payout !== null ? ` $${s.payout.toFixed(2)}` : ""}
                       </s-badge>
-                      <s-text color="subdued">{s.payoutStatus === "HELD" ? `Pays ${day(s.payoutDueAt)}` : (s.flagReason ?? "")}</s-text>
+                      <s-text color="subdued">{s.flagReason ?? (s.payoutStatus === "HELD" ? `Pays ${day(s.payoutDueAt)}` : "")}</s-text>
                     </s-stack>
                   </s-table-cell>
                   <s-table-cell>
@@ -258,7 +258,7 @@ export default function Marketplace() {
                           {armed === `release-${s.id}` ? "Confirm Release" : "Release Credit"}
                         </s-button>
                       ) : null}
-                      {s.payoutStatus !== "PAID" && s.payoutStatus !== "CANCELLED" ? (
+                      {s.payoutStatus !== "CANCELLED" ? (
                         <s-button tone="critical" disabled={busy} onClick={() => confirmThen(`sale-${s.id}`, { intent: "reverseSale", id: s.id })}>
                           {armed === `sale-${s.id}` ? "Confirm Reverse" : "Reverse Sale"}
                         </s-button>
