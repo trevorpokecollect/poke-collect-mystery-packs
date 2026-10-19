@@ -420,12 +420,22 @@ function tierOrder(tierRules: unknown): string[] {
 }
 
 /** Public odds: every card with its total and remaining copies. Card values stay admin-only. */
-export async function seriesOdds(db: Db, shop: string, handle: string) {
+/**
+ * `languages`, when given, looks up each card's language (English or Japanese) so the product page's
+ * demo opening can show the matching card back.
+ */
+export async function seriesOdds(
+  db: Db,
+  shop: string,
+  handle: string,
+  languages?: (productIds: string[]) => Promise<(productId: string) => string>,
+) {
   const series = await db.series.findUnique({
     where: { shop_handle: { shop, handle } },
     include: { cards: { orderBy: [{ sortOrder: "asc" }, { marketValue: "desc" }] } },
   });
   if (!series || series.status === "DRAFT") return null;
+  const languageOf = languages ? await languages(series.cards.map((c) => c.productId)) : null;
 
   const remaining = await db.slot.groupBy({
     by: ["cardId"],
@@ -486,6 +496,7 @@ export async function seriesOdds(db: Db, shop: string, handle: string) {
         title: c.title,
         tier: c.tier,
         imageUrl: c.imageUrl,
+        ...(languageOf ? { language: languageOf(c.productId) } : {}),
         quantity: c.quantity,
         remaining: left,
         currentOdds: totalRemaining > 0 ? left / totalRemaining : 0,

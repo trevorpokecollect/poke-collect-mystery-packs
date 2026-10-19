@@ -4,6 +4,7 @@ import { availableSeries } from "../lib/pool.server";
 import { packImages, packProducts } from "../lib/pack-art.server";
 import { validDemoToken } from "../lib/demo.server";
 import { json, proxyContext } from "../lib/proxy.server";
+import { cardLanguages } from "../lib/card-language.server";
 import { packShelf } from "../lib/shelf.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 
@@ -44,12 +45,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     Array.from({ length: perPack }, () => pick(cards)).sort((a, b) => Number(a.marketValue) - Number(b.marketValue));
   const unopened = cards.length ? [samplePack(), samplePack(), samplePack()] : [];
 
-  const [art, products] = await Promise.all([
+  const [art, products, languageOf] = await Promise.all([
     packImages(admin, [series.packProductId]),
     packProducts(admin, [...new Set([series.packProductId, ...live.map((l) => l.series.packProductId)])]),
+    cardLanguages(admin, cards.map((c) => c.productId)),
   ]);
   const packImageUrl = art.get(series.packProductId) ?? null;
-  const show = (c: (typeof cards)[number]) => ({ title: c.title, tier: c.tier, imageUrl: c.imageUrl });
+  const show = (c: (typeof cards)[number]) => ({ title: c.title, tier: c.tier, imageUrl: c.imageUrl, language: languageOf(c.productId) });
 
   return json({
     demo: true,

@@ -9,6 +9,10 @@
   var standalone = !root;
 
   var api = (root && root.getAttribute("data-api")) || "/apps/packs/api";
+  // Card back images sit next to this script (the app's own host, wherever the page is).
+  var scriptSrc = (document.currentScript && document.currentScript.src) || "";
+  var assetBase = window.PCPackAssetBase != null ? window.PCPackAssetBase : scriptSrc ? scriptSrc.replace(/opener\.js.*$/, "") : "/packs/";
+  function backUrl(card) { return assetBase + (card && card.language === "japanese" ? "card-back-jp.jpg" : "card-back-en.jpg"); }
   // Merchant preview (?demo=<signed token>): sample packs from the live pool, opened locally.
   var demo = !!root && root.getAttribute("data-demo") === "1";
   var demoData = null;
@@ -1013,16 +1017,14 @@
       }
       else front.appendChild(el("strong", { text: card.title }));
     }
-    // A big hit comes out face down, glowing in its tier's color, and waits to be turned over.
+    // A big hit comes out face down (an English or Japanese card back, matching the card), glowing
+    // in its tier's color, and waits to be turned over.
     function showBack(card) {
       front.textContent = "";
       front.classList.remove("mp-holo");
       front.classList.add("mp-back");
       front.style.setProperty("--mp-c", colorOf(card));
-      front.appendChild(el("div", { class: "mp-back-art" }, [
-        el("span", { class: "mp-back-ball" }),
-        el("span", { class: "mp-back-name", text: "Poke-Collect" }),
-      ]));
+      front.appendChild(el("img", { class: "mp-back-img", src: backUrl(card), alt: "" }));
     }
     // Clears finished animations off the card so it can be dragged and tilted by hand.
     function settleFront() {
@@ -1185,7 +1187,11 @@
       });
     }
 
-    Promise.all([reveal.then(function (cards) { return Promise.all(cards.map(preload)); }), wait(reduced ? 0 : 650)])
+    Promise.all([reveal.then(function (cards) {
+      // Card backs load alongside the cards so a face-down hit never appears blank.
+      cards.forEach(function (c) { if (isBig(c)) new Image().src = backUrl(c); });
+      return Promise.all(cards.map(preload));
+    }), wait(reduced ? 0 : 650)])
       .then(function (values) {
         var cards = values[0];
         var card = cards[0];

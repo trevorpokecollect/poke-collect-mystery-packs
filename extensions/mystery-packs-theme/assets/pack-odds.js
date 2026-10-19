@@ -84,8 +84,8 @@
         window.PCPackOpener.open({
           packImageUrl: btn.getAttribute("data-pack-image") || null,
           series: btn.getAttribute("data-series"),
-          card: { title: c.title, tier: c.tier, imageUrl: c.imageUrl },
-          cards: pack.map(function (p) { return { title: p.title, tier: p.tier, imageUrl: p.imageUrl }; }),
+          card: { title: c.title, tier: c.tier, imageUrl: c.imageUrl, language: c.language },
+          cards: pack.map(function (p) { return { title: p.title, tier: p.tier, imageUrl: p.imageUrl, language: p.language }; }),
           note: "Demo pull. Buy a pack to open one for real!",
           doneLabel: "Done",
           again: run,

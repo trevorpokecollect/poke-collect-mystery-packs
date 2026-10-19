@@ -3,6 +3,7 @@ import db from "../db.server";
 import { PoolError, revealPull } from "../lib/pool.server";
 import { finalizeOrder } from "../lib/orders.server";
 import { json, proxyContext } from "../lib/proxy.server";
+import { cardLanguages } from "../lib/card-language.server";
 
 // Reveals a pack. The card was decided at payment; this only marks it opened and returns it.
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -21,7 +22,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error(`Finalizing ${result.orderId} failed`, error),
       );
     }
-    const view = (c: { title: string; tier: string; imageUrl: string | null }) => ({ title: c.title, tier: c.tier, imageUrl: c.imageUrl });
+    // The language picks the English or Japanese card back shown before a big hit turns over.
+    const languageOf = await cardLanguages(admin, result.cards.concat(result.card).map((c) => c.productId));
+    const view = (c: { title: string; tier: string; imageUrl: string | null; productId: string }) => ({
+      title: c.title,
+      tier: c.tier,
+      imageUrl: c.imageUrl,
+      language: languageOf(c.productId),
+    });
     return json({
       // Best card (single-card packs: the card). Multi-card packs also get every card, best last.
       card: view(result.card),

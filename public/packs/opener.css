@@ -492,23 +492,9 @@
 .mp-tap-open.mp-on { opacity: 1; pointer-events: auto; }
 
 /* Card back for a big hit, glowing in the tier color while it charges. */
-.mp-reveal-card.mp-back { background: #0b1230; cursor: pointer; --mp-c: #e0a21a;
+.mp-reveal-card.mp-back { background: #1d3f8f; cursor: pointer; --mp-c: #e0a21a;
   box-shadow: 0 0 0 2px var(--mp-c), 0 0 28px var(--mp-c), 0 18px 40px rgba(0,0,0,.5); }
-.mp-back-art {
-  position: absolute; inset: 5%; border-radius: 4% / 3%; display: grid; place-items: center; align-content: center; gap: 14%;
-  background:
-    repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 6px, transparent 6px 12px),
-    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--mp-c) 55%, transparent), transparent 60%),
-    linear-gradient(160deg, #1c2a66, #0a0f26);
-  border: 2px solid color-mix(in srgb, var(--mp-c) 70%, #fff);
-}
-.mp-back-ball {
-  width: 46%; aspect-ratio: 1; border-radius: 50%; position: relative;
-  background: linear-gradient(180deg, #e3350d 0 47%, #14141a 47% 53%, #f5f5f7 53%);
-  box-shadow: 0 0 0 3px #14141a, 0 0 24px var(--mp-c);
-}
-.mp-back-ball::after { content: ""; position: absolute; left: 50%; top: 50%; width: 30%; height: 30%; transform: translate(-50%, -50%); border-radius: 50%; background: #f5f5f7; box-shadow: 0 0 0 3px #14141a; }
-.mp-back-name { font-family: var(--mp-heading); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #fff; font-size: 1.05em; text-shadow: 0 0 10px var(--mp-c); }
+.mp-reveal-card.mp-back img.mp-back-img { width: 100%; height: 100%; object-fit: cover; }
 .mp-reveal-card.mp-charging { animation: mp-charge 1.4s ease-in infinite; }
 @keyframes mp-charge {
   0%, 100% { transform: scale(1) rotate(0); box-shadow: 0 0 0 2px var(--mp-c), 0 0 24px var(--mp-c), 0 18px 40px rgba(0,0,0,.5); }
