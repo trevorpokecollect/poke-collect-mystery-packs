@@ -1,3 +1,4 @@
+/* eslint-env node */
 import path from "path";
 import fs from "fs";
 import { describe, beforeAll, test, expect } from "vitest";
