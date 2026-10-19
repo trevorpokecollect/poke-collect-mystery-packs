@@ -232,6 +232,10 @@ model MarketSettings {
   sellingEnabled Boolean  @default(false)
   // Kept from each sale before the seller's store credit.
   feePercent     Decimal  @default(10) @db.Decimal(5, 2)
+  // Vault Credit codes only work on products in these collections (never Mystery Packs).
+  creditCollectionIds String[] @default([])
+  // Whether Vault Credit codes combine with other product / order discounts.
+  creditCombines Boolean @default(false)
   updatedAt      DateTime @updatedAt
 }
 
@@ -364,4 +368,42 @@ model WishItem {
 
   @@unique([shop, customerId, variantId])
   @@index([shop, variantId])
+}
+
+// Vault Credit: the marketplace's own balance. Shopify checkout never sees it, so it can't buy
+// Mystery Packs. Every change is a signed ledger row; the balance is their sum.
+model CreditTxn {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  amount     Decimal  @db.Decimal(10, 2)
+  // SALE (seller paid) | PURCHASE (bought a card) | CODE (spent on a store code) | CODE_RETURN | ADJUST
+  kind       String
+  listingId  String?
+  codeId     String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([shop, customerId])
+}
+
+// A one-time Shopify discount code made from Vault Credit, limited to eligible collections.
+model CreditCode {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  code       String   @unique
+  amount     Decimal  @db.Decimal(10, 2)
+  discountId String?
+  // ACTIVE until used, returned or expired.
+  status     String   @default("ACTIVE")
+  orderId    String?
+  orderName  String?
+  usedAmount Decimal? @db.Decimal(10, 2)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([shop, customerId])
+  @@index([status, expiresAt])
 }

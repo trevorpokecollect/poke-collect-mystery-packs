@@ -1,6 +1,6 @@
 // Vault Market: players trade vault cards with each other, sell them to each other, and browse
 // each other's binders. Cards never leave the vault here; a trade or sale only changes the owner.
-// A small hash router: #/ (market), #/collectors, #/u/<name>, #/matches, #/wishlist, #/binder, #/offers.
+// A small hash router: #/ (market), #/collectors, #/u/<name>, #/matches, #/wishlist, #/binder, #/offers, #/wallet.
 (function () {
   "use strict";
 
@@ -23,6 +23,9 @@
   var matchesCache = null;
   var catalogQuery = "";
   var catalogResults = null;
+  var walletCache = null;
+  var newCode = null; // the code just made, shown until the page changes
+  var armedBuy = null; // listing id awaiting a second tap to buy with Vault Credit
 
   // ---------- Helpers ----------
 
@@ -78,6 +81,7 @@
     if (parts[0] === "offers") return { name: "offers" };
     if (parts[0] === "matches") return { name: "matches" };
     if (parts[0] === "wishlist") return { name: "wishlist" };
+    if (parts[0] === "wallet") return { name: "wallet" };
     return { name: "market" };
   }
 
@@ -98,6 +102,8 @@
       state.wishlist = state.wishlist || [];
       state.feed = state.feed || [];
       matchesCache = null;
+      walletCache = null;
+      state.credit = Number(state.credit || 0);
       collectorsCache = null;
       collectionCache = {};
       render();
@@ -252,6 +258,10 @@
         ]);
       })),
       el("div", { class: "vm-top-right" }, [
+        el("a", { class: "vm-credit-chip" + (current === "wallet" ? " vm-credit-chip-on" : ""), href: "#/wallet", title: "Vault Credit" }, [
+          el("span", { class: "vm-credit-label", text: "Vault Credit" }),
+          el("b", { text: money(state.credit) }),
+        ]),
         state.tradeName
           ? el("a", { class: "vm-me", href: profileHash(state.tradeName) }, [el("span", { class: "vm-monogram", text: state.tradeName.charAt(0).toUpperCase() }), el("span", { class: "vm-me-name", text: "@" + state.tradeName })])
           : el("button", { class: "vm-btn vm-btn-small", type: "button", text: "Pick A Trade Name", onclick: needName }),
@@ -630,7 +640,7 @@
       c.listing
         ? el("button", { class: "vm-link", type: "button", text: "Stop Selling", onclick: function (e) { act({ action: "unlist", listingId: c.listing.id }, e.currentTarget, "Listing Removed."); } })
         : null,
-      el("span", { class: "vm-fine", text: "You Get " + (100 - state.feePercent) + "% As Store Credit, " + r.payoutDays + " Days After It Sells." }),
+      el("span", { class: "vm-fine", text: "You Get " + (100 - state.feePercent) + "% As Vault Credit (Right Away When The Buyer Pays With Vault Credit, " + r.payoutDays + " Days After A Card Payment)." }),
     ]);
   }
 
@@ -758,6 +768,84 @@
     }
   }
 
+  // ---------- Wallet (Vault Credit) ----------
+
+  var KIND_LABEL = { SALE: "Card Sold", PURCHASE: "Card Bought", CODE: "Store Code Made", CODE_RETURN: "Returned To Balance", ADJUST: "Adjustment" };
+
+  function walletView() {
+    if (!walletCache) {
+      getJSON({ view: "wallet" }).then(function (w) { walletCache = w; render(); }).catch(function () { walletCache = { balance: state.credit, history: [], codes: [], codesEnabled: false }; render(); });
+      return el("main", { class: "vm-main" }, [el("p", { class: "vm-empty", text: "Opening Your Wallet…" })]);
+    }
+    var w = walletCache;
+    var amount = el("input", { id: "vm-code-amount", class: "vm-input vm-price", type: "number", min: "1", max: String(w.balance), step: "0.01", value: w.balance >= 1 ? w.balance.toFixed(2) : "", "aria-label": "Amount for the code" });
+    var make = el("button", { class: "vm-btn vm-btn-signal", type: "button", text: "Make A Store Code", disabled: !w.codesEnabled || w.balance < 1 });
+    make.addEventListener("click", function () {
+      post({ action: "useCredit", amount: Number(amount.value) }, make).then(function (res) {
+        newCode = res;
+        flash = { text: "Your Code Is Ready. Use It At Checkout On The Main Store." };
+        return load();
+      }).catch(function () {});
+    });
+    var active = w.codes.filter(function (c) { return c.status === "ACTIVE"; });
+    return el("main", { class: "vm-main" }, [
+      el("section", { class: "vm-wallet-hero" }, [
+        el("div", {}, [
+          el("p", { class: "vm-eyebrow", text: "Vault Credit" }),
+          el("p", { class: "vm-wallet-balance", text: money(w.balance) }),
+          el("p", { class: "vm-page-text", text: "Earned From Selling Cards. Spend It On Other Collectors' Cards Here, Or Turn It Into A Code For Singles, Sealed And Accessories On The Main Store. Vault Credit Can't Be Used On Mystery Packs." }),
+        ]),
+        el("div", { class: "vm-wallet-use" }, [
+          el("div", { class: "vm-label", text: "Use Credit In The Store" }),
+          w.codesEnabled
+            ? el("div", { class: "vm-sell-row" }, [el("span", { class: "vm-dollar", text: "$" }), amount, make])
+            : el("p", { class: "vm-fine", text: "Store Codes Are Coming Soon." }),
+          el("p", { class: "vm-fine", text: "One-Time Code For Your Account, Good For " + (w.codeDays || 30) + " Days. Anything The Order Doesn't Use Comes Back To Your Balance." }),
+          newCode ? codeBox(newCode.code, newCode.amount) : null,
+        ]),
+      ]),
+      active.length
+        ? el("section", { class: "vm-wallet-section" }, [
+            el("h2", { class: "vm-section-title", text: "Open Codes" }),
+            el("div", { class: "vm-codes" }, active.map(function (c) {
+              return el("div", { class: "vm-code-row" }, [
+                codeBox(c.code, c.amount),
+                el("span", { class: "vm-fine", text: "Expires " + new Date(c.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) }),
+                el("button", { class: "vm-link", type: "button", text: "Return To Balance", onclick: function (e) {
+                  act({ action: "returnCode", codeId: c.id }, e.currentTarget, money(c.amount) + " Is Back In Your Balance.");
+                } }),
+              ]);
+            })),
+          ])
+        : null,
+      el("section", { class: "vm-wallet-section" }, [
+        el("h2", { class: "vm-section-title", text: "History" }),
+        w.history.length
+          ? el("div", { class: "vm-ledger", role: "table", "aria-label": "Vault Credit history" }, w.history.map(function (h) {
+              return el("div", { class: "vm-ledger-row", role: "row" }, [
+                el("span", { role: "cell", class: "vm-fine", text: new Date(h.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }) }),
+                el("span", { role: "cell" }, [el("strong", { text: KIND_LABEL[h.kind] || h.kind }), h.note ? el("span", { class: "vm-muted", text: " · " + h.note }) : null]),
+                el("span", { role: "cell", class: "vm-ledger-amt" + (h.amount < 0 ? " vm-neg" : ""), text: (h.amount < 0 ? "−" : "+") + money(Math.abs(h.amount)) }),
+              ]);
+            }))
+          : el("p", { class: "vm-empty", text: "No Vault Credit Yet. Sell A Card In My Binder To Earn Some." }),
+      ]),
+    ]);
+  }
+
+  function codeBox(code, amount) {
+    var copy = el("button", { class: "vm-btn vm-btn-small", type: "button", text: "Copy" });
+    copy.addEventListener("click", function () {
+      var done = function () { copy.textContent = "Copied"; };
+      if (navigator.clipboard) navigator.clipboard.writeText(code).then(done).catch(function () {});
+    });
+    return el("div", { class: "vm-code" }, [
+      el("span", { class: "vm-code-text", text: code }),
+      el("span", { class: "vm-code-amt", text: money(amount) }),
+      copy,
+    ]);
+  }
+
   // ---------- Offers ----------
 
   function offersView() {
@@ -829,6 +917,15 @@
         post({ action: "buy", listingId: card.listing.id }, e.currentTarget).then(function (data) {
           window.location.href = data.invoiceUrl;
         }).catch(function () {});
+      } }));
+    }
+    if (!mine && card.listing && state.selling && state.credit >= card.listing.price) {
+      var armed = armedBuy === card.listing.id;
+      actions.push(el("button", { class: "vm-btn vm-btn-wide vm-btn-credit", type: "button", text: armed ? "Tap Again To Pay " + money(card.listing.price) + " In Vault Credit" : "Buy With Vault Credit", onclick: function (e) {
+        if (!state.tradeName) return needName();
+        if (!armed) { armedBuy = card.listing.id; render(); return; }
+        armedBuy = null;
+        act({ action: "buyCredit", listingId: card.listing.id }, e.currentTarget, "It's Yours! The Card Is In Your Binder.");
       } }));
     }
     if (!mine && card.openToTrade && card.trader) {
@@ -999,6 +1096,7 @@
         : r.name === "collection" ? collectionView(r.who)
           : r.name === "matches" ? matchesView()
           : r.name === "wishlist" ? wishlistView()
+          : r.name === "wallet" ? walletView()
           : r.name === "binder" ? binderView()
             : r.name === "offers" ? offersView()
               : marketView(),
@@ -1018,6 +1116,8 @@
     binderPage = 0;
     binderFilter = "all";
     if (route().name !== "binder") showcaseEdit = null;
+    if (route().name !== "wallet") newCode = null;
+    armedBuy = null;
     render();
     window.scrollTo(0, 0);
   });

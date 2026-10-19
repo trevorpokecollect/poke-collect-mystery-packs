@@ -1,11 +1,12 @@
 // Vault marketplace: players trade vault cards with each other, or sell them to each other for
-// store credit. The store is never the buyer. Cards stay on our shelf the whole time; a trade or
+// Vault Credit (this app's own balance, never Shopify store credit, so it can't buy packs). The store is never the buyer. Cards stay on our shelf the whole time; a trade or
 // sale only changes which customer owns the pull. Off until the merchant turns it on.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
 import { PoolError } from "./pool.server";
 import { klaviyoEvent, shopCurrency } from "./vault.server";
+import { addCredit, spendCredit } from "./credit.server";
 
 type Db = PrismaClient;
 type Tx = Prisma.TransactionClient;
@@ -16,7 +17,7 @@ export const TRADE_WAIT_DAYS = 14;
 export const OFFER_DAYS = 7;
 /** A buyer's unpaid invoice holds the card this long. */
 export const CHECKOUT_MINUTES = 60;
-/** The seller's store credit is held this long after the sale (buyer chargeback window). */
+/** The seller's Vault Credit is held this long after a card-paid sale (buyer chargeback window). */
 export const PAYOUT_HOLD_DAYS = 14;
 export const MAX_SIDE_CARDS = 10;
 export const MAX_OPEN_OFFERS = 10;
@@ -51,13 +52,14 @@ export async function marketSettings(db: Db | Tx, shop: string) {
     enabled: row?.enabled ?? false,
     sellingEnabled: (row?.enabled ?? false) && (row?.sellingEnabled ?? false),
     feePercent: Number(row?.feePercent ?? 10),
+    creditCollections: row?.creditCollectionIds.length ?? 0,
   };
 }
 
 export async function updateMarketSettings(
   db: Db,
   shop: string,
-  input: { enabled?: boolean; sellingEnabled?: boolean; feePercent?: number },
+  input: { enabled?: boolean; sellingEnabled?: boolean; feePercent?: number; creditCollectionIds?: string[]; creditCombines?: boolean },
 ) {
   if (input.feePercent !== undefined && !(input.feePercent >= 0 && input.feePercent <= 50)) {
     throw new PoolError("The fee must be between 0% and 50%.");
@@ -554,13 +556,20 @@ export async function reverseSale(db: Db, shop: string, listingId: string, now =
   return db.$transaction(async (tx) => {
     const listing = await tx.listing.findFirst({ where: { id: listingId, shop } });
     if (!listing || listing.status !== "SOLD" || !listing.buyerCustomerId) throw new PoolError("Only a sold card can be reversed.");
-    if (listing.payoutStatus === "PAID") throw new PoolError("The seller was already paid. Take the store credit back in Shopify first, then reverse.");
     const [l] = await lockPulls(tx, [listing.pullId]);
     const shipping = l?.pull.shipRequestId && LIVE_SHIP.includes(l.pull.shipRequest?.status ?? "");
     if (!l || l.pull.customerId !== listing.buyerCustomerId || l.pull.status !== "REVEALED" || shipping) {
       throw new PoolError("The buyer no longer has that card in their vault.");
     }
     await transfer(tx, shop, [{ pullId: listing.pullId, from: listing.buyerCustomerId, to: listing.sellerCustomerId }], "REVERSAL", { listingId: listing.id }, now);
+    // A paid seller gives the Vault Credit back (refused if they've spent it). A card bought with
+    // Vault Credit refunds the buyer's credit; a card bought by card is refunded in Shopify by staff.
+    if (listing.payoutStatus === "PAID" && listing.payoutAmount) {
+      await spendCredit(tx, { shop, customerId: listing.sellerCustomerId, amount: Number(listing.payoutAmount), kind: "ADJUST", listingId: listing.id, note: "Sale reversed" });
+    }
+    if (!listing.orderId) {
+      await addCredit(tx, { shop, customerId: listing.buyerCustomerId, amount: Number(listing.price), kind: "ADJUST", listingId: listing.id, note: "Sale reversed" });
+    }
     return tx.listing.update({ where: { id: listing.id }, data: { payoutStatus: "CANCELLED" } });
   });
 }
@@ -611,36 +620,54 @@ export async function expireCheckouts(db: Db, adminFor: (shop: string) => Promis
   }
 }
 
-/** Pays sellers whose hold has passed, as Shopify store credit. */
+/** Pays sellers whose hold has passed, in Vault Credit. */
 export async function payOutSellers(db: Db, adminFor: (shop: string) => Promise<AdminApiContext>, now = new Date()) {
   const due = await db.listing.findMany({ where: { payoutStatus: "HELD", payoutDueAt: { lt: now } }, take: 100 });
   let paid = 0;
   for (const listing of due) {
     try {
-      // Claim first so a second run can't pay twice.
-      const claimed = await db.listing.updateMany({ where: { id: listing.id, payoutStatus: "HELD" }, data: { payoutStatus: "PAYING" } });
-      if (!claimed.count) continue;
-      const admin = await adminFor(listing.shop);
-      try {
-        await gql(admin, `#graphql
-          mutation MarketPayout($id: ID!, $creditInput: StoreCreditAccountCreditInput!) {
-            storeCreditAccountCredit(id: $id, creditInput: $creditInput) { storeCreditAccountTransaction { id } userErrors { field message } }
-          }`, {
-          id: listing.sellerCustomerId,
-          creditInput: { creditAmount: { amount: Number(listing.payoutAmount).toFixed(2), currencyCode: await shopCurrency(admin) }, notify: true },
-        });
-      } catch (error) {
-        await db.listing.update({ where: { id: listing.id }, data: { payoutStatus: "HELD" } });
-        throw error;
-      }
-      await db.listing.update({ where: { id: listing.id }, data: { payoutStatus: "PAID", paidOutAt: now } });
+      const done = await db.$transaction(async (tx) => {
+        // Claim first so a second run can't pay twice.
+        const claimed = await tx.listing.updateMany({ where: { id: listing.id, payoutStatus: "HELD" }, data: { payoutStatus: "PAID", paidOutAt: now } });
+        if (!claimed.count) return false;
+        await addCredit(tx, { shop: listing.shop, customerId: listing.sellerCustomerId, amount: Number(listing.payoutAmount), kind: "SALE", listingId: listing.id, note: listing.orderName ?? undefined });
+        return true;
+      });
+      if (!done) continue;
       paid++;
-      await notify(admin, listing.sellerCustomerId, METRICS.payout, { amount: Number(listing.payoutAmount).toFixed(2) });
+      await notify(await adminFor(listing.shop).catch(() => undefined), listing.sellerCustomerId, METRICS.payout, { amount: Number(listing.payoutAmount).toFixed(2) });
     } catch (error) {
       console.error(`Paying out listing ${listing.id} failed`, error);
     }
   }
   return paid;
+}
+
+/**
+ * Buys a listed card with Vault Credit: no Shopify order. The card moves to the buyer and the
+ * seller is paid in Vault Credit right away (credit can't be charged back).
+ */
+export async function buyWithCredit(db: Db, shop: string, buyerCustomerId: string, listingId: string, now = new Date()) {
+  const settings = await requireEnabled(db, shop, true);
+  await requireTrader(db, shop, buyerCustomerId);
+  return db.$transaction(async (tx) => {
+    const listing = await tx.listing.findFirst({ where: { id: listingId, shop } });
+    if (!listing || listing.status !== "ACTIVE") throw new PoolError("That card isn't for sale anymore.");
+    if (listing.sellerCustomerId === buyerCustomerId) throw new PoolError("That's your own card.");
+    const [l] = await lockPulls(tx, [listing.pullId]);
+    if (!l || l.pull.customerId !== listing.sellerCustomerId || lockReason(l.pull, l.vault, now)) throw new PoolError("That card isn't for sale anymore.");
+    const claimed = await tx.listing.updateMany({ where: { id: listing.id, status: "ACTIVE" }, data: { status: "SOLD", buyerCustomerId, soldAt: now } });
+    if (!claimed.count) throw new PoolError("Someone else is buying that card right now.");
+    const price = Number(listing.price);
+    await spendCredit(tx, { shop, customerId: buyerCustomerId, amount: price, kind: "PURCHASE", listingId: listing.id, note: l.pull.slot.card.title });
+    await transfer(tx, shop, [{ pullId: listing.pullId, from: listing.sellerCustomerId, to: buyerCustomerId }], "SALE", { listingId: listing.id }, now);
+    const payoutAmount = Math.round(price * (100 - settings.feePercent)) / 100;
+    await addCredit(tx, { shop, customerId: listing.sellerCustomerId, amount: payoutAmount, kind: "SALE", listingId: listing.id, note: l.pull.slot.card.title });
+    return tx.listing.update({
+      where: { id: listing.id },
+      data: { orderName: "Vault Credit", payoutStatus: "PAID", payoutAmount, payoutDueAt: now, paidOutAt: now },
+    });
+  });
 }
 
 // ---------- Emails (Klaviyo events; flows send the emails) ----------
@@ -1052,6 +1079,22 @@ export async function marketDemo(db: Db, shop: string, { view = "", name = "" } 
   if (view === "collection") return collection(name);
   if (view === "matches") return matches();
   if (view === "catalog") return catalog(db, shop, name);
+  if (view === "wallet") {
+    const ago = (h: number) => new Date(Date.now() - h * 3_600_000);
+    return {
+      balance: 37.5,
+      codesEnabled: true,
+      codeDays: 30,
+      codes: [{ id: "demo-code", code: "VAULT-7KQ2M9XA", amount: 15, status: "ACTIVE", usedAmount: null, orderName: null, expiresAt: new Date(Date.now() + 26 * DAY) }],
+      history: [
+        { id: "h1", amount: -15, kind: "CODE", note: "VAULT-7KQ2M9XA", at: ago(3) },
+        { id: "h2", amount: 22.5, kind: "SALE", note: mine[0]?.title ?? "Card", at: ago(30) },
+        { id: "h3", amount: -12.5, kind: "PURCHASE", note: board[3]?.title ?? "Card", at: ago(50) },
+        { id: "h4", amount: 4.5, kind: "CODE_RETURN", note: "Unused part of VAULT-P3W8", at: ago(80) },
+        { id: "h5", amount: 38, kind: "SALE", note: mine[1]?.title ?? "Card", at: ago(120) },
+      ],
+    };
+  }
   if (view === "collectors") {
     return DEMO_TRADERS.map((n) => {
       const c = collection(n);
@@ -1070,6 +1113,7 @@ export async function marketDemo(db: Db, shop: string, { view = "", name = "" } 
     rules: { waitDays: TRADE_WAIT_DAYS, offerDays: OFFER_DAYS, payoutDays: PAYOUT_HOLD_DAYS, maxCards: MAX_SIDE_CARDS, maxOffers: MAX_OPEN_OFFERS, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, maxShowcase: MAX_SHOWCASE },
     notes: OFFER_NOTES,
     tradeName: "PreviewTrader",
+    credit: 37.5,
     me: { tradeName: "PreviewTrader", showCollection: true, showcase: mine.slice(0, 3).map((c) => c.pullId) },
     cards: mine.map((c, i) => ({
       ...c,

@@ -9,6 +9,7 @@ import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
 import { completeSale, MARKET_ATTRIBUTE, METRICS, notify } from "./market.server";
+import { settleCreditCodes } from "./credit.server";
 
 export interface OrderPayload {
   admin_graphql_api_id: string;
@@ -18,6 +19,7 @@ export interface OrderPayload {
   customer?: { admin_graphql_api_id?: string } | null;
   note_attributes?: { name: string; value: string }[] | null;
   payment_gateway_names?: string[] | null;
+  discount_codes?: { code: string; amount: string }[] | null;
   shipping_address?: { country_code?: string | null } | null;
   line_items: {
     admin_graphql_api_id: string;
@@ -27,6 +29,9 @@ export interface OrderPayload {
 }
 
 export async function handlePaidOrder(shop: string, admin: AdminApiContext | undefined, order: OrderPayload) {
+  // Any order can use a Vault Credit code: record it and give back what the cart didn't use.
+  await settleCreditCodes(db, order).catch((error) => console.error(`Settling Vault Credit codes on ${order.name} failed`, error));
+
   // A paid "ship my cards" invoice: its vaulted cards now ship on this order.
   const vaultRequest = order.note_attributes?.find((a) => a.name === VAULT_ATTRIBUTE)?.value;
   if (vaultRequest) {

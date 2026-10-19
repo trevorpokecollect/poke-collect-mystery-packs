@@ -5,6 +5,9 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { demoToken } from "../lib/demo.server";
+import { gql } from "../lib/orders.server";
+import { resolveCustomer } from "../lib/vault.server";
+import { adjustCredit, collectionsWithPacks } from "../lib/credit.server";
 import {
   clearRefundFlag,
   marketActivity,
@@ -18,16 +21,28 @@ import {
 // Vault Marketplace: the on/off switches, the fee, and customer service for trades and sales
 // between players (reverse a trade or sale, hold or release a seller's store credit).
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const [settings, activity] = await Promise.all([marketSettings(db, session.shop), marketActivity(db, session.shop)]);
   const row = await db.marketSettings.findUnique({ where: { shop: session.shop } });
+  const collections = await gql(admin, `#graphql
+    query CreditCollections { collections(first: 250, sortKey: TITLE) { nodes { id title } } }`)
+    .then((d) => d.collections.nodes as { id: string; title: string }[])
+    .catch(() => [] as { id: string; title: string }[]);
+  const credit = {
+    collectionIds: row?.creditCollectionIds ?? [],
+    combines: row?.creditCombines ?? false,
+    outstanding: Number((await db.creditTxn.aggregate({ where: { shop: session.shop }, _sum: { amount: true } }))._sum.amount ?? 0),
+    openCodes: await db.creditCode.count({ where: { shop: session.shop, status: "ACTIVE" } }),
+  };
   return {
     previewUrl: `https://${session.shop}/apps/packs/market?demo=${demoToken(session.shop)}`,
-    settings: { ...settings, sellingSwitch: row?.sellingEnabled ?? false }, activity: JSON.parse(JSON.stringify(activity)) as typeof activity };
+    settings: { ...settings, sellingSwitch: row?.sellingEnabled ?? false },
+    collections,
+    credit, activity: JSON.parse(JSON.stringify(activity)) as typeof activity };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
   const form = await request.formData();
   const id = String(form.get("id") || "");
@@ -40,15 +55,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           feePercent: Number(form.get("fee")),
         });
         return { ok: "Marketplace settings saved." };
+      case "credit": {
+        const ids = form.getAll("collection").map(String).filter(Boolean);
+        const withPacks = await collectionsWithPacks(admin, ids);
+        if (withPacks.length) return { error: `These collections include a Mystery Pack, so Vault Credit could buy packs through them: ${withPacks.join(", ")}. Untick them and save again.` };
+        await updateMarketSettings(db, shop, { creditCollectionIds: ids, creditCombines: form.get("combines") === "on" });
+        return { ok: ids.length ? `Vault Credit codes now work on ${ids.length} collection${ids.length === 1 ? "" : "s"}.` : "Vault Credit codes are off until you pick a collection." };
+      }
+      case "adjust": {
+        const who = await resolveCustomer(db, admin, String(form.get("customer") || ""));
+        await adjustCredit(db, shop, who.customerId, Number(form.get("amount")), String(form.get("reason") || ""));
+        return { ok: `Adjusted ${who.label}'s Vault Credit by $${Number(form.get("amount")).toFixed(2)}.` };
+      }
       case "reverseTrade":
         await reverseTrade(db, shop, id);
         return { ok: "Trade reversed. Every card is back with its original owner." };
       case "reverseSale":
         await reverseSale(db, shop, id);
-        return { ok: "Sale reversed. The card is back with the seller and their store credit was cancelled. Refund the buyer in Shopify if you haven't." };
+        return { ok: "Sale reversed. The card is back with the seller and their Vault Credit was taken back. A card bought with Vault Credit refunds the buyer automatically; refund a card payment in Shopify." };
       case "releasePayout":
         await releaseFlaggedPayout(db, shop, id);
-        return { ok: "The seller's store credit will be paid on the next run once the hold has passed." };
+        return { ok: "The seller's Vault Credit will be paid on the next run once the hold has passed." };
       case "clearFlag":
         await clearRefundFlag(db, shop, id);
         return { ok: "Marked as reviewed. The card stays with its current owner." };
@@ -65,7 +92,7 @@ const payoutLabel: Record<string, string> = { HELD: "Held", PAYING: "Paying", PA
 const payoutTone = { HELD: "info", PAYING: "info", PAID: "success", FLAGGED: "critical", CANCELLED: "neutral" } as const;
 
 export default function Marketplace() {
-  const { settings, activity, previewUrl } = useLoaderData<typeof loader>();
+  const { settings, activity, previewUrl, collections, credit } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const busy = useNavigation().state !== "idle";
@@ -83,7 +110,7 @@ export default function Marketplace() {
           <s-stack gap="base">
             <input type="hidden" name="intent" value="settings" />
             <s-paragraph>
-              Players trade vault cards with each other, or sell them to each other for store credit. The store never buys
+              Players trade vault cards with each other, or sell them to each other for Vault Credit. The store never buys
               cards back. Card values are never shown to players.
             </s-paragraph>
             <s-checkbox name="enabled" label="Trading on (Trade Board and offers on the storefront)" defaultChecked={settings.enabled} />
@@ -97,6 +124,47 @@ export default function Marketplace() {
                 Preview Marketplace
               </s-button>
             </s-stack>
+          </s-stack>
+        </form>
+      </s-section>
+
+      <s-section heading="Vault Credit">
+        <form method="post">
+          <s-stack gap="base">
+            <input type="hidden" name="intent" value="credit" />
+            <s-paragraph>
+              Sellers are paid in Vault Credit, a balance kept in this app (not Shopify store credit). Players spend it on
+              other players&apos; cards, or turn it into a one-time code that only works on the collections ticked below.
+              Never tick a collection that holds Mystery Packs; saving checks for that. Codes last 30 days and unused
+              amounts go back to the player&apos;s balance.
+            </s-paragraph>
+            <s-text>
+              Outstanding Vault Credit: ${credit.outstanding.toFixed(2)} · Open codes: {credit.openCodes}
+            </s-text>
+            <div style={{ maxHeight: 280, overflowY: "auto", border: "1px solid #e1e3e5", borderRadius: 8, padding: 12, display: "grid", gap: 6 }}>
+              {collections.map((c) => (
+                <label key={c.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="checkbox" name="collection" value={c.id} defaultChecked={credit.collectionIds.includes(c.id)} />
+                  {c.title}
+                </label>
+              ))}
+            </div>
+            <s-checkbox name="combines" label="Codes combine with other product and order discounts" defaultChecked={credit.combines} />
+            <s-button type="submit" disabled={busy}>
+              Save Vault Credit Settings
+            </s-button>
+          </s-stack>
+        </form>
+        <form method="post">
+          <s-stack gap="base">
+            <input type="hidden" name="intent" value="adjust" />
+            <s-heading>Adjust A Balance</s-heading>
+            <s-text-field name="customer" label="Customer (email or customer ID)" />
+            <s-number-field name="amount" label="Amount (negative takes credit away)" step={0.01} />
+            <s-text-field name="reason" label="Reason" />
+            <s-button type="submit" disabled={busy}>
+              Adjust Vault Credit
+            </s-button>
           </s-stack>
         </form>
       </s-section>
