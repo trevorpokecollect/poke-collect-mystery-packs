@@ -691,7 +691,7 @@
   // The pack bag inside the product artwork (a square image with the pack centered), as fractions.
   var ART = { left: 0.261, top: 0.042, width: 0.478, height: 0.916 };
   var TEAR_Y = 0.075; // tear line, just under the top seal, as a fraction of the pack height
-  var SLICES = 16; // the torn-off strip is a chain of slices so it can curl as it peels
+  var SLICES = 24; // the torn-off strip is a chain of slices so it can curl as it peels (more = smoother curve)
   var SVGNS = "http://www.w3.org/2000/svg";
   var uid = 0;
 
@@ -829,7 +829,7 @@
     pack.slices.forEach(function (slice, k) {
       // How far the tear has run past this slice's right joint, in slices.
       var past = Math.max(0, Math.min(1.6, (front * 1.04 - slice.joint) * SLICES + 1));
-      var bend = k === 0 ? past * 5 : past * 1.7;
+      var bend = k === 0 ? past * 4 : past * 1.15;
       slice.wrap.style.transform = "translateY(" + (-past * 0.9).toFixed(2) + "px) rotate(" + bend.toFixed(2) + "deg)";
       slice.edge.style.opacity = past > 0 ? 1 : 0;
     });
@@ -1184,10 +1184,24 @@
       var later = setTimeout(function () { button.classList.add("mp-on"); }, 5000);
 
       return new Promise(function (resolve) {
-        var progress = 0, drag = null, finished = false;
-        function done(from) {
+        // `progress` is how far the finger has torn; `shown` eases toward it every frame, so the tear
+        // glides along behind the finger instead of jumping with each touch event.
+        var progress = 0, shown = 0, drag = null, finished = false, box = null;
+        function glide() {
+          if (finished) return;
+          requestAnimationFrame(glide);
+          var gap = progress - shown;
+          if (Math.abs(gap) < 0.0015) { if (shown === progress) return; shown = progress; }
+          else shown += gap * (gap > 0 ? 0.32 : 0.2);
+          tearTo(opener, shown, width, height);
+          // Finger reached the end: the rest of the strip comes away on its own.
+          if (progress >= 1 && shown > 0.9) done();
+        }
+        requestAnimationFrame(glide);
+        function done() {
           if (finished) return;
           finished = true;
+          var from = shown;
           clearTimeout(later);
           stage.removeEventListener("pointerdown", down);
           stage.removeEventListener("pointermove", move);
@@ -1200,10 +1214,12 @@
           if (tilt) tilt.aim(6, 0);
           resolve(tear(opener, width, height, from));
         }
-        function rect() { return holder.getBoundingClientRect(); }
+        function rect() { return box || holder.getBoundingClientRect(); }
         function down(e) {
           if (e.target.closest && e.target.closest("button")) return;
+          box = null;
           var r = rect();
+          box = r; // measured once per drag, not on every move
           var x = e.clientX, y = e.clientY;
           // Generous target: anywhere across the top third of the pack, a little past its sides.
           var onTop = y > r.top - r.height * 0.12 && y < r.top + r.height * 0.32 && x > r.left - r.width * 0.25 && x < r.right + r.width * 0.25;
@@ -1231,10 +1247,8 @@
             if (next > progress) {
               if (navigator.vibrate && Math.floor(next * 8) > Math.floor(progress * 8)) navigator.vibrate(6);
               progress = next;
-              tearTo(opener, progress, width, height);
             }
             if (tilt) tilt.aim(8, (progress - 0.5) * 14);
-            if (progress >= 1) done(1);
           } else if (tilt) {
             // Dragging the rest of the pack turns it in the hand.
             var dx = (e.clientX - drag.x) / r.width;
@@ -1246,19 +1260,18 @@
           if (!drag || e.pointerId !== drag.id) return;
           var wasTear = drag.tear;
           drag = null;
-          if (wasTear && progress > 0.45) return done(progress);
+          box = null;
+          if (wasTear && progress > 0.45) return done();
           if (wasTear && progress > 0) {
-            // Not far enough: the strip springs back down.
-            var from = progress;
+            // Not far enough: the strip eases back down.
             progress = 0;
-            tween(260, function (k) { tearTo(opener, from * (1 - k), width, height); });
             hint.classList.remove("mp-off");
           }
           if (tilt) tilt.idle();
         }
         function leave(e) { if (!drag && e.pointerType === "mouse" && tilt) tilt.idle(); }
-        function key(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); done(progress); } }
-        button.addEventListener("click", function () { done(progress); });
+        function key(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); done(); } }
+        button.addEventListener("click", function () { done(); });
         stage.addEventListener("pointerdown", down);
         stage.addEventListener("pointermove", move);
         stage.addEventListener("pointerup", up);
