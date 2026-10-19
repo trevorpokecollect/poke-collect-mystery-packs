@@ -4,7 +4,7 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import { drawForOrder } from "./pool.server";
-import { fulfillVaultPackLines, holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
+import { fulfillVaultPackLines, fulfillWholeOrder, holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
 import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
@@ -49,8 +49,13 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
   if (marketListing) {
     const sold = await completeSale(db, marketListing, order.admin_graphql_api_id, order.name);
     // The checkout's one-off "Vault Card" variant isn't needed once it's paid.
-    const paidListing = await db.listing.findUnique({ where: { id: marketListing }, select: { checkoutVariantId: true } });
+    const paidListing = await db.listing.findUnique({ where: { id: marketListing }, select: { checkoutVariantId: true, status: true, payoutStatus: true } });
     if (admin && paidListing?.checkoutVariantId) await deleteCheckoutVariant(admin, shop, paidListing.checkoutVariantId);
+    // The card is already in the buyer's vault: nothing to ship, so the order is fulfilled now.
+    // A flagged sale (the card couldn't move) stays open for staff to refund.
+    if (admin && paidListing?.status === "SOLD" && paidListing.payoutStatus !== "FLAGGED") {
+      await fulfillWholeOrder(admin, order.admin_graphql_api_id).catch((e) => console.error("Fulfilling market order failed", e));
+    }
     if (sold) await notify(admin, sold.sellerCustomerId, METRICS.cardSold, { price: Number(sold.price).toFixed(2), payoutAmount: Number(sold.payoutAmount).toFixed(2) });
     return;
   }

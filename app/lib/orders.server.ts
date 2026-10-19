@@ -200,6 +200,38 @@ export async function fulfillMissingVaultPackLines(db: PrismaClient, adminFor: (
   }
 }
 
+/**
+ * Vault Market purchases: the card changes owners inside the vault the moment the order is paid,
+ * so there's nothing for staff to ship. Every open line is marked fulfilled (no customer email).
+ */
+export async function fulfillWholeOrder(admin: Admin, orderId: string) {
+  for (const fo of await fulfillmentOrders(admin, orderId)) {
+    if (fo.status !== "OPEN" && fo.status !== "IN_PROGRESS") continue;
+    const lines = fo.lineItems.nodes.filter((l) => l.remainingQuantity > 0);
+    if (lines.length === 0) continue;
+    const data = await gql(
+      admin,
+      `#graphql
+        mutation MarketFulfill($fulfillment: FulfillmentInput!) {
+          fulfillmentCreate(fulfillment: $fulfillment) {
+            fulfillment { id }
+            userErrors { field message }
+          }
+        }`,
+      {
+        fulfillment: {
+          notifyCustomer: false,
+          lineItemsByFulfillmentOrder: [
+            { fulfillmentOrderId: fo.id, fulfillmentOrderLineItems: lines.map((l) => ({ id: l.id, quantity: l.remainingQuantity })) },
+          ],
+        },
+      },
+    );
+    const errors = data.fulfillmentCreate.userErrors as { message: string }[];
+    if (errors.length) throw new Error(`Fulfilling ${orderId}: ${errors.map((e) => e.message).join("; ")}`);
+  }
+}
+
 /** Marks the pack line items themselves as fulfilled: they were opened online, nothing ships for them. */
 async function fulfillPackLines(admin: Admin, orderId: string, packVariantIds: Set<string>) {
   for (const fo of await fulfillmentOrders(admin, orderId)) {
