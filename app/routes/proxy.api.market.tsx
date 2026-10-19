@@ -62,7 +62,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
   const settings = await marketSettings(db, shop);
   if (!settings.enabled) return json({ enabled: false });
-  if (!viewer?.customerId) return json({ enabled: true, signedIn: false });
+  if (!viewer?.customerId) return json(settings.accessTag ? { enabled: false } : { enabled: true, signedIn: false });
   if (!(await hasMarketAccess(db, admin, shop, viewer.customerId))) return json({ enabled: false });
   if (view === "collectors") return json(await collectors(db, shop, viewer.customerId));
   if (view === "matches") return json(await tradeMatches(db, shop, viewer.customerId));

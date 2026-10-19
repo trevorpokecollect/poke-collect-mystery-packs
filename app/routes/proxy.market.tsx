@@ -63,7 +63,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const demo = new URL(request.url).searchParams.get("demo");
   if (validDemoToken(shop, demo)) return app(demo);
 
-  if (!(await marketSettings(db, shop)).enabled) {
+  const settings = await marketSettings(db, shop);
+  // Off, or a soft launch the visitor can't be checked against yet: nothing to see.
+  if (!settings.enabled || (settings.accessTag && !viewer?.customerId)) {
     return landing(assets, "Coming Soon", "Trade And Sell The Cards In Your Vault With Other Collectors.");
   }
   if (!viewer?.customerId) {
