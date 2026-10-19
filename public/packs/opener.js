@@ -686,7 +686,8 @@
   function pct(v) { return (v * 100).toFixed(3) + "%"; }
 
   // Red laser trace along the tear line, to match the pack's digital look. side: 1 = below (pack
-  // body), -1 = above (strip). The glow comes from a CSS drop-shadow on the line.
+  // body), -1 = above (strip). The glow is drawn with wide faint strokes: a CSS filter here has to be
+  // redrawn on every frame of the tear on all 17 pieces, which made phones stutter.
   function tornEdge(points, side, shown) {
     var svg = document.createElementNS(SVGNS, "svg");
     svg.setAttribute("class", "mp-edge");
@@ -704,10 +705,11 @@
     svg.innerHTML =
       '<defs><clipPath id="' + id + '"><rect x="0" y="0" width="' + (shown ? 1000 : 0) + '" height="1000"/></clipPath></defs>' +
       '<g clip-path="url(#' + id + ')">' +
+      '<path d="' + d + '" fill="none" stroke="rgba(255,45,85,.16)" stroke-width="22" stroke-linejoin="round"/>' +
       '<path d="' + d + '" fill="none" stroke="rgba(255,45,85,.45)" stroke-width="9" stroke-linejoin="miter"/>' +
       '<path d="' + d + '" fill="none" stroke="#ff2d55" stroke-width="4" stroke-linejoin="miter"/>' +
       '<path d="' + d + '" fill="none" stroke="#ffe3ea" stroke-width="1.2" stroke-linejoin="miter"/>' +
-      '<path class="mp-edge-bits" d="' + bits + '" fill="none" stroke="#ff2d55" stroke-width="1.6"/>' +
+      '<path d="' + bits + '" fill="none" stroke="rgba(255,45,85,.8)" stroke-width="1.6"/>' +
       "</g>";
     svg.reveal = svg.querySelector("rect");
     return svg;
@@ -723,17 +725,20 @@
       ? "url(\"" + art.replace(/"/g, "%22") + "\") center / " + pct(1 / ART.width) + " " + pct(1 / ART.height) + " no-repeat"
       : "";
 
-    function face(polygon) {
+    function face(polygon, glare) {
       var node = el("div", { class: "mp-open-face" + (art ? "" : " mp-open-plain") });
       node.style.width = width + "px";
       node.style.height = height + "px";
       if (paint) node.style.background = paint;
       node.style.clipPath = "polygon(" + polygon.map(function (p) { return pct(p[0]) + " " + pct(p[1]); }).join(",") + ")";
-      // Foil glare, moved by the tilt (the --mx/--my it sets on the pack).
-      var sheen = el("div", { class: "mp-sheen" });
-      sheen.style.width = width + "px";
-      sheen.style.height = height + "px";
-      node.appendChild(sheen);
+      // Foil glare on the body, slid across the art by the tilt (a transform, so it's cheap to move).
+      if (glare) {
+        var sheen = el("div", { class: "mp-sheen" });
+        sheen.style.width = width * 2 + "px";
+        sheen.style.height = height * 2 + "px";
+        node.appendChild(sheen);
+        node.sheen = sheen;
+      }
       return node;
     }
 
@@ -742,7 +747,7 @@
     var bodyGlow = el("div", { class: "mp-open-glow" });
     bodyGlow.style.top = (TEAR_Y * 100).toFixed(2) + "%";
     body.appendChild(bodyGlow);
-    var bodyFace = face([[0, 1]].concat(points, [[1, 1]]));
+    var bodyFace = face([[0, 1]].concat(points, [[1, 1]]), true);
     var bodyEdge = tornEdge(points, 1, false);
     bodyFace.appendChild(bodyEdge);
     body.appendChild(bodyFace);
@@ -778,7 +783,7 @@
     var laser = el("span", { class: "mp-laser" });
     group.appendChild(laser);
 
-    return { group: group, laser: laser, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
+    return { group: group, laser: laser, sheen: bodyFace.sheen, width: width, height: height, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
   }
 
   function fleck(pack, x, y) {
@@ -816,7 +821,7 @@
       pack.layers.forEach(function (node) { node.style.clipPath = clip; });
     }
     var now = performance.now();
-    if (front > 0.02 && front < 0.99 && Math.abs(front - (pack.lastFront || 0)) > 0.004 && now - (pack.lastFleck || 0) > 28) {
+    if (front > 0.02 && front < 0.99 && Math.abs(front - (pack.lastFront || 0)) > 0.004 && now - (pack.lastFleck || 0) > 45) {
       pack.lastFleck = now;
       fleck(pack, torn * width, yAt(pack.points, torn) * height);
     }
@@ -835,7 +840,7 @@
   // Makes the pack a tilting 3D object: it floats and sways on its own, leans toward the pointer
   // or finger, follows the phone's tilt where the browser allows it without asking, and moves a
   // foil glare across the artwork. Returns controls; stop() ends the loop.
-  function tilter(node, floor) {
+  function tilter(node, floor, sheen, size) {
     var rx = 0, ry = 0, lift = 0, tx = 0, ty = 0, mode = "idle", running = true;
     var start = performance.now();
     var gyro = null, base = null;
@@ -864,8 +869,11 @@
       ry += (ty - ry) * 0.12;
       lift += (goalLift - lift) * 0.1;
       node.style.transform = "translateX(-50%) translateY(" + lift.toFixed(2) + "px) rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) + "deg)";
-      node.style.setProperty("--mx", (0.5 + ry / 36).toFixed(3));
-      node.style.setProperty("--my", (0.5 - rx / 36).toFixed(3));
+      if (sheen) {
+        // The glare sits centered on the pack and slides opposite the tilt, like light on foil.
+        var gx = (-0.5 + ry / 36) * size.width, gy = (-0.5 - rx / 36) * size.height;
+        sheen.style.transform = "translate3d(" + gx.toFixed(1) + "px, " + gy.toFixed(1) + "px, 0)";
+      }
       if (floor) {
         floor.style.transform = "translateX(calc(-50% + " + (ry * 1.2).toFixed(1) + "px)) scale(" + (1 - lift / 60).toFixed(3) + ")";
         floor.style.opacity = (0.75 - lift / 30).toFixed(2);
@@ -888,7 +896,7 @@
     var ctx = canvas.getContext("2d");
     if (!ctx) return function () {};
     var GLYPHS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789POKECOLLECT";
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var dpr = 1; // a soft background: full-resolution pixels only cost phones frame rate
     var size, cols, drops, speeds, w, h;
     function resize() {
       w = stage.clientWidth; h = stage.clientHeight;
@@ -906,7 +914,7 @@
     function frame(now) {
       if (!running) return;
       requestAnimationFrame(frame);
-      if (now - last < 33) return; // ~30 fps is plenty and easy on phones
+      if (now - last < 42) return; // ~24 fps is plenty and easy on phones
       last = now;
       ctx.fillStyle = "rgba(5, 3, 6, 0.16)"; // fade the old glyphs into trails
       ctx.fillRect(0, 0, w, h);
@@ -951,6 +959,7 @@
       stopRain();
       if (tilt) tilt.stop();
       stage.remove();
+      document.documentElement.classList.remove("mp-stage-open");
       document.removeEventListener("keydown", onKey);
       if (pack.onClose) pack.onClose();
       if (!standalone) load();
@@ -959,6 +968,9 @@
     skip.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
     document.body.appendChild(stage);
+    // The page under the full-screen stage stops drawing while it's open (its blur and loading effects
+    // otherwise keep costing frames).
+    document.documentElement.classList.add("mp-stage-open");
     if (!reduced) stopRain = matrixRain(stage);
 
     // The pack is as tall as the card's final spot and as wide as the artwork's pack bag.
@@ -970,9 +982,9 @@
     var holder = el("div", { class: "mp-pack3d" });
     holder.style.width = width + "px";
     holder.style.height = height + "px";
-    for (var layer = 1; layer <= 6; layer++) {
+    for (var layer = 1; layer <= 3; layer++) {
       var slab = el("div", { class: "mp-pack-layer" });
-      slab.style.transform = "translateZ(" + (-layer * 1.1).toFixed(1) + "px)";
+      slab.style.transform = "translateZ(" + (-layer * 2.2).toFixed(1) + "px)";
       holder.appendChild(slab);
     }
     holder.appendChild(el("div", { class: "mp-pack-back" }));
@@ -980,7 +992,7 @@
     holder.appendChild(opener.group);
     inner.insertBefore(holder, result);
     if (!reduced) {
-      tilt = tilter(holder, floor);
+      tilt = tilter(holder, floor, opener.sheen, opener);
       // The pack drops in and settles before it can be opened.
       animate(opener.group, [
         { transform: "translateY(-60px) scale(.82) rotate(-6deg)", opacity: 0 },

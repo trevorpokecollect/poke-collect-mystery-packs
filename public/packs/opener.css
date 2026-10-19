@@ -446,7 +446,7 @@
 .mp-stage-inner { perspective: 900px; }
 .mp-pack3d {
   position: absolute; left: 50%; top: 0; z-index: 2; transform-style: preserve-3d;
-  transform: translateX(-50%); will-change: transform; --mx: .5; --my: .5;
+  transform: translateX(-50%); will-change: transform;
 }
 .mp-pack3d .mp-open-pack { left: 0; transform: none; width: 100%; height: 100%; }
 /* Thickness behind the artwork and a plain back, so the edges show when the pack turns. */
@@ -457,15 +457,15 @@
 .mp-pack-back { transform: translateZ(-7.2px) rotateY(180deg); background: linear-gradient(160deg, #13244a, #070b18); box-shadow: 0 0 0 1px rgba(90, 160, 255, .35); }
 /* Foil glare that slides across the artwork as the pack tilts. */
 .mp-sheen {
-  position: absolute; left: 0; top: 0; pointer-events: none; mix-blend-mode: screen;
+  position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform;
   background:
-    radial-gradient(circle at calc(var(--mx) * 100%) calc(var(--my) * 100%), rgba(255,255,255,.42) 0%, rgba(255,255,255,.12) 18%, transparent 42%),
-    linear-gradient(calc(110deg + (var(--mx) - .5) * 60deg), transparent calc(20% + var(--mx) * 30%), rgba(140,200,255,.2) calc(32% + var(--mx) * 30%), rgba(255,140,220,.16) calc(38% + var(--mx) * 30%), transparent calc(48% + var(--mx) * 30%));
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.3) 0%, rgba(255,255,255,.08) 10%, transparent 22%),
+    linear-gradient(115deg, transparent 38%, rgba(140,200,255,.12) 46%, rgba(255,140,220,.1) 50%, transparent 56%);
 }
 /* Soft shadow on the "floor" under the floating pack. */
 .mp-floor {
   position: absolute; left: 50%; bottom: -6%; width: 62%; height: 7%; border-radius: 50%; z-index: 0; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(0,0,0,.75), transparent); transform: translateX(-50%); filter: blur(4px);
+  background: radial-gradient(closest-side, rgba(0,0,0,.7), rgba(0,0,0,.3) 60%, transparent); transform: translateX(-50%); will-change: transform, opacity;
   transition: opacity .4s;
 }
 .mp-floor.mp-off { opacity: 0 !important; }
@@ -473,7 +473,7 @@
 /* Swipe hint: a dotted cut line across the top with a glowing dot running along it. */
 .mp-swipe-hint {
   position: absolute; left: 4%; right: 4%; height: 0; z-index: 6; pointer-events: none;
-  border-top: 2px dashed rgba(255,255,255,.85); filter: drop-shadow(0 0 4px rgba(120,190,255,.9));
+  border-top: 2px dashed rgba(255,255,255,.85);
   transition: opacity .25s;
 }
 .mp-swipe-hint.mp-off { opacity: 0; }
@@ -497,18 +497,17 @@
 .mp-reveal-card.mp-back img.mp-back-img { width: 100%; height: 100%; object-fit: cover; }
 .mp-reveal-card.mp-charging { animation: mp-charge 1.4s ease-in infinite; }
 @keyframes mp-charge {
-  0%, 100% { transform: scale(1) rotate(0); box-shadow: 0 0 0 2px var(--mp-c), 0 0 24px var(--mp-c), 0 18px 40px rgba(0,0,0,.5); }
-  10% { transform: scale(1.01) rotate(-1.2deg); } 20% { transform: scale(1.02) rotate(1.2deg); }
-  30% { transform: scale(1.02) rotate(-.8deg); } 40% { transform: scale(1.03) rotate(.8deg); }
-  50% { transform: scale(1.04) rotate(0); box-shadow: 0 0 0 3px #fff, 0 0 60px 12px var(--mp-c), 0 18px 40px rgba(0,0,0,.5); }
+  0%, 100% { transform: scale(1) rotate(0); } 10% { transform: scale(1.01) rotate(-1.2deg); } 20% { transform: scale(1.02) rotate(1.2deg); }
+  30% { transform: scale(1.02) rotate(-.8deg); } 40% { transform: scale(1.03) rotate(.8deg); } 50% { transform: scale(1.04) rotate(0); }
 }
+.mp-glow { will-change: transform, opacity; }
 .mp-glow.mp-charge { animation: mp-glow-charge 1.4s ease-in-out infinite; }
 @keyframes mp-glow-charge { 0%, 100% { opacity: .55; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.15); } }
 .mp-result .mp-tap { display: inline-block; font-family: var(--mp-heading); font-size: 1.35em; font-weight: 700; letter-spacing: .08em; color: #fff; animation: mp-breathe 1.2s ease-in-out infinite; }
 
 /* Light rays behind a big hit: faint while it charges, full when it turns over. */
 .mp-rays {
-  position: absolute; left: 50%; top: 50%; width: 260%; aspect-ratio: 1; z-index: 0; pointer-events: none;
+  position: absolute; left: 50%; top: 50%; width: 200%; aspect-ratio: 1; z-index: 0; pointer-events: none; will-change: transform;
   transform: translate(-50%, -50%); border-radius: 50%; opacity: 0; transition: opacity .6s; --mp-c: #e0a21a;
   background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--mp-c) 70%, #fff) 0deg 6deg, transparent 6deg 20deg);
   -webkit-mask: radial-gradient(closest-side, #000 15%, transparent 70%); mask: radial-gradient(closest-side, #000 15%, transparent 70%);
@@ -537,17 +536,13 @@
 }
 
 /* Digital tear: a glowing red laser line, a bright head that runs along the cut, red sparks. */
-.mp-edge { filter: drop-shadow(0 0 2px #ff2d55) drop-shadow(0 0 5px rgba(255,45,85,.8)); }
-.mp-edge-bits { animation: mp-bits .18s steps(2) infinite; }
-@keyframes mp-bits { 50% { opacity: .2; } }
 .mp-laser {
   position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; z-index: 6; pointer-events: none; opacity: 0;
   background: radial-gradient(circle, #fff 0 25%, #ff2d55 45%, rgba(255,45,85,0) 70%);
-  box-shadow: 0 0 14px 6px rgba(255,45,85,.75); transition: opacity .12s;
+  box-shadow: 0 0 14px 6px rgba(255,45,85,.75); transition: opacity .12s; will-change: transform;
 }
 .mp-laser.mp-on { opacity: 1; }
-.mp-fleck { width: 3px; height: 3px; border-radius: 0; box-shadow: 0 0 4px #ff2d55; }
-@media (prefers-reduced-motion: reduce) { .mp-edge-bits { animation: none; } }
+.mp-fleck { width: 3px; height: 3px; border-radius: 0; }
 .mp-cancel-ship { border-color: transparent; text-decoration: underline; font-weight: 600; opacity: .85; }
 
 /* ---------- Vault Market look ----------
@@ -732,3 +727,6 @@
 @keyframes mp-skel { from { background-position: 100% 0; } to { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .mp-page .mp-skel-hero, .mp-page .mp-skel-title, .mp-page .mp-skel-card { animation: none; } }
 @media (max-width: 749px) { .mp-page .mp-skel-hero { height: 300px; } }
+
+/* While the opening stage is up, the page under it stops drawing. */
+.mp-stage-open .mp-page { visibility: hidden; }
