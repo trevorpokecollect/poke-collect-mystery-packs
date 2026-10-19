@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -107,7 +107,7 @@ export default function Marketplace() {
   return (
     <s-page heading="Vault Marketplace">
       <s-section heading="Settings">
-        <form method="post">
+        <Form method="post">
           <s-stack gap="base">
             <input type="hidden" name="intent" value="settings" />
             <s-paragraph>
@@ -131,11 +131,11 @@ export default function Marketplace() {
               </s-button>
             </s-stack>
           </s-stack>
-        </form>
+        </Form>
       </s-section>
 
       <s-section heading="Vault Credit">
-        <form method="post">
+        <Form method="post">
           <s-stack gap="base">
             <input type="hidden" name="intent" value="credit" />
             <s-paragraph>
@@ -160,8 +160,8 @@ export default function Marketplace() {
               Save Vault Credit Settings
             </s-button>
           </s-stack>
-        </form>
-        <form method="post">
+        </Form>
+        <Form method="post">
           <s-stack gap="base">
             <input type="hidden" name="intent" value="adjust" />
             <s-heading>Adjust A Balance</s-heading>
@@ -172,7 +172,7 @@ export default function Marketplace() {
               Adjust Vault Credit
             </s-button>
           </s-stack>
-        </form>
+        </Form>
       </s-section>
 
       <s-section>
