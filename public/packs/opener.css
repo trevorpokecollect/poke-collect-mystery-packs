@@ -549,3 +549,186 @@
 .mp-fleck { width: 3px; height: 3px; border-radius: 0; box-shadow: 0 0 4px #ff2d55; }
 @media (prefers-reduced-motion: reduce) { .mp-edge-bits { animation: none; } }
 .mp-cancel-ship { border-color: transparent; text-decoration: underline; font-weight: 600; opacity: .85; }
+
+/* ---------- Vault Market look ----------
+   My Packs wears the same night-vault style as Vault Market: deep ink panels, card art up front,
+   a holo foil accent on the heading, and the brand red kept for the one main action. The page sits
+   inside the store theme, so the dark background is painted edge to edge behind it. */
+.mp-page {
+  --mp-ink: #eef1fa;
+  --mp-muted: #98a1c0;
+  --mp-surface: #11172b;
+  --mp-line: #283252;
+  --mp-pocket: #19213b;
+  --mp-signal: #ff4b2b;
+  --mp-signal-hi: #ff6a4d;
+  --mp-trade: #67d5c0;
+  --mp-gold: #f2c35b;
+  --mp-foil: linear-gradient(110deg, #9fe6ff 0%, #c6a8ff 28%, #ffd7a1 52%, #a7ffdc 76%, #9fe6ff 100%);
+  --mp-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --mp-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mp-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --mp-heading: var(--mp-display);
+  --mp-poke: #ff5a4a; --mp-great: #5b8dff; --mp-ultra: #f2c35b; --mp-master: #b07cff;
+  color-scheme: dark;
+  max-width: 1320px;
+  padding: 36px 20px 72px;
+  color: var(--mp-ink);
+  font-family: var(--mp-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(176, 124, 255, .16), transparent 60%),
+    radial-gradient(700px 420px at -10% 10%, rgba(91, 141, 255, .12), transparent 60%),
+    #0a0e1d;
+  box-shadow: 0 0 0 100vmax #0a0e1d;
+  clip-path: inset(0 -100vmax);
+}
+.mp-page a { color: inherit; }
+.mp-page :focus-visible { outline: 2px solid var(--mp-gold); outline-offset: 2px; }
+.mp-page .mp-section-title,
+.mp-page .mp-history-summary .mp-section-title,
+.mp-page .mp-vault-group-title,
+.mp-page .mp-more-title {
+  font-family: var(--mp-display); font-weight: 700; letter-spacing: -.01em; color: var(--mp-ink);
+}
+.mp-page .mp-section-title { font-size: 1.25em; margin: 40px 0 14px; }
+.mp-page .mp-sub, .mp-page .mp-empty, .mp-page .mp-vault-group-sub, .mp-page .mp-history-count,
+.mp-page .mp-more-sub, .mp-page .mp-login-hint, .mp-page .mp-info-note, .mp-page .mp-card-meta { color: var(--mp-muted); }
+.mp-page .mp-history-count { font-family: var(--mp-mono); font-size: .8em; }
+.mp-page .mp-vault-group-sub a, .mp-page .mp-login-hint a { color: var(--mp-trade); }
+.mp-page .mp-error { color: var(--mp-signal-hi); }
+
+/* Hero: a vault panel with the foil heading and mono stats, like the market's front page. */
+.mp-page .mp-hero {
+  border-radius: 22px; padding: 36px 40px; margin: 0 0 32px;
+  background:
+    radial-gradient(600px 300px at 100% 0%, rgba(176, 124, 255, .22), transparent 60%),
+    radial-gradient(500px 260px at 0% 100%, rgba(255, 75, 43, .12), transparent 60%),
+    linear-gradient(160deg, #141b33 0%, #10162b 60%, #160f2a 100%);
+  border: 1px solid var(--mp-line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .35);
+}
+.mp-page .mp-hero-kicker { color: var(--mp-gold); font-family: var(--mp-body); font-weight: 700; letter-spacing: .22em; font-size: 11px; }
+.mp-page .mp-hero h1 {
+  font-family: var(--mp-display); font-weight: 800; letter-spacing: -.02em; line-height: 1.05;
+  font-size: clamp(2.2em, 5.4vw, 3.6em);
+  background: linear-gradient(90deg, #fff 0%, #fff 38%, #9fe6ff 55%, #c6a8ff 70%, #ffd7a1 85%, #a7ffdc 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.mp-page .mp-hero-sub { color: #c3c9de; }
+.mp-page .mp-hero-stat {
+  background: var(--mp-pocket); border-color: var(--mp-line); color: var(--mp-muted);
+  font-size: .8em; letter-spacing: .04em; text-transform: uppercase;
+}
+.mp-page .mp-hero-stat b { font-family: var(--mp-mono); color: var(--mp-ink); font-size: 1.25em; text-transform: none; }
+.mp-page .mp-hero-ship {
+  background: rgba(10, 14, 29, .55); border: 1px solid var(--mp-line); border-radius: 16px;
+  backdrop-filter: blur(8px);
+}
+.mp-page .mp-hero-ship-title { font-family: var(--mp-display); font-weight: 700; }
+.mp-page .mp-hero-ship p { color: var(--mp-muted); }
+.mp-page .mp-hero-bar { background: var(--mp-pocket); }
+.mp-page .mp-hero-bar span { background: var(--mp-foil); }
+
+/* Buttons: one red action, everything else quiet pills. */
+.mp-page .mp-btn {
+  font-family: var(--mp-body); font-weight: 700; letter-spacing: .01em; font-size: 1em;
+  border-radius: 999px; transition: transform .15s ease, background .15s ease, border-color .15s ease;
+}
+.mp-page .mp-btn:hover { transform: translateY(-1px); }
+.mp-page .mp-vault-btn, .mp-page .mp-hero .mp-vault-btn, .mp-page .mp-pick-bar button:not(:disabled):first-child {
+  background: var(--mp-signal); color: #fff; border: 0;
+  box-shadow: 0 8px 24px rgba(255, 75, 43, .28);
+}
+.mp-page .mp-vault-btn:hover:not([disabled]) { background: var(--mp-signal-hi); }
+.mp-page .mp-btn-ghost, .mp-page .mp-pickup-btn, .mp-page .mp-hero .mp-btn-ghost {
+  background: var(--mp-pocket); color: var(--mp-ink); border: 1px solid var(--mp-line);
+}
+.mp-page .mp-btn-ghost:hover, .mp-page .mp-pickup-btn:hover { border-color: #3a4672; background: #1e2745; }
+.mp-page .mp-btn-dark, .mp-page a.mp-btn-dark {
+  background: var(--mp-signal); color: #fff; box-shadow: 0 8px 24px rgba(255, 75, 43, .28);
+}
+.mp-page .mp-btn-dark:hover, .mp-page a.mp-btn-dark:hover { background: var(--mp-signal-hi); color: #fff; }
+.mp-page .mp-market-link {
+  background: var(--mp-pocket); border: 1px solid var(--mp-line); color: var(--mp-ink);
+}
+
+/* Card tiles: art up front, no white frame, a slight lift on hover. */
+.mp-page .mp-grid { grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 18px; }
+.mp-page .mp-card {
+  background: transparent; border: 0; padding: 0; gap: 8px; border-radius: 0;
+}
+.mp-page .mp-card img {
+  background: var(--mp-pocket); border-radius: 10px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.mp-page .mp-card:hover img { transform: translateY(-3px); box-shadow: 0 16px 34px rgba(0, 0, 0, .5); }
+.mp-page .mp-card-title { font-family: var(--mp-body); font-weight: 600; font-size: .92em; color: var(--mp-ink); }
+.mp-page .mp-tier { font-family: var(--mp-mono); letter-spacing: .08em; }
+.mp-page .mp-tier[data-tier="poke"] { color: var(--mp-poke); }
+.mp-page .mp-tier[data-tier="great"] { color: var(--mp-great); }
+.mp-page .mp-tier[data-tier="ultra"] { color: var(--mp-ultra); }
+.mp-page .mp-tier[data-tier="master"] { color: var(--mp-master); }
+.mp-page .mp-grid-listed .mp-card { background: transparent; }
+.mp-page .mp-grid-listed .mp-card img { opacity: .82; outline: 1px dashed var(--mp-line); outline-offset: 4px; }
+
+/* Pick-to-ship tiles: the selection ring is the brand red, like the market's main action. */
+.mp-page .mp-card-pick { padding: 8px; border-radius: 14px; background: var(--mp-surface); border: 1px solid var(--mp-line); }
+.mp-page .mp-card-pick[aria-checked="true"] { border-color: var(--mp-signal); box-shadow: 0 0 0 1px var(--mp-signal), 0 12px 30px rgba(255, 75, 43, .18); }
+.mp-page .mp-card-pick[aria-checked="false"] { opacity: .6; }
+.mp-page .mp-card-pick:focus-visible { outline-color: var(--mp-gold); }
+.mp-page .mp-pick-check { background: var(--mp-pocket); border-color: var(--mp-line); }
+.mp-page .mp-card-pick[aria-checked="true"] .mp-pick-check { background: var(--mp-signal); border-color: var(--mp-signal); }
+.mp-page .mp-pick-bar button { background: var(--mp-pocket); color: var(--mp-ink); border: 1px solid var(--mp-line); }
+
+/* Status chips, in the market's tinted-chip style. */
+.mp-page .mp-ship {
+  font-family: var(--mp-body); font-weight: 700; font-size: .78em; letter-spacing: .01em;
+  border-radius: 7px; padding: 3px 9px; background: rgba(242, 195, 91, .12); color: var(--mp-gold);
+}
+.mp-page .mp-ship[data-state="shipped"], .mp-page .mp-ship[data-state="picked_up"] { background: rgba(103, 213, 192, .12); color: var(--mp-trade); }
+.mp-page .mp-ship[data-state="pickup_ready"] { background: rgba(91, 141, 255, .14); color: #8fb0ff; }
+.mp-page .mp-ship[data-state="vault"] { background: rgba(176, 124, 255, .14); color: #c6a8ff; }
+.mp-page .mp-ship[data-state="market"] { background: rgba(103, 213, 192, .12); color: var(--mp-trade); }
+.mp-page .mp-ship[data-state="awaiting_payment"] { background: rgba(255, 75, 43, .14); color: var(--mp-signal-hi); }
+.mp-page .mp-track { color: var(--mp-trade); }
+
+.mp-page .mp-history { border-top-color: var(--mp-line); }
+.mp-page .mp-vault-group { border-color: var(--mp-line); }
+
+/* Panels: open more packs, how shipping works, demo note. */
+.mp-page .mp-more, .mp-page .mp-info-item, .mp-page .mp-demo, .mp-page .mp-vault {
+  background: var(--mp-surface); border: 1px solid var(--mp-line); color: var(--mp-ink); border-radius: var(--mp-radius, 16px);
+}
+.mp-page .mp-more { background: linear-gradient(160deg, #141b33, #10162b); }
+.mp-page .mp-more-art { background: var(--mp-pocket); border-radius: 12px; }
+.mp-page .mp-more-name { font-family: var(--mp-display); font-weight: 700; }
+.mp-page .mp-qty { background: var(--mp-pocket); border-color: var(--mp-line); }
+.mp-page .mp-info-num { background: var(--mp-foil); color: #0a0e1d; font-family: var(--mp-mono); }
+.mp-page .mp-info-item strong { color: var(--mp-ink); }
+.mp-page .mp-info-item p { color: var(--mp-muted); }
+
+/* The theme's "You Might Also Like" row keeps the store's own light look, set apart below the vault. */
+.mp-page .mp-theme-recs { background: #fff; color: #14141a; margin-top: 56px; padding: 8px 0 24px; color-scheme: light; }
+.mp-page .mp-recs { color: var(--mp-ink); }
+
+@media (max-width: 749px) {
+  .mp-page { padding: 20px 14px 56px; }
+  .mp-page .mp-hero { padding: 24px 18px; border-radius: 18px; }
+  .mp-page .mp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+
+/* Loading placeholder from the page shell, until the packs arrive. */
+.mp-page .mp-skel-hero, .mp-page .mp-skel-title, .mp-page .mp-skel-card {
+  border-radius: 14px;
+  background: linear-gradient(100deg, #11172b 30%, #1b2442 50%, #11172b 70%) 0 0 / 300% 100%;
+  animation: mp-skel 1.4s ease-in-out infinite;
+}
+.mp-page .mp-skel-hero { height: 220px; border-radius: 22px; border: 1px solid var(--mp-line); }
+.mp-page .mp-skel-title { width: 200px; height: 26px; margin: 40px 0 14px; border-radius: 8px; }
+.mp-page .mp-skel-card { aspect-ratio: 5 / 7; border-radius: 10px; }
+@keyframes mp-skel { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .mp-page .mp-skel-hero, .mp-page .mp-skel-title, .mp-page .mp-skel-card { animation: none; } }
+@media (max-width: 749px) { .mp-page .mp-skel-hero { height: 300px; } }

@@ -585,8 +585,10 @@
 
   function fetchPacks() {
     if (demo && demoData) return Promise.resolve(demoData);
-    return fetch(api + (demo ? "/demo" : "/pulls") + query, { credentials: "same-origin" })
-      .then(function (r) { return r.json(); })
+    // The page shell starts the first request before this script has loaded; use it once.
+    var early = window.__mpFirstPulls;
+    window.__mpFirstPulls = null;
+    return (early || fetch(api + (demo ? "/demo" : "/pulls") + query, { credentials: "same-origin" }).then(function (r) { return r.json(); }))
       .then(function (data) {
         if (demo && !data.error) demoData = data;
         return data;
