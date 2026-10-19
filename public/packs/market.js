@@ -1180,7 +1180,7 @@
               : marketView(),
     );
     root.appendChild(el("footer", { class: "vm-foot" }, [
-      el("p", { text: "Trades And Sales Are Between Collectors Only. Poke-Collect Doesn't Buy Cards Back, And Card Values Are Never Shown, So Agree On What Feels Fair To You." }),
+      el("p", { text: "Trades And Sales Are Between Collectors Only. Poke-Collect Doesn't Buy Cards Back Or Set Prices. Sellers Choose Their Own Price, And The Price Guide Is Only A Suggestion." }),
       el("a", { class: "vm-link", href: "/", text: "Back To Poke-Collect" }),
     ]));
     var layer = modalLayer();
