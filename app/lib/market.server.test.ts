@@ -13,6 +13,7 @@ import {
   catalog,
   collectionFor,
   collectors,
+  cancelListing,
   cancelOffer,
   completeSale,
   createListing,
@@ -292,7 +293,7 @@ describe("selling", () => {
     expect(draft.customAttributes[0].value).toBe(listing.id);
     // Same buyer again gets the same invoice; another buyer is turned away; the seller can't ship it.
     expect((await startPurchase(db, admin, SHOP, ANN, listing.id)).invoiceUrl).toBe("https://pay/1");
-    await expect(requestShipment(db, admin, SHOP, { customerId: BEN })).rejects.toThrow(/no cards in your vault/);
+    await expect(requestShipment(db, admin, SHOP, { customerId: BEN })).rejects.toThrow(/listed on Vault Market/);
 
     await completeSale(db, listing.id, "gid://shopify/Order/900", "#900");
     expect(await owner(b1)).toBe(ANN);
@@ -336,15 +337,24 @@ describe("selling", () => {
     expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).payoutStatus).toBe("CANCELLED");
   });
 
-  it("selling has its own switch, and shipping a card withdraws its listing", async () => {
-    const [b1] = await vaultCards(BEN, 1);
+  it("selling has its own switch, and a listed card can't ship until it's taken down", async () => {
+    const [b1, b2] = await vaultCards(BEN, 2);
     await updateMarketSettings(db, SHOP, { sellingEnabled: false });
     await expect(createListing(db, SHOP, BEN, b1, 10)).rejects.toThrow(/Selling isn't open/);
     await updateMarketSettings(db, SHOP, { sellingEnabled: true });
     const listing = await createListing(db, SHOP, BEN, b1, 10);
+    await setOpenToTrade(db, SHOP, BEN, b2, true);
     const { admin } = fakeAdmin();
-    await requestShipment(db, admin, SHOP, { customerId: BEN });
-    expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).status).toBe("CANCELLED");
+    await expect(requestShipment(db, admin, SHOP, { customerId: BEN }, { pullIds: [b1] })).rejects.toThrow(/1 card you picked is listed on Vault Market/);
+    await expect(requestShipment(db, admin, SHOP, { customerId: BEN }, { pickup: true, pullIds: [b1, b2] })).rejects.toThrow(/2 cards you picked are listed/);
+    await expect(requestShipment(db, admin, SHOP, { customerId: BEN })).rejects.toThrow(/Every card in your vault is listed/);
+    expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).status).toBe("ACTIVE");
+
+    // Taken down from sale and trade, it ships.
+    await cancelListing(db, SHOP, BEN, listing.id);
+    await setOpenToTrade(db, SHOP, BEN, b2, false);
+    await requestShipment(db, admin, SHOP, { customerId: BEN }, { pullIds: [b1, b2] });
+    expect(await db.pull.count({ where: { id: { in: [b1, b2] }, shipRequestId: { not: null } } })).toBe(2);
   });
 });
 

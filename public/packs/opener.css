@@ -429,3 +429,13 @@
 .mp-pick-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: -4px 0 14px; color: var(--mp-muted); font-size: .92em; }
 .mp-pick-bar button { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--mp-ink); text-decoration: underline; cursor: pointer; }
 .mp-pick-bar button:disabled { opacity: .4; cursor: default; text-decoration: none; }
+
+/* Your Vault is split into cards ready to ship and cards listed on Vault Market. */
+.mp-vault-group { margin: 22px 0 10px; }
+.mp-vault-group-title { font-family: var(--mp-heading); font-size: 1.25em; font-weight: 700; margin: 0 0 4px; }
+.mp-vault-group-title span { color: var(--mp-muted); font-weight: 600; }
+.mp-vault-group-sub { margin: 0; color: var(--mp-muted); font-size: .92em; }
+.mp-vault-group-sub a { color: var(--mp-ink); font-weight: 700; }
+.mp-ship[data-state="vault"] { background: #e7f6ec; color: #1f7a45; }
+.mp-ship[data-state="market"] { background: #fdeceb; color: #b52a0b; }
+.mp-grid-listed .mp-card { background: #fbfbfc; border-style: dashed; }

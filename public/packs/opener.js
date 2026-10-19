@@ -71,7 +71,7 @@
   }
 
   var SHIP_LABELS = {
-    vault: "In Your Vault",
+    vault: "Ready To Ship",
     awaiting_payment: "Awaiting Shipping Payment",
     preparing: "Preparing To Ship",
     shipped: "Shipped",
@@ -81,6 +81,9 @@
   };
 
   function shipBadge(pack) {
+    if (pack.market) {
+      return el("span", { class: "mp-ship", "data-state": "market", text: "Listed For " + (pack.market.sale && pack.market.trade ? "Sale & Trade" : pack.market.sale ? "Sale" : "Trade") });
+    }
     var ship = pack.shipping || { state: "preparing" };
     var badge = el("span", { class: "mp-ship", "data-state": ship.state, text: SHIP_LABELS[ship.state] || SHIP_LABELS.preparing });
     if (ship.state === "shipped" && ship.tracking && ship.tracking.url) {
@@ -269,7 +272,7 @@
   }
 
   // Page header: title, what's going on, vault stats, and Ship My Cards, all in one banner.
-  function hero(unopened, vault) {
+  function hero(unopened, vault, listedCount) {
     var cards = vault ? vault.cards : 0;
     var pending = vault && vault.pending;
     var sub = unopened
@@ -280,6 +283,7 @@
     var stats = el("div", { class: "mp-hero-stats" }, [
       el("span", { class: "mp-hero-stat" }, [el("b", { text: String(cards) }), document.createTextNode((cards === 1 ? " Card" : " Cards") + " In Vault")]),
       el("span", { class: "mp-hero-stat" }, [el("b", { text: String(unopened) }), document.createTextNode(" Unopened")]),
+      listedCount ? el("span", { class: "mp-hero-stat" }, [el("b", { text: String(listedCount) }), document.createTextNode(" On Vault Market")]) : null,
     ]);
     var text = el("div", { class: "mp-hero-text" }, [
       el("span", { class: "mp-hero-kicker", text: "Digital Mystery Packs · Your Vault" }),
@@ -295,6 +299,7 @@
 
   // Vault cards the customer can pick to ship or pick up, and which ones are picked (by card id).
   var pickable = [];
+  var listedCards = [];
   var picked = {};
   var pickSyncs = [];
   var shipEl = null;
@@ -322,6 +327,7 @@
     var fee = vault ? vault.fee : 5;
     var freeAt = vault ? vault.freeAt : 25;
     var all = pickable.length;
+    var listedOut = listedCards.length;
     var ids = pickedIds();
     var n = ids.length;
     // Picked exactly the cards on the open invoice: just pay it.
@@ -339,7 +345,9 @@
     var left = Math.max(0, freeAt - n);
     var bar = el("span", { class: "mp-hero-bar" }, [el("span", { style: "width:" + Math.min(100, (n / freeAt) * 100) + "%" })]);
     var note = el("p", {
-      text: !all
+      text: !all && listedOut
+        ? "Every card in your vault is listed on Vault Market. Take a card off Vault Market (sale and trade) to ship or pick it up."
+        : !all
         ? "Ship your vault for $" + fee + " flat, free on " + freeAt + "+ cards (US only)."
         : !n
           ? "Tap the cards in your vault you want to ship or pick up."
@@ -433,6 +441,14 @@
     return tile;
   }
 
+  // A heading inside Your Vault: "Ready To Ship Or Pick Up (4)" or "Listed On Vault Market (2)".
+  function vaultGroup(title, count, sub) {
+    return el("div", { class: "mp-vault-group" }, [
+      el("h3", { class: "mp-vault-group-title" }, [document.createTextNode(title + " "), el("span", { text: "(" + count + ")" })]),
+      el("p", { class: "mp-vault-group-sub", text: sub + " " }),
+    ]);
+  }
+
   // "3 Of 5 Cards Selected · Select All · Clear" above the vault grid.
   function pickBar() {
     var count = el("span");
@@ -458,14 +474,16 @@
     var inVault = opened.filter(function (p) { return !p.shipping || p.shipping.state === "vault" || p.shipping.state === "awaiting_payment"; });
     var shipped = opened.filter(function (p) { return inVault.indexOf(p) === -1; });
     // Every vault card starts picked, unless an invoice is open: then just the cards on it.
-    pickable = inVault;
+    // Cards up on Vault Market can't ship until they're taken down: they're listed apart.
+    listedCards = inVault.filter(function (p) { return p.market; });
+    pickable = inVault.filter(function (p) { return !p.market; });
     picked = {};
     pickSyncs = [];
-    var onInvoice = inVault.filter(function (p) { return p.shipping && p.shipping.state === "awaiting_payment"; });
-    (onInvoice.length ? onInvoice : inVault).forEach(function (p) { picked[p.id] = true; });
+    var onInvoice = pickable.filter(function (p) { return p.shipping && p.shipping.state === "awaiting_payment"; });
+    (onInvoice.length ? onInvoice : pickable).forEach(function (p) { picked[p.id] = true; });
 
     if (demo) root.appendChild(demoBanner());
-    root.appendChild(hero(unopened.length, vault));
+    root.appendChild(hero(unopened.length, vault, listedCards.length));
 
     if (unopened.length) {
       root.appendChild(el("h2", { class: "mp-section-title", text: "Unopened" }));
@@ -479,12 +497,20 @@
         el("a", { href: "/account/login?return_url=" + encodeURIComponent("/apps/packs" + (params.get("k") ? "?k=" + encodeURIComponent(params.get("k")) : "")), text: "Log In To Save These To Your Vault" }),
       ]));
     }
-    if (inVault.length > 1) root.appendChild(pickBar());
-    root.appendChild(
-      inVault.length
-        ? el("div", { class: "mp-grid" }, inVault.map(pickTile))
-        : el("p", { class: "mp-empty", text: opened.length ? "Your Vault Is Empty. Every Card Has Shipped." : "Nothing Pulled Yet." }),
-    );
+    if (!inVault.length) {
+      root.appendChild(el("p", { class: "mp-empty", text: opened.length ? "Your Vault Is Empty. Every Card Has Shipped." : "Nothing Pulled Yet." }));
+    }
+    if (pickable.length) {
+      root.appendChild(vaultGroup("Ready To Ship Or Pick Up", pickable.length, "Tap a card to add it to your shipment or leave it out."));
+      if (pickable.length > 1) root.appendChild(pickBar());
+      root.appendChild(el("div", { class: "mp-grid" }, pickable.map(pickTile)));
+    }
+    if (listedCards.length) {
+      var group = vaultGroup("Listed On Vault Market", listedCards.length, "These cards are up for sale or trade, so they can't ship or be picked up. Take a card off Vault Market (sale and trade) to ship it.");
+      group.querySelector(".mp-vault-group-sub").appendChild(el("a", { href: "/apps/packs/market", text: "Manage On Vault Market" }));
+      root.appendChild(group);
+      root.appendChild(el("div", { class: "mp-grid mp-grid-listed" }, listedCards.map(cardTile)));
+    }
     if (shipped.length) {
       var onTheWay = shipped.filter(function (p) { return p.shipping.state === "preparing" || p.shipping.state === "pickup_ready"; }).length;
       var history = el("details", { class: "mp-history" }, [
