@@ -22,6 +22,7 @@ import {
   MIN_PRICE,
   collectionFor,
   collectors,
+  hasMarketAccess,
   marketDemo,
   MAX_SHOWCASE,
   myMarketCards,
@@ -46,7 +47,7 @@ import {
 // Vault Marketplace data for the logged-in customer: their cards, the Trade Board, and offers.
 // Only trade names are shown for other players, and pack card values are never included.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { shop, viewer } = await proxyContext(request);
+  const { shop, viewer, admin } = await proxyContext(request);
   // Staff preview link: sample data, shown even while the marketplace is off.
   const params = new URL(request.url).searchParams;
   const view = params.get("view") ?? "";
@@ -62,6 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const settings = await marketSettings(db, shop);
   if (!settings.enabled) return json({ enabled: false });
   if (!viewer?.customerId) return json({ enabled: true, signedIn: false });
+  if (!(await hasMarketAccess(db, admin, shop, viewer.customerId))) return json({ enabled: false });
   if (view === "collectors") return json(await collectors(db, shop, viewer.customerId));
   if (view === "matches") return json(await tradeMatches(db, shop, viewer.customerId));
   if (view === "wallet") return json({ ...(await creditWallet(db, shop, viewer.customerId)), codesEnabled: settings.creditCollections > 0, codeDays: CODE_DAYS });
@@ -127,6 +129,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (validDemoToken(shop, new URL(request.url).searchParams.get("demo"))) return json({ ok: true, demo: true });
   const me = viewer?.customerId;
   if (!me) return json({ error: "Log in to trade." }, 401);
+  if (!(await hasMarketAccess(db, admin, shop, me))) return json({ error: "The Vault Market isn't open yet." }, 403);
   const body = (await request.json().catch(() => ({}))) as Body;
   try {
     switch (body.action) {

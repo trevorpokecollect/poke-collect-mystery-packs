@@ -53,6 +53,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           enabled: form.get("enabled") === "on",
           sellingEnabled: form.get("selling") === "on",
           feePercent: Number(form.get("fee")),
+          accessTag: String(form.get("accessTag") || "").trim() || null,
         });
         return { ok: "Marketplace settings saved." };
       case "credit": {
@@ -115,6 +116,11 @@ export default function Marketplace() {
             </s-paragraph>
             <s-checkbox name="enabled" label="Trading on (Trade Board and offers on the storefront)" defaultChecked={settings.enabled} />
             <s-checkbox name="selling" label="Selling on (players list cards for a price; needs trading on)" defaultChecked={settings.sellingSwitch} />
+            <s-text-field
+              name="accessTag"
+              label="Soft launch: only customers with this tag (leave empty for everyone)"
+              defaultValue={settings.accessTag ?? ""}
+            />
             <s-number-field name="fee" label="Fee kept from each sale (%)" min={0} max={50} step={0.5} defaultValue={String(settings.feePercent)} />
             <s-stack direction="inline" gap="small">
               <s-button type="submit" variant="primary" disabled={busy}>

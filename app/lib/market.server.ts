@@ -53,18 +53,34 @@ export async function marketSettings(db: Db | Tx, shop: string) {
     sellingEnabled: (row?.enabled ?? false) && (row?.sellingEnabled ?? false),
     feePercent: Number(row?.feePercent ?? 10),
     creditCollections: row?.creditCollectionIds.length ?? 0,
+    accessTag: row?.accessTag ?? null,
   };
 }
 
 export async function updateMarketSettings(
   db: Db,
   shop: string,
-  input: { enabled?: boolean; sellingEnabled?: boolean; feePercent?: number; creditCollectionIds?: string[]; creditCombines?: boolean },
+  input: { enabled?: boolean; sellingEnabled?: boolean; feePercent?: number; creditCollectionIds?: string[]; creditCombines?: boolean; accessTag?: string | null },
 ) {
   if (input.feePercent !== undefined && !(input.feePercent >= 0 && input.feePercent <= 50)) {
     throw new PoolError("The fee must be between 0% and 50%.");
   }
   return db.marketSettings.upsert({ where: { shop }, create: { shop, ...input }, update: input });
+}
+
+/**
+ * Whether this customer can use Vault Market: it's on, and during a soft launch they carry the
+ * access tag in Shopify. Staff can test before everyone sees it.
+ */
+export async function hasMarketAccess(db: Db, admin: AdminApiContext | undefined, shop: string, customerId: string | null | undefined) {
+  const settings = await marketSettings(db, shop);
+  if (!settings.enabled || !customerId) return false;
+  if (!settings.accessTag) return true;
+  if (!admin) return false;
+  const data = await gql(admin, `#graphql
+    query MarketAccess($id: ID!) { customer(id: $id) { tags } }`, { id: customerId }).catch(() => null);
+  const tags = ((data?.customer?.tags as string[] | undefined) ?? []).map((t) => t.toLowerCase());
+  return tags.includes(settings.accessTag.toLowerCase());
 }
 
 async function requireEnabled(db: Db | Tx, shop: string, selling = false) {

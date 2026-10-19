@@ -18,6 +18,7 @@ import {
   expireCheckouts,
   expireOffers,
   flagMarketOrder,
+  hasMarketAccess,
   marketDemo,
   myMarketCards,
   myOffers,
@@ -479,5 +480,19 @@ describe("vault credit", () => {
     await expireCreditCodes(db, async () => admin, new Date(Date.now() + 31 * 86_400_000));
     expect((await db.creditCode.findUniqueOrThrow({ where: { id: lapsing.id } })).status).toBe("EXPIRED");
     expect(await creditBalance(db, SHOP, ANN)).toBe(30);
+  });
+});
+
+describe("soft launch", () => {
+  it("limits Vault Market to tagged customers when an access tag is set", async () => {
+    const admin = { graphql: async () => new Response(JSON.stringify({ data: { customer: { tags: ["VIP", "Vault-Beta"] } } })) };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const a = admin as any;
+    expect(await hasMarketAccess(db, a, SHOP, ANN)).toBe(true);
+    await updateMarketSettings(db, SHOP, { accessTag: "vault-beta" });
+    expect(await hasMarketAccess(db, a, SHOP, ANN)).toBe(true);
+    await updateMarketSettings(db, SHOP, { accessTag: "staff-only" });
+    expect(await hasMarketAccess(db, a, SHOP, ANN)).toBe(false);
+    expect(await hasMarketAccess(db, a, SHOP, null)).toBe(false);
   });
 });
