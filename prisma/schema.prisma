@@ -242,6 +242,10 @@ model Trader {
   customerId String
   tradeName  String
   nameKey    String // lowercased, for uniqueness
+  // Opt-in: other players can browse this player's whole vault (otherwise only cards they put up).
+  showCollection Boolean @default(false)
+  // Up to 6 pull ids pinned at the top of their collection page.
+  showcase   String[] @default([])
   createdAt  DateTime @default(now())
 
   @@unique([shop, customerId])

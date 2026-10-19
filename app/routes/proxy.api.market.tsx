@@ -15,7 +15,10 @@ import {
   MAX_SIDE_CARDS,
   METRICS,
   MIN_PRICE,
+  collectionFor,
+  collectors,
   marketDemo,
+  MAX_SHOWCASE,
   myMarketCards,
   myOffers,
   notify,
@@ -23,6 +26,7 @@ import {
   OFFER_NOTES,
   PAYOUT_HOLD_DAYS,
   respondToOffer,
+  setCollectionSettings,
   setOpenToTrade,
   setTradeName,
   startPurchase,
@@ -35,11 +39,30 @@ import {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
   // Staff preview link: sample data, shown even while the marketplace is off.
-  if (validDemoToken(shop, new URL(request.url).searchParams.get("demo"))) return json(await marketDemo(db, shop));
+  const params = new URL(request.url).searchParams;
+  const view = params.get("view") ?? "";
+  const name = params.get("name")?.slice(0, 40) ?? "";
+  if (validDemoToken(shop, params.get("demo"))) {
+    try {
+      return json(await marketDemo(db, shop, { view, name }));
+    } catch (error) {
+      if (error instanceof PoolError) return json({ error: error.message }, 404);
+      throw error;
+    }
+  }
   const settings = await marketSettings(db, shop);
   if (!settings.enabled) return json({ enabled: false });
   if (!viewer?.customerId) return json({ enabled: true, signedIn: false });
-  const q = new URL(request.url).searchParams.get("q")?.slice(0, 60) ?? "";
+  if (view === "collectors") return json(await collectors(db, shop, viewer.customerId));
+  if (view === "collection") {
+    try {
+      return json(await collectionFor(db, shop, name, viewer.customerId));
+    } catch (error) {
+      if (error instanceof PoolError) return json({ error: error.message }, 404);
+      throw error;
+    }
+  }
+  const q = params.get("q")?.slice(0, 60) ?? "";
   const [me, cards, board, offers] = await Promise.all([
     traderFor(db, shop, viewer.customerId),
     myMarketCards(db, shop, viewer.customerId),
@@ -51,9 +74,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     signedIn: true,
     selling: settings.sellingEnabled,
     feePercent: settings.feePercent,
-    rules: { waitDays: TRADE_WAIT_DAYS, offerDays: OFFER_DAYS, payoutDays: PAYOUT_HOLD_DAYS, maxCards: MAX_SIDE_CARDS, maxOffers: MAX_OPEN_OFFERS, minPrice: MIN_PRICE, maxPrice: MAX_PRICE },
+    rules: { waitDays: TRADE_WAIT_DAYS, offerDays: OFFER_DAYS, payoutDays: PAYOUT_HOLD_DAYS, maxCards: MAX_SIDE_CARDS, maxOffers: MAX_OPEN_OFFERS, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, maxShowcase: MAX_SHOWCASE },
     notes: OFFER_NOTES,
     tradeName: me?.tradeName ?? null,
+    me: me ? { tradeName: me.tradeName, showCollection: me.showCollection, showcase: me.showcase } : null,
     cards,
     board,
     offers,
@@ -72,6 +96,8 @@ type Body = {
   get?: string[];
   note?: string | null;
   counterOfId?: string | null;
+  showCollection?: boolean;
+  showcase?: string[];
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -85,6 +111,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     switch (body.action) {
       case "setName":
         await setTradeName(db, shop, me, String(body.name ?? ""));
+        return json({ ok: true });
+      case "collection":
+        await setCollectionSettings(db, shop, me, {
+          showCollection: typeof body.showCollection === "boolean" ? body.showCollection : undefined,
+          showcase: Array.isArray(body.showcase) ? body.showcase.map(String) : undefined,
+        });
         return json({ ok: true });
       case "openToTrade":
         await setOpenToTrade(db, shop, me, String(body.pullId), body.on === true);
