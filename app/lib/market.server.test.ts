@@ -7,6 +7,7 @@ import {
   activityFeed,
   addWish,
   boardCards,
+  buyWithCredit,
   catalog,
   collectionFor,
   collectors,
@@ -35,6 +36,7 @@ import {
   wishlist,
 } from "./market.server";
 import { moveVault, requestShipment, vaultedPulls } from "./vault.server";
+import { adjustCredit, createCreditCode, creditBalance, expireCreditCodes, refundCreditCodes, returnCreditCode, settleCreditCodes } from "./credit.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -53,6 +55,8 @@ beforeAll(() => {
 afterAll(() => db.$disconnect());
 beforeEach(async () => {
   await db.wishItem.deleteMany();
+  await db.creditTxn.deleteMany();
+  await db.creditCode.deleteMany();
   await db.pullTransfer.deleteMany();
   await db.tradeItem.deleteMany();
   await db.trade.deleteMany();
@@ -123,6 +127,9 @@ function fakeAdmin() {
       else if (query.includes("currencyCode")) data = { shop: { currencyCode: "USD" } };
       else if (query.includes("MarketDraftStatus")) data = { draftOrder: { id: "d", order: paidOrder } };
       else if (query.includes("draftOrderDelete")) data = { draftOrderDelete: { deletedId: "d", userErrors: [] } };
+      else if (query.includes("discountCodeBasicCreate")) data = { discountCodeBasicCreate: { codeDiscountNode: { id: "gid://shopify/DiscountCodeNode/1" }, userErrors: [] } };
+      else if (query.includes("VaultCreditCodeUses")) data = { codeDiscountNode: { codeDiscount: { asyncUsageCount: 0 } } };
+      else if (query.includes("discountCodeDelete")) data = { discountCodeDelete: { deletedCodeDiscountId: "x", userErrors: [] } };
       else if (query.includes("storeCreditAccountCredit")) data = { storeCreditAccountCredit: { storeCreditAccountTransaction: { id: "t" }, userErrors: [] } };
       else if (variables?.input && (variables.input as { changes?: unknown }).changes) data = { inventoryMoveQuantities: { userErrors: [] } };
       return new Response(JSON.stringify({ data }));
@@ -286,8 +293,9 @@ describe("selling", () => {
 
     expect(await payOutSellers(db, async () => admin)).toBe(0);
     expect(await payOutSellers(db, async () => admin, new Date(Date.now() + 15 * 86_400_000))).toBe(1);
-    const credit = calls.find((c) => c.query.includes("storeCreditAccountCredit"))!.variables;
-    expect(credit).toMatchObject({ id: BEN, creditInput: { creditAmount: { amount: "18.00", currencyCode: "USD" } } });
+    // Paid in Vault Credit (this app's ledger), never Shopify store credit.
+    expect(calls.some((c) => c.query.includes("storeCreditAccountCredit"))).toBe(false);
+    expect(await creditBalance(db, SHOP, BEN)).toBe(18);
     expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).payoutStatus).toBe("PAID");
     void pay;
   });
@@ -422,5 +430,54 @@ describe("wishlist and matches", () => {
     const feed = await activityFeed(db, SHOP);
     expect(feed.map((e) => e.type).sort()).toEqual(["listed", "trade"]);
     expect(JSON.stringify(feed)).not.toMatch(/price|30\.00|"30"/);
+  });
+});
+
+describe("vault credit", () => {
+  it("buys a listed card with Vault Credit and pays the seller right away", async () => {
+    const [b1] = await vaultCards(BEN, 1);
+    const listing = await createListing(db, SHOP, BEN, b1, 20);
+    await expect(buyWithCredit(db, SHOP, ANN, listing.id)).rejects.toThrow(/enough Vault Credit/);
+    await adjustCredit(db, SHOP, ANN, 25, "Test top-up");
+    await buyWithCredit(db, SHOP, ANN, listing.id);
+    expect(await owner(b1)).toBe(ANN);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(5);
+    expect(await creditBalance(db, SHOP, BEN)).toBe(18);
+    await setTradeName(db, SHOP, CAL, "Cal");
+    await expect(buyWithCredit(db, SHOP, CAL, listing.id)).rejects.toThrow(/isn't for sale/);
+  });
+
+  it("makes collection-limited codes, returns leftovers, and refunds cancelled orders", async () => {
+    const { admin, calls } = fakeAdmin();
+    await adjustCredit(db, SHOP, ANN, 30, "Test top-up");
+    await expect(createCreditCode(db, admin, SHOP, ANN, 10)).rejects.toThrow(/aren't available/);
+    await updateMarketSettings(db, SHOP, { creditCollectionIds: ["gid://shopify/Collection/9"] });
+    await expect(createCreditCode(db, admin, SHOP, ANN, 40)).rejects.toThrow(/enough Vault Credit/);
+
+    const code = await createCreditCode(db, admin, SHOP, ANN, 20);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(10);
+    const input = calls.find((c) => c.query.includes("discountCodeBasicCreate"))!.variables.input as Record<string, unknown>;
+    expect(input).toMatchObject({
+      code: code.code,
+      usageLimit: 1,
+      context: { customers: { add: [ANN] } },
+      customerGets: { value: { discountAmount: { amount: "20.00" } }, items: { collections: { add: ["gid://shopify/Collection/9"] } } },
+    });
+
+    // The cart only had $12.50 of eligible items: $7.50 comes back.
+    await settleCreditCodes(db, { admin_graphql_api_id: "gid://shopify/Order/77", name: "#77", discount_codes: [{ code: code.code, amount: "12.50" }] });
+    expect(await creditBalance(db, SHOP, ANN)).toBe(17.5);
+    await settleCreditCodes(db, { admin_graphql_api_id: "gid://shopify/Order/77", name: "#77", discount_codes: [{ code: code.code, amount: "12.50" }] });
+    expect(await creditBalance(db, SHOP, ANN)).toBe(17.5);
+    await refundCreditCodes(db, "gid://shopify/Order/77");
+    expect(await creditBalance(db, SHOP, ANN)).toBe(30);
+
+    const unused = await createCreditCode(db, admin, SHOP, ANN, 5);
+    await returnCreditCode(db, admin, SHOP, ANN, unused.id);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(30);
+    const lapsing = await createCreditCode(db, admin, SHOP, ANN, 5);
+    await expireCreditCodes(db, async () => admin, new Date(Date.now() + 31 * 86_400_000));
+    expect((await db.creditCode.findUniqueOrThrow({ where: { id: lapsing.id } })).status).toBe("EXPIRED");
+    expect(await creditBalance(db, SHOP, ANN)).toBe(30);
   });
 });

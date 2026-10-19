@@ -3,10 +3,12 @@ import db from "../db.server";
 import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { validDemoToken } from "../lib/demo.server";
+import { createCreditCode, creditBalance, creditWallet, returnCreditCode, CODE_DAYS } from "../lib/credit.server";
 import {
   activityFeed,
   addWish,
   boardCards,
+  buyWithCredit,
   catalog,
   cancelListing,
   cancelOffer,
@@ -62,6 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!viewer?.customerId) return json({ enabled: true, signedIn: false });
   if (view === "collectors") return json(await collectors(db, shop, viewer.customerId));
   if (view === "matches") return json(await tradeMatches(db, shop, viewer.customerId));
+  if (view === "wallet") return json({ ...(await creditWallet(db, shop, viewer.customerId)), codesEnabled: settings.creditCollections > 0, codeDays: CODE_DAYS });
   if (view === "catalog") return json(await catalog(db, shop, params.get("q")?.slice(0, 60) ?? ""));
   if (view === "collection") {
     try {
@@ -80,6 +83,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     activityFeed(db, shop),
   ]);
   const wishes = await wishlist(db, shop, viewer.customerId, board);
+  const credit = await creditBalance(db, shop, viewer.customerId);
   return json({
     enabled: true,
     signedIn: true,
@@ -93,6 +97,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     board,
     offers,
     wishlist: wishes,
+    credit,
     feed,
   });
 };
@@ -112,6 +117,8 @@ type Body = {
   showCollection?: boolean;
   showcase?: string[];
   cardKey?: string;
+  amount?: number;
+  codeId?: string;
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -139,6 +146,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       case "list":
         await createListing(db, shop, me, String(body.pullId), Number(body.price));
         await sendWishlistAlerts(db, admin, shop, String(body.pullId));
+        return json({ ok: true });
+      case "buyCredit":
+        await buyWithCredit(db, shop, me, String(body.listingId));
+        return json({ ok: true });
+      case "useCredit": {
+        if (!admin) return json({ error: "Codes aren't available right now. Please try again." }, 503);
+        const code = await createCreditCode(db, admin, shop, me, Number(body.amount));
+        return json({ ok: true, code: code.code, amount: Number(code.amount) });
+      }
+      case "returnCode":
+        if (!admin) return json({ error: "Please try again in a moment." }, 503);
+        await returnCreditCode(db, admin, shop, me, String(body.codeId));
         return json({ ok: true });
       case "wish":
         await addWish(db, shop, me, String(body.cardKey));

@@ -353,6 +353,32 @@ body.vm-locked { overflow: hidden; }
 .vm-feed-text .vm-fine { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) { .vm-live { animation: none; } }
 
+/* ---------- Vault Credit ---------- */
+.vm-credit-chip { display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--vm-line); text-decoration: none; }
+.vm-credit-chip b { font-family: var(--vm-mono); color: var(--vm-trade); }
+.vm-credit-chip-on, .vm-credit-chip:hover { border-color: var(--vm-trade); }
+.vm-credit-label { font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--vm-muted); }
+.vm-btn-credit { background: rgba(103, 213, 192, .14); color: var(--vm-trade) !important; border-color: var(--vm-trade); }
+.vm-wallet-hero {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px; align-items: start;
+  padding: 32px; margin: 8px 0 28px; border-radius: 22px; background: var(--vm-ink-1); border: 1px solid var(--vm-line);
+}
+.vm-wallet-balance { margin: 0; font-family: var(--vm-mono); font-weight: 700; font-size: clamp(2.6rem, 7vw, 4.2rem); line-height: 1; color: var(--vm-trade); font-variant-numeric: tabular-nums; }
+.vm-wallet-use { display: grid; gap: 10px; padding: 20px; border-radius: 16px; background: var(--vm-ink-2); }
+.vm-wallet-use .vm-fine { margin: 0; }
+.vm-wallet-section { margin-bottom: 32px; }
+.vm-wallet-section .vm-section-title { margin-bottom: 14px; }
+.vm-codes { display: grid; gap: 10px; }
+.vm-code-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.vm-code { display: inline-flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px dashed var(--vm-trade); background: rgba(103, 213, 192, .06); max-width: 100%; flex-wrap: wrap; }
+.vm-code-text { font-family: var(--vm-mono); font-weight: 700; letter-spacing: .06em; overflow-wrap: anywhere; }
+.vm-code-amt { font-family: var(--vm-mono); color: var(--vm-trade); }
+.vm-ledger { display: grid; border: 1px solid var(--vm-line); border-radius: 14px; overflow: hidden; }
+.vm-ledger-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--vm-line); }
+.vm-ledger-row:first-child { border-top: 0; }
+.vm-ledger-amt { font-family: var(--vm-mono); font-weight: 700; color: var(--vm-trade); font-variant-numeric: tabular-nums; }
+.vm-neg { color: var(--vm-muted); }
+
 /* ---------- Narrow screens ---------- */
 @media (max-width: 860px) {
   .vm-hero { grid-template-columns: 1fr; padding: 26px 20px; }
@@ -370,12 +396,14 @@ body.vm-locked { overflow: hidden; }
   .vm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; }
   .vm-modal-panel { padding: 22px 16px; }
   .vm-showcase-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .vm-wallet-hero { grid-template-columns: 1fr; padding: 22px 18px; }
 }
 @media (max-width: 600px) {
   .vm-fan { display: none; }
   .vm-hero-stats { gap: 18px; margin-top: 20px; }
   .vm-stat dd { font-size: 1.5rem; }
   .vm-me-name { display: none; }
+  .vm-credit-label { display: none; }
   .vm-top-right { gap: 10px; }
 }
 @media (max-width: 420px) {

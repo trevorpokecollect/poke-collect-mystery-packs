@@ -5,6 +5,7 @@ import { attachMissingCustomers, autoOpenDue, ordersReadyToFinalize } from "../l
 import { finalizeOrder, fulfillMissingVaultPackLines, noteMissingVaultPulls } from "../lib/orders.server";
 import { expireShipments, notifyPickupsReady, sendVaultReminders } from "../lib/vault.server";
 import { expireCheckouts, expireOffers, payOutSellers } from "../lib/market.server";
+import { expireCreditCodes } from "../lib/credit.server";
 
 // Called on a schedule (Railway cron): opens packs past their window and retries
 // any order that is ready to ship but wasn't finalized yet.
@@ -41,5 +42,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await expireOffers(db);
   await expireCheckouts(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   await payOutSellers(db, async (shop) => (await unauthenticated.admin(shop)).admin);
+  await expireCreditCodes(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   return Response.json({ finalized: results });
 };
