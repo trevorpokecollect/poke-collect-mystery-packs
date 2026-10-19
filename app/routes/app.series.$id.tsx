@@ -19,7 +19,7 @@ import {
   updateTierRules,
 } from "../lib/series.server";
 import { releaseUnneeded } from "../lib/inventory.server";
-import { refreshBuylistReport, type BuylistReport } from "../lib/buylist.server";
+import { BUYLIST_SOURCE, refreshBuylistReport, type BuylistReport } from "../lib/buylist.server";
 import { demoToken } from "../lib/demo.server";
 import { TIERS } from "../lib/tiers";
 import { PoolError } from "../lib/pool.server";
@@ -47,8 +47,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     include: { slot: { include: { card: { select: { title: true, tier: true } } } } },
   });
   const summary = poolSummary(series.cards, Number(packPrice), series.cardsPerPack);
-  // Buylist cost of the pool (computed after each build; pools built before this get one now).
-  const buylist = series.buylistReport as BuylistReport | null;
+  // Buylist cost of the pool (computed after each build; pools built before this get one now). Reports from before
+  // the switch to Card Broker (Storepass) are recomputed, so every series' profit uses Card Broker prices.
+  const saved = series.buylistReport as BuylistReport | null;
+  const buylist = saved?.source === BUYLIST_SOURCE ? saved : null;
   if (!buylist && series.cards.length > 0) queueBuylistReport(series.id);
   const tierRules = seriesTierRules(series);
   const tierCounts = new Map<string, number>();
@@ -128,6 +130,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       ? {
           cash: buylist.cash,
           credit: buylist.credit,
+          retail: buylist.retail ?? null,
           copies: buylist.copies,
           matchedCopies: buylist.matchedCopies,
           missingValue: buylist.missing.reduce((n, m) => n + m.marketValue * m.quantity, 0),
@@ -702,7 +705,8 @@ export default function SeriesPage() {
           <s-text>Pool market value: {money(summary.totalValue)}</s-text>
           {buylist ? (
             <>
-              <s-text>Buylist cost (cash): {money(buylist.cash)}</s-text>
+              <s-text>Card Broker buylist cost (cash): {money(buylist.cash)}</s-text>
+              {buylist.retail !== null ? <s-text>Card Broker retail value: {money(buylist.retail)}</s-text> : null}
               <s-text type="strong">
                 Profit if sold out: {money(summary.revenue - buylist.cash)} ({percent(summary.revenue ? (summary.revenue - buylist.cash) / summary.revenue : 0)} margin)
               </s-text>
@@ -711,8 +715,8 @@ export default function SeriesPage() {
               </s-text>
               {buylist.matchedCopies < buylist.copies ? (
                 <s-text>
-                  {buylist.copies - buylist.matchedCopies} cards ({money(buylist.missingValue)} market) aren&apos;t on the buylist and are
-                  left out of the cost.
+                  {buylist.copies - buylist.matchedCopies} cards ({money(buylist.missingValue)} market) aren&apos;t priced on the Card Broker
+                  buylist and are left out of the cost.
                 </s-text>
               ) : null}
             </>
