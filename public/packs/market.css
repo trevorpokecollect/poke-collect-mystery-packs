@@ -166,10 +166,6 @@ body.vm-locked { overflow: hidden; }
 }
 .vm-chip:hover { color: var(--vm-text); border-color: var(--vm-muted); }
 .vm-chip-on { background: var(--vm-text); color: var(--vm-ink-0); border-color: var(--vm-text); }
-.vm-chip[data-tier="poke"].vm-chip-on { background: var(--vm-poke); border-color: var(--vm-poke); color: #fff; }
-.vm-chip[data-tier="great"].vm-chip-on { background: var(--vm-great); border-color: var(--vm-great); color: #fff; }
-.vm-chip[data-tier="ultra"].vm-chip-on { background: var(--vm-ultra); border-color: var(--vm-ultra); color: var(--vm-ink-0); }
-.vm-chip[data-tier="master"].vm-chip-on { background: var(--vm-master); border-color: var(--vm-master); color: #fff; }
 .vm-result-count { margin: 12px 0 14px; font-family: var(--vm-mono); font-size: .8rem; color: var(--vm-muted); }
 
 /* ---------- Cards ---------- */
@@ -200,15 +196,9 @@ body.vm-locked { overflow: hidden; }
     linear-gradient(115deg, transparent 20%, rgba(159, 230, 255, .35) 38%, rgba(198, 168, 255, .35) 50%, rgba(255, 215, 161, .3) 62%, transparent 80%);
 }
 .vm-art-live .vm-glare { opacity: .8; }
-.vm-art[data-tier="master"] { box-shadow: 0 14px 30px rgba(0, 0, 0, .45), 0 0 0 2px rgba(176, 124, 255, .55); }
 .vm-art-small { border-radius: 6px; }
 .vm-art-large { width: min(100%, 420px); margin: 0 auto; }
 
-.vm-tier { font-size: .68rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: var(--vm-ink-2); }
-.vm-tier[data-tier="poke"] { color: var(--vm-poke); }
-.vm-tier[data-tier="great"] { color: var(--vm-great); }
-.vm-tier[data-tier="ultra"] { color: var(--vm-ultra); }
-.vm-tier[data-tier="master"] { color: var(--vm-master); }
 .vm-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .vm-tags:empty { display: none; }
 .vm-tag { font-size: .74rem; font-weight: 700; padding: 3px 10px; border-radius: 6px; }

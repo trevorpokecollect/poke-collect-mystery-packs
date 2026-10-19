@@ -134,7 +134,7 @@ async function vaultOrderIds(db: Db | Tx, orderIds: string[]) {
 
 function cardView(pull: MarketPull) {
   const card = pull.slot.card;
-  return { pullId: pull.id, cardKey: card.variantId, title: card.title, imageUrl: card.imageUrl, tier: card.tier, series: pull.series.title };
+  return { pullId: pull.id, cardKey: card.variantId, title: card.title, imageUrl: card.imageUrl, series: pull.series.title };
 }
 
 /** The viewer's vault cards with their marketplace state. */
@@ -372,7 +372,6 @@ export async function myOffers(db: Db, shop: string, customerId: string) {
     pullId: i.pullId,
     title: i.pull.slot.card.title,
     imageUrl: i.pull.slot.card.imageUrl,
-    tier: i.pull.slot.card.tier,
     series: i.pull.series.title,
   });
   return trades.map((t) => {
@@ -865,12 +864,12 @@ async function wishers(db: Db | Tx, shop: string, variantIds: string[]) {
 export async function catalog(db: Db, shop: string, q: string, take = 40) {
   const cards = await db.card.findMany({
     where: { series: { shop }, ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}) },
-    select: { variantId: true, title: true, imageUrl: true, tier: true },
+    select: { variantId: true, title: true, imageUrl: true },
     orderBy: { title: "asc" },
     distinct: ["variantId"],
     take,
   });
-  return cards.map((c) => ({ cardKey: c.variantId, title: c.title, imageUrl: c.imageUrl, tier: c.tier }));
+  return cards.map((c) => ({ cardKey: c.variantId, title: c.title, imageUrl: c.imageUrl }));
 }
 
 export async function addWish(db: Db, shop: string, customerId: string, variantId: string) {
@@ -994,7 +993,7 @@ export async function marketDemo(db: Db, shop: string, { view = "", name = "" } 
   const series = (await db.series.findFirst({ where: { shop, status: { not: "DRAFT" } }, orderBy: { createdAt: "desc" } }))
     ?? (await db.series.findFirst({ where: { shop }, orderBy: { createdAt: "desc" } }));
   const cards = series ? await db.card.findMany({ where: { seriesId: series.id, imageUrl: { not: null } }, orderBy: { title: "asc" }, take: 120 }) : [];
-  // Spread the sample across tiers so every badge color shows.
+  // Spread the sample across tiers so it isn't all one kind of card.
   const tiers = [...new Set(cards.map((c) => c.tier))];
   const byTier = tiers.map((t) => cards.filter((c) => c.tier === t));
   const spread: typeof cards = [];
@@ -1002,7 +1001,7 @@ export async function marketDemo(db: Db, shop: string, { view = "", name = "" } 
     for (const list of byTier) if (list[i]) spread.push(list[i]);
     if (i > cards.length) break;
   }
-  const sample = spread.map((c, i) => ({ pullId: `demo-${i}`, cardKey: c.variantId, title: c.title, imageUrl: c.imageUrl, tier: c.tier, series: series!.title, wantedBy: [0, 2, 0, 1, 5, 0, 3][i % 7] }));
+  const sample = spread.map((c, i) => ({ pullId: `demo-${i}`, cardKey: c.variantId, title: c.title, imageUrl: c.imageUrl, series: series!.title, wantedBy: [0, 2, 0, 1, 5, 0, 3][i % 7] }));
   const price = (i: number) => [4, 12.5, 25, 8, 40, 3, 15, 6][i % 8];
   const mine = sample.slice(0, 8);
   const theirs = sample.slice(8, 60);

@@ -14,7 +14,7 @@
   var state = null; // main payload: me, cards (my vault), board, offers, rules
   var collectorsCache = null;
   var collectionCache = {};
-  var filters = { q: "", kind: "all", tier: "all", sort: "new" };
+  var filters = { q: "", kind: "all", sort: "new" };
   var binderFilter = "all";
   var binderPage = 0;
   var flash = null;
@@ -63,10 +63,6 @@
 
   function money(n) {
     return "$" + Number(n).toFixed(2);
-  }
-
-  function tierKey(tier) {
-    return String(tier || "").trim().toLowerCase();
   }
 
   function since(d) {
@@ -181,7 +177,7 @@
       ? el("img", { src: card.imageUrl, alt: card.title, loading: size ? "eager" : "lazy", draggable: "false" })
       : el("span", { class: "vm-art-blank", text: card.title });
     var glare = el("span", { class: "vm-glare", "aria-hidden": "true" });
-    var node = el("div", { class: "vm-art" + (size ? " vm-art-" + size : ""), "data-tier": tierKey(card.tier) }, [img, glare]);
+    var node = el("div", { class: "vm-art" + (size ? " vm-art-" + size : "") }, [img, glare]);
     if (!reduceMotion) {
       node.addEventListener("pointermove", function (e) {
         var r = node.getBoundingClientRect();
@@ -202,10 +198,6 @@
     return node;
   }
 
-  function tierPill(tier) {
-    return el("span", { class: "vm-tier", "data-tier": tierKey(tier), text: tier });
-  }
-
   function tags(card) {
     return el("div", { class: "vm-tags" }, [
       card.listing && state.selling ? el("span", { class: "vm-tag vm-tag-sale", text: money(card.listing.price) }) : null,
@@ -215,7 +207,7 @@
     ]);
   }
 
-  // A card in a grid: big art, then name, tier, owner and what it's up for. Clicking opens the card view.
+  // A card in a grid: big art, then name, set, owner and what it's up for. Clicking opens the card view.
   function tile(card, opts) {
     opts = opts || {};
     var open = function () {
@@ -227,7 +219,6 @@
       el("div", { class: "vm-tile-body" }, [
         el("h3", { class: "vm-tile-title", text: card.title }),
         el("div", { class: "vm-tile-meta" }, [
-          tierPill(card.tier),
           card.trader && !opts.hideOwner
             ? el("a", { class: "vm-owner", href: profileHash(card.trader), text: "@" + card.trader })
             : null,
@@ -273,14 +264,11 @@
 
   function marketView() {
     var board = state.board.slice();
-    var tiers = [];
-    board.forEach(function (c) { if (tiers.indexOf(c.tier) < 0) tiers.push(c.tier); });
     var q = filters.q.toLowerCase();
     var shown = board.filter(function (c) {
       if (q && c.title.toLowerCase().indexOf(q) < 0 && String(c.trader).toLowerCase().indexOf(q) < 0) return false;
       if (filters.kind === "trade" && !c.openToTrade) return false;
       if (filters.kind === "sale" && !c.listing) return false;
-      if (filters.tier !== "all" && c.tier !== filters.tier) return false;
       return true;
     });
     if (filters.sort === "priceUp" || filters.sort === "priceDown") {
@@ -310,7 +298,6 @@
         class: "vm-chip" + (on ? " vm-chip-on" : ""),
         type: "button",
         "aria-pressed": on ? "true" : "false",
-        "data-tier": group === "tier" && value !== "all" ? tierKey(value) : false,
         text: label,
         onclick: function () { filters[group] = value; render(); },
       });
@@ -348,9 +335,6 @@
           chip("kind", "trade", "For Trade"),
           state.selling ? chip("kind", "sale", "For Sale") : null,
         ]),
-        tiers.length > 1
-          ? el("div", { class: "vm-chips", role: "group", "aria-label": "Tier" }, [chip("tier", "all", "Every Tier")].concat(tiers.map(function (t) { return chip("tier", t, t); })))
-          : null,
         sort,
       ]),
       el("p", { class: "vm-result-count", text: shown.length + (shown.length === 1 ? " Card" : " Cards") }),
@@ -629,7 +613,6 @@
       el("button", { class: "vm-tile-hit", type: "button", "aria-label": "View " + c.title, onclick: function () { modal = { type: "card", card: c, mine: true }; render(); } }, [art(c)]),
       el("div", { class: "vm-tile-body" }, [
         el("h3", { class: "vm-tile-title", text: c.title }),
-        el("div", { class: "vm-tile-meta" }, [tierPill(c.tier)]),
         el("div", { class: "vm-manage" }, controls),
       ]),
     ]);
@@ -756,7 +739,6 @@
                   ? el("button", { class: "vm-btn vm-btn-small vm-btn-signal", type: "button", text: w.available + " Up Now", onclick: function () {
                       filters.q = w.title;
                       filters.kind = "all";
-                      filters.tier = "all";
                       go("#/");
                     } })
                   : el("span", { class: "vm-tag vm-tag-locked", text: "None Up Yet" }),
@@ -861,7 +843,7 @@
     return el("div", { class: "vm-lightbox-body" }, [
       el("div", { class: "vm-lightbox-art" }, [art(card, "large")]),
       el("div", { class: "vm-lightbox-info" }, [
-        el("div", { class: "vm-tile-meta" }, [tierPill(card.tier), el("span", { class: "vm-muted", text: card.series || "" })]),
+        el("div", { class: "vm-tile-meta" }, [el("span", { class: "vm-muted", text: card.series || "" })]),
         el("h2", { class: "vm-lightbox-title", text: card.title }),
         card.trader ? el("p", { class: "vm-muted" }, ["In ", el("a", { class: "vm-owner vm-owner-big", href: profileHash(card.trader), text: "@" + card.trader }), "'s Binder"]) : null,
         tags(card),
