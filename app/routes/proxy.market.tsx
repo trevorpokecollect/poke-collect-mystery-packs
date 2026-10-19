@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { proxyContext } from "../lib/proxy.server";
-import { marketSettings } from "../lib/market.server";
+import { hasMarketAccess, marketSettings } from "../lib/market.server";
 import { validDemoToken } from "../lib/demo.server";
 
 // The Vault Marketplace at /apps/packs/market. Unlike My Packs it is its own full page (not wrapped
@@ -50,7 +50,7 @@ function landing(assets: string, heading: string, text: string, button?: { href:
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { viewer, shop } = await proxyContext(request);
+  const { viewer, shop, admin } = await proxyContext(request);
   const assets = (process.env.SHOPIFY_APP_URL || "").replace(/\/$/, "");
   const app = (demo: string | null) =>
     page(
@@ -71,6 +71,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       href: "/account/login?return_url=/apps/packs/market",
       label: "Log In",
     });
+  }
+  if (!(await hasMarketAccess(db, admin, shop, viewer.customerId))) {
+    return landing(assets, "Coming Soon", "Trade And Sell The Cards In Your Vault With Other Collectors.");
   }
   return app(null);
 };

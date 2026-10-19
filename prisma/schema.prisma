@@ -236,6 +236,8 @@ model MarketSettings {
   creditCollectionIds String[] @default([])
   // Whether Vault Credit codes combine with other product / order discounts.
   creditCombines Boolean @default(false)
+  // Soft launch: when set, only customers with this Shopify tag can use Vault Market.
+  accessTag      String?
   updatedAt      DateTime @updatedAt
 }
 

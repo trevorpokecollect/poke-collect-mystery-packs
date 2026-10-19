@@ -6,7 +6,7 @@ import { json, proxyContext } from "../lib/proxy.server";
 import { shippingStatuses, shipStatusFor } from "../lib/shipping-status.server";
 import { packShelf } from "../lib/shelf.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
-import { marketSettings } from "../lib/market.server";
+import { hasMarketAccess } from "../lib/market.server";
 
 // Lists the viewer's packs. Unopened packs never include the card. Card values are
 // admin-only, so customers never see a dollar figure next to what they pulled.
@@ -48,7 +48,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       fee: SHIP_FEE,
       freeAt: FREE_SHIPPING_CARDS,
       // Logged-in customers get a link to the Vault Marketplace once the merchant turns it on.
-      market: !!viewer.customerId && (await marketSettings(db, shop)).enabled,
+      market: await hasMarketAccess(db, admin, shop, viewer.customerId),
       pending: pending ? { cards: opened.filter((p) => p.shipRequestId === pending.id).length, invoiceUrl: pending.invoiceUrl } : null,
     },
     // Unopened multi-card packs show once (opening reveals all their cards); opened cards list one by one.
