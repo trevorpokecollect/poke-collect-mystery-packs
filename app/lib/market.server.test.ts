@@ -4,6 +4,8 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { drawForOrder, launchSeries, pullsForViewer, revealPull, voidPulls } from "./pool.server";
 import {
+  acceptTerms,
+  requireTerms,
   activityFeed,
   addWish,
   boardCards,
@@ -141,6 +143,15 @@ function fakeAdmin() {
 }
 
 const owner = async (id: string) => (await db.pull.findUniqueOrThrow({ where: { id } })).customerId;
+
+describe("terms", () => {
+  it("needs the current terms agreed to, and a trade name first", async () => {
+    await expect(requireTerms(db, SHOP, ANN)).rejects.toThrow(/agree to the Vault Market Terms/);
+    await expect(acceptTerms(db, SHOP, "gid://shopify/Customer/nobody")).rejects.toThrow(/trade name/);
+    await acceptTerms(db, SHOP, ANN);
+    await expect(requireTerms(db, SHOP, ANN)).resolves.toBeUndefined();
+  });
+});
 
 describe("trading", () => {
   it("swaps cards between vaults when the other player accepts", async () => {

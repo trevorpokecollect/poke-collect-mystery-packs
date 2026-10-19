@@ -439,3 +439,7 @@ body.vm-locked { overflow: hidden; }
 .vm-guide-high { background: rgba(255, 138, 61, .16); color: #ff8a3d; }
 .vm-guide-over { background: rgba(255, 75, 43, .18); color: var(--vm-signal-hi); }
 .vm-guide-wait { margin: 0; font-size: .8rem; color: var(--vm-muted); }
+
+/* ---------- Terms ---------- */
+.vm-agree { display: flex; align-items: flex-start; gap: 10px; font-size: .9rem; cursor: pointer; }
+.vm-agree input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--vm-trade); flex: none; }

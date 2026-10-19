@@ -41,6 +41,10 @@ import {
   startPurchase,
   tradeMatches,
   traderFor,
+  acceptTerms,
+  agreedToTerms,
+  requireTerms,
+  TERMS_URL,
   wishlist,
   TRADE_WAIT_DAYS,
 } from "../lib/market.server";
@@ -98,6 +102,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     rules: { waitDays: TRADE_WAIT_DAYS, offerDays: OFFER_DAYS, payoutDays: PAYOUT_HOLD_DAYS, maxCards: MAX_SIDE_CARDS, maxOffers: MAX_OPEN_OFFERS, minPrice: MIN_PRICE, maxPrice: MAX_PRICE, maxShowcase: MAX_SHOWCASE },
     notes: OFFER_NOTES,
     tradeName: me?.tradeName ?? null,
+    termsAccepted: agreedToTerms(me),
+    termsUrl: TERMS_URL,
     me: me ? { tradeName: me.tradeName, showCollection: me.showCollection, showcase: me.showcase } : null,
     cards,
     board,
@@ -136,7 +142,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!(await hasMarketAccess(db, admin, shop, me))) return json({ error: "The Vault Market isn't open yet." }, 403);
   const body = (await request.json().catch(() => ({}))) as Body;
   try {
+    if (["list", "buy", "buyCredit", "offer", "accept"].includes(String(body.action))) await requireTerms(db, shop, me);
     switch (body.action) {
+      case "acceptTerms":
+        await acceptTerms(db, shop, me);
+        return json({ ok: true });
       case "setName":
         await setTradeName(db, shop, me, String(body.name ?? ""));
         return json({ ok: true });

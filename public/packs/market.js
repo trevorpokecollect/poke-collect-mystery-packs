@@ -114,7 +114,15 @@
     });
   }
 
+  var NEEDS_TERMS = ["list", "buy", "buyCredit", "offer", "accept"];
+
   function post(body, button) {
+    // Selling, buying and trading need the Vault Market Terms agreed to first (the server checks too).
+    if (!demo && state && !state.termsAccepted && NEEDS_TERMS.indexOf(body.action) !== -1) {
+      modal = state.tradeName ? { type: "terms" } : { type: "name" };
+      render();
+      return Promise.reject(new Error("terms"));
+    }
     if (demo) {
       flash = { text: "Preview Only: Nothing Was Saved. On The Live Site This " + (body.action === "buy" ? "Opens Checkout." : "Would Go Through.") };
       modal = null;
@@ -1135,9 +1143,30 @@
     ]);
   }
 
+  function termsModal() {
+    var box = el("input", { id: "vm-agree", type: "checkbox" });
+    var agree = el("button", { class: "vm-btn vm-btn-signal", type: "button", text: "Agree And Continue", disabled: true });
+    box.addEventListener("change", function () { agree.disabled = !box.checked; });
+    agree.addEventListener("click", function () {
+      post({ action: "acceptTerms" }, agree).then(function () {
+        state.termsAccepted = true;
+        modal = null;
+        flash = { text: "Thanks! You're All Set. Tap Again To Continue." };
+        render();
+      }).catch(function () {});
+    });
+    return el("div", { class: "vm-name-box" }, [
+      el("h2", { class: "vm-builder-title", text: "Vault Market Terms" }),
+      el("p", { class: "vm-muted", text: "Before You Sell, Buy Or Trade: Sales Are On Consignment, Sellers Set Their Own Prices And Get 90% As Vault Credit, Vault Credit Has No Cash Value And Can't Buy Mystery Packs, And Completed Trades And Sales Are Final." }),
+      el("a", { class: "vm-link", href: state.termsUrl || "/pages/vault-market-terms", target: "_blank", rel: "noopener", text: "Read The Full Vault Market Terms" }),
+      el("label", { class: "vm-agree", for: "vm-agree" }, [box, el("span", { text: "I'm 18 Or Older And Agree To The Vault Market Terms." })]),
+      agree,
+    ]);
+  }
+
   function modalLayer() {
     if (!modal) return null;
-    var body = modal.type === "card" ? cardModal(modal.card, modal.mine) : modal.type === "offer" ? offerModal(modal) : nameModal();
+    var body = modal.type === "card" ? cardModal(modal.card, modal.mine) : modal.type === "offer" ? offerModal(modal) : modal.type === "terms" ? termsModal() : nameModal();
     var layer = el("div", { class: "vm-modal", role: "dialog", "aria-modal": "true" }, [
       el("div", { class: "vm-modal-panel vm-modal-" + modal.type }, [
         el("button", { class: "vm-close", type: "button", "aria-label": "Close", text: "×", onclick: function () { modal = null; render(); } }),
@@ -1180,7 +1209,7 @@
               : marketView(),
     );
     root.appendChild(el("footer", { class: "vm-foot" }, [
-      el("p", { text: "Trades And Sales Are Between Collectors Only. Poke-Collect Doesn't Buy Cards Back Or Set Prices. Sellers Choose Their Own Price, And The Price Guide Is Only A Suggestion." }),
+      el("p", {}, ["Trades And Sales Are Between Collectors Only. Poke-Collect Doesn't Buy Cards Back Or Set Prices. Sellers Choose Their Own Price, And The Price Guide Is Only A Suggestion. ", el("a", { class: "vm-link", href: (state && state.termsUrl) || "/pages/vault-market-terms", target: "_blank", rel: "noopener", text: "Vault Market Terms" })]),
       el("a", { class: "vm-link", href: "/", text: "Back To Poke-Collect" }),
     ]));
     var layer = modalLayer();

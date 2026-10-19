@@ -92,6 +92,25 @@ async function requireEnabled(db: Db | Tx, shop: string, selling = false) {
 
 // ---------- Trade names ----------
 
+/** Vault Market Terms (a store page). Bump the version when the terms change so everyone agrees again. */
+export const TERMS_VERSION = "2026-10-19";
+export const TERMS_URL = "/pages/vault-market-terms";
+
+export function agreedToTerms(trader: { termsVersion: string | null } | null | undefined) {
+  return trader?.termsVersion === TERMS_VERSION;
+}
+
+/** Selling, buying and trading need the current terms agreed to first. */
+export async function requireTerms(db: Db | Tx, shop: string, customerId: string) {
+  if (!agreedToTerms(await traderFor(db, shop, customerId))) throw new PoolError("Please agree to the Vault Market Terms first.");
+}
+
+export async function acceptTerms(db: Db, shop: string, customerId: string, now = new Date()) {
+  const trader = await traderFor(db, shop, customerId);
+  if (!trader) throw new PoolError("Pick a trade name first.");
+  return db.trader.update({ where: { id: trader.id }, data: { termsVersion: TERMS_VERSION, termsAcceptedAt: now } });
+}
+
 export async function traderFor(db: Db | Tx, shop: string, customerId: string) {
   return db.trader.findUnique({ where: { shop_customerId: { shop, customerId } } });
 }
