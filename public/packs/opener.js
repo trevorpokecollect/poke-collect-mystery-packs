@@ -690,6 +690,11 @@
       node.style.height = height + "px";
       if (paint) node.style.background = paint;
       node.style.clipPath = "polygon(" + polygon.map(function (p) { return pct(p[0]) + " " + pct(p[1]); }).join(",") + ")";
+      // Foil glare, moved by the tilt (the --mx/--my it sets on the pack).
+      var sheen = el("div", { class: "mp-sheen" });
+      sheen.style.width = width + "px";
+      sheen.style.height = height + "px";
+      node.appendChild(sheen);
       return node;
     }
 
@@ -747,27 +752,82 @@
     setTimeout(function () { piece.remove(); }, 900);
   }
 
-  // Tears the strip off from left to right, curling it up as it goes.
-  function tear(pack, width, height) {
-    if (navigator.vibrate) navigator.vibrate([12, 40, 12, 40, 18]);
-    var lastFleck = 0;
-    return tween(1150, function (front) {
-      pack.slices.forEach(function (slice, k) {
-        // How far the tear has run past this slice's right joint, in slices.
-        var past = Math.max(0, Math.min(1.6, (front * 1.04 - slice.joint) * SLICES + 1));
-        var bend = k === 0 ? past * 5 : past * 1.7;
-        slice.wrap.style.transform = "translateY(" + (-past * 0.9).toFixed(2) + "px) rotate(" + bend.toFixed(2) + "deg)";
-        slice.edge.style.opacity = past > 0 ? 1 : 0;
-      });
-      var torn = Math.min(1, front * 1.04);
-      pack.bodyEdge.reveal.setAttribute("width", (torn * 1000).toFixed(1));
-      pack.shade.style.width = torn * 100 + "%";
-      var now = performance.now();
-      if (front > 0.02 && front < 0.99 && now - lastFleck > 28) {
-        lastFleck = now;
-        fleck(pack, torn * width, yAt(pack.points, torn) * height);
+  // Draws the tear run from the left edge to `front` (0 to 1), curling the strip up behind it.
+  // Driven by the customer's finger, or by tear() when the pack opens on its own.
+  function tearTo(pack, front, width, height) {
+    pack.slices.forEach(function (slice, k) {
+      // How far the tear has run past this slice's right joint, in slices.
+      var past = Math.max(0, Math.min(1.6, (front * 1.04 - slice.joint) * SLICES + 1));
+      var bend = k === 0 ? past * 5 : past * 1.7;
+      slice.wrap.style.transform = "translateY(" + (-past * 0.9).toFixed(2) + "px) rotate(" + bend.toFixed(2) + "deg)";
+      slice.edge.style.opacity = past > 0 ? 1 : 0;
+    });
+    var torn = Math.min(1, front * 1.04);
+    pack.bodyEdge.reveal.setAttribute("width", (torn * 1000).toFixed(1));
+    pack.shade.style.width = torn * 100 + "%";
+    var now = performance.now();
+    if (front > 0.02 && front < 0.99 && Math.abs(front - (pack.lastFront || 0)) > 0.004 && now - (pack.lastFleck || 0) > 28) {
+      pack.lastFleck = now;
+      fleck(pack, torn * width, yAt(pack.points, torn) * height);
+    }
+    pack.lastFront = front;
+  }
+
+  // Tears the rest of the strip off on its own, from wherever the finger left it.
+  function tear(pack, width, height, from) {
+    from = from || 0;
+    if (navigator.vibrate) navigator.vibrate(from ? [18] : [12, 40, 12, 40, 18]);
+    return tween(Math.max(250, 1150 * (1 - from)), function (k) {
+      tearTo(pack, from + (1 - from) * k, width, height);
+    }, from ? function (k) { return 1 - Math.pow(1 - k, 2); } : easeInOut);
+  }
+
+  // Makes the pack a tilting 3D object: it floats and sways on its own, leans toward the pointer
+  // or finger, follows the phone's tilt where the browser allows it without asking, and moves a
+  // foil glare across the artwork. Returns controls; stop() ends the loop.
+  function tilter(node, floor) {
+    var rx = 0, ry = 0, lift = 0, tx = 0, ty = 0, mode = "idle", running = true;
+    var start = performance.now();
+    var gyro = null, base = null;
+    function onTilt(e) {
+      if (e.beta == null || e.gamma == null) return;
+      if (!base) base = { b: e.beta, g: e.gamma };
+      gyro = {
+        x: Math.max(-18, Math.min(18, (base.b - e.beta) * 0.7)),
+        y: Math.max(-22, Math.min(22, (e.gamma - base.g) * 0.9)),
+      };
+    }
+    window.addEventListener("deviceorientation", onTilt);
+    function frame(now) {
+      if (!running) return;
+      requestAnimationFrame(frame);
+      var t = (now - start) / 1000;
+      var goalLift = 0;
+      if (mode === "idle") {
+        tx = Math.sin(t * 1.3) * 4 + (gyro ? gyro.x : 0);
+        ty = Math.sin(t * 0.9) * 10 + (gyro ? gyro.y : 0);
+        goalLift = Math.sin(t * 1.8) * 5;
+      } else if (mode === "flat") {
+        tx = 0; ty = 0;
       }
-    }, easeInOut);
+      rx += (tx - rx) * 0.12;
+      ry += (ty - ry) * 0.12;
+      lift += (goalLift - lift) * 0.1;
+      node.style.transform = "translateX(-50%) translateY(" + lift.toFixed(2) + "px) rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) + "deg)";
+      node.style.setProperty("--mx", (0.5 + ry / 36).toFixed(3));
+      node.style.setProperty("--my", (0.5 - rx / 36).toFixed(3));
+      if (floor) {
+        floor.style.transform = "translateX(calc(-50% + " + (ry * 1.2).toFixed(1) + "px)) scale(" + (1 - lift / 60).toFixed(3) + ")";
+        floor.style.opacity = (0.75 - lift / 30).toFixed(2);
+      }
+    }
+    requestAnimationFrame(frame);
+    return {
+      aim: function (x, y) { mode = "aim"; tx = x; ty = y; },
+      idle: function () { mode = "idle"; },
+      flat: function () { mode = "flat"; return wait(380); },
+      stop: function () { running = false; window.removeEventListener("deviceorientation", onTilt); },
+    };
   }
 
   // Red-on-black "digital rain" behind the opening (katakana, digits and Poke-Collect glyphs).
@@ -822,8 +882,10 @@
 
     var front = el("div", { class: "mp-reveal-card" });
     var glow = el("div", { class: "mp-glow" });
+    var rays = el("div", { class: "mp-rays", "aria-hidden": "true" });
+    var floor = el("div", { class: "mp-floor", "aria-hidden": "true" });
     var result = el("div", { class: "mp-result", "aria-live": "polite" });
-    var inner = el("div", { class: "mp-stage-inner" }, [glow, front, result]);
+    var inner = el("div", { class: "mp-stage-inner" }, [floor, rays, glow, front, result]);
     var skip = el("button", { class: "mp-btn mp-btn-ghost mp-skip", type: "button", text: "Close" });
     var stage = el("div", { class: "mp-stage", role: "dialog", "aria-modal": "true", "aria-label": "Opening pack" }, [inner, skip]);
     // Multi-card packs reveal their cards one at a time, so the result area needs room for a counter
@@ -831,29 +893,50 @@
     var multi = (pack.cardsPerPack || (pack.demoCards ? pack.demoCards.length : 1)) > 1;
     if (multi) stage.classList.add("mp-multi");
     var stopRain = function () {};
+    var tilt = null;
     var closed = false;
     function close() {
       if (closed) return;
       closed = true;
       stopRain();
+      if (tilt) tilt.stop();
       stage.remove();
       document.removeEventListener("keydown", onKey);
       if (pack.onClose) pack.onClose();
       if (!standalone) load();
     }
-    function onKey(e) { if (e.key === "Escape") close(); }
+    var onKey = function (e) { if (e.key === "Escape") close(); };
     skip.addEventListener("click", close);
     document.addEventListener("keydown", onKey);
     document.body.appendChild(stage);
-    var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!reducedMotion) stopRain = matrixRain(stage);
+    if (!reduced) stopRain = matrixRain(stage);
 
     // The pack is as tall as the card's final spot and as wide as the artwork's pack bag.
     var height = inner.getBoundingClientRect().height;
     var width = pack.packImageUrl ? height * (ART.width / ART.height) : height * 0.62;
     var opener = stagePack(pack.packImageUrl, width, height);
-    opener.group.classList.add("mp-shaking");
-    inner.insertBefore(opener.group, result);
+    // The 3D pack: the artwork in front, a few layers behind it for the pack's thickness, and a
+    // back face, so its edges show as it tilts.
+    var holder = el("div", { class: "mp-pack3d" });
+    holder.style.width = width + "px";
+    holder.style.height = height + "px";
+    for (var layer = 1; layer <= 6; layer++) {
+      var slab = el("div", { class: "mp-pack-layer" });
+      slab.style.transform = "translateZ(" + (-layer * 1.1).toFixed(1) + "px)";
+      holder.appendChild(slab);
+    }
+    holder.appendChild(el("div", { class: "mp-pack-back" }));
+    holder.appendChild(opener.group);
+    inner.insertBefore(holder, result);
+    if (!reduced) {
+      tilt = tilter(holder, floor);
+      // The pack drops in and settles before it can be opened.
+      animate(opener.group, [
+        { transform: "translateY(-60px) scale(.82) rotate(-6deg)", opacity: 0 },
+        { transform: "translateY(6px) scale(1.02) rotate(1deg)", opacity: 1, offset: 0.7 },
+        { transform: "none", opacity: 1 },
+      ], { duration: 650, easing: "cubic-bezier(.2,.8,.3,1)" });
+    }
 
     // Inside the pack the card sits small and low, hidden behind the wrapper.
     var cardScale = (width * 0.86) / inner.getBoundingClientRect().width;
@@ -861,7 +944,7 @@
     var peek = "translateY(" + ((0.56 - 0.5 - 0.30) * 100).toFixed(1) + "%) scale(" + cardScale.toFixed(3) + ")";
     front.style.transform = inside;
 
-    // Ask the server for the result while the pack shakes. Preview packs already carry their card.
+    // Ask the server for the result while the pack drops in. Preview packs already carry their card.
     var reveal = pack.demoCards || pack.demoCard
       ? Promise.resolve(pack.demoCards || [pack.demoCard]).then(function (cards) {
           pack.opened = true;
@@ -907,6 +990,7 @@
     function isBig(card) { return ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1; }
     function showCard(card) {
       front.textContent = "";
+      front.classList.remove("mp-back", "mp-charging");
       if (card.imageUrl) {
         // Never show a broken-image icon: swap to the card name if the image fails after all.
         var cardImg = el("img", { src: card.imageUrl, alt: "" });
@@ -915,41 +999,216 @@
       }
       else front.appendChild(el("strong", { text: card.title }));
     }
+    // A big hit comes out face down, glowing in its tier's color, and waits to be turned over.
+    function showBack(card) {
+      front.textContent = "";
+      front.classList.remove("mp-holo");
+      front.classList.add("mp-back");
+      front.style.setProperty("--mp-c", colorOf(card));
+      front.appendChild(el("div", { class: "mp-back-art" }, [
+        el("span", { class: "mp-back-ball" }),
+        el("span", { class: "mp-back-name", text: "Poke-Collect" }),
+      ]));
+    }
+    // Clears finished animations off the card so it can be dragged and tilted by hand.
+    function settleFront() {
+      if (front.getAnimations) front.getAnimations().forEach(function (a) { a.cancel(); });
+      front.style.transform = "none";
+    }
+    function flash(color) {
+      var light = el("div", { class: "mp-flash" });
+      light.style.background = "radial-gradient(circle at 50% 45%, #fff 0%, " + color + " 45%, transparent 75%)";
+      stage.appendChild(light);
+      animate(light, [{ opacity: 0 }, { opacity: 0.95, offset: 0.25 }, { opacity: 0 }], { duration: 750, easing: "ease-out" })
+        .then(function () { light.remove(); });
+    }
 
-    Promise.all([reveal.then(function (cards) { return Promise.all(cards.map(preload)); }), wait(reduced ? 0 : 900)])
+    // The big hit: the face-down card charges up (shaking, glowing, light rays behind it) until it's
+    // tapped, then bursts into light and turns over.
+    function hype(card, counter) {
+      var color = colorOf(card);
+      settleFront();
+      rays.style.setProperty("--mp-c", color);
+      glow.style.background = color;
+      result.textContent = "";
+      result.classList.remove("mp-show");
+      if (counter) result.appendChild(counter);
+      result.appendChild(el("span", { class: "mp-tap", text: "Tap To Reveal" }));
+      result.classList.add("mp-show", "mp-quick");
+      rays.classList.add("mp-on");
+      glow.classList.add("mp-charge");
+      front.classList.add("mp-charging");
+      if (navigator.vibrate) navigator.vibrate([20, 80, 20, 80, 30]);
+      return new Promise(function (resolve) {
+        var done = false;
+        function go() {
+          if (done) return;
+          done = true;
+          front.removeEventListener("click", go);
+          clearTimeout(timer);
+          resolve();
+        }
+        front.addEventListener("click", go);
+        var timer = setTimeout(go, 6000);
+      }).then(function () {
+        result.classList.remove("mp-show");
+        front.classList.remove("mp-charging");
+        glow.classList.remove("mp-charge");
+        if (navigator.vibrate) navigator.vibrate([60]);
+        return animate(front, [
+          { transform: "none" },
+          { transform: "rotateY(90deg) scale(1.08)" },
+        ], { duration: 200, easing: "cubic-bezier(.5,0,.8,.4)" });
+      }).then(function () {
+        flash(color);
+        showCard(card);
+        rays.classList.add("mp-burst");
+        return animate(front, [
+          { transform: "rotateY(-90deg) scale(1.18)" },
+          { transform: "rotateY(10deg) scale(1.08)", offset: 0.6 },
+          { transform: "none" },
+        ], { duration: 650, easing: "cubic-bezier(.2,.8,.3,1)" });
+      });
+    }
+
+    // Swipe-to-open: a finger (or mouse) dragged across the top of the pack tears it open along
+    // the dotted line. Resolves once it's open. Tapping "Tap To Open" or pressing Enter opens it too.
+    function swipeToOpen() {
+      var hint = el("div", { class: "mp-swipe-hint", "aria-hidden": "true" }, [el("span", { class: "mp-swipe-dot" })]);
+      hint.style.top = (TEAR_Y * 100).toFixed(2) + "%";
+      opener.group.appendChild(hint);
+      var prompt = el("p", { class: "mp-swipe-text", text: "Swipe Across The Top To Open" });
+      var button = el("button", { class: "mp-btn mp-btn-ghost mp-tap-open", type: "button", text: "Tap To Open" });
+      result.textContent = "";
+      result.appendChild(prompt);
+      result.appendChild(button);
+      result.classList.add("mp-show", "mp-quick");
+      // The tap fallback shows only if a swipe hasn't worked after a while.
+      var later = setTimeout(function () { button.classList.add("mp-on"); }, 5000);
+
+      return new Promise(function (resolve) {
+        var progress = 0, drag = null, finished = false;
+        function done(from) {
+          if (finished) return;
+          finished = true;
+          clearTimeout(later);
+          stage.removeEventListener("pointerdown", down);
+          stage.removeEventListener("pointermove", move);
+          stage.removeEventListener("pointerup", up);
+          stage.removeEventListener("pointercancel", up);
+          stage.removeEventListener("pointerleave", leave);
+          document.removeEventListener("keydown", key);
+          hint.remove();
+          result.classList.remove("mp-show");
+          if (tilt) tilt.aim(6, 0);
+          resolve(tear(opener, width, height, from));
+        }
+        function rect() { return holder.getBoundingClientRect(); }
+        function down(e) {
+          if (e.target.closest && e.target.closest("button")) return;
+          var r = rect();
+          var x = e.clientX, y = e.clientY;
+          // Generous target: anywhere across the top third of the pack, a little past its sides.
+          var onTop = y > r.top - r.height * 0.12 && y < r.top + r.height * 0.32 && x > r.left - r.width * 0.25 && x < r.right + r.width * 0.25;
+          drag = { tear: onTop, x: x, y: y, id: e.pointerId };
+          if (stage.setPointerCapture) { try { stage.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } }
+          if (onTop) hint.classList.add("mp-off");
+          move(e);
+        }
+        function move(e) {
+          var r = rect();
+          if (!drag) {
+            // Mouse hover: the pack leans toward the pointer.
+            if (e.pointerType === "mouse" && tilt) {
+              var hx = (e.clientX - (r.left + r.width / 2)) / r.width;
+              var hy = (e.clientY - (r.top + r.height / 2)) / r.height;
+              tilt.aim(Math.max(-1, Math.min(1, -hy)) * 16, Math.max(-1, Math.min(1, hx)) * 22);
+            }
+            return;
+          }
+          if (e.pointerId !== drag.id) return;
+          if (drag.tear) {
+            // The tear follows the finger's sideways travel, whichever way it swipes.
+            var run = Math.abs(e.clientX - drag.x) / (r.width * 0.8);
+            var next = Math.min(1, Math.max(progress, run));
+            if (next > progress) {
+              if (navigator.vibrate && Math.floor(next * 8) > Math.floor(progress * 8)) navigator.vibrate(6);
+              progress = next;
+              tearTo(opener, progress, width, height);
+            }
+            if (tilt) tilt.aim(8, (progress - 0.5) * 14);
+            if (progress >= 1) done(1);
+          } else if (tilt) {
+            // Dragging the rest of the pack turns it in the hand.
+            var dx = (e.clientX - drag.x) / r.width;
+            var dy = (e.clientY - drag.y) / r.height;
+            tilt.aim(Math.max(-24, Math.min(24, -dy * 40)), Math.max(-32, Math.min(32, dx * 50)));
+          }
+        }
+        function up(e) {
+          if (!drag || e.pointerId !== drag.id) return;
+          var wasTear = drag.tear;
+          drag = null;
+          if (wasTear && progress > 0.45) return done(progress);
+          if (wasTear && progress > 0) {
+            // Not far enough: the strip springs back down.
+            var from = progress;
+            progress = 0;
+            tween(260, function (k) { tearTo(opener, from * (1 - k), width, height); });
+            hint.classList.remove("mp-off");
+          }
+          if (tilt) tilt.idle();
+        }
+        function leave(e) { if (!drag && e.pointerType === "mouse" && tilt) tilt.idle(); }
+        function key(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); done(progress); } }
+        button.addEventListener("click", function () { done(progress); });
+        stage.addEventListener("pointerdown", down);
+        stage.addEventListener("pointermove", move);
+        stage.addEventListener("pointerup", up);
+        stage.addEventListener("pointercancel", up);
+        stage.addEventListener("pointerleave", leave);
+        document.addEventListener("keydown", key);
+      });
+    }
+
+    Promise.all([reveal.then(function (cards) { return Promise.all(cards.map(preload)); }), wait(reduced ? 0 : 650)])
       .then(function (values) {
         var cards = values[0];
         var card = cards[0];
-        showCard(card);
+        if (isBig(card) && !reduced) showBack(card);
+        else showCard(card);
         glow.style.background = colorOf(card);
-        opener.group.classList.remove("mp-shaking");
 
         var sequence = reduced
           ? Promise.resolve().then(function () {
-              opener.group.remove();
+              holder.remove();
               front.style.transform = "none";
             })
-          : tear(opener, width, height)
+          : swipeToOpen()
+              // The pack turns to face the customer before the card comes out.
+              .then(function () { return tilt.flat(); })
               // 1. The torn strip comes away completely and falls off.
               .then(function () {
                 return animate(opener.root, [
                   { transform: getComputedStyle(opener.root).transform },
                   { transform: "translate(" + width * 0.35 + "px, " + -height * 0.16 + "px) rotate(16deg)", offset: 0.35 },
                   { transform: "translate(" + width * 0.9 + "px, " + (window.innerHeight * 1.1) + "px) rotate(70deg)", opacity: 0 },
-                ], { duration: 1000, easing: "cubic-bezier(.3,.1,.6,1)" });
+                ], { duration: 900, easing: "cubic-bezier(.3,.1,.6,1)" });
               })
               // 2. The card rises out of the opening, showing its top.
               .then(function () {
                 glow.classList.add("mp-peek");
                 return animate(front, [{ transform: inside }, { transform: peek }], { duration: 650, easing: "cubic-bezier(.2,.8,.3,1)" });
               })
-              .then(function () { return wait(350); })
+              .then(function () { return wait(300); })
               // 3. The rest of the pack slides down off the card.
               .then(function () {
-                var slide = animate(opener.body, [
-                  { transform: "none" },
-                  { transform: "translateY(" + (window.innerHeight + height) + "px) rotate(-3deg)" },
+                floor.classList.add("mp-off");
+                var slide = animate(holder, [
+                  { transform: holder.style.transform },
+                  { transform: "translateX(-50%) translateY(" + (window.innerHeight + height) + "px) rotateX(18deg) rotate(-3deg)" },
                 ], { duration: 900, easing: "cubic-bezier(.5,0,.75,.4)" });
+                tilt.stop();
                 // The card stays put while the pack slides off, then grows into place.
                 var settle = wait(650).then(function () {
                   return animate(front, [{ transform: peek }, { transform: "translateY(-2%) scale(1.04)", offset: 0.7 }, { transform: "none" }], {
@@ -959,13 +1218,22 @@
                 });
                 return Promise.all([slide, settle]);
               })
-              .then(function () { opener.group.remove(); });
+              .then(function () { holder.remove(); });
 
-        // Shows card i under the counter. Every card but the last waits for a tap, then the next
-        // card flips in; the last (best) card gets the full result with every card in the pack.
+        function counterFor(i) {
+          return multi ? el("span", { class: "mp-count", text: "Card " + (i + 1) + " Of " + cards.length }) : null;
+        }
+        // A face-down big hit charges up before the card's details show.
+        function turnOver(i) {
+          return front.classList.contains("mp-back") ? hype(cards[i], counterFor(i)) : Promise.resolve();
+        }
+
+        // Shows card i under the counter. Every card but the last waits for a tap or a swipe, then
+        // the next card comes in; the last (best) card gets the full result with every card in the pack.
         function step(i) {
           var c = cards[i];
           var last = i === cards.length - 1;
+          settleFront();
           front.classList.remove("mp-holo");
           front.classList.add("mp-revealed");
           if (isBig(c)) front.classList.add("mp-holo");
@@ -973,7 +1241,8 @@
           glow.style.background = colorOf(c);
 
           result.textContent = "";
-          if (multi) result.appendChild(el("span", { class: "mp-count", text: "Card " + (i + 1) + " Of " + cards.length }));
+          var counter = counterFor(i);
+          if (counter) result.appendChild(counter);
           var tierLabel = el("span", { class: "mp-tier", "data-tier": tierKey(c.tier), text: c.tier });
           var name = el("h2", { text: c.title });
           result.appendChild(tierLabel);
@@ -987,21 +1256,41 @@
           next.focus();
           return new Promise(function (resolve) {
             var going = false;
-            function advance(to) {
+            var drag = null, moved = false;
+            function unbind() {
+              front.removeEventListener("click", tapNext);
+              front.removeEventListener("pointerdown", down);
+              front.removeEventListener("pointermove", move);
+              front.removeEventListener("pointerup", up);
+              front.removeEventListener("pointercancel", up);
+            }
+            function advance(to, dir) {
               if (going) return;
               going = true;
-              front.removeEventListener("click", tapNext);
+              unbind();
               result.classList.remove("mp-show");
+              rays.classList.remove("mp-on", "mp-burst");
               var nextCard = cards[to];
               var slow = to === cards.length - 1;
+              var big = isBig(nextCard) && !reduced;
+              var away = dir > 0 ? "translateX(80%) rotate(14deg) scale(.7)" : "translateX(-80%) rotate(-14deg) scale(.7)";
               var out = reduced ? Promise.resolve() : animate(front, [
-                { transform: "none", opacity: 1 },
-                { transform: "translateX(-70%) rotate(-14deg) scale(.7)", opacity: 0 },
-              ], { duration: 360, easing: "cubic-bezier(.5,0,.8,.4)" });
+                { transform: front.style.transform || "none", opacity: 1 },
+                { transform: away, opacity: 0 },
+              ], { duration: 320, easing: "cubic-bezier(.5,0,.8,.4)" });
               resolve(out.then(function () {
-                showCard(nextCard);
+                settleFront();
+                if (big) showBack(nextCard);
+                else showCard(nextCard);
                 front.classList.remove("mp-holo");
                 if (reduced) return;
+                if (big) {
+                  // The hit slides in face down, then charges up.
+                  return animate(front, [
+                    { transform: "translateY(18%) scale(.85)", opacity: 0 },
+                    { transform: "none", opacity: 1 },
+                  ], { duration: 520, easing: "cubic-bezier(.2,.8,.3,1)" }).then(function () { return turnOver(to); });
+                }
                 // The best card turns over a little slower.
                 return animate(front, [
                   { transform: "rotateY(90deg) scale(.92)", opacity: 1 },
@@ -1009,15 +1298,64 @@
                 ], { duration: slow ? 700 : 420, easing: "cubic-bezier(.2,.8,.3,1)" });
               }).then(function () { return step(to); }));
             }
-            function tapNext() { advance(i + 1); }
-            next.addEventListener("click", tapNext);
+            function tapNext() { if (moved) { moved = false; return; } advance(i + 1, -1); }
+            // Swiping the card sideways flicks it away, like dealing through a hand of cards.
+            function down(e) {
+              drag = { x: e.clientX, id: e.pointerId };
+              moved = false;
+              try { front.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+            }
+            function move(e) {
+              if (!drag || e.pointerId !== drag.id) return;
+              var dx = e.clientX - drag.x;
+              if (Math.abs(dx) > 8) moved = true;
+              front.style.transform = "translateX(" + dx + "px) rotate(" + (dx / 18).toFixed(2) + "deg)";
+            }
+            function up(e) {
+              if (!drag || e.pointerId !== drag.id) return;
+              var dx = e.clientX - drag.x;
+              drag = null;
+              if (Math.abs(dx) > 60) return advance(i + 1, dx > 0 ? 1 : -1);
+              if (moved) animate(front, [{ transform: front.style.transform }, { transform: "none" }], { duration: 200, easing: "ease-out", fill: "none" })
+                .then(function () { if (!going) front.style.transform = "none"; });
+            }
+            next.addEventListener("click", function () { advance(i + 1, -1); });
             front.addEventListener("click", tapNext);
-            all.addEventListener("click", function () { advance(cards.length - 1); });
+            if (!reduced) {
+              front.addEventListener("pointerdown", down);
+              front.addEventListener("pointermove", move);
+              front.addEventListener("pointerup", up);
+              front.addEventListener("pointercancel", up);
+            }
+            all.addEventListener("click", function () { advance(cards.length - 1, -1); });
           });
+        }
+
+        // The finished card leans toward the finger or pointer, catching the light.
+        function handTilt() {
+          if (reduced) return;
+          function lean(e) {
+            var r = front.getBoundingClientRect();
+            var x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)));
+            var y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2)));
+            front.style.transform = "rotateX(" + (-y * 12).toFixed(1) + "deg) rotateY(" + (x * 14).toFixed(1) + "deg)";
+            front.style.setProperty("--hx", ((x + 1) * 50).toFixed(1) + "%");
+            front.style.setProperty("--hy", ((y + 1) * 50).toFixed(1) + "%");
+            front.classList.add("mp-leaning");
+          }
+          function rest() {
+            front.style.transform = "none";
+            front.classList.remove("mp-leaning");
+          }
+          front.addEventListener("pointermove", lean);
+          front.addEventListener("pointerdown", lean);
+          front.addEventListener("pointerleave", rest);
+          front.addEventListener("pointerup", function (e) { if (e.pointerType !== "mouse") rest(); });
         }
 
         function finish(best, tierLabel, name) {
           result.classList.remove("mp-quick");
+          handTilt();
           result.appendChild(el("p", { text: pack.resultNote || (multi ? "All " + cards.length + " Cards Are In Your Vault" : "Added To Your Vault") }));
           if (multi) {
             // Every card in the pack, best last. Tapping one shows it big again.
@@ -1030,6 +1368,8 @@
                 showCard(c);
                 front.classList.toggle("mp-holo", isBig(c));
                 glow.style.background = colorOf(c);
+                rays.style.setProperty("--mp-c", colorOf(c));
+                rays.classList.toggle("mp-on", isBig(c));
                 tierLabel.textContent = c.tier;
                 tierLabel.setAttribute("data-tier", tierKey(c.tier));
                 name.textContent = c.title;
@@ -1061,11 +1401,11 @@
         return sequence.then(function () {
           glow.classList.remove("mp-peek");
           glow.classList.add("mp-on");
-          return step(0);
-        });
+          return turnOver(0);
+        }).then(function () { return step(0); });
       })
       .catch(function (err) {
-        opener.group.classList.remove("mp-shaking");
+        result.textContent = "";
         result.appendChild(el("p", { text: err.message }));
         result.classList.add("mp-show");
       });
