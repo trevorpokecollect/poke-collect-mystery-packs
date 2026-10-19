@@ -324,6 +324,8 @@ model Listing {
   buyerCustomerId   String?
   draftOrderId      String?
   invoiceUrl        String?
+  // The one-off "Vault Card" variant (with the card's picture) on this purchase's checkout.
+  checkoutVariantId String?
   checkoutExpiresAt DateTime?
   orderId           String?
   orderName         String?

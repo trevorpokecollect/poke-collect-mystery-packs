@@ -6,7 +6,7 @@ import { json, proxyContext } from "../lib/proxy.server";
 import { shippingStatuses, shipStatusFor } from "../lib/shipping-status.server";
 import { packShelf } from "../lib/shelf.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
-import { hasMarketAccess, listedOnMarket } from "../lib/market.server";
+import { hasMarketAccess, listedOnMarket, recentSales } from "../lib/market.server";
 
 // Lists the viewer's packs. Unopened packs never include the card. Card values are
 // admin-only, so customers never see a dollar figure next to what they pulled.
@@ -31,7 +31,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const pending = opened.find((p) => inVault(p) && p.shipRequest?.status === "PENDING")?.shipRequest ?? null;
   // Vault cards sit in the store, so only cards on their way out need Shopify's fulfillment status.
   const leaving = opened.filter((p) => !inVault(p));
-  const [listed, art, products, shipping, market] = await Promise.all([
+  const [listed, art, products, shipping, market, sales] = await Promise.all([
     // Vault cards up on Vault Market can't ship until they're taken down, so they're shown apart.
     listedOnMarket(db, shop, opened.filter(inVault).map((p) => p.id)),
     packImages(admin, [...new Set(pulls.map((p) => p.series.packProductId))]),
@@ -39,6 +39,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     shippingStatuses(admin, [...new Set(leaving.map((p) => p.shipOrderId ?? p.orderId))]),
     // Logged-in customers get a link to the Vault Marketplace once the merchant turns it on.
     hasMarketAccess(db, admin, shop, viewer.customerId),
+    // "Your card sold" notices (Vault Market sales in the last 14 days).
+    viewer.customerId ? recentSales(db, shop, viewer.customerId) : Promise.resolve([]),
   ]);
   // Seed for "You Might Also Like" (Shopify's storefront product recommendations).
   const seed = live[0]?.series.packProductId ?? pulls[0]?.series.packProductId ?? null;
@@ -56,6 +58,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       fee: SHIP_FEE,
       freeAt: FREE_SHIPPING_CARDS,
       market,
+      sales,
       pending: pending ? { cards: opened.filter((p) => p.shipRequestId === pending.id).length, invoiceUrl: pending.invoiceUrl } : null,
     },
     // Unopened multi-card packs show once (opening reveals all their cards); opened cards list one by one.

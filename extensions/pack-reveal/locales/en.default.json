@@ -7,5 +7,8 @@
   "viewPacks": "View My Packs",
   "pendingHeading": "Preparing your pack…",
   "pendingBody": "Your payment went through. Your pack will be ready to open in a few seconds.",
-  "slowBody": "This is taking a little longer than usual. Use the link in your order confirmation email to open your pack."
+  "slowBody": "This is taking a little longer than usual. Use the link in your order confirmation email to open your pack.",
+  "vaultHeading": "Your Card Is In Your Vault",
+  "vaultBody": "The card you bought from another collector is already in your Poke-Collect vault. Nothing ships yet; send it with the rest of your vault whenever you're ready.",
+  "viewVault": "View My Vault"
 }

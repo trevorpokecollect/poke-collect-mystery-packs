@@ -30,7 +30,39 @@ async function fetchLink() {
   return response.json();
 }
 
+// A Vault Market purchase (card bought from another collector): no pack to open, just a way to the vault.
+const MARKET_ATTRIBUTE = '_market_listing';
+const VAULT_CARD_TYPE = 'vault market card';
+
+function isVaultPurchase() {
+  const attrs = shopify.attributes?.value ?? [];
+  if (attrs.some((a) => a.key === MARKET_ATTRIBUTE)) return true;
+  return (shopify.lines?.value ?? []).some(
+    (line) => (line.merchandise?.product?.productType ?? '').trim().toLowerCase() === VAULT_CARD_TYPE,
+  );
+}
+
+function VaultPurchase() {
+  const t = shopify.i18n.translate;
+  const base = (shopify.shop?.storefrontUrl ?? 'https://poke-collect.com').replace(/\/$/, '');
+  return (
+    <s-section heading={t('vaultHeading')}>
+      <s-stack gap="base">
+        <s-paragraph>{t('vaultBody')}</s-paragraph>
+        <s-button variant="primary" href={`${base}/apps/packs`} inlineSize="fill">
+          {t('viewVault')}
+        </s-button>
+      </s-stack>
+    </s-section>
+  );
+}
+
 function Extension() {
+  if (isVaultPurchase()) return <VaultPurchase />;
+  return <PackExtension />;
+}
+
+function PackExtension() {
   const [link, setLink] = useState({status: 'loading'});
   const [slow, setSlow] = useState(false);
 
