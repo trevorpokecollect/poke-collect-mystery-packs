@@ -1,0 +1,22 @@
+query CartPaymentMethodsTransformRunInput {
+  cart {
+    lines {
+      merchandise {
+        ... on ProductVariant {
+          product {
+            productType
+          }
+        }
+      }
+    }
+  }
+  paymentMethods {
+    id
+    name
+  }
+  paymentCustomization {
+    metafield(namespace: "$app:pack-no-store-credit", key: "function-configuration") {
+      jsonValue
+    }
+  }
+}
