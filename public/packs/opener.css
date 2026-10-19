@@ -439,3 +439,4 @@
 .mp-ship[data-state="vault"] { background: #e7f6ec; color: #1f7a45; }
 .mp-ship[data-state="market"] { background: #fdeceb; color: #b52a0b; }
 .mp-grid-listed .mp-card { background: #fbfbfc; border-style: dashed; }
+.mp-cancel-ship { border-color: transparent; text-decoration: underline; font-weight: 600; opacity: .85; }

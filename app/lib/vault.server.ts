@@ -200,6 +200,21 @@ export async function markShipmentPaid(db: Db, requestId: string, orderId: strin
 }
 
 /**
+ * "Cancel Shipment": the customer backs out of an unpaid shipping invoice. The draft order is
+ * deleted and the cards go back to the vault (reserved again). If it was paid after all, that's kept.
+ */
+export async function cancelShipment(db: Db, admin: AdminApiContext, shop: string, viewer: Viewer) {
+  const inVault = await vaultedPulls(db, shop, viewer);
+  const pendingId = inVault.find((p) => p.shipRequest?.status === "PENDING")?.shipRequestId;
+  if (!pendingId) throw new PoolError("There's no open shipment to cancel.");
+  const request = await db.shipRequest.findUniqueOrThrow({ where: { id: pendingId } });
+  await settleShipRequest(db, admin, request, "CANCELLED");
+  const after = await db.shipRequest.findUniqueOrThrow({ where: { id: pendingId } });
+  if (after.status === "PAID") throw new PoolError("That shipment was already paid, so it's on its way. Email support@poke-collect.com if you need to change it.");
+  return { cards: request.cardCount };
+}
+
+/**
  * Settles ship requests whose invoice has lapsed: if the draft order was in fact paid, records
  * it; otherwise deletes the draft and returns the cards to the vault (reserved again).
  */
