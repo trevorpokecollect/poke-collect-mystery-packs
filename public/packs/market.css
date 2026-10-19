@@ -418,3 +418,24 @@ body.vm-locked { overflow: hidden; }
   .vm-logo-mark { animation: none; }
   .vm-art, .vm-btn, .vm-collector { transition: none; }
 }
+
+/* ---------- Price Guide (seller only) ---------- */
+.vm-guide { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--vm-line); border-radius: 12px; background: var(--vm-ink-2); }
+.vm-guide-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; align-items: baseline; }
+.vm-guide-label { font-size: .7rem; letter-spacing: .16em; text-transform: uppercase; color: var(--vm-gold); font-weight: 700; }
+.vm-guide-market { font-family: var(--vm-mono); font-size: .78rem; color: var(--vm-muted); font-variant-numeric: tabular-nums; }
+.vm-guide-track { position: relative; padding: 6px 0; }
+.vm-guide-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 999px; margin: 0; cursor: pointer;
+  background: linear-gradient(90deg, #3ddc97 0%, #67d5c0 30%, #f2c35b 62%, #ff8a3d 80%, #ff4b2b 100%); }
+.vm-guide-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--vm-text); border: 3px solid var(--vm-ink-0); box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.vm-guide-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--vm-text); border: 3px solid var(--vm-ink-0); }
+.vm-guide-mark { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--vm-text); opacity: .55; pointer-events: none; }
+.vm-guide-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 26px; }
+.vm-guide-pill { font-size: .74rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--vm-ink-1); color: var(--vm-muted); white-space: nowrap; }
+.vm-guide-note { font-size: .8rem; color: var(--vm-muted); min-width: 0; }
+.vm-guide-steal, .vm-guide-great { background: rgba(61, 220, 151, .16); color: #3ddc97; }
+.vm-guide-good { background: rgba(103, 213, 192, .16); color: var(--vm-trade); }
+.vm-guide-fair { background: rgba(242, 195, 91, .16); color: var(--vm-gold); }
+.vm-guide-high { background: rgba(255, 138, 61, .16); color: #ff8a3d; }
+.vm-guide-over { background: rgba(255, 75, 43, .18); color: var(--vm-signal-hi); }
+.vm-guide-wait { margin: 0; font-size: .8rem; color: var(--vm-muted); }
