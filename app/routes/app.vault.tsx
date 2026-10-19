@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
+import { Form, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
+import type { Prisma } from "@prisma/client";
 import { gql } from "../lib/orders.server";
 import { addVaultCardsToShipment, moveVault, recentShipments, resolveCustomer, returnShipmentToVault } from "../lib/vault.server";
 
@@ -12,7 +13,10 @@ import { addVaultCardsToShipment, moveVault, recentShipments, resolveCustomer, r
 // the customer opened later to a paid shipment that hasn't gone out yet.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
-  const shipments = await recentShipments(db, session.shop);
+  const q = (new URL(request.url).searchParams.get("q") ?? "").trim();
+  const shipments = q
+    ? await recentShipments(db, session.shop, { take: 100, where: await shipmentSearch(admin, session.shop, q) })
+    : await recentShipments(db, session.shop);
 
   const ids = [...new Set(shipments.flatMap((s) => [s.orderId, s.draftOrderId]).filter((id): id is string => !!id))];
   const info = new Map<string, { name?: string; email?: string | null; fulfillment?: string; cancelled?: boolean }>();
@@ -34,6 +38,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   return {
+    q,
     shipments: shipments.map((s) => {
       const order = s.orderId ? info.get(s.orderId) : undefined;
       const unshipped = s.status === "PAID" && order?.fulfillment === "UNFULFILLED" && !order.cancelled;
@@ -64,6 +69,34 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }),
   };
 };
+
+// Finds shipments by customer email or name, the shipping order number, or a pack order number.
+// Shopify's order search matches the text against email, customer name and order number.
+async function shipmentSearch(admin: Parameters<typeof gql>[0], shop: string, q: string): Promise<Prisma.ShipRequestWhereInput> {
+  const number = q.match(/^#?(\d+)$/)?.[1];
+  const data = await gql(
+    admin,
+    `#graphql
+      query VaultShipmentSearch($query: String!) {
+        orders(first: 100, sortKey: CREATED_AT, reverse: true, query: $query) { nodes { id } }
+      }`,
+    { query: number ? `name:#${number}` : q.replace(/[()"]/g, " ") },
+  );
+  const orderIds = (data.orders.nodes as { id: string }[]).map((o) => o.id);
+  // Customers behind matching orders, so an unpaid invoice (no order yet) still shows up.
+  const customerIds = orderIds.length
+    ? (await db.pull.findMany({ where: { shop, orderId: { in: orderIds }, customerId: { not: null } }, select: { customerId: true }, distinct: ["customerId"] }))
+        .map((p) => p.customerId!)
+    : [];
+  return {
+    OR: [
+      { orderId: { in: orderIds } },
+      { customerId: { in: customerIds } },
+      { pulls: { some: { orderId: { in: orderIds } } } },
+      ...(number ? [{ pulls: { some: { orderName: `#${number}` } } }] : []),
+    ],
+  };
+}
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
@@ -109,11 +142,12 @@ const tone = {
 } as const;
 
 export default function VaultShipments() {
-  const { shipments } = useLoaderData<typeof loader>();
+  const { shipments, q } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const busy = useNavigation().state !== "idle";
   const [armed, setArmed] = useState<string | null>(null);
+  const [search, setSearch] = useState(q);
 
   const returnToVault = (id: string) => {
     if (armed !== id) return setArmed(id);
@@ -168,11 +202,35 @@ export default function VaultShipments() {
             </s-banner>
           ) : null}
           <s-paragraph>
-            Open and paid vault shipments, newest first. Return To Vault undoes a shipment. Add Vault Cards puts cards the
+            Open and paid vault shipments, newest first (the latest 40, or up to 100 matches when searching). Return To Vault undoes a shipment. Add Vault Cards puts cards the
             customer opened later onto a paid shipment that hasn&apos;t shipped yet, at no extra charge.
           </s-paragraph>
+          <Form method="get">
+            <s-stack direction="inline" gap="small" alignItems="end">
+              <s-search-field
+                label="Search Shipments"
+                labelAccessibilityVisibility="exclusive"
+                placeholder="Email, name, or order number"
+                value={search}
+                onInput={(e) => setSearch(e.currentTarget.value)}
+              />
+              <input type="hidden" name="q" value={search} />
+              <s-button type="submit" disabled={busy}>Search</s-button>
+              {q ? (
+                <s-button
+                  disabled={busy}
+                  onClick={() => {
+                    setSearch("");
+                    submit({}, { method: "get" });
+                  }}
+                >
+                  Clear
+                </s-button>
+              ) : null}
+            </s-stack>
+          </Form>
           {shipments.length === 0 ? (
-            <s-paragraph>No vault shipments yet.</s-paragraph>
+            <s-paragraph>{q ? `No open or paid vault shipments match "${q}".` : "No vault shipments yet."}</s-paragraph>
           ) : (
             <s-table>
               <s-table-header-row>
