@@ -166,15 +166,14 @@ describe("trading", () => {
     expect((await vaultedPulls(db, SHOP, { customerId: ANN })).map((p) => p.id)).toEqual([b1]);
   });
 
-  it("refuses cards still in the refund wait, cards not open to trade and free-text notes", async () => {
-    const [fresh] = await vaultCards(ANN, 1, 3);
-    const [a1] = await vaultCards(ANN, 1);
+  it("trades fresh pulls right away (no hold), but not cards that aren't open to trade or free-text notes", async () => {
+    const [fresh] = await vaultCards(ANN, 1, 0);
     const [b1] = await vaultCards(BEN, 1);
-    await expect(createOffer(db, SHOP, ANN, { give: [a1], get: [b1] })).rejects.toThrow(/isn't open to trade/);
+    await expect(createOffer(db, SHOP, ANN, { give: [fresh], get: [b1] })).rejects.toThrow(/isn't open to trade/);
     await setOpenToTrade(db, SHOP, BEN, b1, true);
-    await expect(createOffer(db, SHOP, ANN, { give: [fresh], get: [b1] })).rejects.toThrow(/Tradable In 11 Days/);
-    await expect(createOffer(db, SHOP, ANN, { give: [a1], get: [b1], note: "text me 555-1234" })).rejects.toThrow(/note from the list/);
-    expect((await myMarketCards(db, SHOP, ANN)).find((c) => c.pullId === fresh)?.locked).toBe("Tradable In 11 Days");
+    await expect(createOffer(db, SHOP, ANN, { give: [fresh], get: [b1], note: "text me 555-1234" })).rejects.toThrow(/note from the list/);
+    expect((await myMarketCards(db, SHOP, ANN)).find((c) => c.pullId === fresh)?.locked).toBeNull();
+    await createOffer(db, SHOP, ANN, { give: [fresh], get: [b1] });
   });
 
   it("locks offered cards and cancels the other offers once a card moves", async () => {
@@ -287,17 +286,15 @@ describe("selling", () => {
     await completeSale(db, listing.id, "gid://shopify/Order/900", "#900");
     expect(await owner(b1)).toBe(ANN);
     const sold = await db.listing.findUniqueOrThrow({ where: { id: listing.id } });
-    expect(sold).toMatchObject({ status: "SOLD", payoutStatus: "HELD" });
+    // No payout hold: the seller is paid in Vault Credit (this app's ledger) as soon as the buyer pays.
+    expect(sold).toMatchObject({ status: "SOLD", payoutStatus: "PAID" });
     expect(Number(sold.payoutAmount)).toBe(18);
-    // A retried webhook does nothing.
-    expect(await completeSale(db, listing.id, "gid://shopify/Order/900", "#900")).toBeNull();
-
-    expect(await payOutSellers(db, async () => admin)).toBe(0);
-    expect(await payOutSellers(db, async () => admin, new Date(Date.now() + 15 * 86_400_000))).toBe(1);
-    // Paid in Vault Credit (this app's ledger), never Shopify store credit.
-    expect(calls.some((c) => c.query.includes("storeCreditAccountCredit"))).toBe(false);
     expect(await creditBalance(db, SHOP, BEN)).toBe(18);
-    expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).payoutStatus).toBe("PAID");
+    // A retried webhook does nothing, and the payout job has nothing left to pay.
+    expect(await completeSale(db, listing.id, "gid://shopify/Order/900", "#900")).toBeNull();
+    expect(await payOutSellers(db, async () => admin)).toBe(0);
+    expect(await creditBalance(db, SHOP, BEN)).toBe(18);
+    expect(calls.some((c) => c.query.includes("storeCreditAccountCredit"))).toBe(false);
     void pay;
   });
 
@@ -311,16 +308,20 @@ describe("selling", () => {
     expect(await owner(b1)).toBe(BEN);
   });
 
-  it("a refunded purchase holds the seller's credit and staff can send the card back", async () => {
+  it("a refunded purchase is flagged and reversing it takes the seller's credit back, even below zero", async () => {
     const [b1] = await vaultCards(BEN, 1);
     const listing = await createListing(db, SHOP, BEN, b1, 10);
     const { admin } = fakeAdmin();
     await startPurchase(db, admin, SHOP, ANN, listing.id);
     await completeSale(db, listing.id, "gid://shopify/Order/901", "#901");
-    await flagMarketOrder(db, "gid://shopify/Order/901", "The buyer was refunded.");
-    expect(await payOutSellers(db, async () => admin, new Date(Date.now() + 30 * 86_400_000))).toBe(0);
+    expect(await creditBalance(db, SHOP, BEN)).toBe(9);
+    // The seller spent the credit before the refund.
+    await adjustCredit(db, SHOP, BEN, -9, "Spent elsewhere");
+    expect(await flagMarketOrder(db, "gid://shopify/Order/901", "The buyer was refunded.")).toBe(1);
+    expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).flagReason).toMatch(/refunded/);
     await reverseSale(db, SHOP, listing.id);
     expect(await owner(b1)).toBe(BEN);
+    expect(await creditBalance(db, SHOP, BEN)).toBe(-9);
     expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).payoutStatus).toBe("CANCELLED");
   });
 

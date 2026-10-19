@@ -571,7 +571,7 @@
           el("h1", { class: "vm-page-title", text: editing ? "Pick Your Showcase" : "Put Cards Up" }),
           el("p", { class: "vm-page-text", text: editing
             ? "Tap Up To " + state.rules.maxShowcase + " Cards To Pin Them At The Top Of Your Binder Page."
-            : "Mark Cards Open To Trade" + (state.selling ? " Or Set A Price To Sell Them" : "") + ". Cards Can Change Hands " + state.rules.waitDays + " Days After Their Pack Order." }),
+            : "Mark Cards Open To Trade" + (state.selling ? " Or Set A Price To Sell Them" : "") + "." + (state.rules.waitDays ? " Cards Can Change Hands " + state.rules.waitDays + " Days After Their Pack Order." : "") }),
         ]),
         editing
           ? el("div", { class: "vm-own-actions" }, [
@@ -640,7 +640,7 @@
       c.listing
         ? el("button", { class: "vm-link", type: "button", text: "Stop Selling", onclick: function (e) { act({ action: "unlist", listingId: c.listing.id }, e.currentTarget, "Listing Removed."); } })
         : null,
-      el("span", { class: "vm-fine", text: "You Get " + (100 - state.feePercent) + "% As Vault Credit (Right Away When The Buyer Pays With Vault Credit, " + r.payoutDays + " Days After A Card Payment)." }),
+      el("span", { class: "vm-fine", text: "You Get " + (100 - state.feePercent) + "% As Vault Credit" + (r.payoutDays ? " (Right Away When The Buyer Pays With Vault Credit, " + r.payoutDays + " Days After A Card Payment)." : " As Soon As It Sells.") }),
     ]);
   }
 

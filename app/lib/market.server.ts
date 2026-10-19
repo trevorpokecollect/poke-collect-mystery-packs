@@ -12,13 +12,13 @@ type Db = PrismaClient;
 type Tx = Prisma.TransactionClient;
 
 /** A card can change owners once its pack order (or its last sale) is this old: refund cooling-off. */
-export const TRADE_WAIT_DAYS = 14;
+export const TRADE_WAIT_DAYS = 0;
 /** Offers lapse after this long without an answer. */
 export const OFFER_DAYS = 7;
 /** A buyer's unpaid invoice holds the card this long. */
 export const CHECKOUT_MINUTES = 60;
 /** The seller's Vault Credit is held this long after a card-paid sale (buyer chargeback window). */
-export const PAYOUT_HOLD_DAYS = 14;
+export const PAYOUT_HOLD_DAYS = 0;
 export const MAX_SIDE_CARDS = 10;
 export const MAX_OPEN_OFFERS = 10;
 export const MIN_PRICE = 1;
@@ -543,6 +543,11 @@ export async function completeSale(db: Db, listingId: string, orderId: string, o
     }
     await transfer(tx, listing.shop, [{ pullId: listing.pullId, from: listing.sellerCustomerId, to: buyer }], "SALE", { listingId: listing.id }, now);
     const payoutAmount = Math.round(Number(listing.price) * (100 - settings.feePercent)) / 100;
+    // No hold: the seller is paid in Vault Credit the moment the buyer's payment clears.
+    const payNow = PAYOUT_HOLD_DAYS === 0;
+    if (payNow) {
+      await addCredit(tx, { shop: listing.shop, customerId: listing.sellerCustomerId, amount: payoutAmount, kind: "SALE", listingId: listing.id, note: orderName });
+    }
     return tx.listing.update({
       where: { id: listing.id },
       data: {
@@ -550,21 +555,29 @@ export async function completeSale(db: Db, listingId: string, orderId: string, o
         orderId,
         orderName,
         soldAt: now,
-        payoutStatus: "HELD",
+        payoutStatus: payNow ? "PAID" : "HELD",
         payoutAmount,
         payoutDueAt: new Date(now.getTime() + PAYOUT_HOLD_DAYS * DAY),
+        paidOutAt: payNow ? now : null,
       },
     });
   });
 }
 
-/** A marketplace order was refunded or cancelled: stop the seller's credit until staff look at it. */
+/**
+ * A marketplace order was refunded or cancelled: an unpaid seller credit is held, and a paid one is
+ * marked for staff, who can reverse the sale (which takes the credit back, even below zero).
+ */
 export async function flagMarketOrder(db: Db, orderId: string, reason: string) {
-  const { count } = await db.listing.updateMany({
+  const held = await db.listing.updateMany({
     where: { orderId, payoutStatus: "HELD" },
     data: { payoutStatus: "FLAGGED", flagReason: reason },
   });
-  return count;
+  const paid = await db.listing.updateMany({
+    where: { orderId, payoutStatus: "PAID" },
+    data: { flagReason: `${reason} Reverse the sale to take the seller's credit back.` },
+  });
+  return held.count + paid.count;
 }
 
 /** Staff: sends a sold card back to the seller (e.g. the buyer was refunded) and cancels the credit. */
@@ -581,7 +594,8 @@ export async function reverseSale(db: Db, shop: string, listingId: string, now =
     // A paid seller gives the Vault Credit back (refused if they've spent it). A card bought with
     // Vault Credit refunds the buyer's credit; a card bought by card is refunded in Shopify by staff.
     if (listing.payoutStatus === "PAID" && listing.payoutAmount) {
-      await spendCredit(tx, { shop, customerId: listing.sellerCustomerId, amount: Number(listing.payoutAmount), kind: "ADJUST", listingId: listing.id, note: "Sale reversed" });
+      // Taken back even if already spent: the balance can go below zero and is repaid from future sales.
+      await addCredit(tx, { shop, customerId: listing.sellerCustomerId, amount: -Number(listing.payoutAmount), kind: "ADJUST", listingId: listing.id, note: "Sale reversed" });
     }
     if (!listing.orderId) {
       await addCredit(tx, { shop, customerId: listing.buyerCustomerId, amount: Number(listing.price), kind: "ADJUST", listingId: listing.id, note: "Sale reversed" });
