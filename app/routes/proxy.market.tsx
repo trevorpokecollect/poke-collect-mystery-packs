@@ -12,6 +12,9 @@ const VERSION = (process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_CO
 const FONTS =
   "https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap";
 
+// The store's own favicon (the Poke-Collect logo), so the tab matches poke-collect.com.
+const FAVICON = "https://poke-collect.com/cdn/shop/files/Logo_Inverted_f6f1059b-c34e-41fe-a1fb-019ee80646f3.png?v=1722967747&crop=center";
+
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function page(assets: string, body: string, title = "Vault Market · Poke-Collect") {
@@ -23,6 +26,8 @@ function page(assets: string, body: string, title = "Vault Market · Poke-Collec
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>${title}</title>
+<link rel="icon" type="image/png" href="${FAVICON}&width=96&height=96">
+<link rel="apple-touch-icon" href="${FAVICON}&width=180&height=180">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">

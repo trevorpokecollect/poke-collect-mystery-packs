@@ -255,7 +255,15 @@
       ["binder", "#/binder", "My Binder"],
       ["offers", "#/offers", "Offers"],
     ];
-    return el("header", { class: "vm-top" }, [
+    var storeBar = el("div", { class: "vm-store-bar" }, [
+      el("a", { class: "vm-store-back", href: "/" }, [el("span", { "aria-hidden": "true", text: "←" }), " Back To Poke-Collect"]),
+      el("div", { class: "vm-store-links" }, [
+        el("a", { href: "/apps/packs", text: "My Packs" }),
+        el("a", { href: "/collections/all", text: "Shop" }),
+        el("a", { href: "/account", text: "Account" }),
+      ]),
+    ]);
+    return el("div", { class: "vm-top-wrap" }, [storeBar, el("header", { class: "vm-top" }, [
       el("a", { class: "vm-logo", href: "#/" }, [
         el("span", { class: "vm-logo-mark", text: "Vault Market" }),
         el("span", { class: "vm-logo-by", text: "By Poke-Collect" }),
@@ -274,9 +282,8 @@
         state.tradeName
           ? el("a", { class: "vm-me", href: profileHash(state.tradeName) }, [el("span", { class: "vm-monogram", text: state.tradeName.charAt(0).toUpperCase() }), el("span", { class: "vm-me-name", text: "@" + state.tradeName })])
           : el("button", { class: "vm-btn vm-btn-small", type: "button", text: "Pick A Trade Name", onclick: needName }),
-        el("a", { class: "vm-top-link", href: "/apps/packs", text: "My Packs" }),
       ]),
-    ]);
+    ])]);
   }
 
   // ---------- Market ----------
