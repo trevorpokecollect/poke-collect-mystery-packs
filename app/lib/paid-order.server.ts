@@ -17,6 +17,7 @@ export interface OrderPayload {
   checkout_token?: string | null;
   customer?: { admin_graphql_api_id?: string } | null;
   note_attributes?: { name: string; value: string }[] | null;
+  payment_gateway_names?: string[] | null;
   shipping_address?: { country_code?: string | null } | null;
   line_items: {
     admin_graphql_api_id: string;
@@ -83,6 +84,11 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
     );
   }
 
+  // Store credit can't pay for packs (checkout hides it). Flag any pack order that got through anyway.
+  if (result.pulls.length > 0 && paidWithStoreCredit(order)) {
+    await tagOrder(admin, order.admin_graphql_api_id, [STORE_CREDIT_TAG]).catch((e) => console.error("Tag failed", e));
+  }
+
   if (result.pulls.length > 0) {
     await checkTopTierGone(db, admin, shop, result.pulls.map((p) => p.seriesId), order.admin_graphql_api_id).catch((error) =>
       console.error("Top tier check failed", error),
@@ -94,4 +100,10 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
     console.error(`Order ${order.name}: series sold out before all packs were drawn`, result.shortfall);
     await tagOrder(admin, order.admin_graphql_api_id, ["mystery-pack-sold-out-refund-needed"]);
   }
+}
+
+export const STORE_CREDIT_TAG = "pack-paid-with-store-credit";
+
+export function paidWithStoreCredit(order: Pick<OrderPayload, "payment_gateway_names">) {
+  return (order.payment_gateway_names ?? []).some((name) => /store[\s_-]?credit/i.test(name));
 }

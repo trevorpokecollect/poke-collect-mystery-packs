@@ -1,0 +1,4 @@
+{
+  "name": "Pack No Store Credit",
+  "description": "Hides store credit at checkout when the cart has a Mystery Pack."
+}
