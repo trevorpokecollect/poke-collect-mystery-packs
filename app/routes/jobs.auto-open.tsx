@@ -6,6 +6,7 @@ import { finalizeOrder, fulfillMissingVaultPackLines, noteMissingVaultPulls } fr
 import { expireShipments, notifyPickupsReady, sendVaultReminders } from "../lib/vault.server";
 import { expireCheckouts, expireOffers, payOutSellers } from "../lib/market.server";
 import { expireCreditCodes } from "../lib/credit.server";
+import { fillMissingCardImages } from "../lib/card-images.server";
 
 // Called on a schedule (Railway cron): opens packs past their window and retries
 // any order that is ready to ship but wasn't finalized yet.
@@ -43,5 +44,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await expireCheckouts(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   await payOutSellers(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   await expireCreditCodes(db, async (shop) => (await unauthenticated.admin(shop)).admin);
+  // Cards that joined a pool before their listing had a photo: take the photo Shopify has now.
+  await fillMissingCardImages(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   return Response.json({ finalized: results });
 };
