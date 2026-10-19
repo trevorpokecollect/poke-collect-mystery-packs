@@ -26,6 +26,7 @@
   var walletCache = null;
   var newCode = null; // the code just made, shown until the page changes
   var armedBuy = null; // listing id awaiting a second tap to buy with Vault Credit
+  var guides = {}; // pull id -> Price Guide ({ market, printing }), "loading" while fetched
 
   // ---------- Helpers ----------
 
@@ -628,6 +629,31 @@
     ]);
   }
 
+  // Price Guide: how a price compares with the TCGplayer market price. Only a suggestion, and only the owner sees it.
+  var PRICE_BANDS = [
+    { upTo: 0.6, key: "steal", label: "Great Price", note: "Well Under Market. It Should Sell Fast, But You Could Ask More." },
+    { upTo: 0.9, key: "great", label: "Great Price", note: "Under Market. Likely To Sell Fast." },
+    { upTo: 1.02, key: "good", label: "Good Price", note: "Right At Market. Should Sell Quickly." },
+    { upTo: 1.15, key: "fair", label: "Fair Price", note: "A Little Over Market. May Take A Few Days." },
+    { upTo: 1.4, key: "high", label: "High Price", note: "Over Market. Could Take A While To Sell." },
+    { upTo: Infinity, key: "over", label: "Overpriced", note: "Well Over Market. Unlikely To Sell Soon." },
+  ];
+
+  function priceBand(price, market) {
+    var ratio = price / market;
+    for (var i = 0; i < PRICE_BANDS.length; i++) if (ratio <= PRICE_BANDS[i].upTo) return PRICE_BANDS[i];
+    return PRICE_BANDS[PRICE_BANDS.length - 1];
+  }
+
+  function loadGuide(pullId) {
+    if (guides[pullId]) return;
+    guides[pullId] = "loading";
+    getJSON({ view: "priceGuide", pull: pullId })
+      .then(function (g) { guides[pullId] = g && g.market ? g : { market: null }; })
+      .catch(function () { guides[pullId] = { market: null }; })
+      .then(function () { if (route().name === "binder") render(); });
+  }
+
   function sellForm(c) {
     var r = state.rules;
     var price = el("input", { id: "vm-price-" + c.pullId, class: "vm-input vm-price", type: "number", min: String(r.minPrice), max: String(r.maxPrice), step: "0.01", placeholder: "0.00", value: c.listing ? Number(c.listing.price).toFixed(2) : "", "aria-label": "Price for " + c.title });
@@ -636,11 +662,63 @@
       act({ action: "list", pullId: c.pullId, price: Number(price.value) }, list, "Listed In The Market.");
     });
     return el("div", { class: "vm-sell" }, [
+      priceGuide(c, price),
       el("div", { class: "vm-sell-row" }, [el("span", { class: "vm-dollar", text: "$" }), price, list]),
       c.listing
         ? el("button", { class: "vm-link", type: "button", text: "Stop Selling", onclick: function (e) { act({ action: "unlist", listingId: c.listing.id }, e.currentTarget, "Listing Removed."); } })
         : null,
       el("span", { class: "vm-fine", text: "You Get " + (100 - state.feePercent) + "% As Vault Credit" + (r.payoutDays ? " (Right Away When The Buyer Pays With Vault Credit, " + r.payoutDays + " Days After A Card Payment)." : " As Soon As It Sells.") }),
+    ]);
+  }
+
+  function priceGuide(c, price) {
+    loadGuide(c.pullId);
+    var g = guides[c.pullId];
+    if (g === "loading") return el("p", { class: "vm-guide-wait", text: "Checking The Market Price…" });
+    if (!g || !g.market) return el("p", { class: "vm-guide-wait", text: "No Price Guide For This Card Yet. You Can Still Set Any Price." });
+    var r = state.rules;
+    var market = g.market;
+    // The slider spans half to double the market price; typing can still go anywhere from the minimum to the maximum.
+    var lo = Math.max(r.minPrice, Math.floor(market * 0.5 * 100) / 100);
+    var hi = Math.min(r.maxPrice, Math.max(lo + 1, Math.ceil(market * 2)));
+    var step = market < 20 ? "0.25" : market < 200 ? "1" : "5";
+    var slider = el("input", { class: "vm-guide-slider", type: "range", min: String(lo), max: String(hi), step: step, value: String(price.value ? Number(price.value) : market), "aria-label": "Slide to set a price for " + c.title });
+    var pill = el("span", { class: "vm-guide-pill" });
+    var note = el("span", { class: "vm-guide-note" });
+    var marker = el("span", { class: "vm-guide-mark", "aria-hidden": "true" });
+    marker.style.left = ((market - lo) / (hi - lo)) * 100 + "%";
+
+    function show(value) {
+      if (!(value > 0)) {
+        pill.className = "vm-guide-pill";
+        pill.textContent = "Slide To Set A Price";
+        note.textContent = "";
+        return;
+      }
+      var band = priceBand(value, market);
+      pill.className = "vm-guide-pill vm-guide-" + band.key;
+      pill.textContent = band.label;
+      note.textContent = band.note;
+    }
+    slider.addEventListener("input", function () {
+      price.value = Number(slider.value).toFixed(2);
+      show(Number(slider.value));
+    });
+    price.addEventListener("input", function () {
+      var v = Number(price.value);
+      if (v > 0) slider.value = String(Math.min(hi, Math.max(lo, v)));
+      show(v);
+    });
+    show(price.value ? Number(price.value) : 0);
+
+    return el("div", { class: "vm-guide" }, [
+      el("div", { class: "vm-guide-head" }, [
+        el("span", { class: "vm-guide-label", text: "Price Guide" }),
+        el("span", { class: "vm-guide-market", text: "TCGplayer Market " + money(market) + (g.printing ? " · " + g.printing : "") }),
+      ]),
+      el("div", { class: "vm-guide-track" }, [slider, marker]),
+      el("div", { class: "vm-guide-verdict", role: "status" }, [pill, note]),
+      el("span", { class: "vm-fine", text: "Just A Suggestion. You Set The Price." }),
     ]);
   }
 

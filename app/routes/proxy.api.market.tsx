@@ -3,6 +3,7 @@ import db from "../db.server";
 import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { validDemoToken } from "../lib/demo.server";
+import { priceGuideFor } from "../lib/price-guide.server";
 import { createCreditCode, creditBalance, creditWallet, returnCreditCode, CODE_DAYS } from "../lib/credit.server";
 import {
   activityFeed,
@@ -53,6 +54,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const view = params.get("view") ?? "";
   const name = params.get("name")?.slice(0, 40) ?? "";
   if (validDemoToken(shop, params.get("demo"))) {
+    // Sample Price Guide so the slider can be tried in the preview.
+    if (view === "priceGuide") return json({ market: 12.5, printing: "Holofoil" });
     try {
       return json(await marketDemo(db, shop, { view, name }));
     } catch (error) {
@@ -67,6 +70,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (view === "collectors") return json(await collectors(db, shop, viewer.customerId));
   if (view === "matches") return json(await tradeMatches(db, shop, viewer.customerId));
   if (view === "wallet") return json({ ...(await creditWallet(db, shop, viewer.customerId)), codesEnabled: settings.creditCollections > 0, codeDays: CODE_DAYS });
+  if (view === "priceGuide") return json(admin ? await priceGuideFor(db, admin, shop, viewer.customerId, params.get("pull") ?? "") : { market: null });
   if (view === "catalog") return json(await catalog(db, shop, params.get("q")?.slice(0, 60) ?? ""));
   if (view === "collection") {
     try {
