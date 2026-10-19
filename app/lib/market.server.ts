@@ -747,6 +747,27 @@ export async function beingBought(db: Db | Tx, pullIds: string[]) {
   return new Set(buying.map((b) => b.pullId));
 }
 
+/**
+ * Vault cards up on Vault Market: listed for sale (or being bought right now) or open to trade.
+ * They can't be shipped or picked up until the owner takes them down. Trade spots only count
+ * while the market is on, since the owner can't change them when it's off.
+ */
+export async function listedOnMarket(db: Db | Tx, shop: string, pullIds: string[]) {
+  const out = new Map<string, { sale: boolean; trade: boolean }>();
+  if (pullIds.length === 0) return out;
+  const { enabled } = await marketSettings(db, shop);
+  const pulls = await db.pull.findMany({
+    where: { id: { in: pullIds } },
+    select: { id: true, openToTrade: true, listings: { where: { status: { in: ["ACTIVE", "CHECKOUT"] } }, select: { id: true } } },
+  });
+  for (const p of pulls) {
+    const sale = p.listings.length > 0;
+    const trade = enabled && p.openToTrade;
+    if (sale || trade) out.set(p.id, { sale, trade });
+  }
+  return out;
+}
+
 /** Cards going on a shipment: their open offers and listings are withdrawn. */
 export async function withdrawFromMarket(db: Db | Tx, ids: string[]) {
   if (ids.length === 0) return;

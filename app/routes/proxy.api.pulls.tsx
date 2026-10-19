@@ -6,7 +6,7 @@ import { json, proxyContext } from "../lib/proxy.server";
 import { shippingStatuses, shipStatusFor } from "../lib/shipping-status.server";
 import { packShelf } from "../lib/shelf.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
-import { hasMarketAccess } from "../lib/market.server";
+import { hasMarketAccess, listedOnMarket } from "../lib/market.server";
 
 // Lists the viewer's packs. Unopened packs never include the card. Card values are
 // admin-only, so customers never see a dollar figure next to what they pulled.
@@ -27,6 +27,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // In the vault: opened on a vault order and not shipping yet.
   const inVault = (p: (typeof pulls)[number]) => p.status === "REVEALED" && vaultOrders.has(p.orderId);
   const pending = opened.find((p) => inVault(p) && p.shipRequest?.status === "PENDING")?.shipRequest ?? null;
+  // Vault cards up on Vault Market can't ship until they're taken down, so they're shown apart.
+  const listed = await listedOnMarket(db, shop, opened.filter(inVault).map((p) => p.id));
   const [art, products, shipping] = await Promise.all([
     packImages(admin, [...new Set(pulls.map((p) => p.series.packProductId))]),
     packProducts(admin, [...new Set([...live.map((l) => l.series.packProductId), ...pulls.map((p) => p.series.packProductId)])]),
@@ -71,6 +73,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               tier: p.slot.card.tier,
               imageUrl: p.slot.card.imageUrl,
             },
+      // Listed on Vault Market: { sale, trade }. Only for vault cards.
+      market: listed.get(p.id) ?? null,
       // preparing | shipped | pickup_preparing | pickup_ready | picked_up, with tracking once shipped.
       shipping:
         p.status === "UNOPENED"

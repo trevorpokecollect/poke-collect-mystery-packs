@@ -616,6 +616,38 @@ describe("vault", () => {
     expect(await db.pull.count({ where: { shipRequestId: requests[1].id, unreservedAt: { not: null } } })).toBe(3);
   });
 
+  it("ships only the cards the customer picks and leaves the rest in the vault", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin, drafts, deleted } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(3));
+    for (const p of pulls) await revealPull(db, SHOP, p.id, viewer);
+    const [a, b, c] = pulls.map((p) => p.id);
+
+    await requestShipment(db, admin, SHOP, viewer, { pullIds: [a, b] });
+    expect((drafts[0].input as { lineItems: { quantity: number }[] }).lineItems.reduce((n, l) => n + l.quantity, 0)).toBe(2);
+    const first = await db.shipRequest.findFirstOrThrow();
+    expect(first.cardCount).toBe(2);
+    expect((await db.pull.findUniqueOrThrow({ where: { id: c } })).shipRequestId).toBeNull();
+    expect((await db.pull.findUniqueOrThrow({ where: { id: c } })).unreservedAt).toBeNull();
+
+    // The same pick again reuses the open invoice.
+    expect(await requestShipment(db, admin, SHOP, viewer, { pullIds: [b, a] })).toEqual({ invoiceUrl: "https://pay/1", reused: true });
+
+    // Swapping a card out replaces the invoice and puts the dropped card back, reserved again.
+    await requestShipment(db, admin, SHOP, viewer, { pullIds: [b, c] });
+    expect(deleted).toEqual(["gid://shopify/DraftOrder/1"]);
+    const dropped = await db.pull.findUniqueOrThrow({ where: { id: a } });
+    expect(dropped.shipRequestId).toBeNull();
+    expect(dropped.unreservedAt).toBeNull();
+    const second = await db.shipRequest.findFirstOrThrow({ where: { status: "PENDING" } });
+    expect(await db.pull.count({ where: { shipRequestId: second.id, unreservedAt: { not: null } } })).toBe(2);
+
+    // Picking only cards that aren't in the vault is refused.
+    await expect(requestShipment(db, admin, SHOP, viewer, { pullIds: ["nope"] })).rejects.toThrow(/Pick at least one card/);
+  });
+
   it("adds cards opened after payment to the paid, unshipped vault order at no charge", async () => {
     const series = await makeReservedSeries(10);
     const { admin, drafts, edits, deleted } = vaultAdmin();

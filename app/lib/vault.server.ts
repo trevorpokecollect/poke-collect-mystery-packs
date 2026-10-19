@@ -6,7 +6,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
 import { rereserveForPulls, unreserveForPulls } from "./inventory.server";
 import { pullsForViewer, PoolError, type Viewer } from "./pool.server";
-import { beingBought, withdrawFromMarket } from "./market.server";
+import { listedOnMarket, withdrawFromMarket } from "./market.server";
 
 export const SHIP_FEE = 5;
 /** Shipping is free once a single shipment has this many cards. */
@@ -47,29 +47,51 @@ export async function vaultedPulls(db: Db, shop: string, viewer: Viewer) {
 /**
  * Starts (or returns the open) shipment for the viewer's vaulted cards and returns the invoice
  * link to pay shipping. Each card's reserved copy is handed to the draft order's own reservation.
+ * With `pullIds`, only those vault cards go; the rest stay in the vault.
  */
 export async function requestShipment(
   db: Db,
   admin: AdminApiContext,
   shop: string,
   viewer: Viewer,
-  { pickup = false }: { pickup?: boolean } = {},
+  { pickup = false, pullIds }: { pickup?: boolean; pullIds?: string[] } = {},
 ): Promise<{ invoiceUrl: string | null; reused: boolean; pickupOrder?: string }> {
+  const chosen = pullIds ? new Set(pullIds) : null;
   const inVault = await vaultedPulls(db, shop, viewer);
+  const wanted = chosen ? inVault.filter((p) => chosen.has(p.id)) : inVault;
+  if (chosen && inVault.length && !wanted.length) throw new PoolError(`Pick at least one card to ${pickup ? "pick up" : "ship"}.`);
   const pending = inVault.find((p) => p.shipRequest?.status === "PENDING")?.shipRequest;
   if (pending?.invoiceUrl) {
-    if (!pickup && inVault.every((p) => p.shipRequestId === pending.id)) return { invoiceUrl: pending.invoiceUrl, reused: true };
-    // Cards opened since the open invoice was made, or picking up instead: replace the invoice.
+    const onInvoice = inVault.filter((p) => p.shipRequestId === pending.id);
+    if (!pickup && wanted.length === onInvoice.length && wanted.every((p) => p.shipRequestId === pending.id)) {
+      return { invoiceUrl: pending.invoiceUrl, reused: true };
+    }
+    // A different set of cards, or picking up instead: replace the invoice.
     const request = await db.shipRequest.findUniqueOrThrow({ where: { id: pending.id } });
     await settleShipRequest(db, admin, request, "CANCELLED", { keepReleased: true });
-    return requestShipment(db, admin, shop, viewer, { pickup });
+    // Cards left off the new shipment go back to the vault, reserved again.
+    const left = onInvoice.filter((p) => chosen && !chosen.has(p.id)).map((p) => p.id);
+    if (left.length) await rereserveForPulls(db, admin, left);
+    return requestShipment(db, admin, shop, viewer, { pickup, pullIds });
   }
 
-  const free = inVault.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
-  // A card another player is paying for right now stays behind.
-  const buying = await beingBought(db, free.map((p) => p.id));
-  const pulls = free.filter((p) => !buying.has(p.id));
-  if (pulls.length === 0) throw new PoolError(`There are no cards in your vault to ${pickup ? "pick up" : "ship"} yet.`);
+  const free = wanted.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
+  // Cards up on Vault Market (for sale, being bought or open to trade) stay until they're taken down.
+  const listed = await listedOnMarket(db, shop, free.map((p) => p.id));
+  const blocked = free.filter((p) => listed.has(p.id)).length;
+  if (chosen && blocked) {
+    throw new PoolError(
+      `${blocked === 1 ? "1 card you picked is" : `${blocked} cards you picked are`} listed on Vault Market. Take ${blocked === 1 ? "it" : "them"} off Vault Market (sale and trade) first, or leave ${blocked === 1 ? "it" : "them"} out.`,
+    );
+  }
+  const pulls = free.filter((p) => !listed.has(p.id));
+  if (pulls.length === 0) {
+    throw new PoolError(
+      blocked
+        ? `Every card in your vault is listed on Vault Market. Take the ones you want off Vault Market to ${pickup ? "pick them up" : "ship them"}.`
+        : `There are no cards in your vault to ${pickup ? "pick up" : "ship"} yet.`,
+    );
+  }
 
   // Vault shipping is US only: refuse up front when the customer's address on their latest pack order is abroad.
   if (!pickup) {
@@ -95,7 +117,7 @@ export async function requestShipment(
     await db.shipRequest.update({ where: { id: request.id }, data: { status: "CANCELLED" } });
     throw new PoolError("Your vault just changed. Please try again.");
   }
-  // Shipping cards takes them off the Vault Marketplace (offers and listings withdrawn).
+  // Offers that include these cards are withdrawn (listed cards never get this far).
   await withdrawFromMarket(db, pulls.map((p) => p.id));
 
   try {
@@ -258,8 +280,8 @@ export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, sh
     await settleShipRequest(db, admin, await db.shipRequest.findUniqueOrThrow({ where: { id } }), "CANCELLED", { keepReleased: true });
   }
   const free = (await vaultedPulls(db, shop, viewer)).filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
-  const buying = await beingBought(db, free.map((p) => p.id));
-  const pulls = free.filter((p) => !buying.has(p.id));
+  const listed = await listedOnMarket(db, shop, free.map((p) => p.id));
+  const pulls = free.filter((p) => !listed.has(p.id));
   if (pulls.length === 0) return 0;
   const ids = pulls.map((p) => p.id);
   const claimed = await db.pull.updateMany({ where: { id: { in: ids }, status: "REVEALED" }, data: { shipRequestId: request.id } });
