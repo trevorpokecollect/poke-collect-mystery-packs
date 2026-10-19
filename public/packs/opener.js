@@ -344,6 +344,7 @@
         payNote,
         el("a", { class: "mp-btn mp-vault-btn", href: vault.pending.invoiceUrl, text: "Pay Shipping" }),
         pickupButton(ids, payNote),
+        cancelShipButton(payNote),
       ]);
     }
     var left = Math.max(0, freeAt - n);
@@ -367,7 +368,38 @@
       note,
       shipButton(label, note, ids),
       pickupButton(ids, note),
+      vault && vault.pending ? cancelShipButton(note) : null,
     ]);
+  }
+
+  // "Cancel Shipment": backs out of the open shipping invoice; the cards stay in the vault.
+  function cancelShipButton(note) {
+    var armed = false;
+    var button = el("button", { class: "mp-pickup-btn mp-cancel-ship", type: "button", text: "Cancel Shipment" });
+    button.addEventListener("click", function () {
+      if (demo) { note.textContent = "Preview mode: there's no shipment to cancel."; return; }
+      if (!armed) {
+        armed = true;
+        button.textContent = "Tap Again To Cancel Your Shipment";
+        note.textContent = "Your cards will stay in your vault and the shipping invoice will be cancelled.";
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "Cancelling...";
+      fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cancel: true }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.cancelled) throw new Error(d.error || "Couldn't cancel your shipment.");
+          window.location.reload();
+        })
+        .catch(function (err) {
+          armed = false;
+          button.disabled = false;
+          button.textContent = "Cancel Shipment";
+          note.textContent = err.message;
+        });
+    });
+    return button;
   }
 
   // Starts (or replaces) the shipping invoice for the picked vault cards, then goes to checkout.

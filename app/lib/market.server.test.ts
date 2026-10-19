@@ -39,7 +39,7 @@ import {
   updateMarketSettings,
   wishlist,
 } from "./market.server";
-import { moveVault, requestShipment, vaultedPulls } from "./vault.server";
+import { cancelShipment, moveVault, requestShipment, vaultedPulls } from "./vault.server";
 import { adjustCredit, createCreditCode, creditBalance, expireCreditCodes, refundCreditCodes, returnCreditCode, settleCreditCodes } from "./credit.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -355,6 +355,12 @@ describe("selling", () => {
     await setOpenToTrade(db, SHOP, BEN, b2, false);
     await requestShipment(db, admin, SHOP, { customerId: BEN }, { pullIds: [b1, b2] });
     expect(await db.pull.count({ where: { id: { in: [b1, b2] }, shipRequestId: { not: null } } })).toBe(2);
+
+    // Left checkout: Cancel Shipment puts the cards back in the vault.
+    await cancelShipment(db, admin, SHOP, { customerId: BEN });
+    expect(await db.pull.count({ where: { id: { in: [b1, b2] }, shipRequestId: null } })).toBe(2);
+    expect(await db.shipRequest.count({ where: { status: "PENDING" } })).toBe(0);
+    await expect(cancelShipment(db, admin, SHOP, { customerId: BEN })).rejects.toThrow(/no open shipment/);
   });
 });
 

@@ -548,3 +548,4 @@
 .mp-laser.mp-on { opacity: 1; }
 .mp-fleck { width: 3px; height: 3px; border-radius: 0; box-shadow: 0 0 4px #ff2d55; }
 @media (prefers-reduced-motion: reduce) { .mp-edge-bits { animation: none; } }
+.mp-cancel-ship { border-color: transparent; text-decoration: underline; font-weight: 600; opacity: .85; }
