@@ -445,16 +445,21 @@
 .mp-stage { touch-action: none; overscroll-behavior: contain; -webkit-user-select: none; user-select: none; }
 .mp-stage-inner { perspective: 900px; }
 .mp-pack3d {
-  position: absolute; left: 50%; top: 0; z-index: 2; transform-style: preserve-3d;
+  position: absolute; left: 50%; top: 0; z-index: 2;
   transform: translateX(-50%); will-change: transform;
 }
 .mp-pack3d .mp-open-pack { left: 0; transform: none; width: 100%; height: 100%; }
 /* Thickness behind the artwork and a plain back, so the edges show when the pack turns. */
-.mp-pack-layer, .mp-pack-back {
-  position: absolute; inset: 0.4% 0.6%; border-radius: 6% / 3.4%; pointer-events: none;
-  background: linear-gradient(90deg, #0b1a3a, #1c3a78 50%, #0b1a3a);
+.mp-pack-edge {
+  position: absolute; left: 50%; top: 0; z-index: 0; pointer-events: none; will-change: transform;
+  border-radius: 6% / 3.4%; transform: translateX(-50%);
+  background: linear-gradient(90deg, #0b1a3a, #1c3a78 50%, #0b1a3a); box-shadow: 0 0 0 1px rgba(90, 160, 255, .35);
 }
-.mp-pack-back { transform: translateZ(-7.2px) rotateY(180deg); background: linear-gradient(160deg, #13244a, #070b18); box-shadow: 0 0 0 1px rgba(90, 160, 255, .35); }
+.mp-glare {
+  position: absolute; inset: 0.4% 0.6%; border-radius: 6% / 3.4%; overflow: hidden; pointer-events: none; z-index: 5;
+  transition: opacity .2s;
+}
+.mp-glare.mp-off { opacity: 0; }
 /* Foil glare that slides across the artwork as the pack tilts. */
 .mp-sheen {
   position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform;
@@ -477,14 +482,20 @@
   transition: opacity .25s;
 }
 .mp-swipe-hint.mp-off { opacity: 0; }
+/* The dot runs along the line by transform (moving it by `left` redrew the whole stage every frame). */
+.mp-swipe-run {
+  position: absolute; top: 0; left: 0; width: calc(100% - 16px); height: 0;
+  animation: mp-swipe-run 1.6s cubic-bezier(.5,0,.3,1) infinite; will-change: transform;
+}
 .mp-swipe-dot {
   position: absolute; top: -9px; left: 0; width: 16px; height: 16px; border-radius: 50%;
   background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.25), 0 0 16px 4px rgba(120,190,255,.9);
   animation: mp-swipe-dot 1.6s cubic-bezier(.5,0,.3,1) infinite;
 }
+@keyframes mp-swipe-run { from { transform: translateX(0); } to { transform: translateX(100%); } }
 @keyframes mp-swipe-dot {
-  0% { left: 0; opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1); }
-  80% { opacity: 1; } 100% { left: calc(100% - 16px); opacity: 0; transform: scale(.8); }
+  0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1); }
+  80% { opacity: 1; } 100% { opacity: 0; transform: scale(.8); }
 }
 .mp-result .mp-swipe-text { font-family: var(--mp-heading); font-size: 1.2em; font-weight: 700; letter-spacing: .06em; color: #fff; margin: 4px 0 12px; animation: mp-breathe 1.8s ease-in-out infinite; }
 @keyframes mp-breathe { 50% { opacity: .55; } }
@@ -532,7 +543,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mp-swipe-dot, .mp-reveal-card.mp-charging, .mp-glow.mp-charge, .mp-rays, .mp-result .mp-swipe-text, .mp-result .mp-tap { animation: none; }
+  .mp-swipe-run, .mp-swipe-dot, .mp-reveal-card.mp-charging, .mp-glow.mp-charge, .mp-rays, .mp-result .mp-swipe-text, .mp-result .mp-tap { animation: none; }
 }
 
 /* Digital tear: a glowing red laser line, a bright head that runs along the cut, red sparks. */

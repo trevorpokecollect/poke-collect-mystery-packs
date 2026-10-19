@@ -725,20 +725,12 @@
       ? "url(\"" + art.replace(/"/g, "%22") + "\") center / " + pct(1 / ART.width) + " " + pct(1 / ART.height) + " no-repeat"
       : "";
 
-    function face(polygon, glare) {
+    function face(polygon) {
       var node = el("div", { class: "mp-open-face" + (art ? "" : " mp-open-plain") });
       node.style.width = width + "px";
       node.style.height = height + "px";
       if (paint) node.style.background = paint;
       node.style.clipPath = "polygon(" + polygon.map(function (p) { return pct(p[0]) + " " + pct(p[1]); }).join(",") + ")";
-      // Foil glare on the body, slid across the art by the tilt (a transform, so it's cheap to move).
-      if (glare) {
-        var sheen = el("div", { class: "mp-sheen" });
-        sheen.style.width = width * 2 + "px";
-        sheen.style.height = height * 2 + "px";
-        node.appendChild(sheen);
-        node.sheen = sheen;
-      }
       return node;
     }
 
@@ -747,7 +739,7 @@
     var bodyGlow = el("div", { class: "mp-open-glow" });
     bodyGlow.style.top = (TEAR_Y * 100).toFixed(2) + "%";
     body.appendChild(bodyGlow);
-    var bodyFace = face([[0, 1]].concat(points, [[1, 1]]), true);
+    var bodyFace = face([[0, 1]].concat(points, [[1, 1]]));
     var bodyEdge = tornEdge(points, 1, false);
     bodyFace.appendChild(bodyEdge);
     body.appendChild(bodyFace);
@@ -783,7 +775,7 @@
     var laser = el("span", { class: "mp-laser" });
     group.appendChild(laser);
 
-    return { group: group, laser: laser, sheen: bodyFace.sheen, width: width, height: height, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
+    return { group: group, laser: laser, width: width, height: height, body: body, bodyEdge: bodyEdge, shade: shade, slices: slices, root: slices[SLICES - 1].wrap, points: points };
   }
 
   function fleck(pack, x, y) {
@@ -814,6 +806,7 @@
     var headY = yAt(pack.points, torn) * height;
     pack.laser.style.transform = "translate(" + (torn * width).toFixed(1) + "px, " + headY.toFixed(1) + "px)";
     pack.laser.classList.toggle("mp-on", front > 0.005 && front < 0.995);
+    if (pack.glare) pack.glare.classList.toggle("mp-off", front > 0.005);
     // The pack's 3D thickness is cut away above the tear too, so no shadow of the top stays behind.
     if (pack.layers) {
       var cut = pct(TEAR_Y + 0.016);
@@ -840,7 +833,7 @@
   // Makes the pack a tilting 3D object: it floats and sways on its own, leans toward the pointer
   // or finger, follows the phone's tilt where the browser allows it without asking, and moves a
   // foil glare across the artwork. Returns controls; stop() ends the loop.
-  function tilter(node, floor, sheen, size) {
+  function tilter(node, floor, sheen, size, edge) {
     var rx = 0, ry = 0, lift = 0, tx = 0, ty = 0, mode = "idle", running = true;
     var start = performance.now();
     var gyro = null, base = null;
@@ -868,7 +861,10 @@
       rx += (tx - rx) * 0.12;
       ry += (ty - ry) * 0.12;
       lift += (goalLift - lift) * 0.1;
-      node.style.transform = "translateX(-50%) translateY(" + lift.toFixed(2) + "px) rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) + "deg)";
+      var turn = " rotateX(" + rx.toFixed(2) + "deg) rotateY(" + ry.toFixed(2) + "deg)";
+      node.style.transform = "translateX(-50%) translateY(" + lift.toFixed(2) + "px)" + turn;
+      // The edge peeks out on the side turning away, like the pack's thickness.
+      if (edge) edge.style.transform = "translateX(-50%) translate(" + (-ry * 0.35).toFixed(1) + "px, " + (lift + rx * 0.3).toFixed(1) + "px)" + turn;
       if (sheen) {
         // The glare sits centered on the pack and slides opposite the tilt, like light on foil.
         var gx = (-0.5 + ry / 36) * size.width, gy = (-0.5 - rx / 36) * size.height;
@@ -977,22 +973,28 @@
     var height = inner.getBoundingClientRect().height;
     var width = pack.packImageUrl ? height * (ART.width / ART.height) : height * 0.62;
     var opener = stagePack(pack.packImageUrl, width, height);
-    // The 3D pack: the artwork in front, a few layers behind it for the pack's thickness, and a
-    // back face, so its edges show as it tilts.
+    // The 3D pack. It turns as one flat layer, which phones can move without redrawing it (real
+    // 3D pieces stuttered on iPhone). Its thickness is a plain edge behind it that shifts with the
+    // tilt, and the foil glare is one overlay on top that slides across.
     var holder = el("div", { class: "mp-pack3d" });
     holder.style.width = width + "px";
     holder.style.height = height + "px";
-    for (var layer = 1; layer <= 3; layer++) {
-      var slab = el("div", { class: "mp-pack-layer" });
-      slab.style.transform = "translateZ(" + (-layer * 2.2).toFixed(1) + "px)";
-      holder.appendChild(slab);
-    }
-    holder.appendChild(el("div", { class: "mp-pack-back" }));
-    opener.layers = Array.prototype.slice.call(holder.querySelectorAll(".mp-pack-layer, .mp-pack-back"));
+    var edge = el("div", { class: "mp-pack-edge" });
+    edge.style.width = width + "px";
+    edge.style.height = height + "px";
+    opener.layers = [edge];
     holder.appendChild(opener.group);
+    var glare = el("div", { class: "mp-glare" });
+    var sheen = el("div", { class: "mp-sheen" });
+    sheen.style.width = width * 2 + "px";
+    sheen.style.height = height * 2 + "px";
+    glare.appendChild(sheen);
+    holder.appendChild(glare);
+    opener.glare = glare;
+    inner.insertBefore(edge, result);
     inner.insertBefore(holder, result);
     if (!reduced) {
-      tilt = tilter(holder, floor, opener.sheen, opener);
+      tilt = tilter(holder, floor, sheen, opener, edge);
       // The pack drops in and settles before it can be opened.
       animate(opener.group, [
         { transform: "translateY(-60px) scale(.82) rotate(-6deg)", opacity: 0 },
@@ -1136,7 +1138,7 @@
     // Swipe-to-open: a finger (or mouse) dragged across the top of the pack tears it open along
     // the dotted line. Resolves once it's open. Tapping "Tap To Open" or pressing Enter opens it too.
     function swipeToOpen() {
-      var hint = el("div", { class: "mp-swipe-hint", "aria-hidden": "true" }, [el("span", { class: "mp-swipe-dot" })]);
+      var hint = el("div", { class: "mp-swipe-hint", "aria-hidden": "true" }, [el("span", { class: "mp-swipe-run" }, [el("span", { class: "mp-swipe-dot" })])]);
       hint.style.top = (TEAR_Y * 100).toFixed(2) + "%";
       opener.group.appendChild(hint);
       var prompt = el("p", { class: "mp-swipe-text", text: "Swipe Across The Top To Open" });
@@ -1248,6 +1250,7 @@
         var sequence = reduced
           ? Promise.resolve().then(function () {
               holder.remove();
+              edge.remove();
               front.style.transform = "none";
             })
           : swipeToOpen()
@@ -1271,10 +1274,9 @@
               // 3. The rest of the pack slides down off the card.
               .then(function () {
                 floor.classList.add("mp-off");
-                var slide = animate(holder, [
-                  { transform: holder.style.transform },
-                  { transform: "translateX(-50%) translateY(" + (window.innerHeight + height) + "px) rotateX(18deg) rotate(-3deg)" },
-                ], { duration: 900, easing: "cubic-bezier(.5,0,.75,.4)" });
+                var away = { transform: "translateX(-50%) translateY(" + (window.innerHeight + height) + "px) rotateX(18deg) rotate(-3deg)" };
+                var slide = animate(holder, [{ transform: holder.style.transform }, away], { duration: 900, easing: "cubic-bezier(.5,0,.75,.4)" });
+                animate(edge, [{ transform: edge.style.transform }, away], { duration: 900, easing: "cubic-bezier(.5,0,.75,.4)" });
                 tilt.stop();
                 // The card stays put while the pack slides off, then grows into place.
                 var settle = wait(650).then(function () {
@@ -1285,7 +1287,7 @@
                 });
                 return Promise.all([slide, settle]);
               })
-              .then(function () { holder.remove(); });
+              .then(function () { holder.remove(); edge.remove(); });
 
         function counterFor(i) {
           return multi ? el("span", { class: "mp-count", text: "Card " + (i + 1) + " Of " + cards.length }) : null;
