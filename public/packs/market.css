@@ -250,7 +250,7 @@ body.vm-locked { overflow: hidden; }
 .vm-own-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .vm-showcase { margin-bottom: 32px; }
 .vm-showcase .vm-section-title { margin-bottom: 14px; }
-.vm-showcase-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap: 18px; }
+.vm-showcase-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
 .vm-binder-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .vm-binder { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 22px; }
 .vm-sheet {
@@ -348,6 +348,14 @@ body.vm-locked { overflow: hidden; }
   .vm-nav { order: 3; width: 100%; overflow-x: auto; flex-wrap: nowrap; }
   .vm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 14px; }
   .vm-modal-panel { padding: 22px 16px; }
+  .vm-showcase-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+}
+@media (max-width: 600px) {
+  .vm-fan { display: none; }
+  .vm-hero-stats { gap: 18px; margin-top: 20px; }
+  .vm-stat dd { font-size: 1.5rem; }
+  .vm-me-name { display: none; }
+  .vm-top-right { gap: 10px; }
 }
 @media (max-width: 420px) {
   .vm-sheet { gap: 6px; padding: 10px; }

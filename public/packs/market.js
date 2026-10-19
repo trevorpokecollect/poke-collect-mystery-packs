@@ -143,7 +143,7 @@
 
   function art(card, size) {
     var img = card.imageUrl
-      ? el("img", { src: card.imageUrl, alt: card.title, loading: "lazy", draggable: "false" })
+      ? el("img", { src: card.imageUrl, alt: card.title, loading: size ? "eager" : "lazy", draggable: "false" })
       : el("span", { class: "vm-art-blank", text: card.title });
     var glare = el("span", { class: "vm-glare", "aria-hidden": "true" });
     var node = el("div", { class: "vm-art" + (size ? " vm-art-" + size : ""), "data-tier": tierKey(card.tier) }, [img, glare]);
@@ -223,7 +223,7 @@
       })),
       el("div", { class: "vm-top-right" }, [
         state.tradeName
-          ? el("a", { class: "vm-me", href: profileHash(state.tradeName) }, [el("span", { class: "vm-monogram", text: state.tradeName.charAt(0).toUpperCase() }), "@" + state.tradeName])
+          ? el("a", { class: "vm-me", href: profileHash(state.tradeName) }, [el("span", { class: "vm-monogram", text: state.tradeName.charAt(0).toUpperCase() }), el("span", { class: "vm-me-name", text: "@" + state.tradeName })])
           : el("button", { class: "vm-btn vm-btn-small", type: "button", text: "Pick A Trade Name", onclick: needName }),
         el("a", { class: "vm-top-link", href: "/apps/packs", text: "My Packs" }),
       ]),
