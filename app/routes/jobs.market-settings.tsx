@@ -4,7 +4,7 @@ import { marketSettings, TRADE_WAIT_DAYS, updateMarketSettings } from "../lib/ma
 
 // Staff switch for Vault Market settings from outside the admin (e.g. the soft launch):
 // POST /jobs/market-settings?shop=<shop> with the cron secret and a JSON body of
-// { enabled?, sellingEnabled?, feePercent?, accessTag? }. Also reports how many vault cards
+// { enabled?, sellingEnabled?, feePercent?, accessTag?, creditCollectionIds? }. Also reports how many vault cards
 // are past the trade hold, so a launch can be timed.
 export const action = async ({ request }: ActionFunctionArgs) => {
   const secret = process.env.CRON_SECRET;
@@ -18,12 +18,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     sellingEnabled?: boolean;
     feePercent?: number;
     accessTag?: string | null;
+    creditCollectionIds?: string[];
   };
   const input: Parameters<typeof updateMarketSettings>[2] = {};
   if (typeof body.enabled === "boolean") input.enabled = body.enabled;
   if (typeof body.sellingEnabled === "boolean") input.sellingEnabled = body.sellingEnabled;
   if (typeof body.feePercent === "number") input.feePercent = body.feePercent;
   if (body.accessTag !== undefined) input.accessTag = body.accessTag ? String(body.accessTag).trim() : null;
+  if (Array.isArray(body.creditCollectionIds)) input.creditCollectionIds = body.creditCollectionIds.map(String);
   if (Object.keys(input).length) await updateMarketSettings(db, shop, input);
 
   const holdEnds = new Date(Date.now() - TRADE_WAIT_DAYS * 86_400_000);
