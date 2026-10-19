@@ -259,8 +259,8 @@
       el("a", { class: "vm-store-back", href: "/" }, [el("span", { "aria-hidden": "true", text: "←" }), " Back To Poke-Collect"]),
       el("div", { class: "vm-store-links" }, [
         el("a", { href: "/apps/packs", text: "My Packs" }),
-        el("a", { href: "/collections/all", text: "Shop" }),
-        el("a", { href: "/account", text: "Account" }),
+        el("a", { href: "/", text: "Shop" }),
+        el("a", { href: "/pages/account", text: "Account" }),
       ]),
     ]);
     return el("div", { class: "vm-top-wrap" }, [storeBar, el("header", { class: "vm-top" }, [
