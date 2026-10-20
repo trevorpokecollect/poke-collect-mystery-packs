@@ -479,3 +479,5 @@ body.vm-locked { overflow: hidden; }
 .vm-pub-how li { display: grid; gap: 6px; padding: 16px; border-radius: 14px; background: var(--vm-ink-2); counter-increment: step; }
 .vm-pub-how li::before { content: counter(step); font-family: var(--vm-display); font-size: 1.4rem; color: var(--vm-gold); }
 .vm-pub-how li span { color: var(--vm-muted); font-size: .9rem; }
+
+.vm-deal { font-family: var(--vm-body); font-weight: 700; }

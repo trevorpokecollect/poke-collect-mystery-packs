@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickRow, tcgplayerIdFromImage } from "./price-guide.server";
+import { dealFor, pickRow, tcgplayerIdFromImage } from "./price-guide.server";
 
 describe("price guide", () => {
   it("reads the TCGplayer id from the card image name", () => {
@@ -20,5 +20,14 @@ describe("price guide", () => {
     expect(pickRow(rows, "Pikachu - 025 - Set - Near Mint")?.marketPrice).toBe(0.2);
     expect(pickRow([{ productId: 1, subTypeName: "Holofoil", marketPrice: 9 }], "Card - Near Mint")?.marketPrice).toBe(9);
     expect(pickRow([{ productId: 1, subTypeName: "Holofoil", marketPrice: null }], "Card Holofoil")).toBeNull();
+  });
+
+  it("rates a price against the market like the seller's slider", () => {
+    expect(dealFor(8, 10)).toBe("great");
+    expect(dealFor(10, 10)).toBe("good");
+    expect(dealFor(11, 10)).toBe("fair");
+    expect(dealFor(13, 10)).toBe("high");
+    expect(dealFor(20, 10)).toBe("over");
+    expect(dealFor(10, null)).toBeNull();
   });
 });

@@ -95,16 +95,31 @@ export async function priceGuideFor(
   const pull = await db.pull.findFirst({ where: { id: pullId, shop, customerId }, include: { slot: { include: { card: true } } } });
   const card = pull?.slot.card;
   if (!card) return none;
+  return guideForCard(admin, card, { fetcher, now });
+}
+
+type GuideCard = { id: string; productId: string; imageUrl: string | null; title: string };
+
+/** Price Guide for one pool card (cached 6 hours). Never throws: no guide is fine. */
+export async function guideForCard(
+  admin: AdminApiContext,
+  card: GuideCard,
+  { fetcher = fetch as Fetcher, now = Date.now(), vendor }: { fetcher?: Fetcher; now?: number; vendor?: string | null } = {},
+): Promise<PriceGuide> {
+  const none = { market: null, printing: null };
   const cached = guideCache.get(card.id);
   if (cached && now - cached.at < 6 * HOUR) return cached.guide;
   try {
     const productId = tcgplayerIdFromImage(card.imageUrl);
     if (!productId) return none;
-    const data = await gql(admin, `#graphql
-      query PriceGuideProduct($id: ID!) { product(id: $id) { vendor } }`, { id: card.productId });
-    const vendor = data.product?.vendor as string | undefined;
-    if (!vendor) return none;
-    const group = await groupId(fetcher, vendor, now);
+    let setName = vendor;
+    if (setName === undefined) {
+      const data = await gql(admin, `#graphql
+        query PriceGuideProduct($id: ID!) { product(id: $id) { vendor } }`, { id: card.productId });
+      setName = data.product?.vendor as string | undefined;
+    }
+    if (!setName) return none;
+    const group = await groupId(fetcher, setName, now);
     if (!group) return none;
     const rows = (await groupPrices(fetcher, group.category, group.id, now)).filter((r) => r.productId === productId);
     const row = pickRow(rows, card.title);
@@ -115,4 +130,57 @@ export async function priceGuideFor(
     console.error(`Price guide for card ${card.id} failed`, error);
     return none;
   }
+}
+
+export type Deal = "great" | "good" | "fair" | "high" | "over";
+
+/** The same bands as the seller's Price Guide slider. */
+export function dealFor(price: number, market: number | null): Deal | null {
+  if (!market || !(price > 0)) return null;
+  const ratio = price / market;
+  if (ratio <= 0.9) return "great";
+  if (ratio <= 1.02) return "good";
+  if (ratio <= 1.15) return "fair";
+  if (ratio <= 1.4) return "high";
+  return "over";
+}
+
+/**
+ * Deal badges for buyers on listed cards: how each price compares with the TCGplayer market.
+ * Only the rating is shared, never the market price. Waits at most `waitMs`; cards not ready by
+ * then get no badge this time and fill in on a later load (the lookups keep going and are cached).
+ */
+export async function dealBadges(
+  db: PrismaClient,
+  admin: AdminApiContext | undefined,
+  listed: { pullId: string; price: number }[],
+  { waitMs = 2500, fetcher = fetch as Fetcher }: { waitMs?: number; fetcher?: Fetcher } = {},
+) {
+  const out = new Map<string, Deal>();
+  if (!admin || listed.length === 0) return out;
+  const pulls = await db.pull.findMany({ where: { id: { in: listed.map((l) => l.pullId) } }, include: { slot: { include: { card: true } } } });
+  const cards = new Map(pulls.map((p) => [p.id, p.slot.card]));
+  const now = Date.now();
+  const missing = [...new Set(pulls.map((p) => p.slot.card).filter((c) => !guideCache.has(c.id) && tcgplayerIdFromImage(c.imageUrl)).map((c) => c.productId))];
+  const work = (async () => {
+    const vendors = new Map<string, string | null>();
+    for (let i = 0; i < missing.length; i += 100) {
+      const data = await gql(admin, `#graphql
+        query PriceGuideVendors($ids: [ID!]!) { nodes(ids: $ids) { ... on Product { id vendor } } }`, { ids: missing.slice(i, i + 100) });
+      for (const n of (data.nodes ?? []) as ({ id: string; vendor: string } | null)[]) if (n) vendors.set(n.id, n.vendor);
+    }
+    await Promise.all(
+      [...new Map(pulls.map((p) => [p.slot.card.id, p.slot.card])).values()].map((c) =>
+        guideForCard(admin, c, { fetcher, now, vendor: guideCache.has(c.id) ? undefined : (vendors.get(c.productId) ?? null) }),
+      ),
+    );
+  })().catch((error) => console.error("Deal badges failed", error));
+  await Promise.race([work, new Promise((r) => setTimeout(r, waitMs))]);
+  for (const l of listed) {
+    const card = cards.get(l.pullId);
+    const guide = card ? guideCache.get(card.id)?.guide : undefined;
+    const deal = dealFor(l.price, guide?.market ?? null);
+    if (deal) out.set(l.pullId, deal);
+  }
+  return out;
 }
