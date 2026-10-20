@@ -615,7 +615,11 @@
         var s = (W * 0.86) / CW;
         card.position.set(0, -0.06 * CH, -0.01);
         card.scale.set(s, s, 1);
-        tiltG.add(card); // sits inside the pack, hidden behind its front, until it rises out
+        // Hidden until the pack is cut open, so it can never peek out around the pack (for example
+        // while the pack drops in). Its texture is uploaded now so showing it later doesn't stall.
+        card.visible = false;
+        if (renderer.initTexture) renderer.initTexture(cardMat.map);
+        packG.add(card); // moves with the pack, inside it, until it rises out
       });
     }
 
@@ -705,6 +709,7 @@
 
         // The card rises out of the opening.
         if (!card) return null;
+        card.visible = true;
         var s0 = (W * 0.86) / CW;
         var y0 = -0.06 * CH, y1 = 0.24 * CH;
         return tween(0.7, function (k) { card.position.y = y0 + (y1 - y0) * easeOut(k); }, 0.12).then(function () {
