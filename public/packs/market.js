@@ -14,7 +14,7 @@
   var state = null; // main payload: me, cards (my vault), board, offers, rules
   var collectorsCache = null;
   var collectionCache = {};
-  var filters = { q: "", kind: "all", sort: "new" };
+  var filters = { q: "", kind: "all", sort: "best" };
   var binderFilter = "all";
   var binderPage = 0;
   var flash = null;
@@ -298,7 +298,17 @@
       if (filters.kind === "sale" && !c.listing) return false;
       return true;
     });
-    if (filters.sort === "priceUp" || filters.sort === "priceDown") {
+    // Best Price (the default): the biggest deals against the TCGplayer market first, then other
+    // listings, then cards only up for trade (each group newest first).
+    if (filters.sort === "best" && state.selling) {
+      var group = function (c) { return c.listing && c.listing.dealRank != null ? 0 : c.listing ? 1 : 2; };
+      shown = shown.map(function (c, i) { return { c: c, i: i }; }).sort(function (a, b) {
+        var ga = group(a.c), gb = group(b.c);
+        if (ga !== gb) return ga - gb;
+        if (ga === 0) return a.c.listing.dealRank - b.c.listing.dealRank;
+        return a.i - b.i;
+      }).map(function (x) { return x.c; });
+    } else if (filters.sort === "priceUp" || filters.sort === "priceDown") {
       shown = shown.filter(function (c) { return c.listing; });
       shown.sort(function (a, b) { return filters.sort === "priceUp" ? a.listing.price - b.listing.price : b.listing.price - a.listing.price; });
     } else if (filters.sort === "name") {
@@ -329,10 +339,12 @@
         onclick: function () { filters[group] = value; render(); },
       });
     }
-    var sort = el("select", { id: "vm-sort", class: "vm-input vm-select", "aria-label": "Sort" }, [
+    var sortOptions = [
       ["new", "Newest"],
       ["name", "Name A–Z"],
-    ].concat(state.selling ? [["priceUp", "Price: Low To High"], ["priceDown", "Price: High To Low"]] : []).map(function (o) {
+    ].concat(state.selling ? [["priceUp", "Price: Low To High"], ["priceDown", "Price: High To Low"]] : []);
+    if (state.selling) sortOptions.unshift(["best", "Sort By Best Price"]);
+    var sort = el("select", { id: "vm-sort", class: "vm-input vm-select", "aria-label": "Sort" }, sortOptions.map(function (o) {
       return el("option", { value: o[0], text: o[1], selected: filters.sort === o[0] });
     }));
     sort.addEventListener("change", function () { filters.sort = sort.value; render(); });

@@ -95,7 +95,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   ]);
   // Great / Good / Fair / High / Overpriced badges on listed cards (the rating only, never the market price).
   const deals = await dealBadges(db, admin, board.filter((c) => c.listing).map((c) => ({ pullId: c.pullId, price: c.listing!.price })));
-  for (const c of board) if (c.listing) (c.listing as { deal?: string | null }).deal = deals.get(c.pullId) ?? null;
+  // "Best Price" order: listings ranked by how far under the market they are (the rank only, no ratio).
+  const ranked = [...deals.entries()].sort((a, b) => a[1].ratio - b[1].ratio).map(([pullId]) => pullId);
+  for (const c of board) {
+    if (!c.listing) continue;
+    const listing = c.listing as { deal?: string | null; dealRank?: number | null };
+    listing.deal = deals.get(c.pullId)?.deal ?? null;
+    listing.dealRank = deals.has(c.pullId) ? ranked.indexOf(c.pullId) : null;
+  }
   const wishes = await wishlist(db, shop, viewer.customerId, board);
   const credit = await creditBalance(db, shop, viewer.customerId);
   return json({

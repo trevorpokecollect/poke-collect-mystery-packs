@@ -156,7 +156,7 @@ export async function dealBadges(
   listed: { pullId: string; price: number }[],
   { waitMs = 2500, fetcher = fetch as Fetcher }: { waitMs?: number; fetcher?: Fetcher } = {},
 ) {
-  const out = new Map<string, Deal>();
+  const out = new Map<string, { deal: Deal; ratio: number }>();
   if (!admin || listed.length === 0) return out;
   const pulls = await db.pull.findMany({ where: { id: { in: listed.map((l) => l.pullId) } }, include: { slot: { include: { card: true } } } });
   const cards = new Map(pulls.map((p) => [p.id, p.slot.card]));
@@ -180,7 +180,7 @@ export async function dealBadges(
     const card = cards.get(l.pullId);
     const guide = card ? guideCache.get(card.id)?.guide : undefined;
     const deal = dealFor(l.price, guide?.market ?? null);
-    if (deal) out.set(l.pullId, deal);
+    if (deal && guide?.market) out.set(l.pullId, { deal, ratio: l.price / guide.market });
   }
   return out;
 }
