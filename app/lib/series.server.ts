@@ -8,13 +8,12 @@ import { refreshBuylistReport } from "./buylist.server";
 import { gql } from "./orders.server";
 import { fetchCandidates, releaseUnneeded, reservePool, type CandidateFilter } from "./inventory.server";
 import {
-  buildPool,
-  copiesAllowed,
+  buildWithLimits,
   DEFAULT_TIER_RULES,
   normalizeTierRules,
   tierFor,
   validateBuildRules,
-  type BuildRules,
+  type LimitRules,
   type TierRule,
 } from "./pool-builder";
 
@@ -265,7 +264,8 @@ export function poolSummary(
   return { packs, cardCount, cardsPerPack: perPack, totalValue, ev, returnRate: packPrice ? ev / packPrice : 0, revenue: packs * packPrice };
 }
 
-export interface AutoBuildInput extends BuildRules, CandidateFilter {}
+export interface AutoBuildInput extends LimitRules, CandidateFilter {}
+
 
 /** Tier rules saved on the series, or the defaults. */
 export function seriesTierRules(series: { tierRules: unknown }): TierRule[] {
@@ -278,7 +278,8 @@ export function seriesTierRules(series: { tierRules: unknown }): TierRule[] {
 
 /**
  * Replaces a draft series' cards with a pool picked from live inventory, inside the value
- * range and averaging the target: one copy of each card, or up to 3 in pools over 50 cards.
+ * range and averaging the target: one copy of each card, or up to 3 in pools over 50 cards
+ * (a build's `maxCopies` can raise that to 5), optionally capped by Japanese share.
  * Cards already in another draft or live series are skipped so two pools never claim the same copy.
  */
 export async function autoBuildPool(admin: AdminApiContext, shop: string, seriesId: string, input: AutoBuildInput) {
@@ -296,7 +297,7 @@ export async function autoBuildPool(admin: AdminApiContext, shop: string, series
     ).map((c) => c.variantId),
   );
   const candidates = (await fetchCandidates(admin, input)).filter((c) => !inUse.has(c.variantId));
-  const { cards } = buildPool(candidates, { ...input, maxCopies: copiesAllowed(input.count) });
+  const { cards } = buildWithLimits(candidates, input);
   const tiers = seriesTierRules(series);
 
   await db.$transaction([

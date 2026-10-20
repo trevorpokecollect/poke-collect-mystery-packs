@@ -24,6 +24,8 @@ export interface InventoryCandidate {
   inventoryItemId: string;
   locationId: string;
   available: number;
+  /** A Japanese card: a Japanese product type or a `Language_Japanese` tag. */
+  japanese: boolean;
 }
 
 interface VariantPage {
@@ -129,6 +131,7 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
         inventoryItemId: v.inventoryItem.id,
         locationId: best.locationId,
         available: best.available,
+        japanese: /japanese/i.test(v.product.productType) || v.product.tags.some((t) => t.trim().toLowerCase() === "language_japanese"),
       });
     }
     if (!conn.pageInfo.hasNextPage) break;

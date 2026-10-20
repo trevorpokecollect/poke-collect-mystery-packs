@@ -59,7 +59,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   // A link can carry pool-rule overrides (e.g. ?targetAverage=10.99) and show a one-click
   // "Rebuild pool" in the title bar for a draft.
   const url = new URL(request.url);
-  const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "minTopHits", "topHitValue", "fillerMax", "productType", "condition", "language"];
+  const BUILD_KEYS = ["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "minTopHits", "topHitValue", "fillerMax", "productType", "condition", "language", "maxCopies", "maxJapanesePercent"];
   const buildOverrides = Object.fromEntries(BUILD_KEYS.filter((k) => url.searchParams.has(k)).map((k) => [k, url.searchParams.get(k) ?? ""]));
   // ?tiers=Poke:0,Great:5.01,Ultra:10.01,Master:25.01 shows a one-click "Apply Tiers" for a draft.
   const tierOverride = (url.searchParams.get("tiers") ?? "")
@@ -102,6 +102,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       minTopHits: String(build.minTopHits ?? 0),
       topHitValue: String(build.topHitValue ?? 25),
       fillerMax: String(build.fillerMax ?? ""),
+      // Not on the form: set by a link (?maxCopies=5&maxJapanesePercent=50) and kept on rebuilds.
+      maxCopies: String(build.maxCopies ?? ""),
+      maxJapanesePercent: String(build.maxJapanesePercent ?? ""),
       productType: String(build.productType ?? "Pokemon Single"),
       condition: String(build.condition ?? "Near Mint"),
       language: String(build.language ?? "English"),
@@ -175,6 +178,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
           minTopHits: Math.floor(num("minTopHits") || 0),
           topHitValue: num("topHitValue") || undefined,
           fillerMax: num("fillerMax") || undefined,
+          maxCopies: Math.floor(num("maxCopies") || 0) || undefined,
+          maxJapanesePercent: form.get("maxJapanesePercent") ? num("maxJapanesePercent") : undefined,
           productType: String(form.get("productType") || "").trim(),
           condition: String(form.get("condition") || "").trim(),
           language: String(form.get("language") || "").trim(),
@@ -321,7 +326,8 @@ export default function SeriesPage() {
       (form.querySelector(`[data-build="${name}"]`) as HTMLInputElement | null)?.value ?? "";
     const fields = ["count", "minValue", "maxValue", "targetAverage", "minHits", "hitValue", "minBigHits", "bigHitValue", "fillerMax", "productType", "condition", "language"] as const;
     const values = Object.fromEntries(fields.map((f) => [f, read(f)]));
-    const run = () => submit({ intent: "autoBuild", ...values }, { method: "post" });
+    const kept = { minTopHits: buildDefaults.minTopHits, topHitValue: buildDefaults.topHitValue, maxCopies: buildDefaults.maxCopies, maxJapanesePercent: buildDefaults.maxJapanesePercent };
+    const run = () => submit({ intent: "autoBuild", ...kept, ...values }, { method: "post" });
     if (cards.length > 0) confirmThen("autoBuild", "Replace the current card list with a new pool from your inventory? Click Build pool again to confirm.", run);
     else run();
   }

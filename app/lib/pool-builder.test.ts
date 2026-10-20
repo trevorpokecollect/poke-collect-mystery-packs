@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPool, copiesAllowed, DEFAULT_TIER_RULES, normalizeTierRules, tierFor } from "./pool-builder";
+import { buildPool, buildWithLimits, copiesAllowed, DEFAULT_TIER_RULES, normalizeTierRules, tierFor } from "./pool-builder";
 
 // Small deterministic RNG so failures reproduce.
 function seeded(seed: number) {
@@ -157,5 +157,28 @@ describe("buildPool three hit floors", () => {
     expect(at(10.01)).toBeGreaterThanOrEqual(30);
     expect(at(15.01)).toBeGreaterThanOrEqual(12);
     expect(average).toBeCloseTo(3.6, 1);
+  });
+});
+
+describe("buildWithLimits", () => {
+  const rules = { count: 300, minValue: 1, maxValue: 130, targetAverage: 6 };
+  const stock = () => inventory(150).map((c, i) => ({ ...c, available: 6, japanese: i % 3 === 0 }));
+
+  it("uses the store copy rule unless the build sets maxCopies, and never more than 5", () => {
+    const most = (r: object) => Math.max(...buildWithLimits(stock(), { ...rules, ...r }, seeded(3)).cards.map((c) => c.quantity));
+    expect(most({})).toBeLessThanOrEqual(3);
+    expect(most({ maxCopies: 5 })).toBe(5);
+    expect(most({ maxCopies: 9 })).toBe(5);
+  });
+
+  it("keeps the Japanese share under the cap", () => {
+    const { cards } = buildWithLimits(stock(), { ...rules, maxCopies: 5, maxJapanesePercent: 40 }, seeded(5));
+    const jp = cards.reduce((n, c) => n + (c.japanese ? c.quantity : 0), 0);
+    expect(jp / 300).toBeLessThanOrEqual(0.4);
+  });
+
+  it("says so when no build fits the cap", () => {
+    const allJapanese = stock().map((c) => ({ ...c, japanese: true }));
+    expect(() => buildWithLimits(allJapanese, { ...rules, maxCopies: 5, maxJapanesePercent: 50 }, seeded(5))).toThrow(/over 50% Japanese/);
   });
 });
