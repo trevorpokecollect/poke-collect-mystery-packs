@@ -49,7 +49,12 @@ export async function recentPulls(db: Db, shop: string, opts: { productId?: stri
   return rows.map(publicPull);
 }
 
-/** The newest revealed card from each series' top tier (Master), across every pack line or one product. */
+/** Tiers the home page features: a series' own top tier, plus Master and Legendary wherever they appear. */
+export function featuredTiers(tierRules: unknown): string[] {
+  return [...new Set([topTierName(tierRules) ?? "Master", "Master", "Legendary"])];
+}
+
+/** The newest revealed Master or Legendary card (or a series' own top tier), across every pack line or one product. */
 export async function latestTopTierPull(db: Db, shop: string, productId?: string | null) {
   const series = await db.series.findMany({
     where: { shop, status: { not: "DRAFT" }, ...(productId ? { packProductId: productId } : {}) },
@@ -60,7 +65,7 @@ export async function latestTopTierPull(db: Db, shop: string, productId?: string
     where: {
       shop,
       ...SEEN,
-      OR: series.map((s) => ({ seriesId: s.id, slot: { card: { tier: topTierName(s.tierRules) ?? "Master" } } })),
+      OR: series.map((s) => ({ seriesId: s.id, slot: { card: { tier: { in: featuredTiers(s.tierRules) } } } })),
     },
     orderBy: { revealedAt: "desc" },
     select: SELECT,
