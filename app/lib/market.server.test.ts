@@ -275,6 +275,19 @@ describe("trading", () => {
   });
 });
 
+describe("staff test cards", () => {
+  it("are hidden on the market except from their owner and testers", async () => {
+    const [b1] = await vaultCards(BEN, 1);
+    await createListing(db, SHOP, BEN, b1, 20);
+    const pull = await db.pull.findUniqueOrThrow({ where: { id: b1 } });
+    await db.series.update({ where: { id: pull.seriesId }, data: { staffTest: true } });
+    expect(await boardCards(db, SHOP, ANN)).toHaveLength(0);
+    expect(await boardCards(db, SHOP, ANN, { tester: true })).toHaveLength(1);
+    expect(await myMarketCards(db, SHOP, BEN)).toHaveLength(1);
+    await db.series.update({ where: { id: pull.seriesId }, data: { staffTest: false } });
+  });
+});
+
 describe("selling", () => {
   it("lists, checks out, moves the card on payment and pays the seller after the hold", async () => {
     const [b1] = await vaultCards(BEN, 1);

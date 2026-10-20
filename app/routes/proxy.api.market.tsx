@@ -41,6 +41,7 @@ import {
   startPurchase,
   tradeMatches,
   traderFor,
+  isVaultTester,
   acceptTerms,
   agreedToTerms,
   requireTerms,
@@ -88,7 +89,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const [me, cards, board, offers, feed] = await Promise.all([
     traderFor(db, shop, viewer.customerId),
     myMarketCards(db, shop, viewer.customerId),
-    boardCards(db, shop, viewer.customerId, { q }),
+    isVaultTester(admin, viewer.customerId).then((tester) => boardCards(db, shop, viewer.customerId!, { q, tester })),
     myOffers(db, shop, viewer.customerId),
     activityFeed(db, shop),
   ]);

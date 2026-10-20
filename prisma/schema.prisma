@@ -67,6 +67,9 @@ model Series {
   topTierGoneAt    DateTime?
   // Cards in each pack (1 for classic packs; e.g. 5 for a booster-style pack). Each card is its own slot.
   cardsPerPack     Int          @default(1)
+  // Staff test cards (put in a staff vault by /jobs/staff-test-cards): never on sale as packs, and on
+  // Vault Market only the owner and customers tagged "vault-tester" can see them.
+  staffTest        Boolean      @default(false)
   // What the pool's cards would cost at our StorePass buylist offers (see lib/buylist.server.ts).
   buylistReport    Json?
   createdAt        DateTime     @default(now())
