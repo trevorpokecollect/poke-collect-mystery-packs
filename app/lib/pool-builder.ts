@@ -213,3 +213,35 @@ export function buildPool<C extends Candidate>(
   const cards = [...byVariant.values()].sort((a, b) => b.value - a.value);
   return { cards, total: total / 100, average: total / 100 / rules.count };
 }
+
+export interface LimitRules extends BuildRules {
+  /** Most Japanese cards (copies) as a percent of the pool, e.g. 50. Blank allows any mix. */
+  maxJapanesePercent?: number;
+}
+
+/** Most copies of one card a build may ask for. */
+export const MAX_COPIES_LIMIT = 5;
+/** Builds tried when a Japanese cap is set; the closest to target that fits the cap wins. */
+const JAPANESE_CAP_TRIES = 40;
+
+/**
+ * Builds a pool with the store's copy rule (or the build's own `maxCopies`, up to 5). With a
+ * Japanese cap it retries with fresh random starts and keeps the build nearest the target average.
+ */
+export function buildWithLimits<C extends Candidate & { japanese: boolean }>(candidates: C[], input: LimitRules, random: () => number = Math.random) {
+  const maxCopies = input.maxCopies ? Math.min(MAX_COPIES_LIMIT, Math.max(1, Math.floor(input.maxCopies))) : copiesAllowed(input.count);
+  const rules = { ...input, maxCopies };
+  const cap = Number(input.maxJapanesePercent);
+  if (!(cap >= 0 && cap < 100)) return buildPool(candidates, rules, random);
+  let best: BuildResult<C> | null = null;
+  let closestShare = 1;
+  for (let i = 0; i < JAPANESE_CAP_TRIES; i++) {
+    const result = buildPool(candidates, rules, random);
+    const share = result.cards.reduce((n, c) => n + (c.japanese ? c.quantity : 0), 0) / input.count;
+    closestShare = Math.min(closestShare, share);
+    if (share * 100 > cap) continue;
+    if (!best || Math.abs(result.average - input.targetAverage) < Math.abs(best.average - input.targetAverage)) best = result;
+  }
+  if (!best) throw new Error(`Every build came out over ${cap}% Japanese (the lowest was ${Math.round(closestShare * 100)}%). Raise the cap or add English stock.`);
+  return best;
+}

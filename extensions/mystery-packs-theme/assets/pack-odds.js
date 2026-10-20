@@ -8,6 +8,7 @@
     great: { top: "#2f6fe0", extra: '<path d="M7 11 L11 7 L11 13 Z M33 11 L29 7 L29 13 Z" fill="#e3350d"/>' },
     ultra: { top: "#1d1d24", extra: '<rect x="12" y="5" width="4" height="10" fill="#ffd400"/><rect x="24" y="5" width="4" height="10" fill="#ffd400"/>' },
     master: { top: "#7b3fe4", extra: '<circle cx="13" cy="11" r="2.6" fill="#ff5fae"/><circle cx="27" cy="11" r="2.6" fill="#ff5fae"/>' },
+    legendary: { top: "#f26b0f", extra: '<path d="M20 4.5 L21.6 8.6 L26 8.8 L22.6 11.5 L23.8 15.8 L20 13.4 L16.2 15.8 L17.4 11.5 L14 8.8 L18.4 8.6 Z" fill="#ffd400"/>' },
   };
   var FALLBACK = ["#2fa36b", "#8b46e0", "#d49a00", "#6b6b76"];
 

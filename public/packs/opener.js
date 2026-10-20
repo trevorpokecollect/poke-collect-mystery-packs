@@ -76,6 +76,7 @@
     great: "#2f6fe0",
     ultra: "#e0a21a",
     master: "#8b46e0",
+    legendary: "#f27a1a",
   };
 
   function el(tag, attrs, children) {
@@ -1156,7 +1157,7 @@
     }
 
     function colorOf(card) { return TIER_COLORS[tierKey(card.tier)] || TIER_COLORS.base; }
-    function isBig(card) { return ["epic", "chase", "ultra", "master"].indexOf(tierKey(card.tier)) !== -1; }
+    function isBig(card) { return ["epic", "chase", "ultra", "master", "legendary"].indexOf(tierKey(card.tier)) !== -1; }
     function showCard(card) {
       front.textContent = "";
       front.classList.remove("mp-back", "mp-charging");

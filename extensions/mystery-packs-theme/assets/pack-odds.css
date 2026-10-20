@@ -12,6 +12,9 @@
 .mpd__tier[data-tier="great"] .mpd__tier-name { color: #2f6fe0; }
 .mpd__tier[data-tier="ultra"] .mpd__tier-name { color: #b88400; }
 .mpd__tier[data-tier="master"] .mpd__tier-name { color: #7b3fe4; }
+.mpd__tier[data-tier="legendary"] .mpd__tier-name { color: #e8630a; }
+/* Five-tier pools (e.g. with Legendary) get five columns on wide screens. */
+.mpd__tiers:has(> :nth-child(5)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .mpd__button { display: block; text-align: center; padding: .9rem 1rem; border-radius: 10px; background: #14141a; color: #fff !important; font-weight: 700; text-decoration: none !important; letter-spacing: .02em; }
 .mpd__button:hover { background: #e3350d; }
 .mpd__how { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,.08); }

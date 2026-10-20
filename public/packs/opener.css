@@ -9,6 +9,7 @@
   --mp-rare: #2f6fe0;
   --mp-epic: #8b46e0;
   --mp-chase: #e0a21a;
+  --mp-legendary: #e8630a;
 }
 /* The theme's root font size is 10px, so set a real base size and use the theme's heading font. */
 .mp-page, .mp-stage { font-size: 16px; --mp-heading: var(--font-heading-family, "Oswald"), "Oswald", "Arial Narrow", sans-serif; }
@@ -120,6 +121,7 @@
 .mp-tier[data-tier="great"] { color: var(--mp-rare); }
 .mp-tier[data-tier="ultra"] { color: var(--mp-chase); }
 .mp-tier[data-tier="master"] { color: var(--mp-epic); }
+.mp-tier[data-tier="legendary"] { color: var(--mp-legendary); }
 
 /* Opening stage */
 .mp-stage {
@@ -575,7 +577,7 @@
   --mp-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mp-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --mp-heading: var(--mp-display);
-  --mp-poke: #ff5a4a; --mp-great: #5b8dff; --mp-ultra: #f2c35b; --mp-master: #b07cff;
+  --mp-poke: #ff5a4a; --mp-great: #5b8dff; --mp-ultra: #f2c35b; --mp-master: #b07cff; --mp-legendary: #ff9a3c;
   color-scheme: dark;
   max-width: 1320px;
   padding: 36px 20px 72px;
@@ -677,6 +679,7 @@
 .mp-page .mp-tier[data-tier="great"] { color: var(--mp-great); }
 .mp-page .mp-tier[data-tier="ultra"] { color: var(--mp-ultra); }
 .mp-page .mp-tier[data-tier="master"] { color: var(--mp-master); }
+.mp-page .mp-tier[data-tier="legendary"] { color: var(--mp-legendary); }
 .mp-page .mp-grid-listed .mp-card { background: transparent; }
 .mp-page .mp-grid-listed .mp-card img { opacity: .82; outline: 1px dashed var(--mp-line); outline-offset: 4px; }
 

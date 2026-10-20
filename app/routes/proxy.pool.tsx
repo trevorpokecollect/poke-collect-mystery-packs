@@ -10,6 +10,7 @@ const TIER_COLORS: Record<string, string> = {
   great: "#2f6fe0",
   ultra: "#d49a00",
   master: "#8b46e0",
+  legendary: "#e8630a",
   chase: "#d49a00",
   epic: "#8b46e0",
   rare: "#2f6fe0",
