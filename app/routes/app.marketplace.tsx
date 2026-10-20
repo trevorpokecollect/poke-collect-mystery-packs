@@ -17,12 +17,18 @@ import {
   reverseTrade,
   updateMarketSettings,
 } from "../lib/market.server";
+import { marketDailyReport, marketSnapshot } from "../lib/market-report.server";
 
 // Vault Marketplace: the on/off switches, the fee, and customer service for trades and sales
 // between players (reverse a trade or sale, hold or release a seller's store credit).
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
-  const [settings, activity] = await Promise.all([marketSettings(db, session.shop), marketActivity(db, session.shop)]);
+  const [settings, activity, daily, open] = await Promise.all([
+    marketSettings(db, session.shop),
+    marketActivity(db, session.shop),
+    marketDailyReport(db, session.shop, 30),
+    marketSnapshot(db, session.shop),
+  ]);
   const row = await db.marketSettings.findUnique({ where: { shop: session.shop } });
   const collections = await gql(admin, `#graphql
     query CreditCollections { collections(first: 250, sortKey: TITLE) { nodes { id title } } }`)
@@ -38,7 +44,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     previewUrl: `https://${session.shop}/apps/packs/market?demo=${demoToken(session.shop)}`,
     settings: { ...settings, sellingSwitch: row?.sellingEnabled ?? false },
     collections,
-    credit, activity: JSON.parse(JSON.stringify(activity)) as typeof activity };
+    credit, daily, open, activity: JSON.parse(JSON.stringify(activity)) as typeof activity };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -93,7 +99,7 @@ const payoutLabel: Record<string, string> = { HELD: "Held", PAYING: "Paying", PA
 const payoutTone = { HELD: "info", PAYING: "info", PAID: "success", FLAGGED: "critical", CANCELLED: "neutral" } as const;
 
 export default function Marketplace() {
-  const { settings, activity, previewUrl, collections, credit } = useLoaderData<typeof loader>();
+  const { settings, activity, previewUrl, collections, credit, daily, open } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
   const busy = useNavigation().state !== "idle";
@@ -181,6 +187,44 @@ export default function Marketplace() {
           {result && "ok" in result ? <s-banner tone="success">{result.ok}</s-banner> : null}
           {armed ? <s-banner tone="warning">Click again to confirm.</s-banner> : null}
           <s-paragraph>{activity.traders} player{activity.traders === 1 ? " has" : "s have"} picked a trade name.</s-paragraph>
+        </s-stack>
+      </s-section>
+
+      <s-section heading="Daily Activity">
+        <s-stack gap="base">
+          <s-paragraph>
+            Cards listed, sold and traded each day (Central time), last 30 days. Right now: {open.activeListings} card
+            {open.activeListings === 1 ? "" : "s"} for sale, {open.pendingOffers} open trade offer{open.pendingOffers === 1 ? "" : "s"}.
+          </s-paragraph>
+          <s-table>
+            <s-table-header-row>
+              <s-table-header>Day</s-table-header>
+              <s-table-header format="numeric">Listed</s-table-header>
+              <s-table-header format="numeric">Sold</s-table-header>
+              <s-table-header format="numeric">Sales</s-table-header>
+              <s-table-header format="numeric">Trades</s-table-header>
+              <s-table-header format="numeric">Cards Traded</s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {daily.map((d) => (
+                <s-table-row key={d.day}>
+                  <s-table-cell>{new Date(`${d.day}T12:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</s-table-cell>
+                  <s-table-cell>{d.listed}</s-table-cell>
+                  <s-table-cell>
+                    {d.sold}
+                    {d.soldWithCredit ? ` (${d.soldWithCredit} credit)` : ""}
+                    {d.reversedSales ? ` · ${d.reversedSales} reversed` : ""}
+                  </s-table-cell>
+                  <s-table-cell>${d.soldValue.toFixed(2)}</s-table-cell>
+                  <s-table-cell>
+                    {d.trades}
+                    {d.reversedTrades ? ` · ${d.reversedTrades} reversed` : ""}
+                  </s-table-cell>
+                  <s-table-cell>{d.cardsTraded}</s-table-cell>
+                </s-table-row>
+              ))}
+            </s-table-body>
+          </s-table>
         </s-stack>
       </s-section>
 
