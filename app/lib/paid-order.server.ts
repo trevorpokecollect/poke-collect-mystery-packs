@@ -9,7 +9,6 @@ import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
 import { completeSale, MARKET_ATTRIBUTE, METRICS, notify } from "./market.server";
-import { deleteCheckoutVariant } from "./market-checkout.server";
 import { settleCreditCodes } from "./credit.server";
 
 export interface OrderPayload {
@@ -48,9 +47,8 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
   const marketListing = order.note_attributes?.find((a) => a.name === MARKET_ATTRIBUTE)?.value;
   if (marketListing) {
     const sold = await completeSale(db, marketListing, order.admin_graphql_api_id, order.name);
-    // The checkout's one-off "Vault Card" variant isn't needed once it's paid.
-    const paidListing = await db.listing.findUnique({ where: { id: marketListing }, select: { checkoutVariantId: true, status: true, payoutStatus: true } });
-    if (admin && paidListing?.checkoutVariantId) await deleteCheckoutVariant(admin, shop, paidListing.checkoutVariantId);
+    // The checkout's "Vault Card" variant is kept, so the order shows the card's picture in the admin.
+    const paidListing = await db.listing.findUnique({ where: { id: marketListing }, select: { status: true, payoutStatus: true } });
     // The card is already in the buyer's vault: nothing to ship, so the order is fulfilled now.
     // A flagged sale (the card couldn't move) stays open for staff to refund.
     if (admin && paidListing?.status === "SOLD" && paidListing.payoutStatus !== "FLAGGED") {
