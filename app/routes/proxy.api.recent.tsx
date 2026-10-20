@@ -6,7 +6,7 @@ import { latestTopTierPull, recentPulls } from "../lib/recent-pulls.server";
 // Public pull feed for the storefront: /apps/packs/api/recent
 //   ?product=<id>  only pulls from packs sold through that product (pack product page feed)
 //   ?limit=<n>     how many recent pulls (default 12, max 30)
-// Always includes `top`, the newest top-tier (Master) pull, for the home page pack section.
+// Always includes `top`, the newest Master or Legendary pull, for the home page pack section.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop } = await proxyContext(request);
   const url = new URL(request.url);

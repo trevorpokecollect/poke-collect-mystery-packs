@@ -1024,4 +1024,32 @@ describe("recent pulls feed", () => {
     const top = await latestTopTierPull(db, SHOP);
     expect(top?.id ?? null).toBe(chase[0]?.id ?? null);
   });
+
+  it("features the newer of a Master and a Legendary pull from a five-tier pack", async () => {
+    const series = await makeSeries(
+      [
+        { name: "Poke", tier: "Poke", value: 1, qty: 2 },
+        { name: "Master", tier: "Master", value: 20, qty: 2 },
+        { name: "Legendary", tier: "Legendary", value: 100, qty: 2 },
+      ],
+      "series-five",
+    );
+    await db.series.update({
+      where: { id: series.id },
+      data: { tierRules: [{ name: "Poke", min: 0 }, { name: "Master", min: 15.01 }, { name: "Legendary", min: 50.01 }] },
+    });
+    await launchSeries(db, series.id);
+    const { pulls } = await drawForOrder(db, order(6));
+    const viewer = { customerId: "gid://shopify/Customer/1" };
+    const tierOf = async (id: string) => (await db.pull.findUniqueOrThrow({ where: { id }, include: { slot: { include: { card: true } } } })).slot.card.tier;
+    const byTier: Record<string, string[]> = {};
+    for (const p of pulls) (byTier[await tierOf(p.id)] ??= []).push(p.id);
+
+    await revealPull(db, SHOP, byTier.Legendary[0], viewer);
+    expect((await latestTopTierPull(db, SHOP))?.tier).toBe("Legendary");
+    await revealPull(db, SHOP, byTier.Master[0], viewer);
+    expect((await latestTopTierPull(db, SHOP))?.tier).toBe("Master");
+    await revealPull(db, SHOP, byTier.Poke[0], viewer);
+    expect((await latestTopTierPull(db, SHOP))?.tier).toBe("Master");
+  });
 });
