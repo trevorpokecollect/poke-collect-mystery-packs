@@ -84,6 +84,17 @@ export async function hasMarketAccess(db: Db, admin: AdminApiContext | undefined
   return tags.includes(settings.accessTag.toLowerCase());
 }
 
+/** Customers tagged "vault-tester" also see staff test cards on Vault Market (for test purchases). */
+export const TESTER_TAG = "vault-tester";
+export async function isVaultTester(admin: AdminApiContext | undefined, customerId: string | null | undefined) {
+  if (!admin || !customerId) return false;
+  const data = await gql(admin, `#graphql
+    query VaultTester($id: ID!) { customer(id: $id) { tags } }`, { id: customerId }).catch(() => null);
+  return ((data?.customer?.tags as string[] | undefined) ?? []).some((t) => t.toLowerCase() === TESTER_TAG);
+}
+
+const NOT_TEST = { series: { staffTest: false } };
+
 async function requireEnabled(db: Db | Tx, shop: string, selling = false) {
   const settings = await marketSettings(db, shop);
   if (!settings.enabled) throw new PoolError("The Vault Marketplace isn't open yet.");
@@ -200,13 +211,14 @@ export async function myMarketCards(db: Db, shop: string, customerId: string, no
 }
 
 /** Cards other players have put on the Trade Board (open to trade and/or for sale). */
-export async function boardCards(db: Db, shop: string, viewerId: string, { q = "", now = new Date() } = {}) {
+export async function boardCards(db: Db, shop: string, viewerId: string, { q = "", now = new Date(), tester = false } = {}) {
   const settings = await marketSettings(db, shop);
   const pulls = await db.pull.findMany({
     where: {
       shop,
       status: "REVEALED",
       customerId: { not: viewerId },
+      ...(tester ? {} : NOT_TEST),
       OR: [{ openToTrade: true }, ...(settings.sellingEnabled ? [{ listings: { some: { status: "ACTIVE" as const } } }] : [])],
       ...(q ? { slot: { card: { title: { contains: q, mode: "insensitive" as const } } } } : {}),
     },
@@ -899,9 +911,9 @@ async function tradeCounts(db: Db, shop: string, customerIds: string[]) {
 }
 
 /** The vault cards that count as a player's collection: opened, in the vault, not shipping. */
-async function collectionPulls(db: Db, shop: string, customerIds: string[]) {
+async function collectionPulls(db: Db, shop: string, customerIds: string[], { withTest = false } = {}) {
   const pulls = await db.pull.findMany({
-    where: { shop, customerId: { in: customerIds }, status: "REVEALED" },
+    where: { shop, customerId: { in: customerIds }, status: "REVEALED", ...(withTest ? {} : NOT_TEST) },
     include: marketInclude,
     orderBy: { createdAt: "desc" },
   });
@@ -918,7 +930,7 @@ export async function collectionFor(db: Db, shop: string, tradeName: string, vie
   const trader = await db.trader.findUnique({ where: { shop_nameKey: { shop, nameKey: tradeName.trim().toLowerCase() } } });
   if (!trader) throw new PoolError("No collector by that name.");
   const own = trader.customerId === viewerId;
-  const pulls = await collectionPulls(db, shop, [trader.customerId]);
+  const pulls = await collectionPulls(db, shop, [trader.customerId], { withTest: own });
   const view = pulls
     .map((p) => {
       const listing = settings.sellingEnabled ? p.listings.find((l) => l.status === "ACTIVE") : undefined;
@@ -993,7 +1005,7 @@ async function wishers(db: Db | Tx, shop: string, variantIds: string[]) {
 /** Cards a player can add to their wishlist: every single that has been in a pack series here. */
 export async function catalog(db: Db, shop: string, q: string, take = 40) {
   const cards = await db.card.findMany({
-    where: { series: { shop }, ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}) },
+    where: { series: { shop, staffTest: false }, ...(q ? { title: { contains: q, mode: "insensitive" as const } } : {}) },
     select: { variantId: true, title: true, imageUrl: true },
     orderBy: { title: "asc" },
     distinct: ["variantId"],
@@ -1065,10 +1077,10 @@ export async function activityFeed(db: Db, shop: string, take = 24) {
   const settings = await marketSettings(db, shop);
   const [listings, trades, traders] = await Promise.all([
     settings.sellingEnabled
-      ? db.listing.findMany({ where: { shop }, include: { pull: { include: { slot: { include: { card: true } } } } }, orderBy: { createdAt: "desc" }, take })
+      ? db.listing.findMany({ where: { shop, pull: NOT_TEST }, include: { pull: { include: { slot: { include: { card: true } } } } }, orderBy: { createdAt: "desc" }, take })
       : Promise.resolve([]),
     db.trade.findMany({
-      where: { shop, status: "ACCEPTED" },
+      where: { shop, status: "ACCEPTED", items: { none: { pull: { series: { staffTest: true } } } } },
       include: { items: { include: { pull: { include: { slot: { include: { card: true } } } } } } },
       orderBy: { respondedAt: "desc" },
       take,
@@ -1096,8 +1108,8 @@ export async function activityFeed(db: Db, shop: string, take = 24) {
  * once per copy. Called after a card is marked open to trade or listed.
  */
 export async function sendWishlistAlerts(db: Db, admin: AdminApiContext | undefined, shop: string, pullId: string) {
-  const pull = await db.pull.findUnique({ where: { id: pullId }, include: { slot: { include: { card: true } } } });
-  if (!pull?.customerId) return 0;
+  const pull = await db.pull.findUnique({ where: { id: pullId }, include: { slot: { include: { card: true } }, series: true } });
+  if (!pull?.customerId || pull.series.staffTest) return 0;
   const owner = await traderFor(db, shop, pull.customerId);
   const wishes = await db.wishItem.findMany({
     where: { shop, variantId: pull.slot.card.variantId, customerId: { not: pull.customerId }, NOT: { alertedPullIds: { has: pullId } } },

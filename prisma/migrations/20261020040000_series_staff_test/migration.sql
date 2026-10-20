@@ -1,0 +1,1 @@
+ALTER TABLE "Series" ADD COLUMN "staffTest" BOOLEAN NOT NULL DEFAULT false;
