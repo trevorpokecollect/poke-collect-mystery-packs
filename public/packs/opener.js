@@ -13,6 +13,45 @@
   var scriptSrc = (document.currentScript && document.currentScript.src) || "";
   var assetBase = window.PCPackAssetBase != null ? window.PCPackAssetBase : scriptSrc ? scriptSrc.replace(/opener\.js.*$/, "") : "/packs/";
   function backUrl(card) { return assetBase + (card && card.language === "japanese" ? "card-back-jp.jpg" : "card-back-en.jpg"); }
+  // The 3D pack draws images into WebGL, which needs them served with CORS. The app's static files
+  // aren't, so card backs come through the app's /packs-art route instead.
+  var assetQuery = (scriptSrc.match(/\?[^#]*/) || [""])[0];
+  var corsBase = window.PCPackAssetBase != null ? assetBase : assetBase.replace(/packs\/$/, "packs-art/");
+  function backUrl3d(card) { return corsBase + (card && card.language === "japanese" ? "card-back-jp.jpg" : "card-back-en.jpg"); }
+
+  // Loads three.js and the 3D pack once, on first use. Rejects when WebGL isn't available, and the
+  // opening falls back to the CSS pack.
+  var pack3dLoad = null;
+  function pack3d() {
+    if (pack3dLoad) return pack3dLoad;
+    pack3dLoad = new Promise(function (resolve, reject) {
+      if (window.PCPack3D) return window.PCPack3D.supported() ? resolve(window.PCPack3D) : reject(new Error("No WebGL"));
+      function script(src) {
+        return new Promise(function (ok, bad) {
+          var tag = document.createElement("script");
+          tag.src = src;
+          tag.async = false;
+          tag.onload = ok;
+          tag.onerror = bad;
+          document.head.appendChild(tag);
+        });
+      }
+      // three.js registers with a page's AMD loader instead of as a global if one is present.
+      var amd = window.define && window.define.amd ? window.define : null;
+      if (amd) window.define = undefined;
+      var timer = setTimeout(function () { reject(new Error("3D took too long to load")); }, 9000);
+      script(assetBase + "vendor/three.min.js" + assetQuery)
+        .then(function () { return script(assetBase + "pack3d.js" + assetQuery); })
+        .then(function () {
+          clearTimeout(timer);
+          if (amd) window.define = amd;
+          if (window.PCPack3D && window.PCPack3D.supported()) resolve(window.PCPack3D);
+          else reject(new Error("No WebGL"));
+        }, function (err) { clearTimeout(timer); if (amd) window.define = amd; reject(err); });
+    });
+    pack3dLoad.catch(function () {});
+    return pack3dLoad;
+  }
   // Merchant preview (?demo=<signed token>): sample packs from the live pool, opened locally.
   var demo = !!root && root.getAttribute("data-demo") === "1";
   var demoData = null;
@@ -644,6 +683,8 @@
           }
         }
         render(packs, data.available, data.signedIn, data.recommendFrom, data.recommendHandle, data.vault);
+        // Unopened packs: get the 3D pack ready so opening starts right away.
+        if (packs.some(function (p) { return !p.opened; })) setTimeout(pack3d, 1200);
         uncover();
       })
       .catch(function (err) {
@@ -981,12 +1022,14 @@
     if (multi) stage.classList.add("mp-multi");
     var stopRain = function () {};
     var tilt = null;
+    var scene3d = null;
     var closed = false;
     function close() {
       if (closed) return;
       closed = true;
       stopRain();
       if (tilt) tilt.stop();
+      if (scene3d) scene3d.destroy();
       stage.remove();
       document.documentElement.classList.remove("mp-stage-open");
       document.removeEventListener("keydown", onKey);
@@ -1026,7 +1069,12 @@
     opener.glare = glare;
     inner.insertBefore(edge, result);
     inner.insertBefore(holder, result);
-    if (!reduced) {
+    // The CSS pack, used when the 3D pack can't run.
+    function startDom() {
+      holder.style.visibility = "";
+      edge.style.visibility = "";
+      floor.style.visibility = "";
+      if (reduced) return;
       tilt = tilter(holder, floor, sheen, opener, edge);
       // The pack drops in and settles before it can be opened.
       animate(opener.group, [
@@ -1035,6 +1083,26 @@
         { transform: "none", opacity: 1 },
       ], { duration: 650, easing: "cubic-bezier(.2,.8,.3,1)" });
     }
+    // The 3D pack (WebGL): a lit foil pack in the card's spot. Until it's ready nothing is shown;
+    // if it can't run, the CSS pack takes over.
+    var use3d = !reduced && !!window.WebGLRenderingContext;
+    var mode = Promise.resolve(null);
+    if (use3d) {
+      holder.style.visibility = "hidden";
+      edge.style.visibility = "hidden";
+      floor.style.visibility = "hidden";
+      mode = pack3d().then(function (P) {
+        if (closed) return null;
+        var made = P.create({ stage: stage, rect: inner.getBoundingClientRect(), packWidth: width, packImageUrl: pack.packImageUrl, art: ART, tearY: TEAR_Y, before: inner });
+        scene3d = made;
+        return made.ready.then(function () { return made; });
+      }).catch(function (err) {
+        if (scene3d) { scene3d.destroy(); scene3d = null; }
+        if (window.console) console.warn("3D pack unavailable, using the CSS pack", err);
+        startDom();
+        return null;
+      });
+    } else startDom();
 
     // Inside the pack the card sits small and low, hidden behind the wrapper.
     var cardScale = (width * 0.86) / inner.getBoundingClientRect().width;
@@ -1170,10 +1238,7 @@
 
     // Swipe-to-open: a finger (or mouse) dragged across the top of the pack tears it open along
     // the dotted line. Resolves once it's open. Tapping "Tap To Open" or pressing Enter opens it too.
-    function swipeToOpen() {
-      var hint = el("div", { class: "mp-swipe-hint", "aria-hidden": "true" }, [el("span", { class: "mp-swipe-run" }, [el("span", { class: "mp-swipe-dot" })])]);
-      hint.style.top = (TEAR_Y * 100).toFixed(2) + "%";
-      opener.group.appendChild(hint);
+    function swipeToOpen(drv) {
       var prompt = el("p", { class: "mp-swipe-text", text: "Swipe Across The Top To Open" });
       var button = el("button", { class: "mp-btn mp-btn-ghost mp-tap-open", type: "button", text: "Tap To Open" });
       result.textContent = "";
@@ -1193,7 +1258,7 @@
           var gap = progress - shown;
           if (Math.abs(gap) < 0.0015) { if (shown === progress) return; shown = progress; }
           else shown += gap * (gap > 0 ? 0.32 : 0.2);
-          tearTo(opener, shown, width, height);
+          drv.draw(shown);
           // Finger reached the end: the rest of the strip comes away on its own.
           if (progress >= 1 && shown > 0.9) done();
         }
@@ -1209,12 +1274,11 @@
           stage.removeEventListener("pointercancel", up);
           stage.removeEventListener("pointerleave", leave);
           document.removeEventListener("keydown", key);
-          hint.remove();
+          drv.clearHint();
           result.classList.remove("mp-show");
-          if (tilt) tilt.aim(6, 0);
-          resolve(tear(opener, width, height, from));
+          resolve(drv.finish(from));
         }
-        function rect() { return box || holder.getBoundingClientRect(); }
+        function rect() { return box || drv.rect(); }
         function down(e) {
           if (e.target.closest && e.target.closest("button")) return;
           box = null;
@@ -1225,17 +1289,17 @@
           var onTop = y > r.top - r.height * 0.12 && y < r.top + r.height * 0.32 && x > r.left - r.width * 0.25 && x < r.right + r.width * 0.25;
           drag = { tear: onTop, x: x, y: y, id: e.pointerId };
           if (stage.setPointerCapture) { try { stage.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } }
-          if (onTop) hint.classList.add("mp-off");
+          if (onTop) drv.hint(false);
           move(e);
         }
         function move(e) {
           var r = rect();
           if (!drag) {
             // Mouse hover: the pack leans toward the pointer.
-            if (e.pointerType === "mouse" && tilt) {
+            if (e.pointerType === "mouse") {
               var hx = (e.clientX - (r.left + r.width / 2)) / r.width;
               var hy = (e.clientY - (r.top + r.height / 2)) / r.height;
-              tilt.aim(Math.max(-1, Math.min(1, -hy)) * 16, Math.max(-1, Math.min(1, hx)) * 22);
+              drv.aim(Math.max(-1, Math.min(1, -hy)) * 16, Math.max(-1, Math.min(1, hx)) * 22);
             }
             return;
           }
@@ -1248,12 +1312,12 @@
               if (navigator.vibrate && Math.floor(next * 8) > Math.floor(progress * 8)) navigator.vibrate(6);
               progress = next;
             }
-            if (tilt) tilt.aim(8, (progress - 0.5) * 14);
-          } else if (tilt) {
+            drv.aim(8, (progress - 0.5) * 14);
+          } else {
             // Dragging the rest of the pack turns it in the hand.
             var dx = (e.clientX - drag.x) / r.width;
             var dy = (e.clientY - drag.y) / r.height;
-            tilt.aim(Math.max(-24, Math.min(24, -dy * 40)), Math.max(-32, Math.min(32, dx * 50)));
+            drv.aim(Math.max(-24, Math.min(24, -dy * 40)), Math.max(-32, Math.min(32, dx * 50)));
           }
         }
         function up(e) {
@@ -1265,11 +1329,11 @@
           if (wasTear && progress > 0) {
             // Not far enough: the strip eases back down.
             progress = 0;
-            hint.classList.remove("mp-off");
+            drv.hint(true);
           }
-          if (tilt) tilt.idle();
+          drv.idle();
         }
-        function leave(e) { if (!drag && e.pointerType === "mouse" && tilt) tilt.idle(); }
+        function leave(e) { if (!drag && e.pointerType === "mouse") drv.idle(); }
         function key(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); done(); } }
         button.addEventListener("click", function () { done(); });
         stage.addEventListener("pointerdown", down);
@@ -1281,25 +1345,79 @@
       });
     }
 
+    // What swipeToOpen moves: the CSS pack, or the 3D pack (same gestures, same prompts).
+    function domDriver() {
+      var hint = el("div", { class: "mp-swipe-hint", "aria-hidden": "true" }, [el("span", { class: "mp-swipe-run" }, [el("span", { class: "mp-swipe-dot" })])]);
+      hint.style.top = (TEAR_Y * 100).toFixed(2) + "%";
+      opener.group.appendChild(hint);
+      return {
+        rect: function () { return holder.getBoundingClientRect(); },
+        draw: function (p) { tearTo(opener, p, width, height); },
+        finish: function (from) { if (tilt) tilt.aim(6, 0); return tear(opener, width, height, from); },
+        aim: function (x, y) { if (tilt) tilt.aim(x, y); },
+        idle: function () { if (tilt) tilt.idle(); },
+        hint: function (on) { hint.classList.toggle("mp-off", !on); },
+        clearHint: function () { hint.remove(); },
+      };
+    }
+    function sceneDriver(sc) {
+      return {
+        rect: sc.rect,
+        draw: sc.draw,
+        finish: function () { return sc.finish(); },
+        aim: sc.aim,
+        idle: sc.idle,
+        hint: sc.hint,
+        clearHint: function () { sc.hint(false); },
+      };
+    }
+
+
     Promise.all([reveal.then(function (cards) {
       // Card backs load alongside the cards so a face-down hit never appears blank.
       cards.forEach(function (c) { if (isBig(c)) new Image().src = backUrl(c); });
       return Promise.all(cards.map(preload));
-    }), wait(reduced ? 0 : 650)])
+    }), wait(reduced ? 0 : 650), mode])
       .then(function (values) {
         var cards = values[0];
         var card = cards[0];
-        if (isBig(card) && !reduced) showBack(card);
+        var sc = values[2];
+        var faceDown = isBig(card) && !reduced;
+        if (faceDown) showBack(card);
         else showCard(card);
         glow.style.background = colorOf(card);
 
-        var sequence = reduced
+        var sequence = sc
+          // 3D: cut, burst of light, the card rises out and grows into its spot, then the page's card
+          // takes over exactly where the 3D one ends.
+          ? (function () {
+              var cardReady = sc.setCard(faceDown ? backUrl3d(card) : card.imageUrl, card.title);
+              return swipeToOpen(sceneDriver(sc))
+                .then(function () { return cardReady; })
+                .then(function () { return sc.open(); })
+                .then(function () {
+                  settleFront();
+                  front.style.visibility = "";
+                  holder.remove();
+                  edge.remove();
+                  floor.remove();
+                  return new Promise(function (resolve) {
+                    requestAnimationFrame(function () {
+                      sc.canvas.style.transition = "opacity .25s";
+                      sc.canvas.style.opacity = "0";
+                      setTimeout(function () { sc.destroy(); if (scene3d === sc) scene3d = null; }, 300);
+                      resolve();
+                    });
+                  });
+                });
+            })()
+          : reduced
           ? Promise.resolve().then(function () {
               holder.remove();
               edge.remove();
               front.style.transform = "none";
             })
-          : swipeToOpen()
+          : swipeToOpen(domDriver())
               // The pack turns to face the customer before the card comes out.
               .then(function () { return tilt.flat(); })
               .then(function () { front.style.visibility = ""; })

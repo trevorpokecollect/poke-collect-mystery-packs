@@ -754,3 +754,6 @@
 .mp-sold-price { font-weight: 700; color: #f2c35b; white-space: nowrap; }
 .mp-sold-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .mp-sold-actions .mp-btn, .mp-sold-actions .mp-pickup-btn { width: auto; margin: 0; }
+
+/* The 3D pack's WebGL canvas: full screen over the code rain, under the page's card and buttons. */
+.mp-gl { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
