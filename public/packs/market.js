@@ -216,6 +216,7 @@
   function tags(card) {
     return el("div", { class: "vm-tags" }, [
       card.listing && state.selling ? el("span", { class: "vm-tag vm-tag-sale", text: money(card.listing.price) }) : null,
+      card.listing && state.selling ? dealBadge(card.listing.deal) : null,
       card.openToTrade ? el("span", { class: "vm-tag vm-tag-trade", text: "For Trade" }) : null,
       card.wantedBy ? el("span", { class: "vm-tag vm-tag-wanted", text: "Wanted By " + card.wantedBy }) : null,
       card.cardKey && card.trader && wished(card.cardKey) ? el("span", { class: "vm-tag vm-tag-wish", text: "★ On Your Wishlist" }) : null,
@@ -642,6 +643,13 @@
         el("div", { class: "vm-manage" }, controls),
       ]),
     ]);
+  }
+
+  // Buyers see how a listed price compares with the TCGplayer market (the rating only).
+  var DEAL_LABELS = { great: "Great Price", good: "Good Price", fair: "Fair Price", high: "High Price", over: "Overpriced" };
+  function dealBadge(deal) {
+    if (!deal || !DEAL_LABELS[deal]) return null;
+    return el("span", { class: "vm-tag vm-deal vm-guide-" + deal, title: "Compared With The TCGplayer Market Price", text: DEAL_LABELS[deal] });
   }
 
   // Price Guide: how a price compares with the TCGplayer market price. Only a suggestion, and only the owner sees it.

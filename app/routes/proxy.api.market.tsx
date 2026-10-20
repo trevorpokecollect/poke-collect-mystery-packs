@@ -3,7 +3,7 @@ import db from "../db.server";
 import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { validDemoToken } from "../lib/demo.server";
-import { priceGuideFor } from "../lib/price-guide.server";
+import { dealBadges, priceGuideFor } from "../lib/price-guide.server";
 import { createCreditCode, creditBalance, creditWallet, returnCreditCode, CODE_DAYS } from "../lib/credit.server";
 import {
   activityFeed,
@@ -92,6 +92,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     myOffers(db, shop, viewer.customerId),
     activityFeed(db, shop),
   ]);
+  // Great / Good / Fair / High / Overpriced badges on listed cards (the rating only, never the market price).
+  const deals = await dealBadges(db, admin, board.filter((c) => c.listing).map((c) => ({ pullId: c.pullId, price: c.listing!.price })));
+  for (const c of board) if (c.listing) (c.listing as { deal?: string | null }).deal = deals.get(c.pullId) ?? null;
   const wishes = await wishlist(db, shop, viewer.customerId, board);
   const credit = await creditBalance(db, shop, viewer.customerId);
   return json({
