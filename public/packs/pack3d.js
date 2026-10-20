@@ -172,22 +172,6 @@
     ctx.fillStyle = g; ctx.fillRect(0, 0, 8, 64);
     return texture(c);
   }
-  // A light beam: bright at its base, fading upward and to its sides.
-  function beamTexture() {
-    var c = canvas(64, 256), ctx = c.getContext("2d");
-    var gx = ctx.createLinearGradient(0, 0, 64, 0);
-    gx.addColorStop(0, "rgba(255,255,255,0)");
-    gx.addColorStop(0.5, "rgba(255,255,255,1)");
-    gx.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = gx; ctx.fillRect(0, 0, 64, 256);
-    ctx.globalCompositeOperation = "destination-in";
-    var gy = ctx.createLinearGradient(0, 0, 0, 256);
-    gy.addColorStop(0, "rgba(0,0,0,0)");
-    gy.addColorStop(0.6, "rgba(0,0,0,.55)");
-    gy.addColorStop(1, "rgba(0,0,0,1)");
-    ctx.fillStyle = gy; ctx.fillRect(0, 0, 64, 256);
-    return texture(c);
-  }
   // A column of the code rain's glyphs (katakana, digits, POKECOLLECT), tiling vertically.
   var GLYPHS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789POKECOLLECT";
   function glyphTexture() {
@@ -364,7 +348,7 @@
 
     var disposables = [];
     function keep(x) { disposables.push(x); return x; }
-    var glow = keep(glowTexture()), lineTex = keep(lineTexture()), beamTex = keep(beamTexture());
+    var glow = keep(glowTexture()), lineTex = keep(lineTexture());
     var env = keep(studio(renderer));
     scene.environment = env;
 
