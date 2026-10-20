@@ -41,6 +41,8 @@
       if (amd) window.define = undefined;
       var timer = setTimeout(function () { reject(new Error("3D took too long to load")); }, 9000);
       script(assetBase + "vendor/three.min.js" + assetQuery)
+        // omggif plays the pack's animated art (a GIF) on the 3D pack.
+        .then(function () { return window.GifReader ? null : script(assetBase + "vendor/omggif.js" + assetQuery).catch(function () {}); })
         .then(function () { return script(assetBase + "pack3d.js" + assetQuery); })
         .then(function () {
           clearTimeout(timer);

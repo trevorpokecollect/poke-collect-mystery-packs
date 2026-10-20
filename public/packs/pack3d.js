@@ -60,20 +60,73 @@
   }
 
   // The pack bag cut out of the square product art, with rounded corners.
+  // tex.paint(source, width, height) redraws it, for each frame of an animated pack.
   function packTexture(img, art, aspect) {
-    var h = 1024, w = Math.round(h * aspect);
+    var h = 900, w = Math.round(h * aspect);
     var c = canvas(w, h), ctx = c.getContext("2d");
-    rounded(ctx, w, h, w * 0.06, h * 0.034);
-    ctx.clip();
-    if (img) {
-      var iw = img.naturalWidth, ih = img.naturalHeight;
-      ctx.drawImage(img, art.left * iw, art.top * ih, art.width * iw, art.height * ih, 0, 0, w, h);
-    } else {
-      var g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, "#2a0f4f"); g.addColorStop(0.5, "#120a2e"); g.addColorStop(1, "#3b0d1c");
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    function paint(src, iw, ih) {
+      ctx.save();
+      ctx.clearRect(0, 0, w, h);
+      rounded(ctx, w, h, w * 0.06, h * 0.034);
+      ctx.clip();
+      if (src) {
+        ctx.drawImage(src, art.left * iw, art.top * ih, art.width * iw, art.height * ih, 0, 0, w, h);
+      } else {
+        var g = ctx.createLinearGradient(0, 0, w, h);
+        g.addColorStop(0, "#2a0f4f"); g.addColorStop(0.5, "#120a2e"); g.addColorStop(1, "#3b0d1c");
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      }
+      ctx.restore();
     }
-    return texture(c);
+    paint(img, img && img.naturalWidth, img && img.naturalHeight);
+    var t = texture(c);
+    t.paint = function (src, iw, ih) { paint(src, iw, ih); t.needsUpdate = true; };
+    return t;
+  }
+
+  // Plays an animated GIF (how Shopify serves the packs' animated art) frame by frame into a canvas,
+  // so the 3D pack keeps its scan line and glow. Rejects for anything that isn't an animated GIF.
+  function gifPlayer(url) {
+    return fetch(url, { mode: "cors", credentials: "omit" }).then(function (r) {
+      if (!r.ok) throw new Error("Pack art failed");
+      return r.arrayBuffer();
+    }).then(function (buf) {
+      var bytes = new Uint8Array(buf);
+      if (!window.GifReader || bytes[0] !== 0x47 || bytes[1] !== 0x49 || bytes[2] !== 0x46) throw new Error("Not a GIF");
+      var gif = new window.GifReader(bytes);
+      var n = gif.numFrames();
+      if (n < 2) throw new Error("Not animated");
+      var w = gif.width, h = gif.height;
+      var c = canvas(w, h), ctx = c.getContext("2d");
+      var img = ctx.createImageData(w, h), px = img.data;
+      var i = -1, saved = null, elapsed = 0;
+      function step() {
+        if (i >= 0) {
+          var f = gif.frameInfo(i);
+          if (f.disposal === 2) {
+            for (var y = f.y; y < f.y + f.height; y++) px.fill(0, (y * w + f.x) * 4, (y * w + f.x + f.width) * 4);
+          } else if (f.disposal === 3 && saved) px.set(saved);
+        }
+        i = (i + 1) % n;
+        if (i === 0) px.fill(0);
+        if (gif.frameInfo(i).disposal === 3) saved = new Uint8ClampedArray(px);
+        gif.decodeAndBlitFrameRGBA(i, px);
+        ctx.putImageData(img, 0, 0);
+      }
+      step();
+      return {
+        canvas: c, width: w, height: h,
+        // Moves on by ms; true when a new frame was drawn.
+        tick: function (ms) {
+          elapsed += ms;
+          var delay = Math.max(20, (gif.frameInfo(i).delay || 8) * 10);
+          if (elapsed < delay) return false;
+          elapsed = Math.min(elapsed - delay, delay);
+          step();
+          return true;
+        },
+      };
+    });
   }
 
   function cardTexture(img, title) {
@@ -135,6 +188,41 @@
     ctx.fillStyle = gy; ctx.fillRect(0, 0, 64, 256);
     return texture(c);
   }
+  // A column of the code rain's glyphs (katakana, digits, POKECOLLECT), tiling vertically.
+  var GLYPHS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン0123456789POKECOLLECT";
+  function glyphTexture() {
+    var c = canvas(64, 1024), ctx = c.getContext("2d");
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "700 46px ui-monospace, Menlo, monospace";
+    for (var y = 0; y < 16; y++) {
+      var a = Math.random();
+      ctx.fillStyle = "rgba(255,255,255," + (a < 0.15 ? 1 : 0.25 + a * 0.55).toFixed(2) + ")";
+      ctx.fillText(GLYPHS.charAt(Math.floor(Math.random() * GLYPHS.length)), 32, y * 64 + 32);
+    }
+    var t = new T.CanvasTexture(c);
+    t.wrapS = t.wrapT = T.RepeatWrapping;
+    return t;
+  }
+  // A small square pixel with a soft edge, for the digital sparks and the pack breaking into pixels.
+  function squareTexture() {
+    var c = canvas(32, 32), ctx = c.getContext("2d");
+    ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fillRect(2, 2, 28, 28);
+    ctx.fillStyle = "#fff"; ctx.fillRect(7, 7, 18, 18);
+    return texture(c);
+  }
+  // A thin glowing rectangle outline: the hologram frame that ripples out of the opening.
+  function frameTexture() {
+    var c = canvas(512, 128), ctx = c.getContext("2d");
+    ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 14; ctx.strokeRect(16, 16, 480, 96);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 4; ctx.strokeRect(16, 16, 480, 96);
+    // Corner brackets, like the pack's HUD corners.
+    ctx.lineWidth = 8;
+    [[16, 16, 1, 1], [496, 16, -1, 1], [16, 112, 1, -1], [496, 112, -1, -1]].forEach(function (k) {
+      ctx.beginPath(); ctx.moveTo(k[0], k[1] + 30 * k[3]); ctx.lineTo(k[0], k[1]); ctx.lineTo(k[0] + 40 * k[2], k[1]); ctx.stroke();
+    });
+    return texture(c);
+  }
+
   function dashTexture() {
     var c = canvas(256, 8), ctx = c.getContext("2d");
     ctx.fillStyle = "rgba(255,255,255,.9)";
@@ -331,26 +419,60 @@
       sparks.push({ s: s, vx: vx, vy: vy, life: life, age: 0, size: size, own: !!mat });
     }
 
-    // Burst pieces, made up front (invisible) so their shaders are ready before the moment they're needed.
-    var beams = [];
-    var beamColors = [0xffffff, 0xffc2d1, 0xa9d4ff, 0xffffff, 0xff8fa8, 0xc7b8ff, 0xffffff];
-    for (var bi = 0; bi < beamColors.length; bi++) {
-      var bm = keep(new T.MeshBasicMaterial({ map: beamTex, color: beamColors[bi], transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0 }));
-      var bg = keep(new T.PlaneGeometry(1, 1));
-      bg.translate(0, 0.5, 0); // grows upward from its base
-      var beam = new T.Mesh(bg, bm);
-      var spread = (bi / (beamColors.length - 1) - 0.5) * 2;
-      beam.position.set(spread * W * 0.32, cutY - H * 0.02, -0.005);
-      beam.rotation.z = -spread * 0.32 + (Math.random() - 0.5) * 0.12;
-      beam.userData = { w: W * (0.12 + Math.random() * 0.14), h: H * (1.1 + Math.random() * 0.7), d: Math.random() * 0.12 };
-      beam.scale.set(0.0001, 0.0001, 1);
-      packG.add(beam);
-      beams.push(beam);
+    // The digital burst, made up front (invisible) so its shaders are ready before the moment it's
+    // needed: the pack's top breaking into pixels, columns of code streaming up out of the opening,
+    // hologram frames rippling outward and a scan line sweeping across.
+    var squareTex = keep(squareTexture());
+    var pixelMat = keep(new T.SpriteMaterial({ map: squareTex, color: 0xffffff, transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
+    var glyphTexs = [keep(glyphTexture()), keep(glyphTexture()), keep(glyphTexture())];
+    var streamGeo = keep(new T.PlaneGeometry(1, 1));
+    streamGeo.translate(0, 0.5, 0); // grows upward from its base
+    var streams = [];
+    var streamColors = [0xff2d55, 0x4da3ff, 0xffffff, 0xff2d55, 0x7fd0ff, 0xff5c7a, 0x4da3ff, 0xffffff, 0xff2d55];
+    for (var si = 0; si < streamColors.length; si++) {
+      var sm = keep(new T.ShaderMaterial({
+        uniforms: { map: { value: glyphTexs[si % 3] }, color: { value: new T.Color(streamColors[si]) }, time: { value: 0 }, opacity: { value: 0 }, rep: { value: 1 }, speed: { value: 1 } },
+        vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+        fragmentShader: [
+          "uniform sampler2D map; uniform vec3 color; uniform float time, opacity, rep, speed; varying vec2 vUv;",
+          "void main() {",
+          "  float g = texture2D(map, vec2(vUv.x, vUv.y * rep - time * speed)).r;",
+          "  float side = smoothstep(0.0, 0.5, 1.0 - abs(vUv.x * 2.0 - 1.0));",
+          "  float fade = pow(1.0 - vUv.y, 1.3);",
+          "  gl_FragColor = vec4(color, (g * 0.95 + 0.08) * side * fade * opacity);",
+          "}",
+        ].join("\n"),
+        transparent: true, depthWrite: false, blending: T.AdditiveBlending,
+      }));
+      var stream = new T.Mesh(streamGeo, sm);
+      var spread = (si / (streamColors.length - 1) - 0.5) * 2;
+      var sw = W * (0.055 + Math.random() * 0.035), sh = H * (0.9 + Math.random() * 0.8);
+      stream.position.set(spread * W * 0.4 + (Math.random() - 0.5) * W * 0.04, cutY - H * 0.01, -0.005);
+      stream.rotation.z = -spread * 0.12;
+      stream.userData = { w: sw, h: sh, d: Math.random() * 0.18, speed: 0.6 + Math.random() * 0.9 };
+      sm.uniforms.rep.value = sh / (sw * 16) * 1.0; // glyphs stay square whatever the column's height
+      sm.uniforms.speed.value = stream.userData.speed;
+      stream.scale.set(0.0001, 0.0001, 1);
+      packG.add(stream);
+      streams.push(stream);
     }
-    var flare = new T.Sprite(keep(new T.SpriteMaterial({ map: glow, color: 0xffe3ea, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0 })));
-    flare.position.set(0, cutY, 0.05);
-    packG.add(flare);
-    var twinkle = keep(new T.SpriteMaterial({ map: glow, color: 0xffffff, transparent: true, depthWrite: false, blending: T.AdditiveBlending }));
+    var frameTex = keep(frameTexture());
+    var holos = [0x4da3ff, 0xff2d55, 0x9fe0ff].map(function (color) {
+      var m = new T.Mesh(keep(new T.PlaneGeometry(1, 1)), keep(new T.MeshBasicMaterial({ map: frameTex, color: color, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0 })));
+      m.position.set(0, cutY + H * 0.03, 0.04);
+      m.scale.set(0.0001, 0.0001, 1);
+      packG.add(m);
+      return m;
+    });
+    var scanMat = keep(new T.MeshBasicMaterial({ map: lineTex, color: 0x9fe0ff, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0 }));
+    var scan = new T.Mesh(keep(new T.PlaneGeometry(1, 1)), scanMat);
+    scan.position.set(0, cutY, 0.05);
+    scan.scale.set(0.0001, 0.0001, 1);
+    packG.add(scan);
+    // The pack's top, cut into pixels that scatter when it breaks apart.
+    var COLS = 16, ROWS = 3;
+    var bits = [];
+    var packTex = null, player = null;
 
     var card = null, cardMat = null;
     var progress = 0, shownCut = 0;
@@ -397,6 +519,9 @@
       sweep.position.set(root.position.x - W * 0.9 - tilt.ry * 0.12, root.position.y + H * 0.45 + tilt.rx * 0.1, 2.2);
       shadow.scale.set(1 - tilt.lift / H, 1, 1);
       shadow.material.opacity = 0.8 - tilt.lift / H;
+
+      if (player && packTex && player.tick(dt * 1000)) packTex.paint(player.canvas, player.width, player.height);
+      streams.forEach(function (s) { s.material.uniforms.time.value = t; });
 
       // Drop-in entrance.
       if (enter < 1) {
@@ -476,7 +601,25 @@
       add(bodyG, piece(0, vt, 28, -1), backMat);
       add(topG, piece(vt, 1, 6, 1), topMat);
       add(topG, piece(vt, 1, 3, -1), backTopMat);
+      for (var r = 0; r < ROWS; r++) {
+        for (var c = 0; c < COLS; c++) {
+          var u0 = c / COLS, u1 = (c + 1) / COLS, v0 = vt + (1 - vt) * (r / ROWS), v1 = vt + (1 - vt) * ((r + 1) / ROWS);
+          var g = keep(new T.PlaneGeometry(W / COLS, H * (v1 - v0)));
+          var uvs = g.attributes.uv;
+          for (var q = 0; q < uvs.count; q++) uvs.setXY(q, uvs.getX(q) ? u1 : u0, uvs.getY(q) ? v1 : v0);
+          var bm = keep(new T.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0, toneMapped: false }));
+          var bit = new T.Mesh(g, bm);
+          var ux = (u0 + u1) / 2, vy = (v0 + v1) / 2;
+          bit.position.set((ux - 0.5) * W, (vy - 0.5) * H, puff(ux, vy) + 0.003);
+          bit.userData = { x: bit.position.x, y: bit.position.y, u: ux, row: r, col: c };
+          packG.add(bit);
+          bits.push(bit);
+        }
+      }
+      packTex = tex;
       renderer.compile(scene, camera);
+      // The pack's own animation (its scan line and glow) plays on the 3D pack when the art is a GIF.
+      if (opts.packImageUrl) gifPlayer(opts.packImageUrl).then(function (p) { if (running) player = p; }, function () {});
       requestAnimationFrame(frame);
     });
 
@@ -515,31 +658,65 @@
           trail.scale.y = H * (0.05 + 0.08 * Math.sin(k * Math.PI));
           trailMat.opacity = 1 - easeIn(k);
         });
-        // Top piece: thrown up and to the right, spinning, fading.
-        var vx = W * 0.9, vy = H * 1.15;
-        tween(1.1, function (k) {
-          var s = k * 1.1;
-          topG.position.set(vx * s, vy * s - 0.5 * H * 2.4 * s * s, 0.3 * s);
-          topG.rotation.set(0.9 * s, 0.4 * s, -1.6 * s);
-          var fade = 1 - smooth((k - 0.45) / 0.55);
-          topMat.opacity = fade; backTopMat.opacity = fade;
-        }).then(function () { topG.visible = false; });
-
-        tween(1.9, function (k) {
-          beams.forEach(function (b) {
-            var kk = clamp((k * 1.9 - b.userData.d) / 1.7, 0, 1);
-            var grow = easeOut(kk / 0.25);
-            b.scale.set(b.userData.w * (0.6 + 0.4 * grow), b.userData.h * grow, 1);
-            b.material.opacity = (kk < 0.2 ? kk / 0.2 : 1 - smooth((kk - 0.2) / 0.8)) * 0.85;
+        // The top breaks into pixels that glitch, then scatter up and out, tinting red and blue.
+        topG.visible = false;
+        var tintR = new T.Color(0xff2d55), tintB = new T.Color(0x4da3ff), white = new T.Color(0xffffff);
+        bits.forEach(function (bit) {
+          var d = bit.userData;
+          d.delay = d.u * 0.16 + Math.random() * 0.06;
+          d.vx = (d.u - 0.5) * W * (0.9 + Math.random() * 0.8) + (Math.random() - 0.5) * W * 0.3;
+          d.vy = H * (0.35 + Math.random() * 0.9) * (1 + d.row * 0.15);
+          d.spin = (Math.random() - 0.5) * 9;
+          d.tint = Math.random() < 0.5 ? tintR : tintB;
+          bit.material.opacity = 1;
+        });
+        tween(1.25, function (k) {
+          var time = k * 1.25;
+          bits.forEach(function (bit) {
+            var d = bit.userData;
+            var s = Math.max(0, time - d.delay);
+            // A short digital glitch before it lets go: jumps sideways a few pixels.
+            var glitch = s < 0.12 ? (Math.random() - 0.5) * W * 0.03 : 0;
+            bit.position.x = d.x + d.vx * s + glitch;
+            bit.position.y = d.y + d.vy * s - H * 0.5 * s * s;
+            bit.rotation.z = d.spin * s * 0.3;
+            var shrink = 1 - 0.7 * smooth(s / 0.9);
+            bit.scale.set(shrink, shrink, 1);
+            bit.material.color.copy(white).lerp(d.tint, smooth(s / 0.35));
+            bit.material.opacity = s <= 0 ? 1 : 1 - smooth((s - 0.25) / 0.7);
           });
-        }).then(function () { beams.forEach(function (b) { b.visible = false; }); });
-        tween(0.9, function (k) {
-          var s = W * (0.4 + 1.8 * easeOut(k));
-          flare.scale.set(s, s * 0.55, 1);
-          flare.material.opacity = 1 - easeIn(k);
-        }).then(function () { flare.visible = false; });
-        for (var i = 0; i < 26; i++) {
-          spark((Math.random() - 0.5) * W * 0.9, cutY, 0.06, (Math.random() - 0.5) * W * 0.5, H * (0.35 + Math.random() * 0.75), 1 + Math.random() * 0.8, W * (0.03 + Math.random() * 0.05), twinkle);
+        }).then(function () { bits.forEach(function (bit) { bit.visible = false; }); });
+        backTopMat.opacity = 0;
+
+        // A scan line sweeps out across the cut.
+        tween(0.55, function (k) {
+          scan.scale.set(W * (0.9 + 1.4 * easeOut(k)), H * 0.035 * (1 - k * 0.6), 1);
+          scanMat.opacity = 1 - easeIn(k);
+        }).then(function () { scan.visible = false; });
+        // Hologram frames ripple out of the opening, one after another.
+        holos.forEach(function (m, i) {
+          tween(0.85, function (k) {
+            var e = easeOut(k);
+            m.scale.set(W * (0.95 + 0.9 * e), H * (0.06 + 0.22 * e), 1);
+            m.position.y = cutY + H * (0.03 + 0.12 * e);
+            m.material.opacity = (k < 0.15 ? k / 0.15 : 1 - smooth((k - 0.15) / 0.85)) * 0.9;
+          }, 0.08 + i * 0.13).then(function () { m.visible = false; });
+        });
+        // Columns of code stream up out of the pack.
+        tween(1.9, function (k) {
+          streams.forEach(function (st) {
+            var kk = clamp((k * 1.9 - st.userData.d) / 1.6, 0, 1);
+            var grow = easeOut(kk / 0.3);
+            st.scale.set(st.userData.w, st.userData.h * grow, 1);
+            st.material.uniforms.opacity.value = (kk < 0.15 ? kk / 0.15 : 1 - smooth((kk - 0.35) / 0.65)) * 0.8;
+          });
+        }).then(function () { streams.forEach(function (st) { st.visible = false; }); });
+        // Square pixel sparks.
+        for (var i = 0; i < 30; i++) {
+          var m = pixelMat.clone();
+          m.color.set([0xff2d55, 0x4da3ff, 0xffffff][i % 3]);
+          spark((Math.random() - 0.5) * W * 0.95, cutY, 0.06, (Math.random() - 0.5) * W * 0.7, H * (0.4 + Math.random() * 0.8), 0.9 + Math.random() * 0.7, W * (0.02 + Math.random() * 0.03), m);
+          m.dispose();
         }
 
         // The card rises out of the opening.
