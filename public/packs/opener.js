@@ -62,8 +62,13 @@
   }
   // The 3D pack plays the art as a GIF, which Shopify serves at full size (about 3 MB). Half the
   // width is about half the download and still sharp on the pack.
+  // Product pages pass theme image URLs (protocol-relative, often with their own width), My Packs
+  // passes cdn.shopify.com URLs; both get resized to 480 wide.
   function artGif(url) {
-    if (!url || !/^https:\/\/(cdn\.shopify\.com|[^/]+\/cdn\/shop)\//.test(url) || /[?&]width=/.test(url)) return url;
+    if (!url) return url;
+    if (url.indexOf("//") === 0) url = "https:" + url;
+    if (!/^https:\/\/(cdn\.shopify\.com|[^/]+\/cdn\/shop)\//.test(url)) return url;
+    if (/[?&]width=\d+/.test(url)) return url.replace(/([?&])width=\d+/, "$1width=480");
     return url + (url.indexOf("?") === -1 ? "?" : "&") + "width=480";
   }
   // Starts downloading a pack's art (still and animated) so it's in the browser cache by the time
