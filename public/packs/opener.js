@@ -40,6 +40,12 @@
       var amd = window.define && window.define.amd ? window.define : null;
       if (amd) window.define = undefined;
       var timer = setTimeout(function () { reject(new Error("3D took too long to load")); }, 9000);
+      // Download all three files at once; they still run in order below.
+      ["vendor/three.min.js", "vendor/omggif.js", "pack3d.js"].forEach(function (file) {
+        var link = document.createElement("link");
+        link.rel = "preload"; link.as = "script"; link.href = assetBase + file + assetQuery;
+        document.head.appendChild(link);
+      });
       script(assetBase + "vendor/three.min.js" + assetQuery)
         // omggif plays the pack's animated art (a GIF) on the 3D pack.
         .then(function () { return window.GifReader ? null : script(assetBase + "vendor/omggif.js" + assetQuery).catch(function () {}); })
@@ -53,6 +59,23 @@
     });
     pack3dLoad.catch(function () {});
     return pack3dLoad;
+  }
+  // The 3D pack plays the art as a GIF, which Shopify serves at full size (about 3 MB). Half the
+  // width is about half the download and still sharp on the pack.
+  function artGif(url) {
+    if (!url || !/^https:\/\/(cdn\.shopify\.com|[^/]+\/cdn\/shop)\//.test(url) || /[?&]width=/.test(url)) return url;
+    return url + (url.indexOf("?") === -1 ? "?" : "&") + "width=480";
+  }
+  // Starts downloading a pack's art (still and animated) so it's in the browser cache by the time
+  // the 3D pack asks for it.
+  var artWarm = {};
+  function warmArt(url) {
+    if (!url || artWarm[url]) return;
+    artWarm[url] = true;
+    var still = new Image();
+    still.crossOrigin = "anonymous";
+    still.src = url;
+    fetch(artGif(url), { mode: "cors", credentials: "omit" }).catch(function () {});
   }
   // Merchant preview (?demo=<signed token>): sample packs from the live pool, opened locally.
   var demo = !!root && root.getAttribute("data-demo") === "1";
@@ -687,7 +710,8 @@
         }
         render(packs, data.available, data.signedIn, data.recommendFrom, data.recommendHandle, data.vault);
         // Unopened packs: get the 3D pack ready so opening starts right away.
-        if (packs.some(function (p) { return !p.opened; })) setTimeout(pack3d, 1200);
+        var firstUnopened = packs.filter(function (p) { return !p.opened; })[0];
+        if (firstUnopened) setTimeout(function () { pack3d(); warmArt(firstUnopened.packImageUrl); }, 1200);
         uncover();
       })
       .catch(function (err) {
@@ -1010,6 +1034,7 @@
 
   function openPack(pack) {
     var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced && window.WebGLRenderingContext) warmArt(pack.packImageUrl);
 
     var front = el("div", { class: "mp-reveal-card" });
     var glow = el("div", { class: "mp-glow" });
@@ -1096,7 +1121,7 @@
       floor.style.visibility = "hidden";
       mode = pack3d().then(function (P) {
         if (closed) return null;
-        var made = P.create({ stage: stage, rect: inner.getBoundingClientRect(), packWidth: width, packImageUrl: pack.packImageUrl, art: ART, tearY: TEAR_Y, before: inner });
+        var made = P.create({ stage: stage, rect: inner.getBoundingClientRect(), packWidth: width, packImageUrl: pack.packImageUrl, gifUrl: artGif(pack.packImageUrl), art: ART, tearY: TEAR_Y, before: inner });
         scene3d = made;
         return made.ready.then(function () { return made; });
       }).catch(function (err) {

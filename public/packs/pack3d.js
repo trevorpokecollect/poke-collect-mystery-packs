@@ -261,7 +261,7 @@
 
   /**
    * opts: stage (element), rect (the card's spot on the page, a DOMRect), packWidth (px),
-   * packImageUrl, art ({ left, top, width, height } of the pack in the square art), tearY (fraction
+   * packImageUrl, gifUrl (the animated art, smaller; defaults to packImageUrl), art ({ left, top, width, height } of the pack in the square art), tearY (fraction
    * from the top), before (element the canvas goes in front of).
    */
   function create(opts) {
@@ -603,7 +603,7 @@
       packTex = tex;
       renderer.compile(scene, camera);
       // The pack's own animation (its scan line and glow) plays on the 3D pack when the art is a GIF.
-      if (opts.packImageUrl) gifPlayer(opts.packImageUrl).then(function (p) { if (running) player = p; }, function () {});
+      if (opts.packImageUrl) gifPlayer(opts.gifUrl || opts.packImageUrl).then(function (p) { if (running) player = p; }, function () {});
       requestAnimationFrame(frame);
     });
 
