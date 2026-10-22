@@ -3,7 +3,7 @@ import db from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { attachMissingCustomers, autoOpenDue, ordersReadyToFinalize } from "../lib/pool.server";
 import { finalizeOrder, fulfillMissingVaultPackLines, noteMissingVaultPulls } from "../lib/orders.server";
-import { expireShipments, notifyPickupsReady, sendVaultReminders } from "../lib/vault.server";
+import { deleteStrayVaultDrafts, expireShipments, notifyPickupsReady, sendVaultReminders } from "../lib/vault.server";
 import { expireCheckouts, expireOffers, payOutSellers } from "../lib/market.server";
 import { expireCreditCodes } from "../lib/credit.server";
 import { fillMissingCardImages } from "../lib/card-images.server";
@@ -33,6 +33,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   // Unpaid "ship my cards" invoices past their window: cards go back to the vault.
   await expireShipments(db, async (shop) => (await unauthenticated.admin(shop)).admin);
+  // Vault invoices left open after a failed or timed-out "Ship My Cards" hold stock twice: delete them.
+  await deleteStrayVaultDrafts(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   await noteMissingVaultPulls(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   await fulfillMissingVaultPackLines(db, async (shop) => (await unauthenticated.admin(shop)).admin);
   // Cards a month from the end of their 12-month vault hold: remind the customer once.

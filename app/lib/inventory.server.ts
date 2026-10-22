@@ -229,21 +229,48 @@ export async function unreserveForPulls(db: PrismaClient, admin: Admin, pullIds:
     where: { id: { in: pullIds }, unreservedAt: null },
     include: { slot: { include: { card: true } } },
   });
+  // A big shipment can hold 100+ cards, so copies are released in batches (one Shopify call per
+  // series and up to 100 cards) instead of one call per card, which took over a minute.
+  const taken = new Map<string, number>();
+  const bySeries = new Map<string, typeof pulls>();
   for (const pull of pulls) {
     const card = pull.slot.card;
-    if (!reservable(card) || card.reservedQty <= 0) continue;
-    await moveQuantities(
-      admin,
-      [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: 1 }],
-      "release",
-      ledgerFor(pull.seriesId),
-      `pull-${pull.id}-${randomUUID()}`,
-    );
-    await db.$transaction([
-      db.pull.update({ where: { id: pull.id }, data: { unreservedAt: new Date() } }),
-      db.card.update({ where: { id: card.id }, data: { reservedQty: { decrement: 1 } } }),
-    ]);
+    const already = taken.get(card.id) ?? 0;
+    if (!reservable(card) || card.reservedQty - already <= 0) continue;
+    taken.set(card.id, already + 1);
+    bySeries.set(pull.seriesId, [...(bySeries.get(pull.seriesId) ?? []), pull]);
   }
+  for (const [seriesId, group] of bySeries) {
+    for (let i = 0; i < group.length; i += BATCH) {
+      const chunk = group.slice(i, i + BATCH);
+      await moveQuantities(admin, movesFor(chunk.map((p) => p.slot.card)), "release", ledgerFor(seriesId), `pulls-release-${randomUUID()}`);
+      await db.$transaction([
+        db.pull.updateMany({ where: { id: { in: chunk.map((p) => p.id) } }, data: { unreservedAt: new Date() } }),
+        ...countsBy(chunk).map(([cardId, n]) => db.card.update({ where: { id: cardId }, data: { reservedQty: { decrement: n } } })),
+      ]);
+    }
+  }
+}
+
+const BATCH = 100;
+
+/** One move per inventory item and location, with the number of copies. */
+function movesFor(cards: Card[]): Move[] {
+  const moves = new Map<string, Move>();
+  for (const c of cards) {
+    const key = `${c.inventoryItemId}|${c.locationId}`;
+    const move = moves.get(key) ?? { inventoryItemId: c.inventoryItemId!, locationId: c.locationId!, quantity: 0 };
+    move.quantity += 1;
+    moves.set(key, move);
+  }
+  return [...moves.values()];
+}
+
+/** How many of the given pulls are on each card. */
+function countsBy(pulls: { slot: { card: Card } }[]) {
+  const counts = new Map<string, number>();
+  for (const p of pulls) counts.set(p.slot.card.id, (counts.get(p.slot.card.id) ?? 0) + 1);
+  return [...counts];
 }
 
 /** Available counts keyed by `${inventoryItemId}|${locationId}`; missing when Shopify doesn't say. */
@@ -301,6 +328,7 @@ export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds:
     await new Promise((r) => setTimeout(r, 2000));
     available = await availableAt(admin, items);
   }
+  const bySeries = new Map<string, typeof pulls>();
   for (const pull of pulls) {
     const card = pull.slot.card as Card & { inventoryItemId: string; locationId: string };
     const key = keyOf(card);
@@ -312,17 +340,18 @@ export async function rereserveForPulls(db: PrismaClient, admin: Admin, pullIds:
       }
       available.set(key, available.get(key)! - 1);
     }
-    await moveQuantities(
-      admin,
-      [{ inventoryItemId: card.inventoryItemId, locationId: card.locationId, quantity: 1 }],
-      "reserve",
-      ledgerFor(pull.seriesId),
-      `rereserve-${pull.id}-${randomUUID()}`,
-    );
-    await db.$transaction([
-      db.pull.update({ where: { id: pull.id }, data: { unreservedAt: null } }),
-      db.card.update({ where: { id: card.id }, data: { reservedQty: { increment: 1 } } }),
-    ]);
+    bySeries.set(pull.seriesId, [...(bySeries.get(pull.seriesId) ?? []), pull]);
+  }
+  // Batched like unreserveForPulls: one Shopify call per series and up to 100 cards.
+  for (const [seriesId, group] of bySeries) {
+    for (let i = 0; i < group.length; i += BATCH) {
+      const chunk = group.slice(i, i + BATCH);
+      await moveQuantities(admin, movesFor(chunk.map((p) => p.slot.card)), "reserve", ledgerFor(seriesId), `rereserve-${randomUUID()}`);
+      await db.$transaction([
+        db.pull.updateMany({ where: { id: { in: chunk.map((p) => p.id) } }, data: { unreservedAt: null } }),
+        ...countsBy(chunk).map(([cardId, n]) => db.card.update({ where: { id: cardId }, data: { reservedQty: { increment: n } } })),
+      ]);
+    }
   }
   return { skipped };
 }
