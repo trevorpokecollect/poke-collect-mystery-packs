@@ -3,7 +3,7 @@ import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-ro
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { auditPoolInventory, repairStuckReservations } from "../lib/inventory.server";
+import { auditPoolInventory, reholdVaultCards, repairStuckReservations } from "../lib/inventory.server";
 
 // Inventory check: every pool card's Shopify counts against what the app expects to be reserved,
 // so a copy can't be held for a pack and committed to an order at the same time unnoticed.
@@ -18,7 +18,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
   try {
-    const itemId = String((await request.formData()).get("inventoryItemId") || "") || undefined;
+    const form = await request.formData();
+    if (form.get("intent") === "rehold") {
+      const { held, stillShort } = await reholdVaultCards(db, admin);
+      return {
+        ok: `Held ${held} vault card${held === 1 ? "" : "s"} again.` +
+          (stillShort ? ` ${stillShort} still have no available copy: check the shelf, then adjust stock in Shopify.` : ""),
+      };
+    }
+    const itemId = String(form.get("inventoryItemId") || "") || undefined;
     const released = await repairStuckReservations(db, admin, itemId);
     return { ok: released ? `Released ${released} stuck reservation${released === 1 ? "" : "s"} back to available.` : "Nothing needed repairing." };
   } catch (error) {
@@ -51,8 +59,12 @@ export default function InventoryCheck() {
           </s-paragraph>
           {unheldVaultCards.length ? (
             <s-banner tone="warning" heading={`${unheldVaultCards.length} vault card${unheldVaultCards.length === 1 ? " isn't" : "s aren't"} held in inventory`}>
-              The return guard couldn&apos;t re-reserve these because Shopify showed no available copy. Check the shelf, then
-              adjust stock in Shopify: {unheldVaultCards.map((c) => `${c.title} (${c.orderName})`).join(", ")}.
+              The return guard couldn&apos;t re-reserve these because Shopify showed no available copy. Hold Vault Cards Again
+              reserves a copy for each card that has one available now; check the shelf for the rest, then adjust stock in
+              Shopify: {unheldVaultCards.map((c) => `${c.title} (${c.orderName})`).join(", ")}.
+              <s-button slot="secondary-actions" disabled={busy} onClick={() => submit({ intent: "rehold" }, { method: "post" })}>
+                Hold Vault Cards Again
+              </s-button>
             </s-banner>
           ) : null}
           {issues.length === 0 ? (
