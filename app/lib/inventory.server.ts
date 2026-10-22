@@ -483,6 +483,25 @@ export async function auditPoolInventory(db: PrismaClient, admin: Admin) {
   return { checked: groups.size, issues, unheldVaultCards };
 }
 
+/**
+ * Vault cards that lost their hold (no copy was available when they went back to the vault, e.g. a
+ * stray invoice still committed it): reserves a copy for each one that now has one available.
+ * Returns how many were held again and how many still have no available copy.
+ */
+export async function reholdVaultCards(db: PrismaClient, admin: Admin) {
+  const unheld = await db.pull.findMany({
+    where: {
+      status: "REVEALED",
+      unreservedAt: { not: null },
+      OR: [{ shipRequestId: null }, { shipRequest: { status: { notIn: ["PENDING", "PAID"] } } }],
+      slot: { card: { inventoryItemId: { not: null } } },
+    },
+    select: { id: true },
+  });
+  const { skipped } = await rereserveForPulls(db, admin, unheld.map((p) => p.id));
+  return { held: unheld.length - skipped.length, stillShort: skipped.length };
+}
+
 /** Releases reserved copies the app no longer accounts for back to available (one item, or all). Returns copies released. */
 export async function repairStuckReservations(db: PrismaClient, admin: Admin, onlyItemId?: string) {
   const { issues } = await auditPoolInventory(db, admin);
