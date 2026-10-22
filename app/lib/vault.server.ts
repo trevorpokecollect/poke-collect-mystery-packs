@@ -230,6 +230,53 @@ export async function expireShipments(db: Db, adminFor: (shop: string) => Promis
 }
 
 /**
+ * Deletes open vault invoices (draft orders) the app no longer stands behind: when building a
+ * shipment fails or times out, Shopify can still finish creating the draft afterwards, and that
+ * stray draft keeps its cards committed (counted twice next to the pool's reserved copies).
+ * Drafts younger than 10 minutes are left alone so one still being saved isn't touched.
+ */
+export async function deleteStrayVaultDrafts(db: Db, adminFor: (shop: string) => Promise<AdminApiContext>, now = new Date()) {
+  const shops = await db.shipRequest.findMany({
+    where: { createdAt: { gt: new Date(now.getTime() - 14 * 86_400_000) } },
+    distinct: ["shop"],
+    select: { shop: true },
+  });
+  for (const { shop } of shops) {
+    try {
+      const admin = await adminFor(shop);
+      const data = await gql(
+        admin,
+        `#graphql
+          query StrayVaultDrafts($query: String!) {
+            draftOrders(first: 100, query: $query) { nodes { id name createdAt customAttributes { key value } } }
+          }`,
+        { query: `tag:${VAULT_TAG} status:open` },
+      );
+      for (const draft of data.draftOrders.nodes as { id: string; name: string; createdAt: string; customAttributes: { key: string; value: string }[] }[]) {
+        if (now.getTime() - new Date(draft.createdAt).getTime() < 10 * 60_000) continue;
+        const requestId = draft.customAttributes.find((a) => a.key === VAULT_ATTRIBUTE)?.value;
+        if (!requestId) continue;
+        const request = await db.shipRequest.findUnique({ where: { id: requestId } });
+        if (request && request.status === "PENDING" && request.draftOrderId === draft.id) continue;
+        const deleted = await gql(
+          admin,
+          `#graphql
+            mutation StrayVaultDraftDelete($input: DraftOrderDeleteInput!) {
+              draftOrderDelete(input: $input) { deletedId userErrors { field message } }
+            }`,
+          { input: { id: draft.id } },
+        );
+        const errors = deleted.draftOrderDelete.userErrors as { message: string }[];
+        if (errors.length) console.error(`Deleting stray vault invoice ${draft.name} failed`, errors);
+        else console.log(`Deleted stray vault invoice ${draft.name} (ship request ${requestId} is ${request?.status ?? "missing"})`);
+      }
+    } catch (error) {
+      console.error(`Stray vault invoice check on ${shop} failed`, error);
+    }
+  }
+}
+
+/**
  * Closes an unpaid ship request: if its draft order was in fact paid, records that; otherwise
  * deletes the draft and returns the cards to the vault (reserved again) with the given status.
  */
@@ -257,7 +304,7 @@ async function settleShipRequest(
       return;
     }
     if (draft) {
-      await gql(
+      const deleted = await gql(
         admin,
         `#graphql
           mutation VaultDraftDelete($input: DraftOrderDeleteInput!) {
@@ -265,6 +312,9 @@ async function settleShipRequest(
           }`,
         { input: { id: request.draftOrderId } },
       );
+      // Not fatal: deleteStrayVaultDrafts retries drafts whose request is no longer pending.
+      const errors = deleted.draftOrderDelete.userErrors as { message: string }[];
+      if (errors.length) console.error(`Deleting vault invoice ${request.draftOrderId} failed`, errors);
     }
   }
   if (!keepReleased) {

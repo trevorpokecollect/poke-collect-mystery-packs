@@ -16,7 +16,7 @@ import {
 import { releaseUnneeded, rereserveForPulls, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { latestTopTierPull, recentPulls } from "./recent-pulls.server";
-import { addVaultCardsToShipment, moveVault, resolveCustomer, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
+import { addVaultCardsToShipment, deleteStrayVaultDrafts, moveVault, resolveCustomer, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -856,6 +856,38 @@ describe("vault", () => {
     expect(pulls.every((p) => p.shipRequestId === null && p.unreservedAt === null && p.status === "REVEALED")).toBe(true);
     expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(2);
     expect((await db.shipRequest.findFirstOrThrow()).status).toBe("EXPIRED");
+  });
+});
+
+describe("stray vault invoices", () => {
+  it("deletes open vault drafts whose ship request isn't pending on them, and keeps the rest", async () => {
+    const live = await db.shipRequest.create({ data: { shop: SHOP, cardCount: 1, shippingFee: 5, expiresAt: new Date(Date.now() + 86_400_000), draftOrderId: "gid://shopify/DraftOrder/10" } });
+    const gaveUp = await db.shipRequest.create({ data: { shop: SHOP, cardCount: 1, shippingFee: 5, expiresAt: new Date(Date.now() + 86_400_000), status: "CANCELLED" } });
+    const old = new Date(Date.now() - 60 * 60_000).toISOString();
+    const attr = (id: string) => [{ key: "_vault_request", value: id }];
+    const drafts = [
+      { id: "gid://shopify/DraftOrder/10", name: "#D10", createdAt: old, customAttributes: attr(live.id) },
+      { id: "gid://shopify/DraftOrder/11", name: "#D11", createdAt: old, customAttributes: attr(gaveUp.id) },
+      { id: "gid://shopify/DraftOrder/12", name: "#D12", createdAt: old, customAttributes: attr("missing-request") },
+      // Too new: the request may still be saving its draft id.
+      { id: "gid://shopify/DraftOrder/13", name: "#D13", createdAt: new Date().toISOString(), customAttributes: attr(gaveUp.id) },
+      { id: "gid://shopify/DraftOrder/14", name: "#D14", createdAt: old, customAttributes: [] },
+    ];
+    const deleted: string[] = [];
+    const admin = {
+      graphql: async (query: string, opts: { variables: Record<string, unknown> }) => {
+        const reply = (data: unknown) => new Response(JSON.stringify({ data }));
+        if (query.includes("StrayVaultDrafts")) return reply({ draftOrders: { nodes: drafts } });
+        if (query.includes("draftOrderDelete")) {
+          deleted.push(String((opts.variables.input as { id: string }).id));
+          return reply({ draftOrderDelete: { deletedId: "d", userErrors: [] } });
+        }
+        throw new Error(`Unexpected query ${query}`);
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await deleteStrayVaultDrafts(db, async () => admin as any);
+    expect(deleted).toEqual(["gid://shopify/DraftOrder/11", "gid://shopify/DraftOrder/12"]);
   });
 });
 
