@@ -5,12 +5,14 @@
  * @typedef {import("../generated/api").CartDeliveryOptionsTransformRunResult} CartDeliveryOptionsTransformRunResult
  */
 
-// "Keep In My Vault (Ships Later)" is a $0 shipping rate: the singles go to the buyer's vault instead
+// "Keep In My Vault (Don't Ship Now)" is a $0 shipping rate: the singles go to the buyer's vault instead
 // of shipping. It's only offered to logged-in customers whose cart is all Pokemon singles; everyone
 // else never sees it. When it is offered it's moved to the end, so a paid shipping option stays the
 // one checkout picks first and nobody vaults by accident.
 // Settings (optional) come from the customization's metafield: { "rateTitle": "...", "productType": "..." }.
-export const DEFAULT_CONFIG = { rateTitle: "Keep In My Vault (Ships Later)", productType: "Pokemon Single" };
+export const DEFAULT_CONFIG = { rateTitle: "Keep In My Vault (Don't Ship Now)", productType: "Pokemon Single" };
+// The rate's first name, still matched while the rename rolls out.
+const OLD_TITLES = ["keep in my vault (ships later)"];
 
 /** @param {CartDeliveryOptionsTransformRunInput} input */
 export function readConfig(input) {
@@ -46,7 +48,8 @@ export function cartDeliveryOptionsTransformRun(input) {
   for (const group of input.cart.deliveryGroups) {
     const count = group.deliveryOptions.length;
     for (const option of group.deliveryOptions) {
-      if ((option.title ?? "").trim().toLowerCase() !== want) continue;
+      const title = (option.title ?? "").trim().toLowerCase();
+      if (title !== want && !OLD_TITLES.includes(title)) continue;
       if (!ok) operations.push({ deliveryOptionHide: { deliveryOptionHandle: option.handle } });
       else if (count > 1) operations.push({ deliveryOptionMove: { deliveryOptionHandle: option.handle, index: count - 1 } });
     }

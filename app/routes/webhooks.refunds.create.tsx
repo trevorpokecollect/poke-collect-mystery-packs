@@ -3,6 +3,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { ordersReadyToFinalize, voidPulls } from "../lib/pool.server";
 import { flagMarketOrder } from "../lib/market.server";
+import { refundCreditCodeLines } from "../lib/credit.server";
 import { finalizeOrder, releaseHolds } from "../lib/orders.server";
 import { releaseUnneeded } from "../lib/inventory.server";
 import { syncPackStock } from "../lib/series.server";
@@ -27,6 +28,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const id = item.line_item.admin_graphql_api_id;
     perLine.set(id, (perLine.get(id) ?? 0) + item.quantity);
   }
+  // Vault Credit codes on this order: the refunded lines' share goes back to Vault Credit.
+  if (admin) await refundCreditCodeLines(db, admin, orderId, perLine).catch((e) => console.error(`Vault Credit refund on ${orderId} failed`, e));
   const voided = await voidPulls(db, orderId, perLine);
   if (voided.length === 0 || !admin) return new Response();
 

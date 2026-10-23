@@ -6,7 +6,7 @@ const input = ({ customer = true, types = ["Pokemon Single"] } = {}) => ({
     buyerIdentity: customer ? { isAuthenticated: true, customer: { id: "gid://shopify/Customer/1" } } : null,
     lines: types.map((t) => ({ merchandise: { product: { productType: t } } })),
     deliveryGroups: [
-      { deliveryOptions: [{ handle: "vault", title: "Keep In My Vault (Ships Later)" }, { handle: "std", title: "Standard" }] },
+      { deliveryOptions: [{ handle: "vault", title: "Keep In My Vault (Don't Ship Now)" }, { handle: "std", title: "Standard" }] },
     ],
   },
   deliveryCustomization: { metafield: null },

@@ -413,6 +413,8 @@ model CreditCode {
   orderId    String?
   orderName  String?
   usedAmount Decimal? @db.Decimal(10, 2)
+  // How much of usedAmount has gone back to Vault Credit through refunds (partial or full).
+  refundedAmount Decimal @default(0) @db.Decimal(10, 2)
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
