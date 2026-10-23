@@ -70,6 +70,9 @@ model Series {
   // Staff test cards (put in a staff vault by /jobs/staff-test-cards): never on sale as packs, and on
   // Vault Market only the owner and customers tagged "vault-tester" can see them.
   staffTest        Boolean      @default(false)
+  // Singles customers bought on the website and chose "Keep In My Vault" for (one series per shop).
+  // Already sold and out of stock, so shipping them later adds a $0 custom line, not the variant.
+  storePurchase    Boolean      @default(false)
   // What the pool's cards would cost at our StorePass buylist offers (see lib/buylist.server.ts).
   buylistReport    Json?
   createdAt        DateTime     @default(now())

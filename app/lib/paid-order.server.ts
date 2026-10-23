@@ -9,6 +9,7 @@ import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
 import { completeSale, MARKET_ATTRIBUTE, METRICS, notify } from "./market.server";
+import { choseVaultRate, vaultSinglesFromOrder } from "./vault-singles.server";
 import { settleCreditCodes } from "./credit.server";
 
 export interface OrderPayload {
@@ -20,6 +21,7 @@ export interface OrderPayload {
   note_attributes?: { name: string; value: string }[] | null;
   discount_codes?: { code: string; amount: string }[] | null;
   shipping_address?: { country_code?: string | null } | null;
+  shipping_lines?: { title?: string | null }[] | null;
   line_items: {
     admin_graphql_api_id: string;
     variant_id: number | null;
@@ -56,6 +58,11 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
     }
     if (sold) await notify(admin, sold.sellerCustomerId, METRICS.cardSold, { price: Number(sold.price).toFixed(2), payoutAmount: Number(sold.payoutAmount).toFixed(2) });
     return;
+  }
+
+  // Singles bought with "Keep In My Vault (Ships Later)": they go to the buyer's vault.
+  if (choseVaultRate(order) && admin) {
+    await vaultSinglesFromOrder(db, admin, shop, order).catch((e) => console.error(`Vaulting singles on ${order.name} failed`, e));
   }
 
   const result = await drawForOrder(db, {
