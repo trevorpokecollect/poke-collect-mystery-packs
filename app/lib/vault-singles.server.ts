@@ -1,4 +1,4 @@
-// "Keep In My Vault (Ships Later)": singles bought on the website can go straight to the buyer's
+// "Keep In My Vault (Don't Ship Now)": singles bought on the website can go straight to the buyer's
 // vault instead of shipping. Checkout only offers the $0 rate on singles-only carts for logged-in
 // customers (extensions/vault-singles-delivery). Once paid, each single becomes a vault card like a
 // pull (one "Bought From Poke-Collect" series per shop), and the order is marked fulfilled: staff
@@ -8,12 +8,15 @@ import type { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { fulfillWholeOrder, gql, tagOrder } from "./orders.server";
 
-export const VAULT_RATE_TITLE = "Keep In My Vault (Ships Later)";
+export const VAULT_RATE_TITLE = "Keep In My Vault (Don't Ship Now)";
+// The rate's first name (2026-10-23), still recognized on orders placed with it.
+const OLD_RATE_TITLES = ["Keep In My Vault (Ships Later)"];
 export const SINGLE_PRODUCT_TYPE = "Pokemon Single";
 export const VAULT_SINGLES_TAG = "vault-singles";
 
 export function choseVaultRate(order: { shipping_lines?: { title?: string | null }[] | null }) {
-  return (order.shipping_lines ?? []).some((l) => (l.title ?? "").trim().toLowerCase() === VAULT_RATE_TITLE.toLowerCase());
+  const titles = [VAULT_RATE_TITLE, ...OLD_RATE_TITLES].map((t) => t.toLowerCase());
+  return (order.shipping_lines ?? []).some((l) => titles.includes((l.title ?? "").trim().toLowerCase()));
 }
 
 async function storeSeries(db: PrismaClient, shop: string) {

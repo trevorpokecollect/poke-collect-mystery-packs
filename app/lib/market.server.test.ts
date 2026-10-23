@@ -41,7 +41,7 @@ import {
 } from "./market.server";
 import { cancelShipment, moveVault, requestShipment, vaultedPulls } from "./vault.server";
 import { choseVaultRate, vaultSinglesFromOrder } from "./vault-singles.server";
-import { adjustCredit, createCreditCode, creditBalance, expireCreditCodes, refundCreditCodes, returnCreditCode, settleCreditCodes } from "./credit.server";
+import { adjustCredit, createCreditCode, creditBalance, expireCreditCodes, refundCreditCodeLines, refundCreditCodes, returnCreditCode, settleCreditCodes } from "./credit.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -279,6 +279,7 @@ describe("trading", () => {
 describe("singles bought for the vault", () => {
   it("go to the buyer's vault and ship later as $0 custom lines", async () => {
     expect(choseVaultRate({ shipping_lines: [{ title: "Keep In My Vault (Ships Later)" }] })).toBe(true);
+    expect(choseVaultRate({ shipping_lines: [{ title: "Keep In My Vault (Don't Ship Now)" }] })).toBe(true);
     expect(choseVaultRate({ shipping_lines: [{ title: "Standard" }] })).toBe(false);
     const calls: { query: string; variables: Record<string, unknown> }[] = [];
     const admin = {
@@ -552,6 +553,18 @@ describe("vault credit", () => {
     expect(await creditBalance(db, SHOP, ANN)).toBe(17.5);
     await settleCreditCodes(db, { admin_graphql_api_id: "gid://shopify/Order/77", name: "#77", discount_codes: [{ code: code.code, amount: "12.50" }] });
     expect(await creditBalance(db, SHOP, ANN)).toBe(17.5);
+    // Refunding 1 of the 2 cards on the code's line gives back half of what the code covered on it;
+    // cancelling later gives back only the rest.
+    const orderAdmin = {
+      graphql: async () =>
+        new Response(JSON.stringify({ data: { order: { name: "#77", lineItems: { nodes: [
+          { id: "gid://shopify/LineItem/1", quantity: 2, discountAllocations: [{ allocatedAmountSet: { shopMoney: { amount: "12.50" } }, discountApplication: { code: code.code } }] },
+        ] } } } })),
+    } as unknown as Parameters<typeof refundCreditCodeLines>[1];
+    expect(await refundCreditCodeLines(db, orderAdmin, "gid://shopify/Order/77", new Map([["gid://shopify/LineItem/1", 1]]))).toBe(6.25);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(23.75);
+    await refundCreditCodes(db, "gid://shopify/Order/77");
+    expect(await creditBalance(db, SHOP, ANN)).toBe(30);
     await refundCreditCodes(db, "gid://shopify/Order/77");
     expect(await creditBalance(db, SHOP, ANN)).toBe(30);
 

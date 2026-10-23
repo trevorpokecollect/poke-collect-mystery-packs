@@ -185,16 +185,67 @@ export async function settleCreditCodes(db: Db, order: OrderDiscountCodes) {
   return settled;
 }
 
-/** A cancelled order that used a Vault Credit code: what the code covered goes back to the balance. */
+/** Gives back up to `amount` of what a used code covered, never more than it covered in total. */
+async function returnCodeShare(db: Db, codeId: string, amount: number, note: string) {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM "CreditCode" WHERE id = ${codeId} FOR UPDATE`;
+    const code = await tx.creditCode.findUniqueOrThrow({ where: { id: codeId } });
+    const left = cents(Number(code.usedAmount ?? 0) - Number(code.refundedAmount));
+    const give = cents(Math.min(left, amount));
+    if (give <= 0.004) return 0;
+    await tx.creditCode.update({
+      where: { id: code.id },
+      data: { refundedAmount: { increment: give }, ...(give >= left - 0.004 ? { status: "REFUNDED" } : {}) },
+    });
+    await addCredit(tx, { shop: code.shop, customerId: code.customerId, amount: give, kind: "CODE_RETURN", codeId: code.id, note });
+    return give;
+  });
+}
+
+/** A cancelled order that used a Vault Credit code: what the code covered (and wasn't already refunded) goes back. */
 export async function refundCreditCodes(db: Db, orderId: string) {
   const codes = await db.creditCode.findMany({ where: { orderId, status: "USED" } });
-  for (const code of codes) {
-    const { count } = await db.creditCode.updateMany({ where: { id: code.id, status: "USED" }, data: { status: "REFUNDED" } });
-    if (count && code.usedAmount) {
-      await addCredit(db, { shop: code.shop, customerId: code.customerId, amount: Number(code.usedAmount), kind: "CODE_RETURN", codeId: code.id, note: `${code.orderName ?? "Order"} cancelled` });
+  for (const code of codes) await returnCodeShare(db, code.id, Number(code.usedAmount ?? 0), `${code.orderName ?? "Order"} cancelled`);
+  return codes.length;
+}
+
+/**
+ * A refund (without cancelling) on an order paid partly with Vault Credit codes: Shopify can only
+ * refund what was paid by card, so each refunded line's share of the code goes back to Vault
+ * Credit here. Never to Shopify store credit or the card (legal, 2026-10-23).
+ */
+export async function refundCreditCodeLines(db: Db, admin: AdminApiContext, orderId: string, refunded: Map<string, number>) {
+  const codes = await db.creditCode.findMany({ where: { orderId, status: "USED" } });
+  if (codes.length === 0 || refunded.size === 0) return 0;
+  const data = await gql(admin, `#graphql
+    query VaultCreditRefundLines($id: ID!) {
+      order(id: $id) {
+        name
+        lineItems(first: 100) {
+          nodes {
+            id quantity
+            discountAllocations { allocatedAmountSet { shopMoney { amount } } discountApplication { ... on DiscountCodeApplication { code } } }
+          }
+        }
+      }
+    }`, { id: orderId });
+  type Line = { id: string; quantity: number; discountAllocations: { allocatedAmountSet: { shopMoney: { amount: string } }; discountApplication: { code?: string } }[] };
+  const share = new Map<string, number>();
+  for (const line of (data.order?.lineItems?.nodes ?? []) as Line[]) {
+    const qty = refunded.get(line.id);
+    if (!qty || !line.quantity) continue;
+    for (const a of line.discountAllocations) {
+      const code = a.discountApplication?.code?.toUpperCase();
+      if (!code?.startsWith("VAULT-")) continue;
+      share.set(code, (share.get(code) ?? 0) + (Number(a.allocatedAmountSet.shopMoney.amount) * Math.min(qty, line.quantity)) / line.quantity);
     }
   }
-  return codes.length;
+  let total = 0;
+  for (const code of codes) {
+    const amount = share.get(code.code.toUpperCase());
+    if (amount) total += await returnCodeShare(db, code.id, amount, `${data.order?.name ?? code.orderName ?? "Order"} refunded`);
+  }
+  return cents(total);
 }
 
 /** Codes past their 30 days: deleted in Shopify, and the full amount goes back to the balance. */
