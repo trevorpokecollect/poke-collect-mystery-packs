@@ -1,0 +1,1 @@
+ALTER TABLE "Series" ADD COLUMN "storePurchase" BOOLEAN NOT NULL DEFAULT false;

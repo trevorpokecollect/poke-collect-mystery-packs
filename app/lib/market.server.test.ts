@@ -40,6 +40,7 @@ import {
   wishlist,
 } from "./market.server";
 import { cancelShipment, moveVault, requestShipment, vaultedPulls } from "./vault.server";
+import { choseVaultRate, vaultSinglesFromOrder } from "./vault-singles.server";
 import { adjustCredit, createCreditCode, creditBalance, expireCreditCodes, refundCreditCodes, returnCreditCode, settleCreditCodes } from "./credit.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -272,6 +273,46 @@ describe("trading", () => {
     expect(await owner(b1)).toBe(CAL);
     const benOrder = (await db.pull.findUniqueOrThrow({ where: { id: b1 } })).orderId;
     expect((await db.packOrder.findUniqueOrThrow({ where: { orderId: benOrder } })).customerId).toBe(BEN);
+  });
+});
+
+describe("singles bought for the vault", () => {
+  it("go to the buyer's vault and ship later as $0 custom lines", async () => {
+    expect(choseVaultRate({ shipping_lines: [{ title: "Keep In My Vault (Ships Later)" }] })).toBe(true);
+    expect(choseVaultRate({ shipping_lines: [{ title: "Standard" }] })).toBe(false);
+    const calls: { query: string; variables: Record<string, unknown> }[] = [];
+    const admin = {
+      graphql: async (query: string, { variables }: { variables: Record<string, unknown> } = { variables: {} }) => {
+        calls.push({ query, variables });
+        let data: unknown = {};
+        if (query.includes("VaultSinglesOrder")) {
+          data = {
+            order: {
+              customer: { id: BEN },
+              lineItems: {
+                nodes: [
+                  { id: "gid://shopify/LineItem/1", quantity: 2, title: "Pikachu", variantTitle: "Near Mint", image: { url: "https://cdn/1.jpg" }, variant: { id: "gid://shopify/ProductVariant/77", displayName: "Pikachu - Near Mint", product: { id: "gid://shopify/Product/7", productType: "Pokemon Single", featuredMedia: null } } },
+                  { id: "gid://shopify/LineItem/2", quantity: 1, title: "Sleeves", variantTitle: null, image: null, variant: { id: "gid://shopify/ProductVariant/88", displayName: "Sleeves", product: { id: "gid://shopify/Product/8", productType: "Accessory", featuredMedia: null } } },
+                ],
+              },
+            },
+          };
+        } else if (query.includes("draftOrderCreate")) data = { draftOrderCreate: { draftOrder: { id: "gid://shopify/DraftOrder/9", invoiceUrl: "https://pay/9" }, userErrors: [] } };
+        else if (query.includes("currencyCode")) data = { shop: { currencyCode: "USD" } };
+        else if (query.includes("order(id")) data = { order: { shippingAddress: { countryCodeV2: "US" }, fulfillmentOrders: { nodes: [] } } };
+        return new Response(JSON.stringify({ data }));
+      },
+    } as unknown as Parameters<typeof vaultSinglesFromOrder>[1];
+    const order = { admin_graphql_api_id: "gid://shopify/Order/500", name: "#500", customer: { admin_graphql_api_id: BEN } };
+    expect(await vaultSinglesFromOrder(db, admin, SHOP, order)).toBe(2);
+    expect(await vaultSinglesFromOrder(db, admin, SHOP, order)).toBe(0);
+    const vault = await vaultedPulls(db, SHOP, { customerId: BEN });
+    expect(vault.filter((p) => p.orderId === "gid://shopify/Order/500")).toHaveLength(2);
+
+    await requestShipment(db, admin, SHOP, { customerId: BEN }, { pullIds: vault.map((p) => p.id) });
+    const draft = calls.find((c) => c.query.includes("draftOrderCreate"))!.variables.input as { lineItems: { variantId?: string; title?: string; quantity: number }[] };
+    expect(draft.lineItems).toEqual([expect.objectContaining({ title: "Vault Card: Pikachu - Near Mint", quantity: 2 })]);
+    expect(draft.lineItems.some((l) => l.variantId)).toBe(false);
   });
 });
 

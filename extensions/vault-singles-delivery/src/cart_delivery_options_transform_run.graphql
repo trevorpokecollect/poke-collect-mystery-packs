@@ -1,0 +1,30 @@
+query CartDeliveryOptionsTransformRunInput {
+  cart {
+    buyerIdentity {
+      isAuthenticated
+      customer {
+        id
+      }
+    }
+    lines {
+      merchandise {
+        ... on ProductVariant {
+          product {
+            productType
+          }
+        }
+      }
+    }
+    deliveryGroups {
+      deliveryOptions {
+        handle
+        title
+      }
+    }
+  }
+  deliveryCustomization {
+    metafield(namespace: "$app:vault-singles-delivery", key: "function-configuration") {
+      jsonValue
+    }
+  }
+}

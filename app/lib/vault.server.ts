@@ -123,8 +123,17 @@ export async function requestShipment(
   try {
     await unreserveForPulls(db, admin, pulls.map((p) => p.id));
     const email = customerId ? null : await orderEmail(admin, pulls[0].orderId);
+    // Pulled cards ship as their variant (100% off). Singles bought for the vault were already sold
+    // and taken out of stock, so they ship as $0 custom lines that don't touch inventory again.
     const counts = new Map<string, number>();
-    for (const p of pulls) counts.set(p.slot.card.variantId, (counts.get(p.slot.card.variantId) ?? 0) + 1);
+    for (const p of pulls) if (!p.series.storePurchase) counts.set(p.slot.card.variantId, (counts.get(p.slot.card.variantId) ?? 0) + 1);
+    const bought = new Map<string, { title: string; quantity: number }>();
+    for (const p of pulls.filter((q) => q.series.storePurchase)) {
+      const row = bought.get(p.slot.card.variantId) ?? { title: p.slot.card.title, quantity: 0 };
+      row.quantity++;
+      bought.set(p.slot.card.variantId, row);
+    }
+    const currencyCode = await shopCurrency(admin);
     const data = await gql(
       admin,
       `#graphql
@@ -148,11 +157,20 @@ export async function requestShipment(
                 title: fee ? `Vault shipment ($${SHIP_FEE} flat)` : `Vault shipment (free on ${FREE_SHIPPING_CARDS}+ cards)`,
                 priceWithCurrency: { amount: fee.toFixed(2), currencyCode: await shopCurrency(admin) },
               },
-          lineItems: [...counts].map(([variantId, quantity]) => ({
-            variantId,
-            quantity,
-            appliedDiscount: { value: 100, valueType: "PERCENTAGE", title: "Mystery pack pull" },
-          })),
+          lineItems: [
+            ...[...counts].map(([variantId, quantity]) => ({
+              variantId,
+              quantity,
+              appliedDiscount: { value: 100, valueType: "PERCENTAGE", title: "Mystery pack pull" },
+            })),
+            ...[...bought.values()].map((b) => ({
+              title: `Vault Card: ${b.title}`,
+              quantity: b.quantity,
+              originalUnitPriceWithCurrency: { amount: "0.00", currencyCode },
+              requiresShipping: true,
+              taxable: false,
+            })),
+          ],
         },
       },
     );
@@ -367,7 +385,24 @@ export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, sh
     );
     const calculatedId = begin.orderEditBegin.calculatedOrder.id as string;
     const counts = new Map<string, number>();
-    for (const p of pulls) counts.set(p.slot.card.variantId, (counts.get(p.slot.card.variantId) ?? 0) + 1);
+    for (const p of pulls) if (!p.series.storePurchase) counts.set(p.slot.card.variantId, (counts.get(p.slot.card.variantId) ?? 0) + 1);
+    // Singles bought for the vault: already sold, so a $0 custom line (see requestShipment).
+    const currency = await shopCurrency(admin);
+    for (const p of pulls.filter((q) => q.series.storePurchase)) {
+      const added = await gql(
+        admin,
+        `#graphql
+          mutation VaultEditAddCustom($id: ID!, $title: String!, $price: MoneyInput!) {
+            orderEditAddCustomItem(id: $id, title: $title, quantity: 1, price: $price, requiresShipping: true, taxable: false) {
+              calculatedLineItem { id }
+              userErrors { field message }
+            }
+          }`,
+        { id: calculatedId, title: `Vault Card: ${p.slot.card.title}`, price: { amount: "0.00", currencyCode: currency } },
+      );
+      const errors = added.orderEditAddCustomItem.userErrors as { message: string }[];
+      if (errors.length) throw new Error(errors.map((e) => e.message).join("; "));
+    }
     for (const [variantId, quantity] of counts) {
       const added = await gql(
         admin,

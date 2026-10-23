@@ -254,7 +254,7 @@ export async function attachMissingCustomers(db: Db, adminFor: (shop: string) =>
 
 const pullInclude = {
   slot: { include: { card: true } },
-  series: { select: { title: true, handle: true, packProductId: true, cardsPerPack: true } },
+  series: { select: { title: true, handle: true, packProductId: true, cardsPerPack: true, storePurchase: true } },
   shipRequest: { select: { id: true, status: true, invoiceUrl: true, expiresAt: true } },
 } as const;
 
