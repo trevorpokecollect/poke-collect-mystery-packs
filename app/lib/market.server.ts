@@ -224,7 +224,8 @@ export async function boardCards(db: Db, shop: string, viewerId: string, { q = "
     },
     include: marketInclude,
     orderBy: { createdAt: "desc" },
-    take: 300,
+    // Every card that's up (was capped at 300, which hid older listings and their collectors).
+    take: 5000,
   });
   const vault = await vaultOrderIds(db, pulls.map((p) => p.orderId));
   const tradable = pulls.filter((p) => p.customerId && vault.has(p.orderId) && !lockReason(p, true, now));

@@ -26,6 +26,8 @@
   var walletCache = null;
   var newCode = null; // the code just made, shown until the page changes
   var armedBuy = null; // listing id awaiting a second tap to buy with Vault Credit
+  var MARKET_PAGE = 60;
+  var marketShown = MARKET_PAGE; // cards drawn on the Market before "Show More Cards"
   var guides = {}; // pull id -> Price Guide ({ market, printing }), "loading" while fetched
 
   // ---------- Helpers ----------
@@ -320,6 +322,7 @@
     var search = el("input", { id: "vm-search", class: "vm-input vm-search", type: "search", placeholder: "Search Cards Or Collectors", value: filters.q, "aria-label": "Search cards or collectors" });
     search.addEventListener("input", function () {
       filters.q = search.value;
+      marketShown = MARKET_PAGE;
       var pos = search.selectionStart;
       render();
       var again = document.getElementById("vm-search");
@@ -336,7 +339,7 @@
         type: "button",
         "aria-pressed": on ? "true" : "false",
         text: label,
-        onclick: function () { filters[group] = value; render(); },
+        onclick: function () { filters[group] = value; marketShown = MARKET_PAGE; render(); },
       });
     }
     var sortOptions = [
@@ -347,7 +350,7 @@
     var sort = el("select", { id: "vm-sort", class: "vm-input vm-select", "aria-label": "Sort" }, sortOptions.map(function (o) {
       return el("option", { value: o[0], text: o[1], selected: filters.sort === o[0] });
     }));
-    sort.addEventListener("change", function () { filters.sort = sort.value; render(); });
+    sort.addEventListener("change", function () { filters.sort = sort.value; marketShown = MARKET_PAGE; render(); });
 
     return el("main", { class: "vm-main" }, [
       el("section", { class: "vm-hero" }, [
@@ -378,7 +381,12 @@
       ]),
       el("p", { class: "vm-result-count", text: shown.length + (shown.length === 1 ? " Card" : " Cards") }),
       shown.length
-        ? el("div", { class: "vm-grid" }, shown.map(function (c) { return tile(c); }))
+        ? el("div", {}, [
+            el("div", { class: "vm-grid" }, shown.slice(0, marketShown).map(function (c) { return tile(c); })),
+            shown.length > marketShown
+              ? el("div", { class: "vm-pager" }, [el("button", { class: "vm-btn vm-btn-ghost", type: "button", text: "Show More Cards (" + (shown.length - marketShown) + " More)", onclick: function () { marketShown += MARKET_PAGE; render(); } })])
+              : null,
+          ])
         : el("p", { class: "vm-empty", text: board.length ? "No Cards Match These Filters." : "Nothing Is Up Yet. Mark Cards In Your Binder Open To Trade To Get Things Started." }),
     ]);
   }
