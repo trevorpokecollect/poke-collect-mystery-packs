@@ -891,7 +891,7 @@
 
   // ---------- Wallet (Vault Credit) ----------
 
-  var KIND_LABEL = { SALE: "Card Sold", PURCHASE: "Card Bought", CODE: "Store Code Made", CODE_RETURN: "Returned To Balance", ADJUST: "Adjustment" };
+  var KIND_LABEL = { SALE: "Card Sold", PURCHASE: "Card Bought", CODE: "Store Code Made", CODE_RETURN: "Returned To Balance", PURCHASE_RETURN: "Returned To Balance", ADJUST: "Adjustment" };
 
   function walletView() {
     if (!walletCache) {
@@ -1047,6 +1047,18 @@
         if (!armed) { armedBuy = card.listing.id; render(); return; }
         armedBuy = null;
         act({ action: "buyCredit", listingId: card.listing.id }, e.currentTarget, "It's Yours! The Card Is In Your Binder.");
+      } }));
+    }
+    // Short on credit: put what they have toward it and pay the rest by card (at least $0.50 by card).
+    var splitCredit = !mine && card.listing && state.selling && state.credit > 0 && state.credit < card.listing.price
+      ? Math.round(Math.min(state.credit, card.listing.price - 0.5) * 100) / 100
+      : 0;
+    if (splitCredit > 0) {
+      actions.push(el("button", { class: "vm-btn vm-btn-wide vm-btn-credit", type: "button", text: "Use " + money(splitCredit) + " Credit + Pay " + money(Math.round((card.listing.price - splitCredit) * 100) / 100), onclick: function (e) {
+        if (!state.tradeName) return needName();
+        post({ action: "buy", listingId: card.listing.id, useCredit: true }, e.currentTarget).then(function (data) {
+          window.location.href = data.invoiceUrl;
+        }).catch(function () {});
       } }));
     }
     if (!mine && card.openToTrade && card.trader) {

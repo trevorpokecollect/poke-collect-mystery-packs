@@ -198,7 +198,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ ok: true });
       case "buy": {
         if (!admin) return json({ error: "Checkout isn't available right now. Please try again." }, 503);
-        const { invoiceUrl } = await startPurchase(db, admin, shop, me, String(body.listingId));
+        const { invoiceUrl } = await startPurchase(db, admin, shop, me, String(body.listingId), { useCredit: body.useCredit === true });
         return json({ invoiceUrl });
       }
       case "offer": {

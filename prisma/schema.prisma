@@ -333,6 +333,9 @@ model Listing {
   // The one-off "Vault Card" variant (with the card's picture) on this purchase's checkout.
   checkoutVariantId String?
   checkoutExpiresAt DateTime?
+  // Vault Credit taken off the buyer's balance and applied as a discount on this checkout's invoice.
+  // Given back if the invoice lapses, the card can't move, or the sale is reversed.
+  creditApplied     Decimal?      @db.Decimal(10, 2)
   orderId           String?
   orderName         String?
   soldAt            DateTime?
@@ -390,7 +393,7 @@ model CreditTxn {
   shop       String
   customerId String
   amount     Decimal  @db.Decimal(10, 2)
-  // SALE (seller paid) | PURCHASE (bought a card) | CODE (spent on a store code) | CODE_RETURN | ADJUST
+  // SALE (seller paid) | PURCHASE (bought a card, or credit put toward a card checkout) | PURCHASE_RETURN | CODE (spent on a store code) | CODE_RETURN | ADJUST
   kind       String
   listingId  String?
   codeId     String?
