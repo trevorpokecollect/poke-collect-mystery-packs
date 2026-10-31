@@ -137,6 +137,7 @@ type Body = {
   get?: string[];
   note?: string | null;
   counterOfId?: string | null;
+  useCredit?: boolean;
   showCollection?: boolean;
   showcase?: string[];
   cardKey?: string;
