@@ -375,6 +375,78 @@ describe("selling", () => {
     expect(await owner(b1)).toBe(BEN);
   });
 
+  it("short on credit: credit comes off the invoice now, the card pays the rest, and a lapse gives it back", async () => {
+    const [b1] = await vaultCards(BEN, 1);
+    const listing = await createListing(db, SHOP, BEN, b1, 20);
+    await adjustCredit(db, SHOP, ANN, 12.5, "Test credit");
+    const { admin, calls } = fakeAdmin();
+    await startPurchase(db, admin, SHOP, ANN, listing.id, { useCredit: true });
+    const draft = calls.find((c) => c.query.includes("draftOrderCreate"))!.variables.input as { appliedDiscount?: { value: number; valueType: string } };
+    expect(draft.appliedDiscount).toMatchObject({ value: 12.5, valueType: "FIXED_AMOUNT" });
+    // Held off the balance while the invoice is open, so it can't be spent twice.
+    expect(await creditBalance(db, SHOP, ANN)).toBe(0);
+    expect(Number((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).creditApplied)).toBe(12.5);
+    // Asking again with credit reuses the same invoice and takes nothing more.
+    await startPurchase(db, admin, SHOP, ANN, listing.id, { useCredit: true });
+    expect(calls.filter((c) => c.query.includes("draftOrderCreate"))).toHaveLength(1);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(0);
+
+    await expireCheckouts(db, async () => admin, new Date(Date.now() + 2 * 3_600_000));
+    expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).status).toBe("ACTIVE");
+    expect(await creditBalance(db, SHOP, ANN)).toBe(12.5);
+    // A second run gives nothing back twice.
+    await expireCheckouts(db, async () => admin, new Date(Date.now() + 3 * 3_600_000));
+    expect(await creditBalance(db, SHOP, ANN)).toBe(12.5);
+  });
+
+  it("credit toward a card checkout leaves at least $0.50 for the card, and the seller still gets the full price", async () => {
+    const [b1] = await vaultCards(BEN, 1);
+    const listing = await createListing(db, SHOP, BEN, b1, 10);
+    await adjustCredit(db, SHOP, ANN, 9.8, "Test credit");
+    const { admin, calls } = fakeAdmin();
+    await startPurchase(db, admin, SHOP, ANN, listing.id, { useCredit: true });
+    const draft = calls.find((c) => c.query.includes("draftOrderCreate"))!.variables.input as { appliedDiscount: { value: number } };
+    expect(draft.appliedDiscount.value).toBe(9.5);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(0.3);
+    await completeSale(db, listing.id, "gid://shopify/Order/910", "#910");
+    expect(await owner(b1)).toBe(ANN);
+    expect(await creditBalance(db, SHOP, BEN)).toBe(9);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(0.3);
+    // Reversing gives the buyer's credit part back (staff refund the card part in Shopify).
+    await reverseSale(db, SHOP, listing.id);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(9.8);
+    expect(await creditBalance(db, SHOP, BEN)).toBe(0);
+  });
+
+  it("switching between card only and credit + card restarts the checkout without losing credit", async () => {
+    const [b1] = await vaultCards(BEN, 1);
+    const listing = await createListing(db, SHOP, BEN, b1, 20);
+    await adjustCredit(db, SHOP, ANN, 5, "Test credit");
+    const { admin, calls } = fakeAdmin();
+    await startPurchase(db, admin, SHOP, ANN, listing.id);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(5);
+    await startPurchase(db, admin, SHOP, ANN, listing.id, { useCredit: true });
+    expect(calls.filter((c) => c.query.includes("draftOrderDelete"))).toHaveLength(1);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(0);
+    await startPurchase(db, admin, SHOP, ANN, listing.id);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(5);
+    const last = calls.filter((c) => c.query.includes("draftOrderCreate")).at(-1)!.variables.input as { appliedDiscount?: unknown };
+    expect(last.appliedDiscount).toBeUndefined();
+    expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).status).toBe("CHECKOUT");
+  });
+
+  it("credit goes back if the invoice can't be made", async () => {
+    const [b1] = await vaultCards(BEN, 1);
+    const listing = await createListing(db, SHOP, BEN, b1, 20);
+    await adjustCredit(db, SHOP, ANN, 5, "Test credit");
+    const { admin } = fakeAdmin();
+    const broken = { graphql: async (q: string, v: unknown) => (q.includes("draftOrderCreate") ? Promise.reject(new Error("Shopify down")) : admin.graphql(q, v)) };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(startPurchase(db, broken as any, SHOP, ANN, listing.id, { useCredit: true })).rejects.toThrow(/Shopify down/);
+    expect(await creditBalance(db, SHOP, ANN)).toBe(5);
+    expect((await db.listing.findUniqueOrThrow({ where: { id: listing.id } })).status).toBe("ACTIVE");
+  });
+
   it("a refunded purchase is flagged and reversing it takes the seller's credit back, even below zero", async () => {
     const [b1] = await vaultCards(BEN, 1);
     const listing = await createListing(db, SHOP, BEN, b1, 10);

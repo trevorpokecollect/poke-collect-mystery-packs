@@ -7,7 +7,7 @@ import { gql } from "./orders.server";
 import { createCheckoutVariant, deleteCheckoutVariant } from "./market-checkout.server";
 import { PoolError } from "./pool.server";
 import { klaviyoEvent, shopCurrency } from "./vault.server";
-import { addCredit, spendCredit } from "./credit.server";
+import { addCredit, creditBalance, spendCredit } from "./credit.server";
 
 type Db = PrismaClient;
 type Tx = Prisma.TransactionClient;
@@ -20,6 +20,8 @@ export const OFFER_DAYS = 7;
 export const CHECKOUT_MINUTES = 60;
 /** The seller's Vault Credit is held this long after a card-paid sale (buyer chargeback window). */
 export const PAYOUT_HOLD_DAYS = 0;
+/** Vault Credit put toward a card checkout always leaves at least this much for the card to pay. */
+export const MIN_CARD_CHARGE = 0.5;
 export const MAX_SIDE_CARDS = 10;
 export const MAX_OPEN_OFFERS = 10;
 export const MIN_PRICE = 1;
@@ -493,29 +495,64 @@ export async function cancelListing(db: Db, shop: string, sellerCustomerId: stri
 
 /**
  * The buyer clicks Buy: the card is held for them and they get a Shopify invoice for the price.
- * The card moves to their vault when the invoice is paid (orders/paid).
+ * The card moves to their vault when the invoice is paid (orders/paid). With `useCredit`, their
+ * Vault Credit comes off the balance now and is applied as a discount on the invoice, so they pay
+ * the rest by card; it goes back if the invoice lapses.
  */
-export async function startPurchase(db: Db, admin: AdminApiContext, shop: string, buyerCustomerId: string, listingId: string, now = new Date()) {
+export async function startPurchase(
+  db: Db,
+  admin: AdminApiContext,
+  shop: string,
+  buyerCustomerId: string,
+  listingId: string,
+  opts: { useCredit?: boolean } = {},
+  now = new Date(),
+) {
   await requireEnabled(db, shop, true);
   const held = await db.$transaction(async (tx) => {
     const listing = await tx.listing.findFirst({ where: { id: listingId, shop } });
     if (!listing) throw new PoolError("That card isn't for sale anymore.");
     if (listing.sellerCustomerId === buyerCustomerId) throw new PoolError("That's your own card.");
-    if (listing.status === "CHECKOUT" && listing.buyerCustomerId === buyerCustomerId && listing.invoiceUrl) return { reuse: listing.invoiceUrl, listing, title: "" };
+    if (listing.status === "CHECKOUT" && listing.buyerCustomerId === buyerCustomerId && listing.invoiceUrl) {
+      // Same buyer again: the open invoice is reused unless they changed whether credit goes toward it.
+      if (Boolean(opts.useCredit) === Boolean(listing.creditApplied)) return { reuse: listing.invoiceUrl, listing, title: "" };
+      return { restart: listing, listing, title: "" };
+    }
     if (listing.status !== "ACTIVE") throw new PoolError("Someone else is buying that card right now.");
     const [l] = await lockPulls(tx, [listing.pullId]);
     if (!l || l.pull.customerId !== listing.sellerCustomerId || lockReason(l.pull, l.vault, now)) {
       await tx.listing.update({ where: { id: listing.id }, data: { status: "CANCELLED" } });
       throw new PoolError("That card isn't for sale anymore.");
     }
+    const price = Number(listing.price);
+    let credit = 0;
+    if (opts.useCredit) {
+      await requireTrader(tx, shop, buyerCustomerId);
+      const balance = await creditBalance(tx, shop, buyerCustomerId);
+      credit = Math.round(Math.min(balance, price - MIN_CARD_CHARGE) * 100) / 100;
+      if (credit <= 0) credit = 0;
+    }
     const claimed = await tx.listing.updateMany({
       where: { id: listing.id, status: "ACTIVE" },
-      data: { status: "CHECKOUT", buyerCustomerId, checkoutExpiresAt: new Date(now.getTime() + CHECKOUT_MINUTES * 60_000) },
+      data: {
+        status: "CHECKOUT",
+        buyerCustomerId,
+        checkoutExpiresAt: new Date(now.getTime() + CHECKOUT_MINUTES * 60_000),
+        creditApplied: credit > 0 ? credit : null,
+      },
     });
     if (!claimed.count) throw new PoolError("Someone else is buying that card right now.");
-    return { reuse: null, listing, title: l.pull.slot.card.title, imageUrl: l.pull.slot.card.imageUrl };
+    // Off the balance now so it can't also be spent elsewhere while the invoice is open.
+    if (credit > 0) await spendCredit(tx, { shop, customerId: buyerCustomerId, amount: credit, kind: "PURCHASE", listingId: listing.id, note: `Toward ${l.pull.slot.card.title}` });
+    return { reuse: null, listing, credit, title: l.pull.slot.card.title, imageUrl: l.pull.slot.card.imageUrl };
   });
-  if (held.reuse) return { invoiceUrl: held.reuse };
+  if ("reuse" in held && held.reuse) return { invoiceUrl: held.reuse };
+  if ("restart" in held && held.restart) {
+    await dropDraft(admin, held.restart.draftOrderId);
+    await releaseCheckout(db, held.restart.id, "Checkout restarted");
+    await deleteCheckoutVariant(admin, shop, held.restart.checkoutVariantId);
+    return startPurchase(db, admin, shop, buyerCustomerId, listingId, opts, now);
+  }
 
   let variantId: string | null = null;
   try {
@@ -554,6 +591,16 @@ export async function startPurchase(db: Db, admin: AdminApiContext, shop: string
           note: `Vault Marketplace: ${held.title} from ${seller?.tradeName ?? "a player"}. The card moves to the buyer's vault; nothing ships.`,
           customAttributes: [{ key: MARKET_ATTRIBUTE, value: held.listing.id }],
           lineItems: [line],
+          ...(held.credit
+            ? {
+                appliedDiscount: {
+                  title: "Vault Credit",
+                  description: "Vault Credit from your balance",
+                  value: held.credit,
+                  valueType: "FIXED_AMOUNT",
+                },
+              }
+            : {}),
         },
       },
     );
@@ -561,13 +608,37 @@ export async function startPurchase(db: Db, admin: AdminApiContext, shop: string
     await db.listing.update({ where: { id: held.listing.id }, data: { draftOrderId: draft.id, invoiceUrl: draft.invoiceUrl, checkoutVariantId: variantId } });
     return { invoiceUrl: draft.invoiceUrl };
   } catch (error) {
-    await db.listing.update({
-      where: { id: held.listing.id },
-      data: { status: "ACTIVE", buyerCustomerId: null, checkoutExpiresAt: null, draftOrderId: null, invoiceUrl: null, checkoutVariantId: null },
-    });
+    await releaseCheckout(db, held.listing.id, "Checkout didn't open");
     await deleteCheckoutVariant(admin, shop, variantId);
     throw error;
   }
+}
+
+async function dropDraft(admin: AdminApiContext, draftOrderId: string | null) {
+  if (!draftOrderId) return;
+  await gql(admin, `#graphql
+    mutation MarketDraftDelete($input: DraftOrderDeleteInput!) { draftOrderDelete(input: $input) { deletedId userErrors { field message } } }`,
+    { input: { id: draftOrderId } });
+}
+
+/**
+ * Puts a held card back on the board and gives back any Vault Credit put toward it. Only acts on a
+ * listing still in checkout, so a retry can't return the credit twice.
+ */
+async function releaseCheckout(db: Db, listingId: string, why: string) {
+  return db.$transaction(async (tx) => {
+    const listing = await tx.listing.findUnique({ where: { id: listingId } });
+    if (!listing || listing.status !== "CHECKOUT") return false;
+    const { count } = await tx.listing.updateMany({
+      where: { id: listing.id, status: "CHECKOUT" },
+      data: { status: "ACTIVE", buyerCustomerId: null, checkoutExpiresAt: null, draftOrderId: null, invoiceUrl: null, checkoutVariantId: null, creditApplied: null },
+    });
+    if (!count) return false;
+    if (listing.buyerCustomerId && listing.creditApplied && Number(listing.creditApplied) > 0) {
+      await addCredit(tx, { shop: listing.shop, customerId: listing.buyerCustomerId, amount: Number(listing.creditApplied), kind: "PURCHASE_RETURN", listingId: listing.id, note: why });
+    }
+    return true;
+  });
 }
 
 /** The buyer's invoice was paid: the card moves to their vault and the seller's credit is scheduled. */
@@ -580,10 +651,22 @@ export async function completeSale(db: Db, listingId: string, orderId: string, o
     const buyer = listing.buyerCustomerId;
     const sellerStillOwns = l && l.pull.customerId === listing.sellerCustomerId && l.pull.status === "REVEALED";
     if (!buyer || !sellerStillOwns) {
-      // Paid, but the card can't move (should not happen while the listing is held). Staff refund the buyer.
+      // Paid, but the card can't move (should not happen while the listing is held). Staff refund the
+      // card payment in Shopify; any Vault Credit the buyer put toward it goes back right away.
+      const credit = Number(listing.creditApplied ?? 0);
+      if (buyer && credit > 0) {
+        await addCredit(tx, { shop: listing.shop, customerId: buyer, amount: credit, kind: "PURCHASE_RETURN", listingId: listing.id, note: "Card was no longer available" });
+      }
       await tx.listing.update({
         where: { id: listing.id },
-        data: { status: "SOLD", orderId, orderName, soldAt: now, payoutStatus: "FLAGGED", flagReason: "Paid but the card was no longer available: refund the buyer." },
+        data: {
+          status: "SOLD",
+          orderId,
+          orderName,
+          soldAt: now,
+          payoutStatus: "FLAGGED",
+          flagReason: `Paid but the card was no longer available: refund the buyer${credit > 0 ? ` (their $${credit.toFixed(2)} Vault Credit is already back)` : ""}.`,
+        },
       });
       return null;
     }
@@ -655,14 +738,17 @@ export async function reverseSale(db: Db, shop: string, listingId: string, now =
       throw new PoolError("The buyer no longer has that card in their vault.");
     }
     await transfer(tx, shop, [{ pullId: listing.pullId, from: listing.buyerCustomerId, to: listing.sellerCustomerId }], "REVERSAL", { listingId: listing.id }, now);
-    // A paid seller gives the Vault Credit back (refused if they've spent it). A card bought with
-    // Vault Credit refunds the buyer's credit; a card bought by card is refunded in Shopify by staff.
+    // A paid seller gives the Vault Credit back. A card bought with Vault Credit refunds the buyer's
+    // credit; a card bought by card is refunded in Shopify by staff, and any Vault Credit put
+    // toward that checkout comes back here.
     if (listing.payoutStatus === "PAID" && listing.payoutAmount) {
       // Taken back even if already spent: the balance can go below zero and is repaid from future sales.
       await addCredit(tx, { shop, customerId: listing.sellerCustomerId, amount: -Number(listing.payoutAmount), kind: "ADJUST", listingId: listing.id, note: "Sale reversed" });
     }
     if (!listing.orderId) {
       await addCredit(tx, { shop, customerId: listing.buyerCustomerId, amount: Number(listing.price), kind: "ADJUST", listingId: listing.id, note: "Sale reversed" });
+    } else if (listing.creditApplied && Number(listing.creditApplied) > 0) {
+      await addCredit(tx, { shop, customerId: listing.buyerCustomerId, amount: Number(listing.creditApplied), kind: "PURCHASE_RETURN", listingId: listing.id, note: "Sale reversed" });
     }
     return tx.listing.update({ where: { id: listing.id }, data: { payoutStatus: "CANCELLED" } });
   });
@@ -698,16 +784,9 @@ export async function expireCheckouts(db: Db, adminFor: (shop: string) => Promis
           await completeSale(db, listing.id, draft.order.id, draft.order.name, now);
           continue;
         }
-        if (draft) {
-          await gql(admin, `#graphql
-            mutation MarketDraftDelete($input: DraftOrderDeleteInput!) { draftOrderDelete(input: $input) { deletedId userErrors { field message } } }`,
-            { input: { id: listing.draftOrderId } });
-        }
+        if (draft) await dropDraft(admin, listing.draftOrderId);
       }
-      await db.listing.updateMany({
-        where: { id: listing.id, status: "CHECKOUT" },
-        data: { status: "ACTIVE", buyerCustomerId: null, checkoutExpiresAt: null, draftOrderId: null, invoiceUrl: null, checkoutVariantId: null },
-      });
+      await releaseCheckout(db, listing.id, "Checkout lapsed");
       await deleteCheckoutVariant(admin, listing.shop, listing.checkoutVariantId);
     } catch (error) {
       console.error(`Expiring market checkout ${listing.id} failed`, error);
