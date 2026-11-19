@@ -488,7 +488,7 @@
       button.disabled = true;
       button.textContent = "Cancelling...";
       fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cancel: true }) })
-        .then(function (r) { return r.json(); })
+        .then(shipReply)
         .then(function (d) {
           if (!d.cancelled) throw new Error(d.error || "Couldn't cancel your shipment.");
           window.location.reload();
@@ -503,6 +503,16 @@
     return button;
   }
 
+  // Reads a ship/pickup reply. When the store returns an error page instead of JSON, Safari's
+  // r.json() fails with "The string did not match the expected pattern.", so show our own message.
+  function shipReply(r) {
+    return r.text().then(function (text) {
+      try { return JSON.parse(text); } catch (e) {
+        return { error: "Something went wrong on our end. Please try again in a minute, or email support@poke-collect.com and we'll send your cards." };
+      }
+    });
+  }
+
   // Starts (or replaces) the shipping invoice for the picked vault cards, then goes to checkout.
   function shipButton(label, note, ids) {
     var button = el("button", { class: "mp-btn mp-vault-btn", type: "button", text: label });
@@ -512,7 +522,7 @@
       button.disabled = true;
       button.textContent = "Starting...";
       fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pullIds: ids }) })
-        .then(function (r) { return r.json(); })
+        .then(shipReply)
         .then(function (d) {
           if (d.invoiceUrl) { window.location.href = d.invoiceUrl; return; }
           throw new Error(d.error || "Couldn't start your shipment.");
@@ -538,7 +548,7 @@
       button.disabled = true;
       button.textContent = "Setting Aside...";
       fetch(api + "/ship" + query, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pickup: true, pullIds: ids }) })
-        .then(function (r) { return r.json(); })
+        .then(shipReply)
         .then(function (d) {
           if (!d.pickupOrder) throw new Error(d.error || "Couldn't set your cards aside.");
           window.alert(
