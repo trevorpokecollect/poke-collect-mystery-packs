@@ -134,7 +134,7 @@ export async function requestShipment(
       bought.set(p.slot.card.variantId, row);
     }
     const currencyCode = await shopCurrency(admin);
-    const data = await gql(
+    const createDraft = (reserve: boolean) => gql(
       admin,
       `#graphql
         mutation VaultDraft($input: DraftOrderInput!) {
@@ -150,12 +150,12 @@ export async function requestShipment(
           tags: pickup ? [VAULT_TAG, PICKUP_TAG] : [VAULT_TAG],
           note: `${pickup ? "Local pickup" : "Vault shipment"}: ${pulls.length} card${pulls.length === 1 ? "" : "s"} from ${[...new Set(pulls.map((p) => p.orderName))].join(", ")}`,
           customAttributes: [{ key: VAULT_ATTRIBUTE, value: request.id }],
-          reserveInventoryUntil: expiresAt.toISOString(),
+          ...(reserve ? { reserveInventoryUntil: expiresAt.toISOString() } : {}),
           shippingLine: pickup
-            ? { title: "Local Pickup", priceWithCurrency: { amount: "0.00", currencyCode: await shopCurrency(admin) } }
+            ? { title: "Local Pickup", priceWithCurrency: { amount: "0.00", currencyCode } }
             : {
                 title: fee ? `Vault shipment ($${SHIP_FEE} flat)` : `Vault shipment (free on ${FREE_SHIPPING_CARDS}+ cards)`,
-                priceWithCurrency: { amount: fee.toFixed(2), currencyCode: await shopCurrency(admin) },
+                priceWithCurrency: { amount: fee.toFixed(2), currencyCode },
               },
           lineItems: [
             ...[...counts].map(([variantId, quantity]) => ({
@@ -174,6 +174,18 @@ export async function requestShipment(
         },
       },
     );
+    // Only pack pulls (variant lines) can be held on the draft. A shipment of nothing but singles
+    // bought for the vault ($0 custom lines) has nothing to hold, and Shopify refuses the draft with
+    // "None of the line items in this draft order are reservable" if asked to, so skip it there and
+    // retry without the hold if Shopify still says no (e.g. a card's stock tracking was turned off).
+    let data;
+    try {
+      data = await createDraft(counts.size > 0);
+    } catch (error) {
+      if (!(counts.size > 0 && error instanceof Error && /reservable/i.test(error.message))) throw error;
+      console.warn("Vault draft couldn't hold inventory; creating it without the hold", error.message);
+      data = await createDraft(false);
+    }
     const draft = data.draftOrderCreate.draftOrder as { id: string; invoiceUrl: string };
     await db.shipRequest.update({
       where: { id: request.id },
