@@ -280,6 +280,8 @@ export function shopAction(
     const card = cards.get(id || "");
     if (!card || (state.stock[card.id] ?? (card.editionId ? 0 : 1)) < 1)
       throw new DemoError("sold_out", "This single has sold out.");
+    if (!Number.isSafeInteger(card.priceBits) || card.priceBits <= 0)
+      throw new DemoError("unpriced", "Retail Price Unavailable.");
     const available = state.stock[card.id] ?? 1;
     const copyId = randomUUID();
     purchase(card.name, {
@@ -389,11 +391,11 @@ export async function demoAccount(
   const load = async (tx: Prisma.TransactionClient) => {
     const row = await tx.cardbitDemoAccount.findUnique({ where });
     if (row) return row.state as unknown as ShopperState;
-    const created = await tx.cardbitDemoAccount.upsert({
-      where,
-      create: { shop, customerId, state: jsonState(seed) },
-      update: {},
-    });
+    // A GET can arrive while first-time checkout is initializing this customer.
+    await tx.$executeRaw`INSERT INTO "CardbitDemoAccount" ("shop","customerId","state")
+      VALUES (${shop}, ${customerId}, ${JSON.stringify(seed)}::jsonb)
+      ON CONFLICT ("shop","customerId") DO NOTHING`;
+    const created = await tx.cardbitDemoAccount.findUniqueOrThrow({ where });
     return created.state as unknown as ShopperState;
   };
   if (!input) return { state: await load(db), result: {} };
