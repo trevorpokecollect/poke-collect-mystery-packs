@@ -75,19 +75,26 @@ export interface DrawResult {
  * Idempotent: webhook retries only draw packs that have not been drawn yet.
  */
 export async function drawForOrder(db: PrismaClient, input: DrawInput): Promise<DrawResult> {
-  return db.$transaction(tx => drawForOrderInTransaction(tx, input));
+  // Resolve matching variants before taking a connection for the serialized allocation.
+  const byVariant = await drawCandidates(db, input);
+  return db.$transaction(tx => claimFromSeries(tx, input, byVariant));
 }
 
 export async function drawForOrderInTransaction(tx: Prisma.TransactionClient, input: DrawInput, requiredSeries?: string): Promise<DrawResult> {
+  return claimFromSeries(tx, input, await drawCandidates(tx, input, requiredSeries));
+}
+
+async function drawCandidates(db: Db, input: DrawInput, requiredSeries?: string) {
+  const cardbit = isCardbit(input.shop);
   const variantIds = [...new Set(input.lines.map((l) => l.variantId))];
   // A pack product can be reused by later series, so draw from the live one. A series that
   // already drew for this order (e.g. a retried webhook after it sold out) still counts.
-  const candidates = await tx.series.findMany({
+  const candidates = await db.series.findMany({
     where: {
       shop: input.shop,
       ...(requiredSeries ? { id: requiredSeries, staffTest: true } : isCardbit(input.shop) ? { staffTest: false } : {}),
       packVariantId: { in: variantIds },
-      OR: [{ status: "LIVE" }, { pulls: { some: { orderId: input.orderId } } }],
+      OR: [cardbit ? {status:{in:["LIVE","CLOSED"]}} : {status:"LIVE"}, { pulls: { some: { orderId: input.orderId } } }],
     },
     include: { _count: { select: { pulls: { where: { orderId: input.orderId } } } } },
     orderBy: { createdAt: "asc" },
@@ -95,10 +102,14 @@ export async function drawForOrderInTransaction(tx: Prisma.TransactionClient, in
   const byVariant = new Map<string, (typeof candidates)[number]>();
   for (const s of candidates) {
     const current = byVariant.get(s.packVariantId);
-    if (!current || (current._count.pulls === 0 && (s._count.pulls > 0 || s.status === "LIVE"))) {
+    if (!current || (current._count.pulls === 0 && (s._count.pulls > 0 || s.status === "LIVE" || (cardbit && current.status === "CLOSED")))) {
       byVariant.set(s.packVariantId, s);
     }
   }
+  return byVariant;
+}
+
+async function claimFromSeries(tx: Prisma.TransactionClient, input: DrawInput, byVariant: Awaited<ReturnType<typeof drawCandidates>>): Promise<DrawResult> {
   const seriesList = [...byVariant.values()];
   const lines = input.lines.filter((l) => byVariant.has(l.variantId));
   if (lines.length === 0) return { pulls: [], shortfall: [], packOrder: null };
