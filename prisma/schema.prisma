@@ -462,3 +462,11 @@ model CardbitBuyback {
   acceptedAt DateTime?
   @@index([shop, customerId])
 }
+
+model CardbitDemoAccount {
+  shop       String
+  customerId String
+  state      Json
+
+  @@id([shop, customerId])
+}
