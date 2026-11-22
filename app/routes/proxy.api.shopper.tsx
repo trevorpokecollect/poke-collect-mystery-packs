@@ -124,6 +124,7 @@ async function handle({ request }: LoaderFunctionArgs) {
       seed,
       catalog,
       input,
+      url.searchParams.get("catalog") || undefined,
     );
     if (state.version !== archive.version)
       throw new DemoError(
@@ -139,8 +140,13 @@ async function handle({ request }: LoaderFunctionArgs) {
       proof: proof(shop, customerId, day),
       ...(url.searchParams.get("catalog") === archive.version
         ? {}
-        : { catalog }),
-      state: shopperView(state, owner.firstName || "Collector", accountRef),
+        : { catalog: { cards: catalog.cards, packs: catalog.packs } }),
+      state: shopperView(
+        state,
+        owner.firstName || "Collector",
+        accountRef,
+        catalog,
+      ),
     });
   } catch (e) {
     if (e instanceof DemoError)
