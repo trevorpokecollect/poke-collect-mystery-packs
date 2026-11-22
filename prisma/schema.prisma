@@ -170,6 +170,7 @@ model Pull {
   tradeItems    TradeItem[]
   listings      Listing[]
   transfers     PullTransfer[]
+  cardbitBuyback CardbitBuyback?
 
   @@unique([lineItemId, packIndex, cardIndex])
   @@index([orderId])
@@ -217,6 +218,7 @@ model ShipRequest {
   invoiceUrl   String?
   orderId      String?
   cardCount    Int
+  quoteKey     String?
   shippingFee  Decimal  @db.Decimal(10, 2)
   // Local pickup instead of shipping; readyAt is when the "ready for pickup" email went out.
   pickup       Boolean  @default(false)
@@ -424,4 +426,39 @@ model CreditCode {
 
   @@index([shop, customerId])
   @@index([status, expiresAt])
+}
+
+// Cardbit's signed Shopify test integration. QA and ordinary Poke-Collect records are distinct.
+model CardbitWallet {
+  shop       String
+  customerId String
+  balance    Int      @default(0)
+  held       Boolean  @default(false)
+  @@id([shop, customerId])
+}
+
+model CardbitReceipt {
+  id          String   @id @default(cuid())
+  shop        String
+  eventKey    String
+  customerId  String
+  fingerprint String
+  kind        String
+  delta       Int
+  openingId   String?
+  copyId      String?
+  createdAt   DateTime @default(now())
+  @@unique([shop, eventKey])
+  @@index([shop, customerId, createdAt])
+}
+
+model CardbitBuyback {
+  copyId    String   @id
+  copy      Pull     @relation(fields: [copyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  shop      String
+  customerId String
+  amount    Int
+  expiresAt DateTime
+  acceptedAt DateTime?
+  @@index([shop, customerId])
 }
