@@ -1,0 +1,50 @@
+# Shopify app configuration for Cardbit Mystery Packs (second install of this code for cardbit.com; docs/CARDBIT.md).
+client_id = "0b523ad40ed028e70fe816ae22950b05"
+name = "Cardbit Mystery Packs"
+application_url = "https://app-production-74528444.up.railway.app"
+embedded = true
+
+[access_scopes]
+scopes = "write_app_proxy,read_discounts,write_discounts,read_products,write_products,read_inventory,write_inventory,read_locations,read_customers,read_orders,write_orders,write_order_edits,read_draft_orders,write_draft_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,write_store_credit_account_transactions,read_payment_customizations,write_payment_customizations,read_delivery_customizations,write_delivery_customizations"
+
+[auth]
+redirect_urls = ["https://app-production-74528444.up.railway.app/auth/callback"]
+
+[app_proxy]
+# Storefront URL: https://cardbit.com/apps/packs
+url = "/proxy"
+subpath = "packs"
+prefix = "apps"
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks/app/scopes_update"
+
+  # The card for each pack is drawn when payment clears.
+  [[webhooks.subscriptions]]
+  topics = ["orders/paid"]
+  uri = "/webhooks/orders/paid"
+
+  # Orders created already paid get no orders/paid, so they are drawn on create.
+  [[webhooks.subscriptions]]
+  topics = ["orders/create"]
+  uri = "/webhooks/orders/create"
+
+  [[webhooks.subscriptions]]
+  topics = ["orders/cancelled"]
+  uri = "/webhooks/orders/cancelled"
+
+  [[webhooks.subscriptions]]
+  topics = ["refunds/create"]
+  uri = "/webhooks/refunds/create"
+
+[build]
+# Keep the Railway URLs; don't let `shopify app dev` rewrite them.
+automatically_update_urls_on_dev = false

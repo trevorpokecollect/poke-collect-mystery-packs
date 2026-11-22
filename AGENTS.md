@@ -7,3 +7,7 @@ Use the [Shopify AI Toolkit](https://shopify.dev/docs/apps/build/ai-toolkit) for
 # Staff guide
 
 Employees use the Staff Guide at `~/Documents/poke-collect-staff-guide/index.html` on Trevor's Mac, kept out of this public repo (published as https://claude.ai/artifact/Qm6abwQDP3nGvF8z7ciK3R). Any change to what customers see, what staff can do in the admin, fees, or rules must update the guide in the same change: the relevant section, Quick Answers if affected, a dated "What's New" entry and the "Last updated" date. Then republish it to that URL (Artifact tool, `url` set, `files` mapping `img/*` from that folder's `img/`). Never put card value ranges for packs or tiers in it.
+
+## Cardbit releases
+
+Use the `cardbit` branch for all Cardbit changes. Do not open a pull request into `main`. Each merge between `main` and `cardbit`, in either direction, needs Trevor’s approval for that exact merge. Check Poke-Collect’s Railway source read-only before changing Cardbit hosting. Announce the branch and the target Railway project, environment and service before every Cardbit deployment. Keep store-specific behavior behind verified shop configuration. The Cardbit Railway startup check runs before database migrations.
