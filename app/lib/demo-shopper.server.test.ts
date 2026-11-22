@@ -12,7 +12,7 @@ import {
 const common = {
   name: "Test printing",
   priceBits: 100,
-  buybackBits: 90,
+  buybackBits: 80,
   cardbitValue: 100,
   tier: "Rare",
 };
@@ -121,6 +121,8 @@ describe("signed collector demo", () => {
       id: first.copyId,
       requestId: randomUUID(),
     });
+    expect(state.orders[0].amount).toBe(100);
+    expect(state.balance).toBe(980);
     const second = buy();
     const parcel = {
       action: "ship-group",
@@ -145,16 +147,13 @@ describe("signed collector demo", () => {
   });
 });
 
-const dburl = process.env.TEST_DATABASE_URL,
-  db = new PrismaClient({
-    datasources: {
-      db: { url: dburl || "postgresql://localhost/unconfigured_test" },
-    },
-  });
+const dburl = process.env.TEST_DATABASE_URL;
+let db: PrismaClient;
 describe.skipIf(!dburl)("Postgres demo account isolation", () => {
   const shop = "demo-shopper-test.example",
     other = shop + "-other";
   beforeAll(() => {
+    db = new PrismaClient({ datasources: { db: { url: dburl! } } });
     execFileSync("npx", ["prisma", "migrate", "deploy"], {
       env: { ...process.env, DATABASE_URL: dburl },
       stdio: "ignore",
@@ -165,6 +164,59 @@ describe.skipIf(!dburl)("Postgres demo account isolation", () => {
       where: { shop: { in: [shop, other] } },
     });
     await db.$disconnect();
+  });
+  it("preserves purchases across a buylist revision and prevents stale quotes or retired sales", async () => {
+    const customer = randomUUID(),
+      seed = fresh();
+    const run = (input?: Parameters<typeof demoAccount>[5]) =>
+      demoAccount(db, shop, customer, seed, catalog, input);
+    await run(topup(200));
+    const buy = { action: "buy", id: "single-1", requestId: randomUUID() };
+    const purchased = await run(buy);
+    const newer = { ...seed, version: "new-buylist" };
+    const revised: Catalog = {
+      cards: [],
+      packs: [{ ...catalog.packs[0], cardIds: [] }],
+      archivedCards: [catalog.cards[1]],
+      replacesVersion: seed.version,
+    };
+    const updated = (
+      input?: Parameters<typeof demoAccount>[5],
+      quoted?: string,
+    ) => demoAccount(db, shop, customer, newer, revised, input, quoted);
+    const reads = await Promise.all([updated(), updated()]);
+    for (const r of reads)
+      expect(r.state).toEqual({ ...purchased.state, version: newer.version });
+    expect((await updated(buy, seed.version)).result).toEqual(purchased.result);
+    await expect(
+      updated({ ...buy, requestId: randomUUID() }, seed.version),
+    ).rejects.toThrow("Review your selection");
+    await expect(updated({ ...buy, requestId: randomUUID() })).rejects.toThrow(
+      "sold out",
+    );
+    await expect(
+      updated({
+        action: "buyback",
+        id: purchased.result.copyId,
+        requestId: randomUUID(),
+      }),
+    ).rejects.toThrow("No buyback");
+    await expect(
+      updated({ action: "open", id: "pack", requestId: randomUUID() }),
+    ).rejects.toThrow("sold out");
+    expect(
+      shopperView(reads[0].state, "Collector", "a", revised).historyCards,
+    ).toHaveLength(1);
+    await expect(run()).rejects.toThrow("Reload");
+    const shipped = await updated({
+      action: "ship-group",
+      copyIds: [purchased.result.copyId!],
+      destination: "madison",
+      requestId: randomUUID(),
+    });
+    expect(shipped.state.balance).toBe(100);
+    expect(shipped.state.orders).toEqual(purchased.state.orders);
+    expect(shipped.state.shipments).toHaveLength(1);
   });
   it("locks concurrent confirmations, rolls back failed purchases and scopes by owner and shop", async () => {
     const account = randomUUID(),

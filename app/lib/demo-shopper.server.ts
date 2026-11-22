@@ -18,7 +18,12 @@ export type DemoPack = {
   cardsPerPack: number;
   cardIds: string[];
 };
-export type Catalog = { cards: DemoCard[]; packs: DemoPack[] };
+export type Catalog = {
+  cards: DemoCard[];
+  packs: DemoPack[];
+  replacesVersion?: string;
+  archivedCards?: { id: string; name: string }[];
+};
 type Copy = {
   id: string;
   cardId: string;
@@ -117,6 +122,7 @@ export function shopAction(
   state: ShopperState,
   catalog: Catalog,
   input: ShopperAction,
+  quotedVersion?: string,
 ): Result {
   if (
     !input ||
@@ -160,6 +166,16 @@ export function shopAction(
         "This confirmation belongs to a different action.",
       );
     return prior.result;
+  }
+  if (
+    quotedVersion &&
+    quotedVersion !== state.version &&
+    ["buy", "buyback", "open"].includes(action)
+  ) {
+    throw new DemoError(
+      "catalog_changed",
+      "Card prices or availability changed. Review your selection again.",
+    );
   }
   const at = new Date().toISOString(),
     result: Result = {};
@@ -302,8 +318,12 @@ export function shopAction(
     result.copyId = copyId;
   } else if (action === "buyback") {
     const copy = held(id),
-      card = cards.get(copy.cardId)!;
-    if (!card.buybackBits || card.buybackBits < 1)
+      card = cards.get(copy.cardId);
+    if (
+      !card?.buybackBits ||
+      !Number.isSafeInteger(card.buybackBits) ||
+      card.buybackBits < 1
+    )
       throw new DemoError(
         "no_offer",
         "No buyback offer is available for this printing.",
@@ -354,6 +374,7 @@ export function shopperView(
   state: ShopperState,
   name: string,
   accountRef: string,
+  catalog?: Catalog,
 ) {
   const { balance, used, stock, wants } = state;
   const copies = state.copies.filter((c) => c.status !== "sealed");
@@ -365,7 +386,11 @@ export function shopperView(
       cardCount: copyIds.length,
       copyIds: p.sealed ? [] : copyIds,
     }));
+  const visibleCardIds = new Set(copies.map((copy) => copy.cardId));
+  const historyCards =
+    catalog?.archivedCards?.filter((card) => visibleCardIds.has(card.id)) ?? [];
   return {
+    historyCards,
     version: state.version,
     account: { id: accountRef, name, bits: balance },
     used,
@@ -386,6 +411,7 @@ export async function demoAccount(
   seed: ShopperState,
   catalog: Catalog,
   input?: ShopperAction,
+  quotedVersion?: string,
 ) {
   const where = { shop_customerId: { shop, customerId } };
   const load = async (tx: Prisma.TransactionClient) => {
@@ -398,16 +424,34 @@ export async function demoAccount(
     const created = await tx.cardbitDemoAccount.findUniqueOrThrow({ where });
     return created.state as unknown as ShopperState;
   };
-  if (!input) return { state: await load(db), result: {} };
+  if (!input) {
+    const state = await load(db);
+    if (state.version === seed.version) return { state, result: {} };
+  }
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"demo-shopper/" + shop + "/" + customerId},0))::text`;
     const state = await load(tx);
-    if (state.version !== seed.version)
-      throw new DemoError(
-        "catalog_changed",
-        "The saved demo catalog needs to be restored before shopping.",
+    if (state.version !== seed.version) {
+      const knownIds = new Set(
+        [...catalog.cards, ...(catalog.archivedCards ?? [])].map(
+          (card) => card.id,
+        ),
       );
-    const result = shopAction(state, catalog, input);
+      if (
+        state.version !== catalog.replacesVersion ||
+        state.copies.some((copy) => !knownIds.has(copy.cardId))
+      )
+        throw new DemoError(
+          "catalog_changed",
+          "Reload your account to load the current catalog.",
+        );
+      // The signed replacement catalog preserves existing copy IDs and entitlements.
+      // Only its version changes. Never restore the starting wallet or orders here.
+      state.version = seed.version;
+    }
+    const result = input
+      ? shopAction(state, catalog, input, quotedVersion)
+      : {};
     await tx.cardbitDemoAccount.update({
       where,
       data: { state: jsonState(state) },
