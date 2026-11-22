@@ -1,3 +1,4 @@
+import { isCardbit } from "../lib/cardbit.server";
 import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
@@ -142,6 +143,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       : null,
     oddsUrl: `/apps/packs/api/odds/${series.handle}`,
     // Opens My Packs with sample packs from this pool (works for drafts too); link valid 30 days.
+    cardbit: isCardbit(session.shop),
     demoUrl: `${packsPageUrl(await storefrontBase(admin, session.shop))}?demo=${demoToken(session.shop)}&series=${encodeURIComponent(series.handle)}`,
     packsPage: packsPageUrl(await storefrontBase(admin, session.shop)),
   };
@@ -293,7 +295,7 @@ const money = (n: number | string) => `$${Number(n).toFixed(2)}`;
 const percent = (n: number) => `${(n * 100).toFixed(1)}%`;
 
 export default function SeriesPage() {
-  const { series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults, buildOverrides, tierOverride, buylist, demoUrl, renameTo, rehandle } =
+  const { cardbit, series, cards, summary, pulls, oddsUrl, packsPage, tierRules, tierNames, tierCounts, buildDefaults, buildOverrides, tierOverride, buylist, demoUrl, renameTo, rehandle } =
     useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
@@ -745,10 +747,10 @@ export default function SeriesPage() {
           <s-button href={demoUrl} target="_blank">
             Demo Packs From This Pool
           </s-button>
-          <s-paragraph>
+          <s-paragraph>{cardbit ? "Cardbit assigns cards at purchase. Collectors open their packs when ready." : <>
             Customers open packs at <s-link href={packsPage} target="_blank">{packsPage}</s-link>. Unopened packs
             open automatically after {series.autoOpenDays === 1 ? "1 day" : `${series.autoOpenDays} days`}.
-          </s-paragraph>
+          </>}</s-paragraph>
           {series.commitHash ? (
             <s-paragraph>
               Fairness commitment: <s-text type="strong">{series.commitHash.slice(0, 16)}…</s-text>. Public odds feed:{" "}

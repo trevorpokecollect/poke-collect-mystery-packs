@@ -1,0 +1,29 @@
+import type { ActionFunctionArgs } from "react-router";
+import db from "../db.server";
+import { walletAction, cardbitsConfig } from "../lib/cardbits.server";
+import { PoolError } from "../lib/pool.server";
+import { json, proxyContext } from "../lib/proxy.server";
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { shop, viewer } = await proxyContext(request);
+  if (!viewer?.customerId) return json({ error: "Sign in to Cardbit." }, 401);
+  if (!cardbitsConfig(shop)?.customers.includes(viewer.customerId))
+    return json({ error: "Cardbits testing is unavailable." }, 404);
+  if (request.method !== "POST")
+    return json({ error: "Method not allowed." }, 405);
+  try {
+    const input = await request.json().catch(() => null);
+    if (!input || typeof input !== "object")
+      throw new PoolError("Review the offer again.");
+    const receipt = await walletAction(db, shop, viewer.customerId, input);
+    return json({
+      receipt: receipt.id,
+      openingId: receipt.openingId,
+      copyId: receipt.copyId,
+      delta: receipt.delta,
+    });
+  } catch (error) {
+    if (error instanceof PoolError) return json({ error: error.message }, 409);
+    throw error;
+  }
+};

@@ -1,3 +1,4 @@
+import { isCardbit } from "../lib/cardbit.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate, unauthenticated } from "../shopify.server";
 import db from "../db.server";
@@ -36,7 +37,7 @@ async function handle(request: Request) {
     where: { shop, checkoutToken: url.searchParams.get("checkoutToken") || "__none__" },
   });
   const packOrder =
-    found && surface === "account" && found.customerId && found.customerId !== customerId ? null : found;
+    found && surface === "account" && ((isCardbit(shop) && !customerId) || (found.customerId && found.customerId !== customerId)) ? null : found;
 
   const { admin } = await unauthenticated.admin(shop);
 
@@ -58,12 +59,17 @@ async function handle(request: Request) {
   const pulls = await db.pull.findMany({
     where: { orderId: packOrder.orderId, status: { not: "VOIDED" } },
     include: { series: { select: { title: true, packProductId: true } } },
+    ...(isCardbit(shop) ? {orderBy: [{lineItemId:"asc" as const}, {packIndex:"asc" as const}, {cardIndex:"asc" as const}]} : {}),
   });
   if (pulls.length === 0) return reply({ status: "none" });
 
   const art = await packImages(admin, [...new Set(pulls.map((p) => p.series.packProductId))]);
   const link = new URL(packsPageUrl(await storefrontBase(admin, shop), packOrder.openToken));
   link.searchParams.set("open", "1");
+  if (isCardbit(shop)) {
+    const next = pulls.find(p => p.status === "UNOPENED") ?? pulls[0];
+    link.searchParams.set("pack", next.id);
+  }
 
   return reply({
     status: "ready",

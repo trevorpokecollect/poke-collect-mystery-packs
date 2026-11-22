@@ -2,6 +2,8 @@ import type { LoaderFunctionArgs } from "react-router";
 import { proxyContext } from "../lib/proxy.server";
 import { validDemoToken } from "../lib/demo.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
+import { isCardbit } from "../lib/cardbit.server";
+import { brand, brandAttrs } from "../lib/brand.server";
 
 // Rendered inside the store theme at /apps/packs. The page shell is Liquid so it
 // picks up the theme's header and footer; the opener script does the rest.
@@ -27,7 +29,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Merchant preview with sample pulls (link from the app home); no login needed.
   const demo = validDemoToken(shop, url.searchParams.get("demo"));
 
-  if (!viewer && !demo) {
+  if ((!viewer || (isCardbit(shop) && !viewer.customerId)) && !demo) {
     return liquid(
       `${FONTS}
       <link rel="stylesheet" href="${assets}/packs/opener.css?v=${VERSION}">
@@ -40,9 +42,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           </div>
           <div class="mp-hero-ship">
             <strong class="mp-hero-ship-title">Welcome Back</strong>
-            <p>Your pulls wait in your vault until you ship them: $${SHIP_FEE} flat, free on ${FREE_SHIPPING_CARDS}+ cards (US only).</p>
+            <p>${isCardbit(shop) ? "Your physical cards stay in My Vault until you request shipping." : `Your pulls wait in your vault until you ship them: $${SHIP_FEE} flat, free on ${FREE_SHIPPING_CARDS}+ cards (US only).`}</p>
             <a class="mp-btn mp-vault-btn" href="{{ routes.account_login_url }}?return_url=/apps/packs">Log In</a>
-            <a class="mp-btn mp-btn-ghost" href="/products/poke-collect-mystery-pack">Shop Mystery Packs</a>
+            <a class="mp-btn mp-btn-ghost" href="/products/${brand().packProductHandle}">Shop Mystery Packs</a>
           </div>
         </section>
       </div>`,
@@ -61,7 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
      <link rel="preload" href="${assets}/packs/opener.js?v=${VERSION}" as="script">
      ${FONTS}
      <link rel="stylesheet" href="${assets}/packs/opener.css?v=${VERSION}">
-     <div class="mp-page" id="mystery-packs" data-api="/apps/packs/api"${demo ? ' data-demo="1"' : ""}>${SKELETON}</div>
+     <div class="mp-page" id="mystery-packs" data-api="/apps/packs/api"${brandAttrs()}${demo ? ' data-demo="1"' : ""}>${SKELETON}</div>
      <script src="${assets}/packs/opener.js?v=${VERSION}" defer></script>`,
   );
 };

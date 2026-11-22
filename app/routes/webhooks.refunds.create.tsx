@@ -1,3 +1,4 @@
+import { reviewFunding } from "../lib/cardbits.server";
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -16,9 +17,10 @@ interface RefundPayload {
 // Refunding a pack voids its pull. The card goes back to normal store stock (not back into the
 // pool, whose order was committed at launch), and the pack stock is re-synced to the cards left.
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, payload } = await authenticate.webhook(request);
+  const { admin, payload, shop } = await authenticate.webhook(request);
   const refund = payload as RefundPayload;
   const orderId = `gid://shopify/Order/${refund.order_id}`;
+  await reviewFunding(db,shop,orderId);
 
   // A refunded Vault Marketplace purchase: hold the seller's credit for staff to decide.
   await flagMarketOrder(db, orderId, "The buyer was refunded.");

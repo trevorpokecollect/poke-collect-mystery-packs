@@ -1,3 +1,4 @@
+import { isCardbit } from "../lib/cardbit.server";
 import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
@@ -20,6 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ? await db.series.findFirst({ where: { id: copyFromId, shop: session.shop }, select: { id: true, title: true } })
     : null;
   return {
+    cardbit: isCardbit(session.shop),
     prefill: {
       title: url.searchParams.get("title") ?? "",
       cardsPerPack: url.searchParams.get("cardsPerPack") ?? "1",
@@ -35,8 +37,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const form = await request.formData();
   const title = String(form.get("title") || "").trim();
   const packVariantId = String(form.get("packVariantId") || "");
-  const autoOpenDays = Number(form.get("autoOpenDays") || 1);
+  const autoOpenDays = isCardbit(session.shop) ? 0 : Number(form.get("autoOpenDays") || 1);
   const cardsPerPack = Number(form.get("cardsPerPack") || 1);
+  if (!Number.isInteger(cardsPerPack) || cardsPerPack < 1 || cardsPerPack > 10) return { error: "Choose 1 to 10 cards per pack." };
   if (!title || !packVariantId) return { error: "Give the series a name and pick its pack product." };
 
   try {
@@ -72,8 +75,9 @@ export default function NewSeries() {
   const submit = useSubmit();
   const navigation = useNavigation();
   const result = useActionData<typeof action>();
-  const { prefill } = useLoaderData<typeof loader>();
+  const { prefill, cardbit } = useLoaderData<typeof loader>();
   const [title, setTitle] = useState(prefill.title);
+  const [packSize, setPackSize] = useState(prefill.cardsPerPack);
   const [days, setDays] = useState("1");
   const [pack, setPack] = useState<{ id: string; label: string } | null>(
     prefill.variant ? { id: prefill.variant, label: prefill.variant } : null,
@@ -84,7 +88,7 @@ export default function NewSeries() {
         title,
         packVariantId: pack?.id ?? "",
         autoOpenDays: days,
-        cardsPerPack: prefill.cardsPerPack,
+        cardsPerPack: packSize,
         ...(prefill.copyFrom ? { copyFrom: prefill.copyFrom.id, ...prefill.overrides } : {}),
       },
       { method: "post" },
@@ -125,13 +129,15 @@ export default function NewSeries() {
             </s-paragraph>
             <s-button onClick={pickPack}>{pack ? pack.label : "Choose pack product"}</s-button>
           </s-stack>
-          <s-number-field
+          {cardbit && <s-number-field label="Cards per pack" min={1} max={10} value={packSize}
+            onInput={e => setPackSize(e.currentTarget.value)} />}
+          {cardbit ? <s-paragraph>Contents are assigned at purchase. Collectors choose when to open their packs.</s-paragraph> : <s-number-field
             label="Auto-open unopened packs after (days)"
             min={1}
             max={60}
             value={days}
             onInput={(e) => setDays((e.currentTarget).value)}
-          />
+          />}
           <s-button
             variant="primary"
             {...(navigation.state === "submitting" ? { loading: true } : {})}

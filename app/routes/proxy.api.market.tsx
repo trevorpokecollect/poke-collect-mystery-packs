@@ -1,3 +1,4 @@
+import { isCardbit } from "../lib/cardbit.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { PoolError } from "../lib/pool.server";
@@ -54,6 +55,7 @@ import {
 // Only trade names are shown for other players, and pack card values are never included.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer, admin } = await proxyContext(request);
+  if (isCardbit(shop)) return json({ enabled: false }, 404);
   // Staff preview link: sample data, shown even while the marketplace is off.
   const params = new URL(request.url).searchParams;
   const view = params.get("view") ?? "";
@@ -147,6 +149,7 @@ type Body = {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, viewer, admin } = await proxyContext(request);
+  if (isCardbit(shop)) return json({ enabled: false }, 404);
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
   if (validDemoToken(shop, new URL(request.url).searchParams.get("demo"))) return json({ ok: true, demo: true });
   const me = viewer?.customerId;

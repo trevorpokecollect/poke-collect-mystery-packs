@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
+import { isCardbit } from "../lib/cardbit.server";
 import db from "../db.server";
 import { PoolError, revealPull } from "../lib/pool.server";
 import { finalizeOrder } from "../lib/orders.server";
@@ -24,7 +25,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     // The language picks the English or Japanese card back shown before a big hit turns over.
     const languageOf = await cardLanguages(admin, result.cards.concat(result.card).map((c) => c.productId));
-    const view = (c: { title: string; tier: string; imageUrl: string | null; productId: string }) => ({
+    const view = (c: { title: string; tier: string; imageUrl: string | null; productId: string; variantId: string; copyId: string; slotIndex: number; heldByViewer: boolean }) => ({
+      ...(isCardbit(shop) ? {copyId: c.copyId, slotIndex: c.slotIndex, variantId: c.variantId, productId: c.productId, heldByViewer: c.heldByViewer} : {}),
       title: c.title,
       tier: c.tier,
       imageUrl: c.imageUrl,
@@ -32,6 +34,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
     return json({
       // Best card (single-card packs: the card). Multi-card packs also get every card, best last.
+      ...(isCardbit(shop) ? {packId: result.packId} : {}),
       card: view(result.card),
       cards: result.cards.map(view),
     });

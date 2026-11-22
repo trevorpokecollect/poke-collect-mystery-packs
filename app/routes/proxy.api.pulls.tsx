@@ -1,4 +1,6 @@
+import { walletView } from "../lib/cardbits.server";
 import type { LoaderFunctionArgs } from "react-router";
+import { isCardbit } from "../lib/cardbit.server";
 import db from "../db.server";
 import { availableSeries, pullsForViewer } from "../lib/pool.server";
 import { packImages, packProducts } from "../lib/pack-art.server";
@@ -8,15 +10,35 @@ import { packShelf } from "../lib/shelf.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 import { hasMarketAccess, listedOnMarket, recentSales } from "../lib/market.server";
 
+async function openingHistory(database: typeof db, shop: string, customerId: string) {
+  const orders = await database.packOrder.findMany({where:{shop,customerId},select:{orderId:true}});
+  if (!orders.length) return [];
+  const opened = await database.pull.findMany({where:{shop,orderId:{in:orders.map(o=>o.orderId)},status:{in:["REVEALED","FULFILLING"]},cardIndex:0},
+    orderBy:{createdAt:"desc"},select:{id:true,lineItemId:true,packIndex:true,orderName:true,series:{select:{title:true,packProductId:true}}}});
+  return opened.map(p=>({packId:p.id,group:p.lineItemId + "/" + p.packIndex,orderName:p.orderName,series:p.series.title,productId:p.series.packProductId}));
+}
+
 // Lists the viewer's packs. Unopened packs never include the card. Card values are
 // admin-only, so customers never see a dollar figure next to what they pulled.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer, admin } = await proxyContext(request);
-  if (!viewer) return json({ error: "Log in to see your packs." }, 401);
+  if (!viewer || (isCardbit(shop) && !viewer.customerId)) return json({ error: "Log in to see your packs." }, 401);
 
   // Everything after the first query runs at once: this call is on the critical path of My Packs
   // and the account page's My Vault tab.
   const [pulls, live] = await Promise.all([pullsForViewer(db, shop, viewer), availableSeries(db, shop)]);
+  const cardbit = isCardbit(shop);
+  const target = cardbit && viewer.openToken && viewer.customerId ? await db.packOrder.findFirst({
+    where: { openToken: viewer.openToken, shop, customerId: viewer.customerId }, select: { orderId: true },
+  }) : null;
+  const history = cardbit && viewer.customerId ? await openingHistory(db,shop,viewer.customerId) : [];
+  const savedPackIds = new Map(history.map(p => [p.group,p.packId]));
+  const packGroup = (p: (typeof pulls)[number]) => p.lineItemId + "/" + p.packIndex;
+  const first = new Map<string, (typeof pulls)[number]>();
+  for (const p of pulls) {
+    const key = packGroup(p);
+    if (!first.has(key) || p.cardIndex < first.get(key)!.cardIndex) first.set(key, p);
+  }
   const opened = pulls.filter((p) => p.status !== "UNOPENED");
   const vaultOrders = new Set(
     (
@@ -45,8 +67,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Seed for "You Might Also Like" (Shopify's storefront product recommendations).
   const seed = live[0]?.series.packProductId ?? pulls[0]?.series.packProductId ?? null;
   return json({
+    ...(cardbit ? {cardbits: await walletView(db,shop,viewer.customerId)} : {}),
     // Order-link visitors who aren't logged in only see that order; they can log in for the rest.
     signedIn: !!viewer.customerId,
+    ...(cardbit ? { cardbitVersion: 1, orderLink: !!viewer.openToken,
+      openings: history.map(p=>({packId:p.packId,orderName:p.orderName,series:p.series,productId:p.productId})) } : {}),
     recommendFrom: seed ? seed.split("/").pop() : null,
     // The theme's own "You Might Also Like" row is rendered for this product (Section Rendering API).
     recommendHandle: seed ? (products.get(seed)?.handle ?? null) : null,
@@ -55,8 +80,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Cards waiting in the vault, and an unpaid shipping invoice if one is open.
     vault: {
       cards: opened.filter((p) => inVault(p) && p.shipRequest?.status !== "PENDING").length,
-      fee: SHIP_FEE,
-      freeAt: FREE_SHIPPING_CARDS,
+      ...(cardbit ? { shippingMode: "destination", pickup: false } : { fee: SHIP_FEE, freeAt: FREE_SHIPPING_CARDS }),
       market,
       sales,
       pending: pending ? { cards: opened.filter((p) => p.shipRequestId === pending.id).length, invoiceUrl: pending.invoiceUrl } : null,
@@ -67,6 +91,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       pulls.findIndex((q) => q.status === "UNOPENED" && q.lineItemId === p.lineItemId && q.packIndex === p.packIndex) === i,
     ).map((p) => ({
       cardsPerPack: p.series.cardsPerPack,
+      ...(cardbit ? { packId: savedPackIds.get(packGroup(p)) ?? first.get(packGroup(p))!.id, slotIndex: p.cardIndex,
+        targetOrder: target?.orderId === p.orderId, productId: p.series.packProductId,
+        seriesHandle: p.series.handle, ...(p.status !== "UNOPENED" ? { copyId: p.id, variantId: p.slot.card.variantId } : {}) } : {}),
       id: p.id,
       series: p.series.title,
       packImageUrl: art.get(p.series.packProductId) ?? null,

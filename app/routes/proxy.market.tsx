@@ -1,8 +1,10 @@
+import { isCardbit } from "../lib/cardbit.server";
 import type { LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { proxyContext } from "../lib/proxy.server";
 import { boardCards, hasMarketAccess, marketSettings } from "../lib/market.server";
 import { validDemoToken } from "../lib/demo.server";
+import { brand } from "../lib/brand.server";
 
 // The Vault Marketplace at /apps/packs/market. Unlike My Packs it is its own full page (not wrapped
 // in the store theme), so it can look and feel like a separate site. The app proxy passes a plain
@@ -12,12 +14,14 @@ const VERSION = (process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_CO
 const FONTS =
   "https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap";
 
-// The store's own favicon (the Poke-Collect logo), so the tab matches poke-collect.com.
-const FAVICON = "https://poke-collect.com/cdn/shop/files/Logo_Inverted_f6f1059b-c34e-41fe-a1fb-019ee80646f3.png?v=1722967747&crop=center";
-
+// The store's own favicon (per site: lib/brand.server.ts), so the tab matches the storefront.
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const BRAND = brand();
+const FAVICON = BRAND.faviconUrl;
+const NAME = escape(BRAND.name);
 
-function page(assets: string, body: string, title = "Vault Market · Poke-Collect") {
+
+function page(assets: string, body: string, title = `Vault Market · ${NAME}`) {
   return new Response(
     `<!doctype html>
 <html lang="en">
@@ -44,7 +48,7 @@ ${body}
 function landing(assets: string, heading: string, text: string, button?: { href: string; label: string }) {
   return page(
     assets,
-    `<header class="vm-top"><a class="vm-logo" href="/apps/packs/market"><span class="vm-logo-mark">Vault Market</span><span class="vm-logo-by">By Poke-Collect</span></a><a class="vm-top-link" href="/">Back To The Store</a></header>
+    `<header class="vm-top"><a class="vm-logo" href="/apps/packs/market"><span class="vm-logo-mark">Vault Market</span><span class="vm-logo-by">By ${NAME}</span></a><a class="vm-top-link" href="/">Back To The Store</a></header>
 <main class="vm-landing">
   <p class="vm-eyebrow">Player To Player</p>
   <h1 class="vm-landing-title">${heading}</h1>
@@ -76,13 +80,13 @@ function publicPage(assets: string, board: BoardCard[]) {
     </a>`;
   return page(
     assets,
-    `<div class="vm-store-bar"><a class="vm-store-back" href="/"><span aria-hidden="true">←</span> Back To Poke-Collect</a><div class="vm-store-links"><a href="/apps/packs">My Packs</a><a href="/">Shop</a><a href="${LOGIN_URL}">Log In</a></div></div>
-<header class="vm-top"><a class="vm-logo" href="/apps/packs/market"><span class="vm-logo-mark">Vault Market</span><span class="vm-logo-by">By Poke-Collect</span></a></header>
+    `<div class="vm-store-bar"><a class="vm-store-back" href="/"><span aria-hidden="true">←</span> Back To ${NAME}</a><div class="vm-store-links"><a href="/apps/packs">My Packs</a><a href="/">Shop</a><a href="${LOGIN_URL}">Log In</a></div></div>
+<header class="vm-top"><a class="vm-logo" href="/apps/packs/market"><span class="vm-logo-mark">Vault Market</span><span class="vm-logo-by">By ${NAME}</span></a></header>
 <main class="vm-pub">
   <section class="vm-pub-hero">
     <p class="vm-eyebrow">Player To Player</p>
     <h1 class="vm-landing-title">Trade &amp; Sell Vault Cards</h1>
-    <p class="vm-landing-text">Buy Cards Straight From Other Collectors' Vaults, Trade Card For Card, Or Sell Your Own Pulls. Every Card Stays Safe In The Poke-Collect Vault Until You Ship It.</p>
+    <p class="vm-landing-text">Buy Cards Straight From Other Collectors' Vaults, Trade Card For Card, Or Sell Your Own Pulls. Every Card Stays Safe In The ${NAME} Vault Until You Ship It.</p>
     <div class="vm-pub-cta"><a class="vm-btn vm-btn-signal" href="${LOGIN_URL}">Log In To Shop The Market</a></div>
     <div class="vm-pub-stats">
       <span><b>${forSale.length}</b> For Sale</span>
@@ -97,12 +101,12 @@ function publicPage(assets: string, board: BoardCard[]) {
   <section class="vm-pub-section vm-pub-how">
     <h2>How It Works</h2>
     <ol>
-      <li><b>Open Packs</b><span>Every card you pull lands in your Poke-Collect vault.</span></li>
+      <li><b>Open Packs</b><span>Every card you pull lands in your ${NAME} vault.</span></li>
       <li><b>List Or Trade</b><span>Set your own price, or mark cards open to trade and swap with other collectors.</span></li>
       <li><b>Ship When Ready</b><span>Cards you buy or trade for join your vault. Ship them all together whenever you like.</span></li>
     </ol>
     <a class="vm-btn vm-btn-signal" href="${LOGIN_URL}">Log In</a>
-    <p class="vm-fine">Sellers Set Their Own Prices. Poke-Collect Doesn't Buy Cards Back. <a class="vm-link" href="/pages/vault-market-terms">Vault Market Terms</a></p>
+    <p class="vm-fine">Sellers Set Their Own Prices. ${NAME} Doesn't Buy Cards Back. <a class="vm-link" href="/pages/vault-market-terms">Vault Market Terms</a></p>
   </section>
 </main>`,
   );
@@ -110,11 +114,12 @@ function publicPage(assets: string, board: BoardCard[]) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { viewer, shop, admin } = await proxyContext(request);
+  if (isCardbit(shop)) return new Response("The collector marketplace is unavailable.", {status: 404});
   const assets = (process.env.SHOPIFY_APP_URL || "").replace(/\/$/, "");
   const app = (demo: string | null) =>
     page(
       assets,
-      `<div id="vault-market" data-api="/apps/packs/api/market"${demo ? ` data-demo="${escape(demo)}"` : ""}></div>
+      `<div id="vault-market" data-api="/apps/packs/api/market" data-brand="${NAME}"${demo ? ` data-demo="${escape(demo)}"` : ""}></div>
 <script src="${assets}/packs/market.js?v=${VERSION}" defer></script>`,
     );
 
