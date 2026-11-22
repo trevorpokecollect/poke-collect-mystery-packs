@@ -1,6 +1,7 @@
 // Vault marketplace: players trade vault cards with each other, or sell them to each other for
 // Vault Credit (this app's own balance, never Shopify store credit, so it can't buy packs). The store is never the buyer. Cards stay on our shelf the whole time; a trade or
 // sale only changes which customer owns the pull. Off until the merchant turns it on.
+import { isCardbit } from "./cardbit.server";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
@@ -50,7 +51,7 @@ const DAY = 86_400_000;
 const LIVE_SHIP = ["PENDING", "PAID"];
 
 export async function marketSettings(db: Db | Tx, shop: string) {
-  const row = await db.marketSettings.findUnique({ where: { shop } });
+  const row = isCardbit(shop) ? null : await db.marketSettings.findUnique({ where: { shop } });
   return {
     enabled: row?.enabled ?? false,
     sellingEnabled: (row?.enabled ?? false) && (row?.sellingEnabled ?? false),
@@ -65,6 +66,7 @@ export async function updateMarketSettings(
   shop: string,
   input: { enabled?: boolean; sellingEnabled?: boolean; feePercent?: number; creditCollectionIds?: string[]; creditCombines?: boolean; accessTag?: string | null },
 ) {
+  if (isCardbit(shop)) throw new PoolError("Peer trading is unavailable on Cardbit.");
   if (input.feePercent !== undefined && !(input.feePercent >= 0 && input.feePercent <= 50)) {
     throw new PoolError("The fee must be between 0% and 50%.");
   }

@@ -1,13 +1,15 @@
+import { fundTestOrder } from "./cardbits.server";
 // The card for every pack is decided here, server-side, the moment payment clears.
 // Called from orders/paid, and from orders/create for orders that are created already paid
 // (Shopify sends no orders/paid for those). Drawing is idempotent, so both firing is safe.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
+import { isCardbit } from "./cardbit.server";
 import db from "../db.server";
 import { drawForOrder } from "./pool.server";
 import { fulfillVaultPackLines, fulfillWholeOrder, holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
 import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
-import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
+import { acceptPaidParcel, markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
 import { completeSale, MARKET_ATTRIBUTE, METRICS, notify } from "./market.server";
 import { choseVaultRate, vaultSinglesFromOrder } from "./vault-singles.server";
 import { settleCreditCodes } from "./credit.server";
@@ -15,6 +17,7 @@ import { settleCreditCodes } from "./credit.server";
 export interface OrderPayload {
   admin_graphql_api_id: string;
   name: string;
+  test?: boolean;
   financial_status?: string | null;
   checkout_token?: string | null;
   customer?: { admin_graphql_api_id?: string } | null;
@@ -30,12 +33,15 @@ export interface OrderPayload {
 }
 
 export async function handlePaidOrder(shop: string, admin: AdminApiContext | undefined, order: OrderPayload) {
+  if (isCardbit(shop) && order.test && admin) await fundTestOrder(db, admin, shop, order.admin_graphql_api_id);
   // Any order can use a Vault Credit code: record it and give back what the cart didn't use.
-  await settleCreditCodes(db, order).catch((error) => console.error(`Settling Vault Credit codes on ${order.name} failed`, error));
+  if (!isCardbit(shop)) await settleCreditCodes(db, order).catch((error) => console.error(`Settling Vault Credit codes on ${order.name} failed`, error));
 
   // A paid "ship my cards" invoice: its vaulted cards now ship on this order.
   const vaultRequest = order.note_attributes?.find((a) => a.name === VAULT_ATTRIBUTE)?.value;
-  if (vaultRequest) {
+  if (vaultRequest && isCardbit(shop) && admin &&
+      await acceptPaidParcel(db,admin,shop,vaultRequest,order.admin_graphql_api_id,order.customer?.admin_graphql_api_id ?? null)) return;
+  if (vaultRequest && !isCardbit(shop)) {
     await markShipmentPaid(db, vaultRequest, order.admin_graphql_api_id);
     // The $5 vault rate is US only; flag shipments to other countries for the merchant.
     const country = order.shipping_address?.country_code;
@@ -47,7 +53,7 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
 
   // A paid Vault Marketplace purchase: the card moves to the buyer's vault.
   const marketListing = order.note_attributes?.find((a) => a.name === MARKET_ATTRIBUTE)?.value;
-  if (marketListing) {
+  if (marketListing && !isCardbit(shop)) {
     const sold = await completeSale(db, marketListing, order.admin_graphql_api_id, order.name);
     // The checkout's "Vault Card" variant is kept, so the order shows the card's picture in the admin.
     const paidListing = await db.listing.findUnique({ where: { id: marketListing }, select: { status: true, payoutStatus: true } });

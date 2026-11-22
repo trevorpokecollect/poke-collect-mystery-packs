@@ -3,6 +3,7 @@
 // Trevor 2026-10-19: every profit report uses Card Broker's buylist and retail prices, not Storepass. Reads Card
 // Broker's variant offers through its app proxy (poke-collect.com/apps/buylist/singles/variant-offers).
 import type { PrismaClient } from "@prisma/client";
+import { brand } from "./brand.server";
 
 const OFFERS_URL = process.env.CARD_BROKER_OFFERS_URL || "https://poke-collect.com/apps/buylist/singles/variant-offers";
 /** Reports from before the switch (Storepass) have no source and are recomputed. */
@@ -42,7 +43,7 @@ const numericId = (gid: string) => gid.split("/").pop() ?? gid;
 
 async function offersFor(ids: string[], fetcher: typeof fetch): Promise<Offer[]> {
   const response = await fetcher(`${OFFERS_URL}?variants=${ids.join(",")}`, {
-    headers: { Accept: "application/json", "User-Agent": "Poke-Collect Mystery Packs" },
+    headers: { Accept: "application/json", "User-Agent": `${brand().name} Mystery Packs` },
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) throw new Error(`Card Broker offers returned ${response.status}`);

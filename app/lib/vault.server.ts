@@ -1,12 +1,15 @@
 // The card vault: pulled cards stay with us until the customer asks to have them shipped.
 // "Ship my cards" makes one draft order for the vaulted cards (free) plus a flat shipping fee;
 // paying its invoice creates a normal order that ships like any other.
+import { parcelLines, quoteParcel, type ParcelAddress } from "./cardbit-shipping.server";
+import { CARDBIT_SHOP, isCardbit } from "./cardbit.server";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
 import { rereserveForPulls, unreserveForPulls } from "./inventory.server";
 import { pullsForViewer, PoolError, type Viewer } from "./pool.server";
 import { listedOnMarket, withdrawFromMarket } from "./market.server";
+import { brand } from "./brand.server";
 
 export const SHIP_FEE = 5;
 /** Shipping is free once a single shipment has this many cards. */
@@ -54,16 +57,23 @@ export async function requestShipment(
   admin: AdminApiContext,
   shop: string,
   viewer: Viewer,
-  { pickup = false, pullIds }: { pickup?: boolean; pullIds?: string[] } = {},
+  { pickup = false, pullIds, destination }: { pickup?: boolean; pullIds?: string[]; destination?: {address: ParcelAddress; quoteKey: string} } = {},
 ): Promise<{ invoiceUrl: string | null; reused: boolean; pickupOrder?: string }> {
+  const cardbit = isCardbit(shop);
+  if (cardbit && (!viewer.customerId || pickup || !pullIds?.length || !destination))
+    throw new PoolError("Select your cards and review a destination shipping quote.");
   const chosen = pullIds ? new Set(pullIds) : null;
   const inVault = await vaultedPulls(db, shop, viewer);
   const wanted = chosen ? inVault.filter((p) => chosen.has(p.id)) : inVault;
   if (chosen && inVault.length && !wanted.length) throw new PoolError(`Pick at least one card to ${pickup ? "pick up" : "ship"}.`);
+  if (cardbit && wanted.length !== chosen!.size) throw new PoolError("A selected card is no longer in your vault.");
+  const accepted = cardbit ? (await quoteParcel(admin, shop, viewer.customerId!, wanted, destination!.address))
+    .find(rate => rate.quoteKey === destination!.quoteKey) : null;
+  if (cardbit && !accepted) throw new PoolError("Shipping rates changed. Request current rates and confirm again.");
   const pending = inVault.find((p) => p.shipRequest?.status === "PENDING")?.shipRequest;
   if (pending?.invoiceUrl) {
     const onInvoice = inVault.filter((p) => p.shipRequestId === pending.id);
-    if (!pickup && wanted.length === onInvoice.length && wanted.every((p) => p.shipRequestId === pending.id)) {
+    if (!pickup && (!cardbit || pending.quoteKey === accepted!.quoteKey) && wanted.length === onInvoice.length && wanted.every((p) => p.shipRequestId === pending.id)) {
       return { invoiceUrl: pending.invoiceUrl, reused: true };
     }
     // A different set of cards, or picking up instead: replace the invoice.
@@ -72,7 +82,7 @@ export async function requestShipment(
     // Cards left off the new shipment go back to the vault, reserved again.
     const left = onInvoice.filter((p) => chosen && !chosen.has(p.id)).map((p) => p.id);
     if (left.length) await rereserveForPulls(db, admin, left);
-    return requestShipment(db, admin, shop, viewer, { pickup, pullIds });
+    return requestShipment(db, admin, shop, viewer, { pickup, pullIds, destination });
   }
 
   const free = wanted.filter((p) => !p.shipRequestId || p.shipRequest?.status !== "PENDING");
@@ -94,22 +104,22 @@ export async function requestShipment(
   }
 
   // Vault shipping is US only: refuse up front when the customer's address on their latest pack order is abroad.
-  if (!pickup) {
+  if (!pickup && !cardbit) {
     const latest = pulls.reduce((a, p) => (p.createdAt > a.createdAt ? p : a), pulls[0]);
     const country = await orderCountry(admin, latest.orderId);
     if (country && country !== "US") {
-      throw new PoolError("Ship My Cards is available for US addresses only. Email support@poke-collect.com and we'll sort out your shipment.");
+      throw new PoolError(`Ship My Cards is available for US addresses only. Email ${brand().supportEmail} and we'll sort out your shipment.`);
     }
   }
 
-  const fee = pickup ? 0 : shippingFeeFor(pulls.length);
+  const fee = accepted ? Number(accepted.price.amount) : pickup ? 0 : shippingFeeFor(pulls.length);
   const expiresAt = new Date(Date.now() + INVOICE_DAYS * 86_400_000);
   const customerId = viewer.customerId ?? pulls.find((p) => p.customerId)?.customerId ?? null;
   const request = await db.shipRequest.create({
-    data: { shop, customerId, cardCount: pulls.length, shippingFee: fee, expiresAt, pickup },
+    data: { shop, customerId, cardCount: pulls.length, shippingFee: fee, quoteKey: accepted?.quoteKey ?? null, expiresAt, pickup },
   });
   const claimed = await db.pull.updateMany({
-    where: { id: { in: pulls.map((p) => p.id) }, status: "REVEALED", OR: [{ shipRequestId: null }, { shipRequest: { status: { not: "PENDING" } } }] },
+    where: { id: { in: pulls.map((p) => p.id) }, shop, ...(cardbit ? {customerId} : {}), status: "REVEALED", OR: [{ shipRequestId: null }, { shipRequest: { status: { not: "PENDING" } } }] },
     data: { shipRequestId: request.id },
   });
   if (claimed.count !== pulls.length) {
@@ -125,14 +135,7 @@ export async function requestShipment(
     const email = customerId ? null : await orderEmail(admin, pulls[0].orderId);
     // Pulled cards ship as their variant (100% off). Singles bought for the vault were already sold
     // and taken out of stock, so they ship as $0 custom lines that don't touch inventory again.
-    const counts = new Map<string, number>();
-    for (const p of pulls) if (!p.series.storePurchase) counts.set(p.slot.card.variantId, (counts.get(p.slot.card.variantId) ?? 0) + 1);
-    const bought = new Map<string, { title: string; quantity: number }>();
-    for (const p of pulls.filter((q) => q.series.storePurchase)) {
-      const row = bought.get(p.slot.card.variantId) ?? { title: p.slot.card.title, quantity: 0 };
-      row.quantity++;
-      bought.set(p.slot.card.variantId, row);
-    }
+    const hasVariantLines = pulls.some(p => !p.series.storePurchase);
     const currencyCode = await shopCurrency(admin);
     const createDraft = (reserve: boolean) => gql(
       admin,
@@ -151,26 +154,14 @@ export async function requestShipment(
           note: `${pickup ? "Local pickup" : "Vault shipment"}: ${pulls.length} card${pulls.length === 1 ? "" : "s"} from ${[...new Set(pulls.map((p) => p.orderName))].join(", ")}`,
           customAttributes: [{ key: VAULT_ATTRIBUTE, value: request.id }],
           ...(reserve ? { reserveInventoryUntil: expiresAt.toISOString() } : {}),
-          shippingLine: pickup
+          ...(accepted ? { shippingAddress: destination!.address } : {}),
+          shippingLine: accepted ? { shippingRateHandle: accepted.handle } : pickup
             ? { title: "Local Pickup", priceWithCurrency: { amount: "0.00", currencyCode } }
             : {
                 title: fee ? `Vault shipment ($${SHIP_FEE} flat)` : `Vault shipment (free on ${FREE_SHIPPING_CARDS}+ cards)`,
                 priceWithCurrency: { amount: fee.toFixed(2), currencyCode },
               },
-          lineItems: [
-            ...[...counts].map(([variantId, quantity]) => ({
-              variantId,
-              quantity,
-              appliedDiscount: { value: 100, valueType: "PERCENTAGE", title: "Mystery pack pull" },
-            })),
-            ...[...bought.values()].map((b) => ({
-              title: `Vault Card: ${b.title}`,
-              quantity: b.quantity,
-              originalUnitPriceWithCurrency: { amount: "0.00", currencyCode },
-              requiresShipping: true,
-              taxable: false,
-            })),
-          ],
+          lineItems: parcelLines(pulls, currencyCode),
         },
       },
     );
@@ -180,9 +171,9 @@ export async function requestShipment(
     // retry without the hold if Shopify still says no (e.g. a card's stock tracking was turned off).
     let data;
     try {
-      data = await createDraft(counts.size > 0);
+      data = await createDraft(hasVariantLines);
     } catch (error) {
-      if (!(counts.size > 0 && error instanceof Error && /reservable/i.test(error.message))) throw error;
+      if (cardbit || !(hasVariantLines && error instanceof Error && /reservable/i.test(error.message))) throw error;
       console.warn("Vault draft couldn't hold inventory; creating it without the hold", error.message);
       data = await createDraft(false);
     }
@@ -215,10 +206,36 @@ export async function requestShipment(
   }
 }
 
+type PaidParcelOrder = {id: string; displayFinancialStatus: string; cancelledAt: string | null; customer: {id: string} | null};
+export function paidParcelMatches(order: PaidParcelOrder | null, id: string, customerId: string | null) {
+  return !!customerId && order?.id === id && order.customer?.id === customerId &&
+    !order.cancelledAt && order.displayFinancialStatus === "PAID";
+}
+
+export async function acceptPaidParcel(db: Db, admin: AdminApiContext, shop: string, requestId: string, orderId: string, customerId: string | null) {
+  const request = await db.shipRequest.findFirst({where:{shop,id:requestId,customerId}});
+  if (!request || !customerId || !request.draftOrderId) return false;
+  const data = await gql(admin, `#graphql
+    query CardbitInvoiceOrder($id:ID!) {
+      draftOrder(id:$id) { order { id displayFinancialStatus cancelledAt customer { id } } }
+    }`, {id:request.draftOrderId});
+  if (!paidParcelMatches(data.draftOrder?.order,orderId,customerId)) return false;
+  await markShipmentPaid(db, request.id, orderId);
+  return true;
+}
+
 /** The paid vault order: its cards are now shipping on `orderId`. */
 export async function markShipmentPaid(db: Db, requestId: string, orderId: string) {
   const request = await db.shipRequest.findUnique({ where: { id: requestId } });
   if (!request || request.status === "PAID") return false;
+  if (isCardbit(request.shop)) {
+    return db.$transaction(async tx => {
+      const changed = await tx.shipRequest.updateMany({where:{id:requestId,shop:request.shop,status:"PENDING"},data:{status:"PAID",orderId}});
+      if (!changed.count) return false;
+      await tx.pull.updateMany({where:{shop:request.shop,customerId:request.customerId,shipRequestId:requestId,status:"REVEALED"},data:{status:"FULFILLING",fulfillingAt:new Date(),shipOrderId:orderId}});
+      return true;
+    });
+  }
   await db.$transaction([
     db.shipRequest.update({ where: { id: requestId }, data: { status: "PAID", orderId } }),
     db.pull.updateMany({
@@ -240,7 +257,7 @@ export async function cancelShipment(db: Db, admin: AdminApiContext, shop: strin
   const request = await db.shipRequest.findUniqueOrThrow({ where: { id: pendingId } });
   await settleShipRequest(db, admin, request, "CANCELLED");
   const after = await db.shipRequest.findUniqueOrThrow({ where: { id: pendingId } });
-  if (after.status === "PAID") throw new PoolError("That shipment was already paid, so it's on its way. Email support@poke-collect.com if you need to change it.");
+  if (after.status === "PAID") throw new PoolError(`That shipment was already paid, so it's on its way. Email ${brand().supportEmail} if you need to change it.`);
   return { cards: request.cardCount };
 }
 
@@ -313,7 +330,7 @@ export async function deleteStrayVaultDrafts(db: Db, adminFor: (shop: string) =>
 async function settleShipRequest(
   db: Db,
   admin: AdminApiContext,
-  request: { id: string; draftOrderId: string | null },
+  request: { id: string; shop: string; customerId: string | null; draftOrderId: string | null },
   status: "EXPIRED" | "CANCELLED",
   // Replacing the invoice with a new one (or an order edit): the cards go straight onto it, so
   // they stay released instead of being re-reserved and released again.
@@ -324,12 +341,14 @@ async function settleShipRequest(
       admin,
       `#graphql
         query VaultDraftStatus($id: ID!) {
-          draftOrder(id: $id) { id status order { id } }
+          draftOrder(id: $id) { id status order { id displayFinancialStatus cancelledAt customer { id } } }
         }`,
       { id: request.draftOrderId },
     );
-    const draft = data.draftOrder as { status: string; order: { id: string } | null } | null;
+    const draft = data.draftOrder as { status: string; order: PaidParcelOrder | null } | null;
     if (draft?.order) {
+      if (isCardbit(request.shop) && !paidParcelMatches(draft.order,draft.order.id,request.customerId))
+        throw new PoolError("This shipping checkout needs payment review.");
       await markShipmentPaid(db, request.id, draft.order.id);
       return;
     }
@@ -362,6 +381,7 @@ async function settleShipRequest(
  * at no charge, so everything goes out in one package. Returns how many cards were added.
  */
 export async function addVaultCardsToShipment(db: Db, admin: AdminApiContext, shop: string, requestId: string) {
+  if (isCardbit(shop)) throw new PoolError("New cards require a new destination quote.");
   const request = await db.shipRequest.findFirst({ where: { id: requestId, shop } });
   if (!request || request.status !== "PAID" || !request.orderId || !request.customerId) {
     throw new PoolError("That shipment isn't a paid vault order with a customer.");
@@ -580,6 +600,7 @@ export async function sendVaultReminders(db: Db, adminFor: (shop: string) => Pro
   const due = await db.pull.findMany({
     where: {
       status: "REVEALED",
+      ...(isCardbit(CARDBIT_SHOP) ? {shop: {not: CARDBIT_SHOP}} : {}), // Cardbit has no approved storage deadline.
       remindedAt: null,
       createdAt: { lt: cutoff },
       OR: [{ shipRequestId: null }, { shipRequest: { status: { not: "PENDING" } } }],

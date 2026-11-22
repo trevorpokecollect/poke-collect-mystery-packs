@@ -1,5 +1,6 @@
 // Database-only pack logic: launching a series, drawing at payment, revealing,
 // voiding. Nothing here talks to Shopify, so it can be tested against Postgres alone.
+import { CARDBIT_SHOP, isCardbit, packFrequencies } from "./cardbit.server";
 import { Prisma, type PrismaClient, type Pull } from "@prisma/client";
 import { commitmentHash, newSalt, newToken, secureShuffle } from "./fairness.server";
 
@@ -74,12 +75,17 @@ export interface DrawResult {
  * Idempotent: webhook retries only draw packs that have not been drawn yet.
  */
 export async function drawForOrder(db: PrismaClient, input: DrawInput): Promise<DrawResult> {
+  return db.$transaction(tx => drawForOrderInTransaction(tx, input));
+}
+
+export async function drawForOrderInTransaction(tx: Prisma.TransactionClient, input: DrawInput, requiredSeries?: string): Promise<DrawResult> {
   const variantIds = [...new Set(input.lines.map((l) => l.variantId))];
   // A pack product can be reused by later series, so draw from the live one. A series that
   // already drew for this order (e.g. a retried webhook after it sold out) still counts.
-  const candidates = await db.series.findMany({
+  const candidates = await tx.series.findMany({
     where: {
       shop: input.shop,
+      ...(requiredSeries ? { id: requiredSeries, staffTest: true } : isCardbit(input.shop) ? { staffTest: false } : {}),
       packVariantId: { in: variantIds },
       OR: [{ status: "LIVE" }, { pulls: { some: { orderId: input.orderId } } }],
     },
@@ -97,79 +103,77 @@ export async function drawForOrder(db: PrismaClient, input: DrawInput): Promise<
   const lines = input.lines.filter((l) => byVariant.has(l.variantId));
   if (lines.length === 0) return { pulls: [], shortfall: [], packOrder: null };
 
-  return db.$transaction(async (tx) => {
-    // Serialize draws per series so two orders can never claim the same position.
-    const ids = seriesList.map((s) => s.id).sort();
-    await tx.$queryRaw`SELECT id FROM "Series" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
+  // Serialize draws per series so two orders can never claim the same position.
+  const ids = seriesList.map((s) => s.id).sort();
+  await tx.$queryRaw`SELECT id FROM "Series" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
 
-    const packOrder = await tx.packOrder.upsert({
-      where: { orderId: input.orderId },
-      create: {
-        orderId: input.orderId,
-        shop: input.shop,
-        orderName: input.orderName,
-        customerId: input.customerId,
-        checkoutToken: input.checkoutToken ?? null,
-        openToken: newToken(),
-        // New orders keep their pulls in the customer's vault until they ask to ship them.
-        vault: true,
-      },
-      update: input.checkoutToken ? { checkoutToken: input.checkoutToken } : {},
-    });
-
-    const pulls: Pull[] = [];
-    const shortfall: DrawResult["shortfall"] = [];
-
-    for (const line of lines) {
-      const series = byVariant.get(line.variantId)!;
-      const existing = await tx.pull.findMany({ where: { lineItemId: line.lineItemId } });
-      const drawn = new Set(existing.map((p) => p.packIndex));
-      const perPack = Math.max(1, series.cardsPerPack);
-      let missing = 0;
-
-      for (let packIndex = 0; packIndex < line.quantity; packIndex++) {
-        if (drawn.has(packIndex)) continue;
-        // A pack takes the next `perPack` cards in the committed order, or none if that many aren't left.
-        const slots =
-          series.status === "LIVE"
-            ? await tx.slot.findMany({
-                where: { seriesId: series.id, claimed: false, voided: false },
-                orderBy: { position: "asc" },
-                take: perPack,
-              })
-            : [];
-        if (slots.length < perPack) {
-          missing++;
-          continue;
-        }
-        for (const [cardIndex, slot] of slots.entries()) {
-          await tx.slot.update({ where: { id: slot.id }, data: { claimed: true } });
-          pulls.push(
-            await tx.pull.create({
-              data: {
-                shop: input.shop,
-                seriesId: series.id,
-                slotId: slot.id,
-                orderId: input.orderId,
-                orderName: input.orderName,
-                lineItemId: line.lineItemId,
-                packIndex,
-                cardIndex,
-                customerId: input.customerId,
-              },
-            }),
-          );
-        }
-      }
-      if (missing > 0) shortfall.push({ lineItemId: line.lineItemId, missing });
-    }
-
-    for (const series of seriesList) {
-      await closeIfEmpty(tx, series.id);
-    }
-
-    return { pulls, shortfall, packOrder };
+  const packOrder = await tx.packOrder.upsert({
+    where: { orderId: input.orderId },
+    create: {
+      orderId: input.orderId,
+      shop: input.shop,
+      orderName: input.orderName,
+      customerId: input.customerId,
+      checkoutToken: input.checkoutToken ?? null,
+      openToken: newToken(),
+      // New orders keep their pulls in the customer's vault until they ask to ship them.
+      vault: true,
+    },
+    update: input.checkoutToken ? { checkoutToken: input.checkoutToken } : {},
   });
+
+  const pulls: Pull[] = [];
+  const shortfall: DrawResult["shortfall"] = [];
+
+  for (const line of lines) {
+    const series = byVariant.get(line.variantId)!;
+    const existing = await tx.pull.findMany({ where: { lineItemId: line.lineItemId } });
+    const drawn = new Set(existing.map((p) => p.packIndex));
+    const perPack = Math.max(1, series.cardsPerPack);
+    let missing = 0;
+
+    for (let packIndex = 0; packIndex < line.quantity; packIndex++) {
+      if (drawn.has(packIndex)) continue;
+      // A pack takes the next `perPack` cards in the committed order, or none if that many aren't left.
+      const slots =
+        series.status === "LIVE"
+          ? await tx.slot.findMany({
+              where: { seriesId: series.id, claimed: false, voided: false },
+              orderBy: { position: "asc" },
+              take: perPack,
+            })
+          : [];
+      if (slots.length < perPack) {
+        missing++;
+        continue;
+      }
+      for (const [cardIndex, slot] of slots.entries()) {
+        await tx.slot.update({ where: { id: slot.id }, data: { claimed: true } });
+        pulls.push(
+          await tx.pull.create({
+            data: {
+              shop: input.shop,
+              seriesId: series.id,
+              slotId: slot.id,
+              orderId: input.orderId,
+              orderName: input.orderName,
+              lineItemId: line.lineItemId,
+              packIndex,
+              cardIndex,
+              customerId: input.customerId,
+            },
+          }),
+        );
+      }
+    }
+    if (missing > 0) shortfall.push({ lineItemId: line.lineItemId, missing });
+  }
+
+  for (const series of seriesList) {
+    await closeIfEmpty(tx, series.id);
+  }
+
+  return { pulls, shortfall, packOrder };
 }
 
 async function closeIfEmpty(tx: Db, seriesId: string) {
@@ -255,12 +259,12 @@ export async function attachMissingCustomers(db: Db, adminFor: (shop: string) =>
 const pullInclude = {
   slot: { include: { card: true } },
   series: { select: { title: true, handle: true, packProductId: true, cardsPerPack: true, storePurchase: true } },
-  shipRequest: { select: { id: true, status: true, invoiceUrl: true, expiresAt: true } },
+  shipRequest: { select: { id: true, status: true, invoiceUrl: true, expiresAt: true, quoteKey: true } },
 } as const;
 
 export async function pullsForViewer(db: Db, shop: string, viewer: Viewer) {
-  await claimGuestOrder(db, viewer);
-  const scope = await viewerScope(db, viewer);
+  if (!isCardbit(shop)) await claimGuestOrder(db, viewer);
+  const scope = isCardbit(shop) ? (viewer.customerId ? [{ customerId: viewer.customerId }] : []) : await viewerScope(db, viewer);
   if (scope.length === 0) return [];
   return db.pull.findMany({
     where: { shop, status: { not: "VOIDED" }, OR: scope },
@@ -281,15 +285,17 @@ export async function revealPull(db: PrismaClient, shop: string, pullId: string,
     });
     if (!pull || pull.status === "VOIDED") throw new PoolError("Pack not found.");
 
-    const scope = await viewerScope(tx, viewer);
-    const allowed = scope.some((s) =>
+    const cardbit = isCardbit(shop);
+    const scope = cardbit ? [] : await viewerScope(tx, viewer);
+    const receipt = cardbit && viewer.customerId ? await tx.packOrder.findFirst({where:{orderId:pull.orderId,shop,customerId:viewer.customerId},select:{orderId:true}}) : null;
+    const allowed = cardbit ? !!receipt : scope.some((s) =>
       s.orderId ? s.orderId === pull.orderId : !!s.customerId && s.customerId === pull.customerId,
     );
     if (!allowed) throw new PoolError("Pack not found.");
 
     // A multi-card pack opens all its cards at once (they share the line item and pack index).
     const pack = await tx.pull.findMany({
-      where: { lineItemId: pull.lineItemId, packIndex: pull.packIndex, status: { not: "VOIDED" } },
+      where: { shop, lineItemId: pull.lineItemId, packIndex: pull.packIndex, status: { not: "VOIDED" } },
       include: pullInclude,
       orderBy: { cardIndex: "asc" },
     });
@@ -301,17 +307,18 @@ export async function revealPull(db: PrismaClient, shop: string, pullId: string,
       where: { orderId: pull.orderId, status: "UNOPENED" },
     });
     // Reveal order: lowest value first, best card last.
-    const cards = pack
-      .map((p) => p.slot.card)
-      .sort((a, b) => Number(a.marketValue) - Number(b.marketValue));
-    return { pull, card: cards[cards.length - 1] ?? pull.slot.card, cards, orderId: pull.orderId, orderReady: unopened === 0 };
+    const cards = pack.map(p => ({
+      ...p.slot.card, copyId: p.id, slotIndex: p.cardIndex,
+      heldByViewer: !!viewer.customerId && p.customerId === viewer.customerId,
+    })).sort((a, b) => Number(a.marketValue) - Number(b.marketValue) || a.slotIndex - b.slotIndex);
+    return { pull, packId: pack[0].id, card: cards[cards.length - 1], cards, orderId: pull.orderId, orderReady: unopened === 0 };
   });
 }
 
 /** Reveals packs left unopened past their series' auto-open window. Returns orders now ready. */
 export async function autoOpenDue(db: PrismaClient, now = new Date()) {
   const candidates = await db.pull.findMany({
-    where: { status: "UNOPENED" },
+    where: { status: "UNOPENED", ...(isCardbit(CARDBIT_SHOP) ? {shop: {not: CARDBIT_SHOP}} : {}) },
     include: { series: { select: { autoOpenDays: true } } },
   });
   // An order's packs open together once its oldest pack is past the window.
@@ -446,7 +453,12 @@ export async function seriesOdds(
   const totalRemaining = remaining.reduce((sum, r) => sum + r._count._all, 0);
   const total = series.cards.reduce((sum, c) => sum + c.quantity, 0);
 
+  const packCounts = isCardbit(shop) ? packFrequencies(await db.slot.findMany({
+    where: { seriesId: series.id, claimed: false, voided: false }, orderBy: { position: "asc" },
+    select: { cardId: true, card: { select: { tier: true } } },
+  }), Math.max(1, series.cardsPerPack)) : null;
   return {
+    ...(packCounts ? { completePacks: packCounts.packs, packOddsBasis: "remaining complete packs containing at least one" } : {}),
     title: series.title,
     handle: series.handle,
     status: series.status,
@@ -485,6 +497,7 @@ export async function seriesOdds(
         .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
         .map(([name, n]) => ({
           name,
+          ...(packCounts ? { packsContaining: packCounts.tiers.get(name) ?? 0 } : {}),
           remaining: n.remaining,
           total: n.total,
           currentOdds: totalRemaining > 0 ? n.remaining / totalRemaining : 0,
@@ -493,6 +506,7 @@ export async function seriesOdds(
     cards: series.cards.map((c) => {
       const left = remainingBy.get(c.id) ?? 0;
       return {
+        ...(packCounts ? { packsContaining: packCounts.cards.get(c.id) ?? 0 } : {}),
         title: c.title,
         tier: c.tier,
         imageUrl: c.imageUrl,
@@ -508,7 +522,7 @@ export async function seriesOdds(
 /** Live series that still have packs to sell, with how many are left. */
 export async function availableSeries(db: Db, shop: string) {
   const series = await db.series.findMany({
-    where: { shop, status: "LIVE" },
+    where: { shop, status: "LIVE", ...(isCardbit(shop) ? {staffTest:false} : {}) },
     orderBy: { launchedAt: "desc" },
   });
   const left = await db.slot.groupBy({

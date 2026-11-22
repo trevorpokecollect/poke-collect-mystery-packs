@@ -7,6 +7,7 @@ import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import type { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { fulfillWholeOrder, gql, tagOrder } from "./orders.server";
+import { brand } from "./brand.server";
 
 export const VAULT_RATE_TITLE = "Keep In My Vault (Don't Ship Now)";
 // The rate's first name (2026-10-23), still recognized on orders placed with it.
@@ -25,7 +26,7 @@ async function storeSeries(db: PrismaClient, shop: string) {
   return db.series.create({
     data: {
       shop,
-      title: "Bought From Poke-Collect",
+      title: `Bought From ${brand().name}`,
       handle: "bought-from-poke-collect",
       status: "CLOSED",
       storePurchase: true,

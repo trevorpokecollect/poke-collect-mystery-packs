@@ -7,9 +7,10 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import type { PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
+import { brand } from "./brand.server";
 
 const BASE = "https://tcgcsv.com";
-const UA = "PokeCollectMysteryPacks/1.0 (+https://poke-collect.com)";
+const UA = `PokeCollectMysteryPacks/1.0 (+${brand().siteUrl})`;
 const CATEGORIES = [3, 85];
 const HOUR = 3_600_000;
 

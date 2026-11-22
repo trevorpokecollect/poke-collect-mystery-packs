@@ -6,6 +6,7 @@
 // once the current one is nearly full.
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import { gql } from "./orders.server";
+import { brand } from "./brand.server";
 
 export const VAULT_CARD_HANDLE = "vault-market-card";
 export const VAULT_CARD_TYPE = "Vault Market Card";
@@ -22,7 +23,7 @@ async function createVaultCardProduct(admin: AdminApiContext, handle: string) {
       title: "Vault Card",
       handle,
       productType: VAULT_CARD_TYPE,
-      vendor: "Poke-Collect",
+      vendor: brand().name,
       status: "ACTIVE",
       descriptionHtml: "<p>A card bought from another collector in Vault Market. It moves to the buyer's vault; nothing ships. Used by the Mystery Packs app only.</p>",
       productOptions: [{ name: "Card", values: [{ name: "Vault Card" }] }],
