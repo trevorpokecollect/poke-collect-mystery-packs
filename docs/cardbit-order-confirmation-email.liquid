@@ -1,0 +1,13 @@
+{% comment %}Cardbit order confirmation. Add this block to the Cardbit notification after merchant review.{% endcomment %}
+{% assign cardbit_pack = false %}
+{% for item in line_items %}
+  {% if item.product.type == 'Mystery Pack' or item.product.tags contains 'cardbit-pack' or item.product.template_suffix contains 'cardbit-' %}
+    {% assign cardbit_pack = true %}
+  {% endif %}
+{% endfor %}
+{% if shop.permanent_domain == 'hhuuev-81.myshopify.com' and cardbit_pack %}
+  {% assign packs_url = order.metafields.mystery_packs.open_url | default: order_status_url %}
+  <p>Your pack is saved to your Cardbit account. Sign in to open it whenever you’re ready.</p>
+  <p><a href="{{ packs_url | escape }}">Open my packs</a></p>
+  <p>Your physical cards stay in My Vault. Choose the copies you want to ship and enter your delivery address to see shipping rates.</p>
+{% endif %}
