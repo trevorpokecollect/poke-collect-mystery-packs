@@ -37,6 +37,8 @@ interface Offer {
   cash: number | null;
   credit: number | null;
   retail: number | null;
+  unavailable?: string;
+  hiddenBy?: string;
 }
 
 const numericId = (gid: string) => gid.split("/").pop() ?? gid;
@@ -51,14 +53,19 @@ async function offersFor(ids: string[], fetcher: typeof fetch): Promise<Offer[]>
   return data.offers ?? [];
 }
 
-/** Prices every card in the pool at Card Broker's cash and credit offers and retail. */
-export async function buildBuylistReport(cards: PoolCard[], fetcher: typeof fetch = fetch): Promise<BuylistReport> {
-  const ids = [...new Set(cards.map((c) => numericId(c.variantId)))];
+/** Exact Shopify variant quotes from the existing Poke-Collect merchant buylist. */
+export async function fetchBuylistOffers(variants: string[], fetcher: typeof fetch = fetch) {
+  const ids = [...new Set(variants.map(numericId).filter(id => /^\d{1,20}$/.test(id)))];
   const offers = new Map<string, Offer>();
   for (let i = 0; i < ids.length; i += BATCH) {
     for (const o of await offersFor(ids.slice(i, i + BATCH), fetcher)) offers.set(String(o.variantId), o);
   }
+  return offers;
+}
 
+/** Prices every card in the pool at Card Broker's cash and credit offers and retail. */
+export async function buildBuylistReport(cards: PoolCard[], fetcher: typeof fetch = fetch): Promise<BuylistReport> {
+  const offers = await fetchBuylistOffers(cards.map(c => c.variantId), fetcher);
   const report: BuylistReport = { source: BUYLIST_SOURCE, computedAt: new Date().toISOString(), copies: 0, matchedCopies: 0, cash: 0, credit: 0, retail: 0, missing: [], byTier: {} };
   for (const card of cards) {
     const market = Number(card.marketValue.toString());
