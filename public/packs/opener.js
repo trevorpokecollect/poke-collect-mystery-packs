@@ -9,6 +9,9 @@
   var standalone = !root;
 
   var api = (root && root.getAttribute("data-api")) || "/apps/packs/api";
+  // Per-site store name and support address (app/lib/brand.server.ts), Poke-Collect's when the page sends none.
+  var BRAND = (root && root.getAttribute("data-brand")) || "Poke-Collect";
+  var SUPPORT = (root && root.getAttribute("data-support")) || "support@poke-collect.com";
   // Card back images sit next to this script (the app's own host, wherever the page is).
   var scriptSrc = (document.currentScript && document.currentScript.src) || "";
   var assetBase = window.PCPackAssetBase != null ? window.PCPackAssetBase : scriptSrc ? scriptSrc.replace(/opener\.js.*$/, "") : "/packs/";
@@ -135,7 +138,7 @@
         ]
       : [
           el("span", { class: "mp-pack-foil", "aria-hidden": "true" }),
-          el("span", { class: "mp-pack-brand", text: "Poke-Collect" }),
+          el("span", { class: "mp-pack-brand", text: BRAND }),
           el("span", { class: "mp-pack-emblem", "aria-hidden": "true" }),
           el("span", { class: "mp-pack-series", text: pack.series }),
           el("span", { class: "mp-pack-label", text: "Tap To Open" }),
@@ -508,7 +511,7 @@
   function shipReply(r) {
     return r.text().then(function (text) {
       try { return JSON.parse(text); } catch (e) {
-        return { error: "Something went wrong on our end. Please try again in a minute, or email support@poke-collect.com and we'll send your cards." };
+        return { error: "Something went wrong on our end. Please try again in a minute, or email " + SUPPORT + " and we'll send your cards." };
       }
     });
   }

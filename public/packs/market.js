@@ -7,6 +7,8 @@
   var root = document.getElementById("vault-market");
   if (!root) return;
   var base = root.getAttribute("data-api") || "/apps/packs/api/market";
+  // Per-site store name (app/lib/brand.server.ts), Poke-Collect's when the page sends none.
+  var BRAND = root.getAttribute("data-brand") || "Poke-Collect";
   // Staff preview link (?demo=<token>): sample cards, and buttons only show what would happen.
   var demo = root.getAttribute("data-demo");
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -259,7 +261,7 @@
       ["offers", "#/offers", "Offers"],
     ];
     var storeBar = el("div", { class: "vm-store-bar" }, [
-      el("a", { class: "vm-store-back", href: "/" }, [el("span", { "aria-hidden": "true", text: "←" }), " Back To Poke-Collect"]),
+      el("a", { class: "vm-store-back", href: "/" }, [el("span", { "aria-hidden": "true", text: "←" }), " Back To " + BRAND]),
       el("div", { class: "vm-store-links" }, [
         el("a", { href: "/apps/packs", text: "My Packs" }),
         el("a", { href: "/", text: "Shop" }),
@@ -269,7 +271,7 @@
     return el("div", { class: "vm-top-wrap" }, [storeBar, el("header", { class: "vm-top" }, [
       el("a", { class: "vm-logo", href: "#/" }, [
         el("span", { class: "vm-logo-mark", text: "Vault Market" }),
-        el("span", { class: "vm-logo-by", text: "By Poke-Collect" }),
+        el("span", { class: "vm-logo-by", text: "By " + BRAND }),
       ]),
       el("nav", { class: "vm-nav", "aria-label": "Vault Market" }, links.map(function (l) {
         return el("a", { class: "vm-nav-link" + (current === l[0] ? " vm-nav-on" : ""), href: l[1], "aria-current": current === l[0] ? "page" : false }, [
@@ -358,8 +360,8 @@
           el("p", { class: "vm-eyebrow", text: "Player To Player" }),
           el("h1", { class: "vm-hero-title" }, ["Every Card Here Is ", el("em", { text: "In A Real Vault." })]),
           el("p", { class: "vm-hero-text", text: state.selling
-            ? "Trade With Other Collectors Or Buy Straight From Their Binders. Cards Change Hands Inside The Poke-Collect Vault, So Nothing Gets Lost In The Mail."
-            : "Trade With Other Collectors. Cards Change Hands Inside The Poke-Collect Vault, So Nothing Gets Lost In The Mail." }),
+            ? "Trade With Other Collectors Or Buy Straight From Their Binders. Cards Change Hands Inside The " + BRAND + " Vault, So Nothing Gets Lost In The Mail."
+            : "Trade With Other Collectors. Cards Change Hands Inside The " + BRAND + " Vault, So Nothing Gets Lost In The Mail." }),
           el("dl", { class: "vm-hero-stats" }, [
             stat(board.length, "Cards Up"),
             stat(Object.keys(collectorCount).length, "Collectors"),
@@ -1256,8 +1258,8 @@
               : marketView(),
     );
     root.appendChild(el("footer", { class: "vm-foot" }, [
-      el("p", {}, ["Trades And Sales Are Between Collectors Only. Poke-Collect Doesn't Buy Cards Back Or Set Prices. Sellers Choose Their Own Price, And The Price Guide Is Only A Suggestion. ", el("a", { class: "vm-link", href: (state && state.termsUrl) || "/pages/vault-market-terms", target: "_blank", rel: "noopener", text: "Vault Market Terms" })]),
-      el("a", { class: "vm-link", href: "/", text: "Back To Poke-Collect" }),
+      el("p", {}, ["Trades And Sales Are Between Collectors Only. " + BRAND + " Doesn't Buy Cards Back Or Set Prices. Sellers Choose Their Own Price, And The Price Guide Is Only A Suggestion. ", el("a", { class: "vm-link", href: (state && state.termsUrl) || "/pages/vault-market-terms", target: "_blank", rel: "noopener", text: "Vault Market Terms" })]),
+      el("a", { class: "vm-link", href: "/", text: "Back To " + BRAND }),
     ]));
     var layer = modalLayer();
     if (layer) root.appendChild(layer);
