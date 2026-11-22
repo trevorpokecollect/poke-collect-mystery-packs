@@ -3,22 +3,24 @@ import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
+import { isCardbit } from "../lib/cardbit.server";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   // eslint-disable-next-line no-undef
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", pricingDesk: isCardbit(session.shop) };
 };
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, pricingDesk } = useLoaderData<typeof loader>();
 
   return (
     <AppProvider apiKey={apiKey}>
       <s-app-nav>
         <s-link href="/app">Pack series</s-link>
+        {pricingDesk && <s-link href="/app/pricing-desk">Pricing desk</s-link>}
         <s-link href="/app/series/new">New series</s-link>
         <s-link href="/app/vault">Vault shipments</s-link>
         <s-link href="/app/marketplace">Vault marketplace</s-link>

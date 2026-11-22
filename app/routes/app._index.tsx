@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs } from "re
 import { useActionData, useLoaderData, useSubmit } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { isCardbit } from "../lib/cardbit.server";
 import db from "../db.server";
 import { getFreeShipping, saveFreeShipping } from "../lib/free-shipping.server";
 import { addVaultCardsToShipment, FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
@@ -20,6 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // paid, unshipped vault order (for cards opened after they paid).
   const addVaultCards = new URL(request.url).searchParams.get("addVaultCards");
   return {
+    pricingDesk: isCardbit(session.shop),
     addVaultCards,
     // Opens the storefront My Packs page with sample packs to open (link works for 30 days).
     previewUrl: `https://${session.shop}/apps/packs?demo=${demoToken(session.shop)}`,
@@ -62,7 +64,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 const tone = { DRAFT: "neutral", LIVE: "success", CLOSED: "info" } as const;
 
 export default function Index() {
-  const { series, unopened, freeShipping, vaultShipping, previewUrl, addVaultCards } = useLoaderData<typeof loader>();
+  const { series, unopened, freeShipping, vaultShipping, previewUrl, addVaultCards, pricingDesk } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const submit = useSubmit();
 
@@ -73,6 +75,7 @@ export default function Index() {
         New series
       </s-button>
 
+      {pricingDesk && <s-button slot="secondary-actions" href="/app/pricing-desk">Pricing desk</s-button>}
       <s-section>
         {series.length === 0 ? (
           <s-paragraph>

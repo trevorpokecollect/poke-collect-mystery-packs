@@ -357,6 +357,7 @@ export default function SeriesPage() {
 
   return (
     <s-page heading={series.title}>
+      {cardbit && <s-button slot="secondary-actions" href={`/app/pricing-desk?series=${encodeURIComponent(series.id)}`}>Pricing desk</s-button>}
       {draft && Object.keys(buildOverrides).length > 0 ? (
         <s-button
           slot="secondary-actions"
