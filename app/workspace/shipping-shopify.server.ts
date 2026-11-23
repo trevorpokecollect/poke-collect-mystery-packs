@@ -17,9 +17,17 @@ export type OrderHeader = {
   displayFinancialStatus: string;
   displayFulfillmentStatus: string;
   shippingLine: { title: string } | null;
+  customAttributes?: { key: string; value: string }[];
+  tags?: string[];
   currentTotalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
 };
 const header = `id name test cancelledAt createdAt displayFinancialStatus displayFulfillmentStatus shippingLine{title} currentTotalPriceSet{shopMoney{amount currencyCode}}`;
+export function vaultReference(order: OrderHeader) {
+  return (
+    order.customAttributes?.find((a) => a.key === "_vault_request")?.value ||
+    (order.tags?.includes("mystery-vault-shipment") ? "unlinked" : null)
+  );
+}
 export const shopifyOrderUrl = (id: string) =>
   "https://admin.shopify.com/store/" +
   shop.split(".")[0] +
@@ -159,7 +167,7 @@ export async function orderDetail(admin: AdminApiContext, id: string) {
       order: (OrderHeader & { fulfillmentOrders: Page<ParcelHeader> }) | null;
     } = await gql(
       admin,
-      `query ShelfOrder($id:ID!,$after:String){order(id:$id){${header} fulfillmentOrders(first:50,after:$after){nodes{${fields}} pageInfo{hasNextPage endCursor}}}}`,
+      `query ShelfOrder($id:ID!,$after:String){order(id:$id){${header} tags customAttributes{key value} fulfillmentOrders(first:50,after:$after){nodes{${fields}} pageInfo{hasNextPage endCursor}}}}`,
       { id, after },
     );
     if (!page.order || page.order.test)

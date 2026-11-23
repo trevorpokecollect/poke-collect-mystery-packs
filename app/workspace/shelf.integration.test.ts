@@ -120,6 +120,7 @@ describe.skipIf(!url)("numbered vault custody in PostgreSQL", () => {
     let writes = 0,
       fail = true,
       paid = true,
+      waitingForVault = false,
       closed = false,
       tracking = "",
       labelWrites = 0;
@@ -142,6 +143,9 @@ describe.skipIf(!url)("numbered vault custody in PostgreSQL", () => {
               cancelledAt: null,
               displayFinancialStatus: paid ? "PAID" : "PENDING",
               shippingLine: { title: "Ground" },
+              customAttributes: waitingForVault
+                ? [{ key: "_vault_request", value: "unlinked-fixture" }]
+                : [],
               fulfillmentOrders: conn([
                 {
                   id: fo,
@@ -260,6 +264,12 @@ describe.skipIf(!url)("numbered vault custody in PostgreSQL", () => {
     paid = false;
     await expect(action("prepareShipment")).rejects.toThrow(/Payment/);
     paid = true;
+    waitingForVault = true;
+    await expect(action("prepareShipment")).rejects.toThrow(
+      /exact vault shipment/,
+    );
+    expect(await db.cardbitShelfParcel.count({ where: { id: fo } })).toBe(0);
+    waitingForVault = false;
     const [a, b] = await Promise.all([
       action("prepareShipment"),
       action("prepareShipment"),

@@ -8,6 +8,7 @@ import { CARDBIT_SHOP as shop } from "../lib/cardbit.server";
 import { digest, reclaimClosed, shelfLock } from "./shelf.server";
 import {
   orderDetail,
+  vaultReference,
   orderItems,
   deliveryAddress,
   orderPage,
@@ -34,6 +35,7 @@ type Pick = {
 };
 type Line = { id: string; lineItemId: string; quantity: number };
 type Manifest = {
+  vaultRequest: string | null;
   picks: Pick[];
   lines: Line[];
   snapshot: string;
@@ -114,6 +116,7 @@ export function matchingPulls(line: OrderLine, native: Native[]) {
 async function assign(
   tx: Tx,
   input: Input,
+  expectedRequest: string | null,
   lines: OrderLine[],
   location: string,
   prior: string[],
@@ -134,6 +137,10 @@ async function assign(
       cardCount: true,
     },
   });
+  if (expectedRequest && expectedRequest !== request?.id)
+    throw Error(
+      "Waiting for Cardbit to link this paid order to its exact vault shipment.",
+    );
   if (request && (request.status !== "PAID" || request.pickup))
     throw Error("This vault shipment is awaiting payment or is local pickup.");
   const pack = await tx.packOrder.findFirst({
@@ -167,6 +174,15 @@ async function assign(
     );
   if (!request && pack && !pack.vault && !pack.finalized)
     throw Error("The pack results are still being assigned to this order.");
+  if (
+    !request &&
+    pack &&
+    !pack.vault &&
+    sourcePulls.some((p) => p.refundFlaggedAt || p.status === "VOIDED")
+  )
+    throw Error(
+      "A pack award on this order needs refund reconciliation before shipping.",
+    );
   const native = sourcePulls.filter(
     (p) =>
       request ||
@@ -216,6 +232,12 @@ async function assign(
           "A shipping line could not be matched to the customer's vaulted cards.",
         );
       const variant = l.lineItem.variant?.id;
+      if (
+        /sealed product|accessor|apparel|supplies/i.test(
+          l.lineItem.variant?.product?.productType || "",
+        )
+      )
+        continue;
       if (!variant)
         throw Error("This custom physical item has no verified shelf copy.");
       copies = await tx.cardbitShelfCopy.findMany({
@@ -282,6 +304,7 @@ async function assign(
       throw Error("Some cards in this vault shipment have no shelf record.");
   }
   const data: Manifest = {
+    vaultRequest: request?.id || null,
     picks: picks.sort((a, b) => a.slot - b.slot || a.id.localeCompare(b.id)),
     lines: selected,
     location,
@@ -533,6 +556,7 @@ export async function staffShipping(
         assign(
           tx,
           input,
+          vaultReference(order),
           lines,
           location,
           previous.map((f) => f.id),
@@ -549,6 +573,47 @@ export async function staffShipping(
     throw Error(
       "Shopify or this pick list has changed. Reconcile or return these cards before starting again.",
     );
+  const physical = manifest(p);
+  if (vaultReference(order) && vaultReference(order) !== physical.vaultRequest)
+    throw Error(
+      "The vault request changed. Reconcile this parcel before packing.",
+    );
+  const nativeIds = physical.picks.flatMap((c) => (c.pullId ? [c.pullId] : []));
+  if (nativeIds.length) {
+    const request = physical.vaultRequest
+      ? await db.shipRequest.findFirst({
+          where: {
+            id: physical.vaultRequest,
+            shop,
+            orderId: order.id,
+            status: "PAID",
+            pickup: false,
+          },
+          select: { id: true, customerId: true },
+        })
+      : null;
+    if (physical.vaultRequest && !request)
+      throw Error("This vault shipment was returned or cancelled.");
+    const matching = await db.pull.count({
+      where: {
+        id: { in: nativeIds },
+        shop,
+        status: "FULFILLING",
+        refundFlaggedAt: null,
+        ...(request
+          ? {
+              shipOrderId: order.id,
+              shipRequestId: request.id,
+              customerId: request.customerId,
+            }
+          : { orderId: order.id, shipOrderId: null, shipRequestId: null }),
+      },
+    });
+    if (matching !== nativeIds.length)
+      throw Error(
+        "Custody changed on a packed card. Review its order before shipping.",
+      );
+  }
   if (input.action === "packShipment") {
     const ids = manifest(p)
       .picks.map((i) => i.id)
