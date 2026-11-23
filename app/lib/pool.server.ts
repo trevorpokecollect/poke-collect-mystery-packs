@@ -4,6 +4,7 @@ import { isWalletPool } from "./cardbit-wallet-pool.server";
 import { CARDBIT_SHOP, isCardbit, packFrequencies } from "./cardbit.server";
 import { Prisma, type PrismaClient, type Pull } from "@prisma/client";
 import { commitmentHash, newSalt, newToken, secureShuffle } from "./fairness.server";
+import { bindNativeSlots } from "../workspace/shelf.server";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -46,6 +47,10 @@ export async function launchSeriesInTransaction(tx: Prisma.TransactionClient, se
     })),
   });
 
+  if (isCardbit(series.shop) && !series.staffTest) {
+    const slots = await tx.slot.findMany({ where: { seriesId }, select: { id: true } });
+    await bindNativeSlots(tx, slots.map(slot => slot.id));
+  }
   return tx.series.update({
     where: { id: seriesId },
     data: { status: "LIVE", salt, commitHash, launchedAt: new Date() },

@@ -71,7 +71,9 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
 
   // Singles bought with "Keep In My Vault (Ships Later)": they go to the buyer's vault.
   if (choseVaultRate(order) && admin) {
-    await vaultSinglesFromOrder(db, admin, shop, order).catch((e) => console.error(`Vaulting singles on ${order.name} failed`, e));
+    const vaulting=vaultSinglesFromOrder(db, admin, shop, order);
+    if (isCardbit(shop) && !order.test) await vaulting;
+    else await vaulting.catch((e) => console.error(`Vaulting singles on ${order.name} failed`, e));
   }
 
   const result = await drawForOrder(db, {

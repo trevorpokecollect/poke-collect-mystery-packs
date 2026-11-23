@@ -644,6 +644,10 @@ export async function walletAction(
       });
       if (acquired.count !== 1)
         throw new PoolError("This copy is no longer available for buyback.");
+      if (live) {
+        const bought = await tx.pull.findUniqueOrThrow({where:{id:input.id}, select:{slotId:true}});
+        await tx.cardbitShelfCopy.updateMany({where:{shop,poolSlotId:bought.slotId,parcelId:null},data:{poolSlotId:null}});
+      }
       if (!dynamic)
         await tx.cardbitBuyback.update({
           where: { copyId: input.id },
