@@ -7,6 +7,7 @@ import { fetchCandidates } from "../lib/inventory.server";
 import { fetchBuylistOffers } from "../lib/buylist.server";
 import { unpackCatalog } from "../pricing/catalog.server";
 import { changeBook, readBook, type References } from "./book.server";
+import { unpack, type Bundle } from "./demo-catalog.server";
 import { marketApproved } from "./market.server";
 import { printingKey, type Recipe, type Stock } from "./model";
 
@@ -206,6 +207,124 @@ function stockRow(v: StockMap): InputRow {
     cash: null,
   };
 }
+// The signed catalog can retain owned or sealed printings after a pool has rotated.
+async function shopperJapanesePrintings(admin: AdminApiContext) {
+  const rows: InputRow[] = [];
+  const versions = new Set<string>();
+  let after: string | null = null;
+  do {
+    const page: {
+      customers: {
+        nodes: { catalog: { jsonValue: Bundle } | null }[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    } = await gql(
+      admin,
+      `#graphql
+      query JapaneseShopperCatalogs($after:String) {
+        customers(first:5,after:$after,query:"tag:cardbit-demo-shopper") {
+          pageInfo { hasNextPage endCursor }
+          nodes { catalog:metafield(namespace:"cardbit_preview",key:"catalog_v1"){jsonValue} }
+        }
+      }`,
+      { after },
+    );
+    for (const { catalog } of page.customers.nodes) {
+      const archive = catalog?.jsonValue;
+      if (!archive || versions.has(archive.version)) continue;
+      versions.add(archive.version);
+      const data = unpack(archive);
+      for (const card of [...data.cards, ...(data.archivedCards ?? [])]) {
+        const set = "set" in card && card.set,
+          no = "number" in card && card.number;
+        const key = printingKey(
+          card.tcgplayerId,
+          card.language || "",
+          card.printing || "",
+          card.condition || "",
+        );
+        if (
+          key?.split("|")[1] !== "ja" ||
+          typeof set !== "string" ||
+          !set ||
+          typeof no !== "string"
+        )
+          continue;
+        rows.push({
+          id: key.split("|")[0],
+          name: card.name,
+          no,
+          set,
+          language: "Japanese",
+          finish: card.printing!,
+          condition: card.condition!,
+          cash: null,
+          retail: null,
+        });
+      }
+    }
+    after = page.customers.pageInfo.hasNextPage
+      ? page.customers.pageInfo.endCursor
+      : null;
+  } while (after);
+  return rows;
+}
+
+// The merchant's printing endpoint also covers cards without a Shopify listing.
+async function verifyJapaneseBuylist(
+  refs: References,
+  mapped: Map<string, string>,
+  date: string,
+) {
+  const pending = Object.values(refs).filter(
+    (r) => r.key.split("|")[1] === "ja" && !mapped.has(r.key) && r.market,
+  );
+  let cursor = 0;
+  async function worker() {
+    while (cursor < pending.length) {
+      const ref = pending[cursor++],
+        id = ref.key.split("|")[0];
+      const params = new URLSearchParams({
+        tcgplayerId: id,
+        printing: ref.finish,
+        condition: ref.condition,
+      });
+      const reply = await fetch(
+        "https://poke-collect.com/apps/buylist/singles/offer?" + params,
+        {
+          headers: { Accept: "application/json" },
+          redirect: "error",
+          signal: AbortSignal.timeout(12000),
+        },
+      );
+      if (!reply.ok)
+        throw Error(
+          "Poke-Collect could not verify the Japanese buylist. Retry the pricing refresh.",
+        );
+      const q = await reply.json();
+      const cash = cents(q.cash);
+      if (
+        String(q.tcgplayerId) !== id ||
+        q.setName !== ref.set ||
+        q.number !== ref.number ||
+        q.printing?.toLowerCase() !== ref.finish.toLowerCase() ||
+        q.condition?.toLowerCase() !== ref.condition.toLowerCase() ||
+        !cash ||
+        q.unavailable ||
+        q.hiddenBy
+      )
+        continue;
+      ref.cash = cash;
+      ref.retail ??= Math.round((ref.market! * 120) / 100);
+      ref.retailDate = date;
+      ref.quoteSource = "merchant";
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(3, pending.length) }, worker),
+  );
+}
+
 export async function refresh(db: PrismaClient, admin: AdminApiContext) {
   const started = new Date(),
     today = started.toISOString().slice(0, 10);
@@ -286,6 +405,10 @@ export async function refresh(db: PrismaClient, admin: AdminApiContext) {
     };
     rows.set(identity(r), r);
   }
+  if (marketApproved()) {
+    for (const r of await shopperJapanesePrintings(admin))
+      rows.set(identity(r), r);
+  }
   for (const v of stock) {
     const r = stockRow(v);
     rows.set(identity(r), r);
@@ -364,6 +487,7 @@ export async function refresh(db: PrismaClient, admin: AdminApiContext) {
       r.retailDate = today;
     }
   }
+  if (marketApproved()) await verifyJapaneseBuylist(refs, links, today);
   for (const v of stock) {
     const key = printingKey(
       v.card.tcgplayerId,

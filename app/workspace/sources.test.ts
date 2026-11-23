@@ -70,6 +70,8 @@ function wire(
   const c =
     opts.marketField === false ? { ...printing, market: undefined } : printing;
   mocks.gql.mockImplementation(async (_admin: unknown, document: string) => {
+    if (document.includes("JapaneseShopperCatalogs"))
+      return { customers: { nodes: [], pageInfo: { hasNextPage: false } } };
     if (document.includes("WorkspaceVariantOwnership"))
       return {
         shop: { myshopifyDomain: shop },
@@ -98,6 +100,17 @@ function wire(
   mocks.fetch.mockImplementation(async (raw: string, init: RequestInit) => {
     const u = new URL(raw);
     if (u.hostname === "poke-collect.com") {
+      if (u.pathname === "/apps/buylist/singles/offer") {
+        expect(u.searchParams.get("tcgplayerId")).toBe("101");
+        return Response.json({
+          tcgplayerId: 101,
+          setName: "Test Set",
+          number: "13",
+          printing: "Holo",
+          condition: "Near Mint",
+          cash: 1.25,
+        });
+      }
       expect(u.pathname).toBe("/apps/buylist/singles/variant-offers");
       expect(u.searchParams.get("variants")).toBe("881");
       expect(new Headers(init.headers).has("Authorization")).toBe(false);
@@ -232,5 +245,17 @@ it("requires a matching Shopify customer before an owner opens a new wallet", as
   expect(await lookup(empty, admin, "123")).toMatchObject({
     source: "wallet",
     customerId: id,
+  });
+});
+
+it("checks the exact Japanese printing directly when the merchant variant map omits it", async () => {
+  vi.stubEnv("CARDBIT_TCGPLAYER_MARKET_APPROVED", "true");
+  wire({ links: [], hasSnapshot: false });
+  await refresh(db, admin);
+  expect(mocks.change.mock.calls[0][1].refs[refKey]).toMatchObject({
+    cash: 125,
+    market: 225,
+    retail: 270,
+    quoteSource: "merchant",
   });
 });
