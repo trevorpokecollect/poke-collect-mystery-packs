@@ -68,7 +68,7 @@ export const setPrintingKey = (
   finish: string,
 ) => JSON.stringify([set, product, number, finish.trim().toLowerCase()]);
 
-// Read the same set index shown on Card Broker Market, once per missing set.
+// Read the same set index shown on Card Broker Market, once per requested set.
 export async function japaneseSetMarkets(names: Set<string>) {
   const prices = new Map<string, string | null>();
   if (!names.size) return prices;

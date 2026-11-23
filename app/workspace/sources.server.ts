@@ -470,16 +470,14 @@ export async function refresh(db: PrismaClient, admin: AdminApiContext) {
     };
   }
   if (marketApproved()) {
-    const missing = [...rows.values()].filter((r) => {
+    const japaneseRows = [...rows.values()].filter((r) => {
       const key = printingKey(r.id, r.language || "", r.finish, r.condition);
-      return (
-        key?.endsWith("|near mint") &&
-        key.split("|")[1] === "ja" &&
-        !refs[key]?.market
-      );
+      return key?.endsWith("|near mint") && key.split("|")[1] === "ja";
     });
-    const market = await japaneseSetMarkets(new Set(missing.map((r) => r.set)));
-    for (const row of missing) {
+    const market = await japaneseSetMarkets(
+      new Set(japaneseRows.map((r) => r.set)),
+    );
+    for (const row of japaneseRows) {
       const amount = market.get(
         setPrintingKey(row.set, row.id, row.no, row.finish),
       );

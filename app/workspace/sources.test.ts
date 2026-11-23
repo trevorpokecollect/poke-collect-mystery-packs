@@ -266,18 +266,21 @@ it("checks the exact Japanese printing directly when the merchant variant map om
   });
 });
 
-it("restores an exact Japanese Market set quote missing from the store catalog", async () => {
-  vi.stubEnv("CARDBIT_TCGPLAYER_MARKET_APPROVED", "true");
-  wire({ links: [], marketField: false, hasSnapshot: false });
-  mocks.sets.mockResolvedValue(
-    new Map([[JSON.stringify(["Test Set", "101", "13", "holo"]), "1.27"]]),
-  );
-  await refresh(db, admin);
-  expect(mocks.sets).toHaveBeenCalledWith(new Set(["Test Set"]));
-  expect(mocks.change.mock.calls[0][1].refs[refKey]).toMatchObject({
-    cash: 125,
-    market: 127,
-    retail: 152,
-    quoteSource: "merchant",
-  });
-});
+it.each([true, false])(
+  "uses the same Japanese Market quote as the storefront with a catalog quote present=%s",
+  async (marketField) => {
+    vi.stubEnv("CARDBIT_TCGPLAYER_MARKET_APPROVED", "true");
+    wire({ links: [], marketField, hasSnapshot: false });
+    mocks.sets.mockResolvedValue(
+      new Map([[JSON.stringify(["Test Set", "101", "13", "holo"]), "1.27"]]),
+    );
+    await refresh(db, admin);
+    expect(mocks.sets).toHaveBeenCalledWith(new Set(["Test Set"]));
+    expect(mocks.change.mock.calls[0][1].refs[refKey]).toMatchObject({
+      cash: 125,
+      market: 127,
+      retail: 152,
+      quoteSource: "merchant",
+    });
+  },
+);
