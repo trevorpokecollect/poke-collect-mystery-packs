@@ -1,5 +1,5 @@
-import widgetCss from "../../../../../../extensions/cardbit-giveaway-widget/assets/giveaway.css?raw";
-import widgetJs from "../../../../../../extensions/cardbit-giveaway-widget/assets/giveaway.js?raw";
+import widgetCss from "../../../../../../extensions/mystery-packs-theme/assets/giveaway.css?raw";
+import widgetJs from "../../../../../../extensions/mystery-packs-theme/assets/giveaway.js?raw";
 
 // Hosted giveaway page at /apps/packs/campaigns/<slug>, opened directly in the browser.
 // Returned as application/liquid so Shopify renders it inside the store's theme (header,

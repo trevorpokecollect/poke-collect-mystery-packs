@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 // The storefront widget itself, so the preview can't drift from what shoppers see.
-import widgetCss from "../../../../../extensions/cardbit-giveaway-widget/assets/giveaway.css?raw";
-import widgetJs from "../../../../../extensions/cardbit-giveaway-widget/assets/giveaway.js?raw";
-import popupJs from "../../../../../extensions/cardbit-giveaway-widget/assets/daily-popup.js?raw";
+import widgetCss from "../../../../../extensions/mystery-packs-theme/assets/giveaway.css?raw";
+import widgetJs from "../../../../../extensions/mystery-packs-theme/assets/giveaway.js?raw";
+import popupJs from "../../../../../extensions/mystery-packs-theme/assets/daily-popup.js?raw";
 import type { CampaignFormValues } from "../lib/campaign-form";
 import { previewData, type PreviewPrize } from "../lib/preview";
 import { Select } from "./fields";
