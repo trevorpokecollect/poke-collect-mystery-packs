@@ -79,9 +79,14 @@ export function validatePolicy(p: Policy) {
     )
       throw Error("Check each range and its rate.");
 }
+function isJapanese(c: Reference) {
+  const language = c.key?.split("|")[1] || c.language;
+  return ["ja", "jp", "japanese"].includes(String(language).trim().toLowerCase());
+}
+
 // Pool economics and Cardbits use the exact Japanese printing's USD market quote.
 export function poolRetail(c: Reference): number | null {
-  if (c.key.split("|")[1] !== "ja") return c.retail;
+  if (!isJapanese(c)) return c.retail;
   if (!c.retail || !c.market || !Number.isSafeInteger(c.market) || c.market < 0) return null;
   return Math.round(c.market * 120 / 100);
 }
@@ -92,7 +97,7 @@ export function offer(c: Reference, p: Policy): number | null {
     return null;
   const retail = poolRetail(c);
   if (retail == null) return null;
-  if (c.key.split("|")[1] === "ja") return Math.round(retail * 80 / 100) || null;
+  if (isJapanese(c)) return Math.round(retail * 80 / 100) || null;
   const band = p.bands.find(
     (b) =>
       (!b.set || b.set === c.set) &&
