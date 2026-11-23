@@ -11,6 +11,7 @@ import { workspacePackProducts } from "./pack-products.server";
 import { candidates } from "./sources.server";
 import {
   planPool,
+  poolRetail,
   validateRecipe,
   cardsPerPack,
   type Stock,
@@ -287,12 +288,12 @@ export async function commitPool(
         ref?.quoteSource !== "merchant" ||
         !ref.cash ||
         ref.key !== current?.key ||
-        ref.retail !== Math.round(Number(c.marketValue) * 100) ||
+        poolRetail(ref) !== Math.round(Number(c.marketValue) * 100) ||
         !current?.cash ||
         current.locationId !== c.locationId ||
         current.inventoryItemId !== c.inventoryItemId ||
         current.available < c.quantity ||
-        current.retail !== Math.round(Number(c.marketValue) * 100)
+        poolRetail(current) !== Math.round(Number(c.marketValue) * 100)
       )
         throw Error(
           "Stock or pricing changed. Discard this draft and rebuild it.",
@@ -357,7 +358,7 @@ export async function verifyWorkspaceLaunch(
         !ref ||
         ref.quoteSource !== "merchant" ||
         !ref.cash ||
-        ref.retail !== Math.round(Number(card.marketValue) * 100) ||
+        poolRetail(ref) !== Math.round(Number(card.marketValue) * 100) ||
         !card.inventoryItemId ||
         !card.locationId
       );

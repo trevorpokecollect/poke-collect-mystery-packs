@@ -4,9 +4,9 @@ import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import { vault } from "./portfolio.server";
 import { initialPolicy } from "./model";
 afterEach(() => vi.unstubAllEnvs());
-it("keeps the Cardbits portfolio working and omits previously stored market history while permission is pending", async () => {
+it.each([["en", "English", 200], ["ja", "Japanese", null]] as const)("handles %s offers while market access is disabled", async (lang, language, bits) => {
   vi.stubEnv("CARDBIT_TCGPLAYER_MARKET_APPROVED", "false");
-  const key = "101|ja|holo|near mint",
+  const key = `101|${lang}|holo|near mint`,
     at = new Date(),
     variantId = "gid://shopify/ProductVariant/301";
   const ref = {
@@ -16,7 +16,7 @@ it("keeps the Cardbits portfolio working and omits previously stored market hist
     number: "1",
     finish: "Holo",
     condition: "Near Mint",
-    language: "Japanese",
+    language,
     cash: 150,
     retail: 250,
     market: 9900,
@@ -64,11 +64,11 @@ it("keeps the Cardbits portfolio working and omits previously stored market hist
   expect(value).toMatchObject({
     marketApproved: false,
     market: null,
-    bits: 200,
+    bits,
     history: [{ market: null, bits: 200 }],
     holdings: [
       {
-        bits: 200,
+        bits,
         market: null,
         marketDate: null,
         history: [{ market: null, bits: 200 }],

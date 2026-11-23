@@ -84,7 +84,7 @@ describe("Cardbit owner workspace", () => {
       key: "1|ja|holo|near mint",
       language: "Japanese",
       market: 2000,
-      retail: 2400,
+      retail: 29875,
       quoteSource: "merchant" as const,
     };
     const [pick] = planPool([card], {
@@ -99,6 +99,13 @@ describe("Cardbit owner workspace", () => {
     expect(pick.retail).toBe(2400);
     expect(offer(card, initialPolicy)).toBe(1920);
     expect(offer(card, { ...initialPolicy, basis: "market" })).toBe(1920);
+    const greninja = { ...card, market: 12884 };
+    expect(offer(greninja, initialPolicy)).toBe(12369);
+    expect(offer(greninja, { rate: 5000, bands: [], overrides: { [card.key]: 5500 } })).toBe(12369);
+    expect(offer({ ...card, market: null }, initialPolicy)).toBeNull();
+    expect(offer({ ...card, cash: null }, initialPolicy)).toBeNull();
+    expect(offer({ ...card, quoteSource: "snapshot" }, initialPolicy)).toBeNull();
+    expect(offer({ ...card, market: 9992 }, initialPolicy)).toBe(9592);
     expect(card.market).toBe(2000);
   });
   it("keeps zero inventory, ineligible sets/languages and unquoted copies out of Booster", () => {

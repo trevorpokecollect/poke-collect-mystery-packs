@@ -1,3 +1,4 @@
+import { poolRetail } from "./model";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { AdminApiContext as Admin } from "@shopify/shopify-app-react-router/server";
 import { CARDBIT_SHOP as shop } from "../lib/cardbit.server";
@@ -264,7 +265,7 @@ export async function launchWalletPool(
           return (
             !ref?.cash ||
             ref.quoteSource !== "merchant" ||
-            ref.retail !== Math.round(Number(c.marketValue) * 100)
+            poolRetail(ref) !== Math.round(Number(c.marketValue) * 100)
           );
         })
       )
