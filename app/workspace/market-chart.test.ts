@@ -76,3 +76,76 @@ it("skips an ambiguous catalog match without fetching a chart", async () => {
   ).toEqual({});
   expect(fetchChart).not.toHaveBeenCalled();
 });
+
+it("resolves older Market catalog IDs while rejecting another product with the same name", async () => {
+  const p = {
+    key: "33|ja|holofoil|near mint",
+    product: 33,
+    game: "pokemon-japan",
+    finish: "holofoil",
+  };
+  const card = {
+    id: "new-id",
+    tcgplayerId: 33,
+    game: p.game,
+    name: "Example - 12/50",
+    number: "12/50",
+    set: { name: "Test Set" },
+    printing: "Holofoil",
+  };
+  vi.mocked(site).mockResolvedValue({ items: [card] });
+  const day = new Date().toISOString().slice(0, 10);
+  function response(value: unknown) {
+    // Encode the JSON subset of the pinned React Router stream protocol.
+    const records: unknown[] = [];
+    function put(v: unknown): number {
+      if (v === null) return -5;
+      const n = records.length;
+      records.push(null);
+      if (Array.isArray(v)) records[n] = v.map(put);
+      else if (typeof v === "object")
+        records[n] = Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).map(([k, val]) => [
+            "_" + put(k),
+            put(val),
+          ]),
+        );
+      else records[n] = v;
+      return n;
+    }
+    put(value);
+    return new Response(JSON.stringify(records) + "\n");
+  }
+  const hit = {
+    ...card,
+    id: "old-id",
+    imageUrl: "https://product-images.tcgplayer.com/fit-in/400x400/33.jpg",
+  };
+  const fetchChart = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 404 }))
+    .mockResolvedValueOnce(
+      response({
+        "routes/search": {
+          data: {
+            cards: [
+              hit,
+              {
+                ...hit,
+                id: "wrong",
+                imageUrl: "https://product-images.tcgplayer.com/44.jpg",
+              },
+            ],
+          },
+        },
+      }),
+    )
+    .mockResolvedValueOnce(
+      response({ "routes/card": { data: { card: hit, rows: [[day, 20]] } } }),
+    );
+  vi.stubGlobal("fetch", fetchChart);
+  expect(await marketChartHistory([p])).toEqual({ [p.key]: [[day, 2000]] });
+  expect(fetchChart.mock.calls[2][0]).toBe(
+    "https://www.cardbroker.app/market/card/old-id.data",
+  );
+});

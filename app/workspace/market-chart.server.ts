@@ -8,6 +8,9 @@ type CatalogCard = {
   game: string;
   printing: string;
   tcgplayerId: number;
+  name: string;
+  number: string | null;
+  set: { name: string } | null;
 };
 type ChartData = {
   card: { id: string; game: string; printing: string };
@@ -15,6 +18,40 @@ type ChartData = {
 };
 
 const cache = new Map<string, { expires: number; data: Promise<Prices> }>();
+
+const validId = (id: string) => /^[a-zA-Z0-9_-]{1,128}$/.test(id);
+
+function tcgImageId(image: string | null) {
+  if (!image) return null;
+  try {
+    const url = new URL(image);
+    if (
+      url.hostname === "tcgplayer-cdn.tcgplayer.com" ||
+      url.hostname === "product-images.tcgplayer.com"
+    )
+      return url.pathname.match(
+        /\/(\d+)(?:_in_\d+x\d+)?\.(?:jpg|png|webp)$/i,
+      )?.[1];
+  } catch {
+    /* Unrecognized image source. */
+  }
+  return null;
+}
+
+async function marketRoute<T>(path: string, route: string): Promise<T | null> {
+  const url = new URL(path, "https://www.cardbroker.app/market/");
+  url.pathname += ".data";
+  const response = await fetch(url.toString(), {
+    redirect: "error",
+    signal: AbortSignal.timeout(6000),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok || !response.body) throw Error("Market chart unavailable");
+  const { value } = await decode(response.body, globalThis);
+  return (
+    (value as Record<string, { data?: T }>)?.["routes/" + route]?.data ?? null
+  );
+}
 
 async function loadPrinting(p: Printing): Promise<Prices> {
   const params = new URLSearchParams({
@@ -33,22 +70,35 @@ async function loadPrinting(p: Printing): Promise<Prices> {
       c.printing.toLowerCase() === p.finish,
   );
   if (matches.length !== 1 || catalog.nextCursor) return [];
-  const id = matches[0].id;
-  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)) return [];
-  // Card Broker Market uses the catalog card ID as its chart ID. Its own
-  // React Router loader supplies the daily rows used by the collector chart.
-  const response = await fetch(
-    "https://www.cardbroker.app/market/card/" + id + ".data",
-    {
-      redirect: "error",
-      signal: AbortSignal.timeout(6000),
-    },
-  );
-  if (response.status === 404) return [];
-  if (!response.ok || !response.body) throw Error("Market chart unavailable");
-  const { value } = await decode(response.body, globalThis);
-  const chart = (value as Record<string, { data?: ChartData }>)?.["routes/card"]
-    ?.data;
+  const card = matches[0];
+  if (!validId(card.id)) return [];
+  let id = card.id;
+  let chart = await marketRoute<ChartData>("card/" + id, "card");
+  // Some historical Market imports used the original catalog's IDs. Resolve
+  // those copies by exact TCGplayer image ID, set, number, name and finish.
+  if (!chart && card.number && card.set && card.name) {
+    const query = new URLSearchParams({
+      q:
+        card.name.replace(/\s*-?\s*#?[a-z]*\d+\/[^ ]+$/i, "").trim() +
+        " " +
+        card.number,
+    });
+    const search = await marketRoute<{
+      cards: (CatalogCard & { imageUrl: string | null })[];
+    }>("search?" + query, "search");
+    const alternatives = search?.cards?.filter(
+      (c) =>
+        validId(c.id) &&
+        c.number === card.number &&
+        c.name === card.name &&
+        c.set?.name === card.set?.name &&
+        c.printing.toLowerCase() === p.finish &&
+        tcgImageId(c.imageUrl) === String(p.product),
+    );
+    if (alternatives?.length !== 1 || alternatives[0].id === id) return [];
+    id = alternatives[0].id;
+    chart = await marketRoute<ChartData>("card/" + id, "card");
+  }
   if (
     chart?.card?.id !== id ||
     chart.card.game !== p.game ||
