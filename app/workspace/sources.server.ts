@@ -49,7 +49,7 @@ type Link = {
   merchantVariantId: string;
 };
 
-async function site<T>(path: string, params: URLSearchParams) {
+export async function site<T>(path: string, params: URLSearchParams) {
   const key = process.env.CARD_BROKER_API_KEY,
     base = process.env.CARD_BROKER_API_URL;
   if (!key || !base)

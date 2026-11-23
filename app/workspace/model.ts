@@ -91,7 +91,14 @@ export function offer(c: Reference, p: Policy): number | null {
       (b.max == null || retail < b.max),
   );
   const bps = p.overrides[c.key] ?? band?.rate ?? p.rate;
-  const basis = p.basis === "market" ? c.market : retail;
+  // Merchant retail already includes the language markup. Apply it once when
+  // the owner elects to start with the unadjusted TCGplayer market instead.
+  let basis: number | null = retail;
+  if (p.basis === "market") {
+    basis = c.market;
+    if (basis != null && c.key.split("|")[1] === "ja")
+      basis = Math.floor((basis * 120 + 50) / 100);
+  }
   return basis == null
     ? null
     : Math.floor((basis * bps + 5000) / 10000) || null;

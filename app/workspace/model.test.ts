@@ -78,6 +78,29 @@ describe("Cardbit owner workspace", () => {
       }),
     ).toThrow();
   });
+  it("uses Japanese retail once for pool values and both offer bases", () => {
+    const card = {
+      ...base,
+      key: "1|ja|holo|near mint",
+      language: "Japanese",
+      market: 2000,
+      retail: 2400,
+      quoteSource: "merchant" as const,
+    };
+    const [pick] = planPool([card], {
+      ...recipe,
+      edition: "japanese",
+      language: "Japanese",
+      price: 2400,
+      target: 10000,
+      min: 2399,
+      max: 2401,
+    });
+    expect(pick.retail).toBe(2400);
+    expect(offer(card, initialPolicy)).toBe(1920);
+    expect(offer(card, { ...initialPolicy, basis: "market" })).toBe(1920);
+    expect(card.market).toBe(2000);
+  });
   it("keeps zero inventory, ineligible sets/languages and unquoted copies out of Booster", () => {
     const allowed = [
       base,
