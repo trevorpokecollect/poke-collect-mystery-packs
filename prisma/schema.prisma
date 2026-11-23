@@ -524,3 +524,65 @@ model CardbitLaunchBatch {
   confirmedAt DateTime?
   @@id([seriesId, index])
 }
+
+model CardbitShelfReceipt {
+  shop       String
+  eventKey   String
+  digest     String
+  quantity   Int
+  createdAt  DateTime @default(now())
+  @@id([shop, eventKey])
+}
+
+model CardbitShelfCopy {
+  id          String @id @default(cuid())
+  shop        String
+  eventKey    String
+  unit        Int
+  variantId   String
+  lookKey     String
+  faceKey     String
+  title       String
+  details     String
+  image       String?
+  locationId  String?
+  slot        Int?
+  pocket      Int?
+  filedAt     DateTime?
+  poolSlotId  String? @unique
+  parcelId    String?
+  shippedAt   DateTime?
+  lastSlot    Int?
+  createdAt   DateTime @default(now())
+  @@unique([shop, eventKey, unit])
+  @@unique([shop, slot, pocket])
+  @@unique([shop, slot, lookKey])
+  @@unique([shop, slot, faceKey])
+  @@index([shop, variantId, slot])
+  @@index([shop, parcelId])
+}
+
+model CardbitShelfBinding {
+  poolSlotId String @id
+  shop       String
+  copyId     String
+  boundAt    DateTime @default(now())
+  @@index([shop, copyId])
+}
+
+model CardbitShelfParcel {
+  id            String @id
+  shop          String
+  orderId       String
+  state         String @default("READY")
+  manifest      Json
+  revision      String
+  actor         String
+  tracking      String?
+  carrier       String?
+  labelResultId String?
+  labelState    String?
+  fulfillmentId String?
+  updatedAt     DateTime @updatedAt
+  @@index([shop, orderId])
+}
