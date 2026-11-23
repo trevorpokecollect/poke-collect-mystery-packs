@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import { gql } from "./orders.server";
 import { PoolError } from "./pool.server";
+import { isCardbit } from "./cardbit.server";
 
 export type ParcelAddress = {
   firstName: string;
@@ -50,7 +51,7 @@ export type ShippingCard = {
   series: { storePurchase: boolean };
   slot: { card: { variantId: string; title: string } };
 };
-export function parcelLines(pulls: ShippingCard[], currencyCode: string) {
+export function parcelLines(pulls: ShippingCard[], currencyCode: string, includeVariantRef=false) {
   const groups = new Map<string, { card: ShippingCard; quantity: number }>();
   for (const card of pulls) {
     const key =
@@ -63,6 +64,7 @@ export function parcelLines(pulls: ShippingCard[], currencyCode: string) {
     card.series.storePurchase
       ? {
           title: "Vault Card: " + card.slot.card.title,
+          ...(includeVariantRef ? {customAttributes: [{key:"_cardbit_vault_variant",value:card.slot.card.variantId}]} : {}),
           quantity,
           originalUnitPriceWithCurrency: { amount: "0.00", currencyCode },
           requiresShipping: true,
@@ -104,7 +106,7 @@ export async function quoteParcel(
       input: {
         purchasingEntity: { customerId },
         shippingAddress: address,
-        lineItems: parcelLines(pulls, "USD"),
+        lineItems: parcelLines(pulls, "USD",isCardbit(shop)),
       },
     },
   );

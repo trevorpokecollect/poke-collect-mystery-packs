@@ -18,6 +18,8 @@ import {
 import { pools, build, commitPool, discard } from "../workspace/pools.server";
 import { refresh } from "../workspace/sources.server";
 import { vault } from "../workspace/portfolio.server";
+import { shelfPage,confirmFiled } from "../workspace/shelf.server";
+import { staffShipping } from "../workspace/fulfillment.server";
 function verifiedActor(request: Request) {
   const key = process.env.CARDBIT_DESK_SECRET,
     owner = process.env.CARDBIT_OWNER_EMAIL?.trim().toLowerCase(),
@@ -58,6 +60,22 @@ export async function action({ request }: ActionFunctionArgs) {
     if (direct && input.source && input.source !== "wallet")
       return json({ error: "Choose a Cardbit customer wallet." }, 400);
     switch (input.action) {
+      case "shelf":
+      case "fileCopy":
+      case "orders":
+      case "order":
+      case "deliveryAddress":
+      case "prepareShipment":
+      case "checkShipment":
+      case "packShipment":
+      case "shipParcel":
+      case "releasePick":
+      case "buyLabel":
+      case "labelStatus":
+        if (!direct) return json({error:"Physical operations require the Cardbit owner workspace."},403);
+        if (input.action==="shelf") return json(await shelfPage(db,input));
+        if (input.action==="fileCopy") return json(await confirmFiled(db,input.copy,input.slot));
+        return json(await staffShipping(db,admin,input,actor));
       case "home": {
         const [book, series, customers, packProducts] = await Promise.all([
           readBook(db),

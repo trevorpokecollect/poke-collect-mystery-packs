@@ -161,7 +161,7 @@ export async function requestShipment(
                 title: fee ? `Vault shipment ($${SHIP_FEE} flat)` : `Vault shipment (free on ${FREE_SHIPPING_CARDS}+ cards)`,
                 priceWithCurrency: { amount: fee.toFixed(2), currencyCode },
               },
-          lineItems: parcelLines(pulls, currencyCode),
+          lineItems: parcelLines(pulls, currencyCode,isCardbit(shop)),
         },
       },
     );

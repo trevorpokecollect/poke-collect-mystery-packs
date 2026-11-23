@@ -46,12 +46,15 @@ type OrderLine = {
   variant: { id: string; displayName: string; product: { id: string; productType: string; featuredMedia: { preview: { image: { url: string } | null } | null } | null } } | null;
 };
 
+import { bindNativeSlots } from "../workspace/shelf.server";
+import { liveWorkspace } from "../workspace/mode.server";
+
 /** Puts the singles from a paid "Keep In My Vault" order into the buyer's vault. Safe to repeat. */
 export async function vaultSinglesFromOrder(
   db: PrismaClient,
   admin: AdminApiContext,
   shop: string,
-  order: { admin_graphql_api_id: string; name: string; customer?: { admin_graphql_api_id?: string } | null },
+  order: { admin_graphql_api_id: string; name: string; test?:boolean; customer?: { admin_graphql_api_id?: string } | null },
 ) {
   const orderId = order.admin_graphql_api_id;
   if (await db.packOrder.findUnique({ where: { orderId } })) return 0;
@@ -79,6 +82,7 @@ export async function vaultSinglesFromOrder(
       data: { orderId, shop, orderName: order.name, customerId, openToken: randomBytes(16).toString("hex"), vault: true, finalized: true },
     });
     let n = 0;
+    const shelfSlots: string[] = [];
     for (const line of singles) {
       const v = line.variant!;
       const card = await tx.card.upsert({
@@ -97,6 +101,7 @@ export async function vaultSinglesFromOrder(
       });
       for (let i = 0; i < line.quantity; i++) {
         const slot = await tx.slot.create({ data: { seriesId: series.id, cardId: card.id, claimed: true } });
+        shelfSlots.push(slot.id);
         await tx.pull.create({
           data: {
             shop,
@@ -114,6 +119,7 @@ export async function vaultSinglesFromOrder(
         n++;
       }
     }
+    if (liveWorkspace(shop) && !order.test) await bindNativeSlots(tx, shelfSlots,true);
     return n;
   });
 
