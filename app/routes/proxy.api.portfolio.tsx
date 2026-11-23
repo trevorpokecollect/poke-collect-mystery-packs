@@ -1,3 +1,4 @@
+import { vaultMarketHistory } from "../workspace/vault-market.server";
 import type { LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { proxyContext, json } from "../lib/proxy.server";
@@ -24,6 +25,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const data = await vault(db, admin, viewer.customerId, source);
     return json({
       ...data,
+      marketHistory: data.marketApproved
+        ? await vaultMarketHistory(data.holdings.map((h) => h.key))
+        : null,
       holdings: data.holdings.map((h) => ({
         key: h.key,
         name: h.name,
