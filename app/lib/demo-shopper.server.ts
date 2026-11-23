@@ -1,7 +1,7 @@
 import { topups } from "./cardbit-topups.server";
 import { createHash, randomInt, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { reviewWorkspaceEnabled as enabled, readBook, lockBook, quoteFor, type Identity } from "../workspace/book.server";
+import { enabled, reviewWorkspaceEnabled, readBook, lockBook, quoteFor, type Identity } from "../workspace/book.server";
 import { samplePack } from "./cardbit.server";
 
 export type DemoCard = Identity & {
@@ -24,7 +24,7 @@ export type Catalog = {
   cards: DemoCard[];
   packs: DemoPack[];
   replacesVersion?: string;
-  archivedCards?: { id: string; name: string }[];
+  archivedCards?: (Identity & { id: string; name: string; buybackBits?: number | null })[];
 };
 type Copy = {
   id: string;
@@ -322,7 +322,7 @@ export function shopAction(
     result.copyId = copyId;
   } else if (action === "buyback") {
     const copy = held(id),
-      card = cards.get(copy.cardId);
+      card = cards.get(copy.cardId) ?? catalog.archivedCards?.find(c => c.id === copy.cardId);
     if (
       !card?.buybackBits ||
       !Number.isSafeInteger(card.buybackBits) ||
@@ -334,8 +334,8 @@ export function shopAction(
       );
     entry("Sold Back · " + card.name, card.buybackBits);
     copy.status = "returned";
-    state.stock[card.id] =
-      (state.stock[card.id] ?? (card.editionId ? 0 : 1)) + 1;
+    const listed = cards.get(card.id);
+    if (listed) state.stock[card.id] = (state.stock[card.id] ?? (listed.editionId ? 0 : 1)) + 1;
     result.copyId = copy.id;
   } else if (action === "ship-group") {
     const destination = input.destination || "";
@@ -459,11 +459,18 @@ export async function demoAccount(
     if (enabled(shop)) {
       await lockBook(tx);
       const book=await readBook(tx);
-      prices=Object.fromEntries(catalog.cards.map(c=>[c.id,quoteFor(c,book)]));
-      current={...catalog,cards:catalog.cards.map(c=>({...c,buybackBits:prices![c.id]}))};
+      const review = reviewWorkspaceEnabled(shop);
+      prices = {};
+      for (const card of [...catalog.cards, ...(catalog.archivedCards ?? [])]) {
+        if (review || ["ja", "jp", "japanese"].includes(String(card.language).trim().toLowerCase()))
+          prices[card.id] = quoteFor(card, book);
+      }
+      const offers = prices;
+      current = {...catalog, archivedCards:catalog.archivedCards?.map(card => ({...card, buybackBits:offers[card.id] ?? null})), cards:catalog.cards.map(card => Object.hasOwn(offers,card.id)
+        ? {...card, buybackBits:offers[card.id], cardbitValue:offers[card.id] ?? 0} : card)};
       if (input?.action==="buyback" && !state.requests?.[input.requestId]) {
         const copy=state.copies.find(c=>c.id===input.id && c.status==="held");
-        if (!copy || !prices[copy.cardId] || input.amount!==prices[copy.cardId])
+        if (!copy || (Object.hasOwn(prices, copy.cardId) && (!prices[copy.cardId] || input.amount !== prices[copy.cardId])))
           throw new DemoError("catalog_changed","The Cardbits offer changed. Review the current price.");
       }
     }
