@@ -79,11 +79,25 @@ export function validatePolicy(p: Policy) {
     )
       throw Error("Check each range and its rate.");
 }
+function isJapanese(c: Reference) {
+  const language = c.key?.split("|")[1] || c.language;
+  return ["ja", "jp", "japanese"].includes(String(language).trim().toLowerCase());
+}
+
+// Pool economics and Cardbits use the exact Japanese printing's USD market quote.
+export function poolRetail(c: Reference): number | null {
+  if (!isJapanese(c)) return c.retail;
+  if (!c.retail || !c.market || !Number.isSafeInteger(c.market) || c.market < 0) return null;
+  return Math.round(c.market * 120 / 100);
+}
+
 export function offer(c: Reference, p: Policy): number | null {
   if (c.quoteSource && c.quoteSource !== "merchant") return null;
   if (c.cash == null || c.cash <= 0 || c.retail == null || c.retail <= 0)
     return null;
-  const retail = c.retail;
+  const retail = poolRetail(c);
+  if (retail == null) return null;
+  if (isJapanese(c)) return Math.round(retail * 80 / 100) || null;
   const band = p.bands.find(
     (b) =>
       (!b.set || b.set === c.set) &&
@@ -91,14 +105,7 @@ export function offer(c: Reference, p: Policy): number | null {
       (b.max == null || retail < b.max),
   );
   const bps = p.overrides[c.key] ?? band?.rate ?? p.rate;
-  // Merchant retail already includes the language markup. Apply it once when
-  // the owner elects to start with the unadjusted TCGplayer market instead.
-  let basis: number | null = retail;
-  if (p.basis === "market") {
-    basis = c.market;
-    if (basis != null && c.key.split("|")[1] === "ja")
-      basis = Math.floor((basis * 120 + 50) / 100);
-  }
+  const basis = p.basis === "market" ? c.market : retail;
   return basis == null
     ? null
     : Math.floor((basis * bps + 5000) / 10000) || null;
@@ -213,7 +220,7 @@ export function planPool(stock: Stock[], r: Recipe) {
   validateRecipe(r);
   const perPack = cardsPerPack(r.edition),
     count = r.packs * perPack;
-  const eligible = stock.filter(
+  const eligible = stock.map(c => ({ ...c, retail: poolRetail(c) })).filter(
     (c) =>
       c.available > 0 &&
       c.cash &&

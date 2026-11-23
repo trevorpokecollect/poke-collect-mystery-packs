@@ -1,5 +1,7 @@
 // Database-only pack logic: launching a series, drawing at payment, revealing,
 // voiding. Nothing here talks to Shopify, so it can be tested against Postgres alone.
+import { enabled as pricesEnabled, readBook } from "../workspace/book.server";
+import { offer } from "../workspace/model";
 import { isWalletPool } from "./cardbit-wallet-pool.server";
 import { CARDBIT_SHOP, isCardbit, packFrequencies } from "./cardbit.server";
 import { Prisma, type PrismaClient, type Pull } from "@prisma/client";
@@ -465,6 +467,7 @@ export async function seriesOdds(
   if (!series || series.status === "DRAFT") return null;
   const languageOf = languages ? await languages(series.cards.map((c) => c.productId)) : null;
 
+  const book = pricesEnabled(shop) ? await readBook(db) : null;
   const remaining = await db.slot.groupBy({
     by: ["cardId"],
     where: { seriesId: series.id, claimed: false, voided: false },
@@ -527,8 +530,11 @@ export async function seriesOdds(
     })(),
     cards: series.cards.map((c) => {
       const left = remainingBy.get(c.id) ?? 0;
+      const ref = book?.refs[book.variants[c.variantId]];
+      const japanese = ref ? ref.key.split("|")[1] === "ja" : ["ja","jp","japanese"].includes(languageOf?.(c.productId)?.toLowerCase() ?? "");
       return {
         ...(packCounts ? { packsContaining: packCounts.cards.get(c.id) ?? 0 } : {}),
+        ...(book && japanese ? { buybackBits: ref ? offer(ref, book.policy) : null } : {}),
         title: c.title,
         tier: c.tier,
         imageUrl: c.imageUrl,
