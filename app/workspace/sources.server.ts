@@ -8,6 +8,7 @@ import { fetchBuylistOffers } from "../lib/buylist.server";
 import { unpackCatalog } from "../pricing/catalog.server";
 import { changeBook, readBook, type References } from "./book.server";
 import { unpack, type Bundle } from "./demo-catalog.server";
+import { japaneseSetMarkets, setPrintingKey } from "./market-chart.server";
 import { marketApproved } from "./market.server";
 import { printingKey, type Recipe, type Stock } from "./model";
 
@@ -467,6 +468,45 @@ export async function refresh(db: PrismaClient, admin: AdminApiContext) {
       marketDate:
         market != null ? (raw?.marketAsOf ?? raw?.fetchedAt ?? null) : null,
     };
+  }
+  if (marketApproved()) {
+    const missing = [...rows.values()].filter((r) => {
+      const key = printingKey(r.id, r.language || "", r.finish, r.condition);
+      return (
+        key?.endsWith("|near mint") &&
+        key.split("|")[1] === "ja" &&
+        !refs[key]?.market
+      );
+    });
+    const market = await japaneseSetMarkets(new Set(missing.map((r) => r.set)));
+    for (const row of missing) {
+      const amount = market.get(
+        setPrintingKey(row.set, row.id, row.no, row.finish),
+      );
+      const raw =
+        amount && /^\d+(\.\d{1,2})?$/.test(amount)
+          ? cents(Number(amount))
+          : null;
+      if (!raw) continue;
+      const key = printingKey(row.id, "ja", row.finish, row.condition)!;
+      refs[key] ??= {
+        key,
+        name: row.name,
+        set: row.set,
+        number: row.no,
+        language: "Japanese",
+        finish: row.finish,
+        condition: row.condition,
+        market: null,
+        marketDate: null,
+        retail: null,
+        cash: null,
+        quoteSource: "unmatched",
+        retailDate: "",
+      };
+      refs[key].market = raw;
+      refs[key].marketDate = today;
+    }
   }
   // Only merchant-owned variant IDs from the explicit printing map go to the merchant.
   const mapped = Object.keys(refs).flatMap((k) =>

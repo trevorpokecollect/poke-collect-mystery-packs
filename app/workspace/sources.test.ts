@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 const mocks = vi.hoisted(() => ({
+  sets: vi.fn(),
   gql: vi.fn(),
   read: vi.fn(),
   change: vi.fn(),
@@ -11,6 +12,10 @@ vi.mock("../lib/orders.server", () => ({ gql: mocks.gql }));
 vi.mock("./book.server", () => ({
   readBook: mocks.read,
   changeBook: mocks.change,
+}));
+vi.mock("./market-chart.server", async (original) => ({
+  ...(await original<typeof import("./market-chart.server")>()),
+  japaneseSetMarkets: mocks.sets,
 }));
 import { refresh } from "./sources.server";
 import { lookup, verifyAccount } from "./customers.server";
@@ -148,6 +153,7 @@ function wire(
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.sets.mockResolvedValue(new Map());
   vi.stubEnv("CARD_BROKER_API_KEY", "test-only");
   vi.stubEnv("CARD_BROKER_API_URL", "https://app.cardbroker.app/api/v1");
   vi.stubEnv("CARDBIT_TCGPLAYER_MARKET_APPROVED", "false");
@@ -256,6 +262,22 @@ it("checks the exact Japanese printing directly when the merchant variant map om
     cash: 125,
     market: 225,
     retail: 270,
+    quoteSource: "merchant",
+  });
+});
+
+it("restores an exact Japanese Market set quote missing from the store catalog", async () => {
+  vi.stubEnv("CARDBIT_TCGPLAYER_MARKET_APPROVED", "true");
+  wire({ links: [], marketField: false, hasSnapshot: false });
+  mocks.sets.mockResolvedValue(
+    new Map([[JSON.stringify(["Test Set", "101", "13", "holo"]), "1.27"]]),
+  );
+  await refresh(db, admin);
+  expect(mocks.sets).toHaveBeenCalledWith(new Set(["Test Set"]));
+  expect(mocks.change.mock.calls[0][1].refs[refKey]).toMatchObject({
+    cash: 125,
+    market: 127,
+    retail: 152,
     quoteSource: "merchant",
   });
 });

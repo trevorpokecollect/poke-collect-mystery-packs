@@ -53,6 +53,55 @@ async function marketRoute<T>(path: string, route: string): Promise<T | null> {
   );
 }
 
+type MarketSet = { id: string; name: string; game: string };
+type SetPrinting = {
+  number: string | null;
+  printing: string;
+  imageUrl: string | null;
+  market: string | null;
+};
+
+export const setPrintingKey = (
+  set: string,
+  product: string,
+  number: string,
+  finish: string,
+) => JSON.stringify([set, product, number, finish.trim().toLowerCase()]);
+
+// Read the same set index shown on Card Broker Market, once per missing set.
+export async function japaneseSetMarkets(names: Set<string>) {
+  const prices = new Map<string, string | null>();
+  if (!names.size) return prices;
+  const index = await marketRoute<{ game: string; sets: MarketSet[] }>(
+    "sets?game=pokemon-japan",
+    "sets",
+  );
+  if (index?.game !== "pokemon-japan")
+    throw Error("Japanese Market set index unavailable.");
+  for (const name of names) {
+    const matches = index.sets.filter((s) => s.name === name && validId(s.id));
+    if (matches.length !== 1) continue;
+    const { id } = matches[0];
+    const detail = await marketRoute<{ set: MarketSet; cards: SetPrinting[] }>(
+      "sets/" + id,
+      "set",
+    );
+    if (
+      detail?.set.id !== id ||
+      detail.set.game !== "pokemon-japan" ||
+      detail.set.name !== name
+    )
+      continue;
+    for (const card of detail.cards) {
+      const product = tcgImageId(card.imageUrl);
+      if (!product || !card.number || !card.printing) continue;
+      const key = setPrintingKey(name, product, card.number, card.printing);
+      prices.set(key, prices.has(key) ? null : card.market);
+    }
+  }
+  return prices;
+}
+
 async function loadPrinting(p: Printing): Promise<Prices> {
   const params = new URLSearchParams({
     game: p.game,
