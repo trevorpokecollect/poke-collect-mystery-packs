@@ -1,7 +1,7 @@
 import { topups } from "./cardbit-topups.server";
 import { createHash, randomInt, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { enabled, reviewWorkspaceEnabled, readBook, lockBook, quoteFor, type Identity } from "../workspace/book.server";
+import { enabled, reviewWorkspaceEnabled, readBook, lockBook, quoteFor, type Book, type Identity } from "../workspace/book.server";
 import { samplePack } from "./cardbit.server";
 
 export type DemoCard = Identity & {
@@ -125,6 +125,7 @@ export function shopAction(
   catalog: Catalog,
   input: ShopperAction,
   quotedVersion?: string,
+  currentOffers?: Record<string, number | null>,
 ): Result {
   if (
     !input ||
@@ -322,7 +323,9 @@ export function shopAction(
     result.copyId = copyId;
   } else if (action === "buyback") {
     const copy = held(id),
-      card = cards.get(copy.cardId) ?? catalog.archivedCards?.find(c => c.id === copy.cardId);
+      listed = cards.get(copy.cardId),
+      archived = !listed && currentOffers?.[copy.cardId] ? catalog.archivedCards?.find(c => c.id === copy.cardId) : null,
+      card = listed ?? (archived ? { ...archived, buybackBits: currentOffers?.[copy.cardId] } : null);
     if (
       !card?.buybackBits ||
       !Number.isSafeInteger(card.buybackBits) ||
@@ -334,7 +337,6 @@ export function shopAction(
       );
     entry("Sold Back · " + card.name, card.buybackBits);
     copy.status = "returned";
-    const listed = cards.get(card.id);
     if (listed) state.stock[card.id] = (state.stock[card.id] ?? (listed.editionId ? 0 : 1)) + 1;
     result.copyId = copy.id;
   } else if (action === "ship-group") {
@@ -409,6 +411,15 @@ export function shopperView(
   };
 }
 
+function shopperOffers(catalog: Catalog, book: Book, review: boolean) {
+  const prices: Record<string, number | null> = {};
+  for (const card of [...catalog.cards, ...(catalog.archivedCards ?? [])]) {
+    if (review || ["ja", "jp", "japanese"].includes(String(card.language).trim().toLowerCase()))
+      prices[card.id] = quoteFor(card, book);
+  }
+  return prices;
+}
+
 export async function demoAccount(
   db: PrismaClient,
   shop: string,
@@ -431,7 +442,10 @@ export async function demoAccount(
   };
   if (!input) {
     const state = await load(db);
-    if (state.version === seed.version && !enabled(shop)) return { state, result: {}, prices: undefined };
+    if (state.version === seed.version) {
+      const prices = enabled(shop) ? shopperOffers(catalog, await readBook(db), reviewWorkspaceEnabled(shop)) : undefined;
+      return { state, result: {}, prices };
+    }
   }
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"demo-shopper/" + shop + "/" + customerId},0))::text`;
@@ -459,14 +473,9 @@ export async function demoAccount(
     if (enabled(shop)) {
       await lockBook(tx);
       const book=await readBook(tx);
-      const review = reviewWorkspaceEnabled(shop);
-      prices = {};
-      for (const card of [...catalog.cards, ...(catalog.archivedCards ?? [])]) {
-        if (review || ["ja", "jp", "japanese"].includes(String(card.language).trim().toLowerCase()))
-          prices[card.id] = quoteFor(card, book);
-      }
-      const offers = prices;
-      current = {...catalog, archivedCards:catalog.archivedCards?.map(card => ({...card, buybackBits:offers[card.id] ?? null})), cards:catalog.cards.map(card => Object.hasOwn(offers,card.id)
+      const offers = shopperOffers(catalog, book, reviewWorkspaceEnabled(shop));
+      prices = offers;
+      current = {...catalog, cards:catalog.cards.map(card => Object.hasOwn(offers,card.id)
         ? {...card, buybackBits:offers[card.id], cardbitValue:offers[card.id] ?? 0} : card)};
       if (input?.action==="buyback" && !state.requests?.[input.requestId]) {
         const copy=state.copies.find(c=>c.id===input.id && c.status==="held");
@@ -474,7 +483,7 @@ export async function demoAccount(
           throw new DemoError("catalog_changed","The Cardbits offer changed. Review the current price.");
       }
     }
-    const result = input ? shopAction(state, current, input, quotedVersion) : {};
+    const result = input ? shopAction(state, current, input, quotedVersion, prices) : {};
     await tx.cardbitDemoAccount.update({
       where,
       data: { state: jsonState(state) },
