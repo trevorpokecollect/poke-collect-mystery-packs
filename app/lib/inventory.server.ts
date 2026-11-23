@@ -141,15 +141,15 @@ export async function fetchCandidates(admin: Admin, filter: CandidateFilter): Pr
 }
 
 interface Move {
+  expectedAvailable?: number;
   inventoryItemId: string;
   locationId: string;
   quantity: number;
 }
 
-// Each call gets a fresh idempotency key. Shopify silently skips a move whose key it has seen
-// before, so reusing a key (e.g. when a pull is released, re-reserved, then released again)
-// would leave a copy stuck in "reserved" while the order also commits it.
-async function moveQuantities(
+// Reuse a key when retrying the same move. A later reservation or release is a
+// distinct move and needs its own key, even if it covers the same card.
+export async function moveQuantities(
   admin: Admin,
   moves: Move[],
   direction: "reserve" | "release",
@@ -180,7 +180,7 @@ async function moveQuantities(
             locationId: m.locationId,
             name: from,
             ledgerDocumentUri: from === "reserved" ? ledger : null,
-            changeFromQuantity: null,
+            changeFromQuantity: m.expectedAvailable ?? null,
           },
           to: {
             locationId: m.locationId,
@@ -194,7 +194,7 @@ async function moveQuantities(
   );
 }
 
-const ledgerFor = (seriesId: string) => `mystery-packs://series/${seriesId}`;
+export const ledgerFor = (seriesId: string) => `mystery-packs://series/${seriesId}`;
 
 function reservable(card: Card): card is Card & { inventoryItemId: string; locationId: string } {
   return !!card.inventoryItemId && !!card.locationId;
@@ -274,7 +274,7 @@ function countsBy(pulls: { slot: { card: Card } }[]) {
 }
 
 /** Available counts keyed by `${inventoryItemId}|${locationId}`; missing when Shopify doesn't say. */
-async function availableAt(admin: Admin, items: { inventoryItemId: string; locationId: string }[]) {
+export async function availableAt(admin: Admin, items: { inventoryItemId: string; locationId: string }[]) {
   const out = new Map<string, number>();
   const ids = [...new Set(items.map((i) => i.inventoryItemId))];
   for (let i = 0; i < ids.length; i += 50) {

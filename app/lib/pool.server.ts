@@ -1,5 +1,6 @@
 // Database-only pack logic: launching a series, drawing at payment, revealing,
 // voiding. Nothing here talks to Shopify, so it can be tested against Postgres alone.
+import { isWalletPool } from "./cardbit-wallet-pool.server";
 import { CARDBIT_SHOP, isCardbit, packFrequencies } from "./cardbit.server";
 import { Prisma, type PrismaClient, type Pull } from "@prisma/client";
 import { commitmentHash, newSalt, newToken, secureShuffle } from "./fairness.server";
@@ -83,11 +84,11 @@ export async function drawForOrder(db: PrismaClient, input: DrawInput): Promise<
   return db.$transaction(tx => claimFromSeries(tx, input, byVariant));
 }
 
-export async function drawForOrderInTransaction(tx: Prisma.TransactionClient, input: DrawInput, requiredSeries?: string): Promise<DrawResult> {
+export async function drawForOrderInTransaction(tx: Prisma.TransactionClient, input: DrawInput, requiredSeries?: string | {id:string;staffTest:boolean}): Promise<DrawResult> {
   return claimFromSeries(tx, input, await drawCandidates(tx, input, requiredSeries));
 }
 
-async function drawCandidates(db: Db, input: DrawInput, requiredSeries?: string) {
+async function drawCandidates(db: Db, input: DrawInput, requiredSeries?: string | {id:string;staffTest:boolean}) {
   const cardbit = isCardbit(input.shop);
   const variantIds = [...new Set(input.lines.map((l) => l.variantId))];
   // A pack product can be reused by later series, so draw from the live one. A series that
@@ -95,7 +96,7 @@ async function drawCandidates(db: Db, input: DrawInput, requiredSeries?: string)
   const candidates = await db.series.findMany({
     where: {
       shop: input.shop,
-      ...(requiredSeries ? { id: requiredSeries, staffTest: true } : isCardbit(input.shop) ? { staffTest: false } : {}),
+      ...(requiredSeries ? (typeof requiredSeries === "string" ? { id: requiredSeries, staffTest: true } : requiredSeries) : isCardbit(input.shop) ? { staffTest: false } : {}),
       packVariantId: { in: variantIds },
       OR: [cardbit ? {status:{in:["LIVE","CLOSED"]}} : {status:"LIVE"}, { pulls: { some: { orderId: input.orderId } } }],
     },
@@ -104,6 +105,7 @@ async function drawCandidates(db: Db, input: DrawInput, requiredSeries?: string)
   });
   const byVariant = new Map<string, (typeof candidates)[number]>();
   for (const s of candidates) {
+    if (cardbit && !requiredSeries && isWalletPool(s.buildRules) && s._count.pulls === 0) continue;
     const current = byVariant.get(s.packVariantId);
     if (!current || (current._count.pulls === 0 && (s._count.pulls > 0 || s.status === "LIVE" || (cardbit && current.status === "CLOSED")))) {
       byVariant.set(s.packVariantId, s);
@@ -121,6 +123,11 @@ async function claimFromSeries(tx: Prisma.TransactionClient, input: DrawInput, b
   const ids = seriesList.map((s) => s.id).sort();
   await tx.$queryRaw`SELECT id FROM "Series" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
 
+  // A series may have closed between selection and acquiring its row lock.
+  if(isCardbit(input.shop)){
+    const current = await tx.series.findMany({where:{id:{in:ids}},select:{id:true,status:true}});
+    for (const s of seriesList) s.status = current.find(r=>r.id===s.id)!.status;
+  }
   const packOrder = await tx.packOrder.upsert({
     where: { orderId: input.orderId },
     create: {
@@ -478,6 +485,7 @@ export async function seriesOdds(
     status: series.status,
     packPrice: series.packPrice.toString(),
     commitHash: series.commitHash,
+    ...(isCardbit(shop) && isWalletPool(series.buildRules) ? {walletOnly:true}:{}),
     // The salt and full sequence are only published once the series is closed.
     reveal:
       series.status === "CLOSED"

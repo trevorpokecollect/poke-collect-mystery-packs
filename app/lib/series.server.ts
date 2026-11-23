@@ -1,3 +1,4 @@
+import { isWalletPool } from "./cardbit-wallet-pool.server";
 import { liveWorkspace } from "../workspace/mode.server";
 import { lockPackVariantDraft } from "./series-draft-lock.server";
 // Admin-side series management: creating a series, filling its card pool from
@@ -170,6 +171,7 @@ export async function launch(admin: AdminApiContext, seriesId: string) {
     where: { shop: draft.shop, packVariantId: draft.packVariantId, status: "LIVE", id: { not: draft.id } },
   });
   if (live) throw new Error(`"${live.title}" is still selling on this pack. Close it before launching this draft.`);
+  if (liveWorkspace(draft.shop) && isWalletPool(draft.buildRules)) throw Error("Confirm this wallet pool in the Cardbit owner workspace.");
   if (draft.reserveInventory && draft.status === "DRAFT") {
     const short = await unavailableCards(admin, seriesId);
     if (short.length > 0) {
@@ -248,6 +250,7 @@ export async function syncPackStock(admin: AdminApiContext, seriesId: string) {
     });
     if (live) series = live;
   }
+  if (liveWorkspace(series.shop) && isWalletPool(series.buildRules)) return;
   seriesId = series.id;
   const left =
     series.status === "LIVE"
