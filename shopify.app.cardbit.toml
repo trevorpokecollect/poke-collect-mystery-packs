@@ -45,6 +45,10 @@ api_version = "2026-10"
   topics = ["refunds/create"]
   uri = "/webhooks/refunds/create"
 
+  [[webhooks.subscriptions]]
+  topics = ["fulfillments/create","fulfillments/update"]
+  uri = "/webhooks/cardbit/fulfillment"
+
 [build]
 # Keep the Railway URLs; don't let `shopify app dev` rewrite them.
 automatically_update_urls_on_dev = false
