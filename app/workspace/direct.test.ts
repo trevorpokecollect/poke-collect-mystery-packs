@@ -169,7 +169,7 @@ it("saves a real product-bound inventory-reserving draft, reuses a request and k
   client.series.findFirst.mockResolvedValue(pool);
   expect((await build(db, admin, recipe, request)).id).toBe(pool.id);
   expect(tx.series.create).toHaveBeenCalledTimes(1);
-  await expect(commitPool(db, admin, pool.id)).rejects.toThrow("Mystery Packs");
+  await expect(commitPool(db, admin, pool.id)).rejects.toThrow("Review this draft");
   client.series.findFirst.mockResolvedValue(null);
   tx.series.findFirst.mockResolvedValue({ title: "Another draft" });
   await expect(build(db, admin, recipe, request)).rejects.toThrow(

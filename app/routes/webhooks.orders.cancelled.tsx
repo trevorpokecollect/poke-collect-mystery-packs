@@ -11,7 +11,7 @@ import { syncPackStock } from "../lib/series.server";
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, payload, shop } = await authenticate.webhook(request);
   const orderId = (payload as { admin_graphql_api_id: string }).admin_graphql_api_id;
-  await reviewFunding(db,shop,orderId);
+  await reviewFunding(db,shop,orderId,admin);
   // A cancelled Vault Marketplace purchase: hold the seller's credit for staff.
   await flagMarketOrder(db, orderId, "The buyer's order was cancelled.");
   // A cancelled order paid partly with a Vault Credit code: that credit goes back to the balance.

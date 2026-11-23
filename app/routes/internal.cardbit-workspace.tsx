@@ -98,9 +98,13 @@ export async function action({ request }: ActionFunctionArgs) {
       case "build":
         return json(await build(db, admin, input.recipe, input.requestId));
       case "commit":
-        return json(await commitPool(db, admin, input.id));
+        return json(await commitPool(db, admin, input.id, input.revision));
       case "discard":
-        await discard(db, input.id);
+        if (direct) {
+          const { discardWalletDraft } =
+            await import("../workspace/launch.server");
+          await discardWalletDraft(db, admin, input.id);
+        } else await discard(db, input.id);
         return json({ ok: true });
       case "pricing":
         return json({

@@ -1,14 +1,21 @@
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
-import { walletAction, cardbitsConfig } from "../lib/cardbits.server";
+import { walletAction, walletAccess, walletView } from "../lib/cardbits.server";
 import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
+
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const { shop, viewer } = await proxyContext(request);
+  if (!viewer?.customerId || !walletAccess(shop, viewer.customerId))
+    return json({ error: "Sign in to Cardbit." }, 401);
+  return json(await walletView(db, shop, viewer.customerId));
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
   if (!viewer?.customerId) return json({ error: "Sign in to Cardbit." }, 401);
-  if (!cardbitsConfig(shop)?.customers.includes(viewer.customerId))
-    return json({ error: "Cardbits testing is unavailable." }, 404);
+  if (!walletAccess(shop, viewer.customerId))
+    return json({ error: "Cardbits are unavailable." }, 404);
   if (request.method !== "POST")
     return json({ error: "Method not allowed." }, 405);
   try {

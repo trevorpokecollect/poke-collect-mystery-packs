@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { PrismaClient, Prisma } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
@@ -18,7 +19,7 @@ import {
 
 const prefix = "cb-workspace-";
 const directPrefix = "cb-owner-";
-const seriesFilter = () =>
+export const seriesFilter = () =>
   liveWorkspace(shop)
     ? { shop, staffTest: false, handle: { startsWith: directPrefix } }
     : { shop, staffTest: true, handle: { startsWith: prefix } };
@@ -33,6 +34,7 @@ function nativeBuildRules(r: Recipe) {
   const per = cardsPerPack(r.edition);
   return {
     cardbitRecipe: r,
+    cardbitSalesChannel: "wallet",
     productType: "Pokemon Single,Pokemon Japanese Single",
     language: r.language === "Any" ? "" : r.language,
     condition: r.condition,
@@ -51,7 +53,7 @@ function nativeBuildRules(r: Recipe) {
     maxJapanesePercent: r.japaneseCap ?? 100,
   };
 }
-const details = {
+export const details = {
   cards: {
     select: {
       title: true,
@@ -65,14 +67,40 @@ const details = {
     orderBy: { sortOrder: "asc" as const },
   },
 };
-type SeriesView = Prisma.SeriesGetPayload<{ include: typeof details }>;
-function toView(s: SeriesView) {
+export type SeriesView = Prisma.SeriesGetPayload<{ include: typeof details }>;
+export function draftRevision(s: SeriesView) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        s.id,
+        s.title,
+        s.packProductId,
+        s.packVariantId,
+        String(s.packPrice),
+        s.cardsPerPack,
+        s.buildRules,
+        s.tierRules,
+        s.reserveInventory,
+        s.cards.map((c) => [
+          c.variantId,
+          c.inventoryItemId,
+          c.locationId,
+          c.quantity,
+          c.tier,
+          String(c.marketValue),
+        ]),
+      ]),
+    )
+    .digest("hex");
+}
+export function toView(s: SeriesView) {
   return {
     id: s.id,
     title: s.title,
     status: s.status,
     recipe: recipeOf(s.buildRules),
     commit: s.commitHash,
+    revision: draftRevision(s),
     handle: s.handle,
     rows: s.cards.map((c) => ({
       name: c.title,
@@ -226,11 +254,14 @@ export async function commitPool(
   db: PrismaClient,
   admin: AdminApiContext,
   id: string,
+  revision?: string,
 ) {
-  if (liveWorkspace(shop))
-    throw Error(
-      "Open the saved pool in Mystery Packs to review its inventory and confirm launch.",
-    );
+  if (liveWorkspace(shop)) {
+    if (!revision || !/^[a-f0-9]{64}$/.test(revision))
+      throw Error("Review this draft in the owner workspace before launching.");
+    const { launchWalletPool } = await import("./launch.server");
+    return launchWalletPool(db, admin, id, revision);
+  }
   const s = await db.series.findFirstOrThrow({
     where: { ...seriesFilter(), id },
     include: details,

@@ -1,4 +1,5 @@
-import { fundTestOrder } from "./cardbits.server";
+import { isTopupVariant } from "./cardbit-topups.server";
+import { fundPaidTopup, fundTestOrder } from "./cardbits.server";
 // The card for every pack is decided here, server-side, the moment payment clears.
 // Called from orders/paid, and from orders/create for orders that are created already paid
 // (Shopify sends no orders/paid for those). Drawing is idempotent, so both firing is safe.
@@ -34,6 +35,8 @@ export interface OrderPayload {
 
 export async function handlePaidOrder(shop: string, admin: AdminApiContext | undefined, order: OrderPayload) {
   if (isCardbit(shop) && order.test && admin) await fundTestOrder(db, admin, shop, order.admin_graphql_api_id);
+  if (isCardbit(shop) && !order.test && admin && order.line_items.some(line=>isTopupVariant("gid://shopify/ProductVariant/"+line.variant_id)))
+    await fundPaidTopup(db, admin, shop, order.admin_graphql_api_id);
   // Any order can use a Vault Credit code: record it and give back what the cart didn't use.
   if (!isCardbit(shop)) await settleCreditCodes(db, order).catch((error) => console.error(`Settling Vault Credit codes on ${order.name} failed`, error));
 

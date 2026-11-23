@@ -78,6 +78,7 @@ model Series {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
+  cardbitLaunchBatches CardbitLaunchBatch[]
   cards Card[]
   slots Slot[]
   pulls Pull[]
@@ -507,4 +508,19 @@ model CardbitVaultMark {
   bits     Int?
   market   Int?
   @@id([shop, customer, source, day])
+}
+
+// Each row preserves the exact Shopify comparison quantities and repeatable key across a lost response.
+model CardbitLaunchBatch {
+  seriesId    String
+  index       Int
+  revision    String
+  moves       Json
+  series Series @relation(fields:[seriesId],references:[id],onDelete:Restrict,onUpdate:Cascade)
+  cancelling Boolean @default(false)
+  releasedAt DateTime?
+  generation  Int @default(0)
+  attemptedAt DateTime?
+  confirmedAt DateTime?
+  @@id([seriesId, index])
 }

@@ -52,6 +52,22 @@ const topup = (amount = 100) => ({
 });
 
 describe("signed collector demo", () => {
+  it.each([
+    [1000, 0],
+    [5000, 0],
+    [10000, 500],
+    [50000, 5000],
+  ])("credits a %i top-up and its bonus once on the signed test account", (amount, bonus) => {
+    const state = fresh();
+    const payment = topup(amount);
+    shopAction(state, catalog, { ...topup(amount), payment: "demo-0002" });
+    shopAction(state, catalog, payment);
+    shopAction(state, catalog, payment);
+    expect(state.balance).toBe(amount + bonus);
+    expect(state.history.map((entry) => entry.delta)).toEqual(bonus ? [0, amount, bonus] : [0, amount]);
+    expect(shopperView(state, "Collector", "a").topupPromotions).toBe(true);
+  });
+
   it("records a decline once, rejects changed confirmations, and reconciles approved funding", () => {
     const state = fresh(),
       declined = { ...topup(), payment: "demo-0002" };

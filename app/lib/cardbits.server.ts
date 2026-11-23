@@ -1,8 +1,20 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
-import { reviewWorkspaceEnabled as deskEnabled, readBook, lockBook } from "../workspace/book.server";
-import {offer as currentOffer} from "../workspace/model";
+import {
+  reviewWorkspaceEnabled as deskEnabled,
+  readBook,
+  lockBook,
+} from "../workspace/book.server";
+import { liveWorkspace } from "../workspace/mode.server";
+import {
+  approvedGateways,
+  topups,
+  verifiedPaidTopup,
+  isTopupVariant,
+} from "./cardbit-topups.server";
+import { isWalletPool, walletPoolFilter } from "./cardbit-wallet-pool.server";
+import { offer as currentOffer } from "../workspace/model";
 import { isCardbit } from "./cardbit.server";
 import { drawForOrderInTransaction, PoolError } from "./pool.server";
 import { gql } from "./orders.server";
@@ -44,6 +56,27 @@ export function cardbitsConfig(shop: string, env = process.env): Config | null {
     series: pairs(env.CARDBIT_TEST_SERIES),
   };
 }
+export function walletAccess(shop: string, customerId: string) {
+  return liveWorkspace(shop)
+    ? /^gid:\/\/shopify\/Customer\/\d+$/.test(customerId)
+    : !!cardbitsConfig(shop)?.customers.includes(customerId);
+}
+async function hasRehearsalCredit(
+  db: PrismaClient | Tx,
+  shop: string,
+  customerId: string,
+) {
+  return !!(await db.cardbitReceipt.findFirst({
+    where: {
+      shop,
+      customerId,
+      kind: "topup",
+      delta: { gt: 0 },
+      qualifyingPaidCents: 0,
+    },
+    select: { id: true },
+  }));
+}
 async function lock(tx: Tx, shop: string, customerId: string) {
   await tx.cardbitWallet.upsert({
     where: { shop_customerId: { shop, customerId } },
@@ -61,18 +94,32 @@ export async function walletView(
   customerId?: string,
 ) {
   const config = cardbitsConfig(shop);
-  if (!customerId || !config?.customers.includes(customerId))
-    return { enabled: false };
-  const [wallet, series, offers, history] = await Promise.all([
+  const live = liveWorkspace(shop);
+  if (!customerId || !walletAccess(shop, customerId)) return { enabled: false };
+  const [wallet, series, offers, history, rehearsal] = await Promise.all([
     db.cardbitWallet.findUnique({
       where: { shop_customerId: { shop, customerId } },
     }),
     db.series.findMany({
       where: {
         shop,
-        staffTest: true,
+        staffTest: !live,
         status: "LIVE",
-        OR: [{handle:{in:Object.keys(config.series)}},...(deskEnabled(shop)?[{handle:{startsWith:"cb-workspace-"},packVariantId:{startsWith:"qa:cb-workspace-"}}]:[])],
+        ...(live
+          ? { buildRules: walletPoolFilter }
+          : {
+              OR: [
+                { handle: { in: Object.keys(config!.series) } },
+                ...(deskEnabled(shop)
+                  ? [
+                      {
+                        handle: { startsWith: "cb-workspace-" },
+                        packVariantId: { startsWith: "qa:cb-workspace-" },
+                      },
+                    ]
+                  : []),
+              ],
+            }),
       },
       select: {
         id: true,
@@ -81,6 +128,10 @@ export async function walletView(
         commitHash: true,
         cardsPerPack: true,
         packPrice: true,
+        packProductId: true,
+        _count: {
+          select: { slots: { where: { claimed: false, voided: false } } },
+        },
       },
     }),
     db.cardbitBuyback.findMany({
@@ -98,25 +149,68 @@ export async function walletView(
       take: 30,
       select: { kind: true, delta: true, openingId: true, createdAt: true },
     }),
+    live ? hasRehearsalCredit(db, shop, customerId) : false,
   ]);
-  let dynamic: {copyId:string;amount:number;version:string}[]|undefined;
-  if(deskEnabled(shop)){
-    const [book,pulls]=await Promise.all([readBook(db),db.pull.findMany({where:{shop,customerId,status:"REVEALED",shipRequestId:null,series:{staffTest:true},listings:{none:{status:{in:["ACTIVE","CHECKOUT"]}}},tradeItems:{none:{trade:{status:"PENDING"}}}},select:{id:true,slot:{select:{card:{select:{variantId:true}}}}}})]);
-    dynamic=pulls.flatMap(p=>{const ref=book.refs[book.variants[p.slot.card.variantId]], amount=ref?currentOffer(ref,book.policy):null;
-      return amount?[{copyId:p.id,amount,version:"price:"+amount}]:[];});
+  let dynamic:
+    { copyId: string; amount: number; version: string }[] | undefined;
+  if (live || deskEnabled(shop)) {
+    const [book, pulls] = await Promise.all([
+      readBook(db),
+      db.pull.findMany({
+        where: {
+          shop,
+          customerId,
+          status: "REVEALED",
+          shipRequestId: null,
+          series: { staffTest: !live },
+          listings: { none: { status: { in: ["ACTIVE", "CHECKOUT"] } } },
+          tradeItems: { none: { trade: { status: "PENDING" } } },
+        },
+        select: {
+          id: true,
+          slot: {
+            select: { card: { select: { variantId: true, title: true } } },
+          },
+        },
+      }),
+    ]);
+    dynamic = pulls.flatMap((p) => {
+      const ref = book.refs[book.variants[p.slot.card.variantId]],
+        amount = ref ? currentOffer(ref, book.policy) : null;
+      return amount
+        ? [
+            {
+              copyId: p.id,
+              title: p.slot.card.title,
+              amount,
+              version: "price:" + amount,
+            },
+          ]
+        : [];
+    });
   }
   return {
     enabled: true,
-    mode: "staging",
+    mode: live ? "live" : "staging",
+    checkoutReady: live ? approvedGateways().size > 0 : true,
     accountRef: digest([shop, customerId]),
     balance: wallet?.balance ?? 0,
-    held: !!wallet?.held,
-    packs: series.map((s) => ({ ...s, price: config.series[s.handle] ?? Math.round(Number(s.packPrice)*100) })),
-    offers:dynamic??offers,
+    held: !!wallet?.held || rehearsal,
+    packs: series
+      .filter((s) => s._count.slots >= s.cardsPerPack)
+      .map(({ _count, ...s }) => ({
+        ...s,
+        remaining: Math.floor(_count.slots / s.cardsPerPack),
+        price:
+          config?.series[s.handle] ?? Math.round(Number(s.packPrice) * 100),
+      })),
+    offers: dynamic ?? offers,
     history,
-    topups: Object.entries(config.variants)
-      .filter(([id]) => /^gid:\/\/shopify\/ProductVariant\/\d+$/.test(id))
-      .map(([id, amount]) => ({ amount, variant: id.split("/").pop() })),
+    topups: live
+      ? topups
+      : Object.entries(config!.variants)
+          .filter(([id]) => /^gid:\/\/shopify\/ProductVariant\/\d+$/.test(id))
+          .map(([id, amount]) => ({ amount, variant: id.split("/").pop() })),
   };
 }
 
@@ -124,6 +218,8 @@ export type VerifiedFunding = {
   id: string;
   customerId: string;
   amount: number;
+  bonus?: number;
+  paidCents?: number;
 };
 type Money = { amount: string; currencyCode: string };
 type PaymentOrder = {
@@ -198,7 +294,7 @@ export async function recordFunding(
 ) {
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${shop + "/" + order.id},0))::text`;
-    await lock(tx, shop, order.customerId);
+    const before = await lock(tx, shop, order.customerId);
     const key = "fund:" + order.id;
     const old = await tx.cardbitReceipt.findUnique({
       where: { shop_eventKey: { shop, eventKey: key } },
@@ -210,9 +306,9 @@ export async function recordFunding(
     if (reversal) return reversal;
     await tx.cardbitWallet.update({
       where: { shop_customerId: { shop, customerId: order.customerId } },
-      data: { balance: { increment: order.amount } },
+      data: { balance: { increment: order.amount + (order.bonus ?? 0) } },
     });
-    return tx.cardbitReceipt.create({
+    const paid = await tx.cardbitReceipt.create({
       data: {
         shop,
         customerId: order.customerId,
@@ -220,8 +316,24 @@ export async function recordFunding(
         fingerprint: digest([order.id, order.amount]),
         kind: "topup",
         delta: order.amount,
+        balanceAfter: before.balance + order.amount,
+        source: order.paidCents ? "wallet" : "rehearsal",
+        qualifyingPaidCents: order.paidCents ?? 0,
       },
     });
+    if (order.bonus)
+      await tx.cardbitReceipt.create({
+        data: {
+          shop,
+          customerId: order.customerId,
+          eventKey: "bonus:" + order.id,
+          fingerprint: digest([order.id, order.bonus]),
+          kind: "topup-bonus",
+          delta: order.bonus,
+          balanceAfter: before.balance + order.amount + order.bonus,
+        },
+      });
+    return paid;
   });
 }
 export async function fundTestOrder(
@@ -245,18 +357,87 @@ export async function fundTestOrder(
   const funding = verifiedFunding(data.order, config);
   if (funding) await recordFunding(db, shop, funding);
 }
+export async function fundPaidTopup(
+  db: PrismaClient,
+  admin: AdminApiContext,
+  shop: string,
+  id: string,
+) {
+  if (!liveWorkspace(shop)) return;
+  const data = await gql(
+    admin,
+    `#graphql
+    query CardbitPaidTopup($id: ID!) { order(id:$id) {
+      id test cancelledAt displayFinancialStatus customer{id}
+      totalPriceSet{shopMoney{amount currencyCode}} totalRefundedSet{shopMoney{amount currencyCode}}
+      lineItems(first:100){pageInfo{hasNextPage} nodes{quantity currentQuantity variant{id}
+        originalUnitPriceSet{shopMoney{amount currencyCode}} discountAllocations{allocatedAmountSet{shopMoney{amount currencyCode}}}}}
+      transactions(first:100){test manualPaymentGateway status kind gateway amountSet{shopMoney{amount currencyCode}}}
+    }}`,
+    { id },
+  );
+  const funding = verifiedPaidTopup(data.order, approvedGateways());
+  if (funding) await recordFunding(db, shop, funding);
+  else if (
+    data.order?.customer?.id &&
+    data.order.lineItems.nodes.some(
+      (line: { variant: { id: string } | null }) =>
+        line.variant && isTopupVariant(line.variant.id),
+    )
+  ) {
+    await db.cardbitReceipt.upsert({
+      where: { shop_eventKey: { shop, eventKey: "unverified:" + id } },
+      create: {
+        shop,
+        customerId: data.order.customer.id,
+        eventKey: "unverified:" + id,
+        fingerprint: digest([id]),
+        kind: "topup-unverified",
+        delta: 0,
+      },
+      update: {},
+    });
+  }
+}
 export async function reviewFunding(
   db: PrismaClient,
   shop: string,
   orderId: string,
+  admin?: AdminApiContext,
 ) {
-  if (!cardbitsConfig(shop)) return;
+  if (!cardbitsConfig(shop) && !liveWorkspace(shop)) return;
+  if (
+    liveWorkspace(shop) &&
+    !(await db.cardbitReceipt.findUnique({
+      where: { shop_eventKey: { shop, eventKey: "fund:" + orderId } },
+      select: { id: true },
+    }))
+  ) {
+    if (!admin) return;
+    const data = await gql(
+      admin,
+      `#graphql
+      query CardbitRefundTopups($id:ID!){order(id:$id){lineItems(first:100){nodes{variant{id}} pageInfo{hasNextPage}}}}`,
+      { id: orderId },
+    );
+    const lines = data.order?.lineItems;
+    if (
+      !lines ||
+      (!lines.pageInfo.hasNextPage &&
+        !lines.nodes.some(
+          (l: { variant: { id: string } | null }) =>
+            l.variant && isTopupVariant(l.variant.id),
+        ))
+    )
+      return;
+  }
   await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${shop + "/" + orderId},0))::text`;
     const receipt = await tx.cardbitReceipt.findUnique({
       where: { shop_eventKey: { shop, eventKey: "fund:" + orderId } },
     });
-    const customerId = receipt?.customerId ?? HOUSE;
+    const customerId =
+      receipt?.customerId ?? (liveWorkspace(shop) ? "cardbit:merchant" : HOUSE);
     if (receipt) {
       await lock(tx, shop, customerId);
       await tx.cardbitWallet.update({
@@ -272,6 +453,7 @@ export async function reviewFunding(
         eventKey: "review:" + orderId,
         fingerprint: digest([orderId]),
         kind: "funding-review",
+        qualifyingPaidCents: -(receipt?.qualifyingPaidCents ?? 0),
         delta: 0,
       },
       update: {},
@@ -293,8 +475,9 @@ export async function walletAction(
   input: CardbitAction,
 ) {
   const config = cardbitsConfig(shop);
-  if (!config?.customers.includes(customerId))
-    throw new PoolError("Cardbits testing is unavailable for this account.");
+  const live = liveWorkspace(shop);
+  if (!walletAccess(shop, customerId))
+    throw new PoolError("Cardbits are unavailable for this account.");
   if (
     !["pack", "buyback"].includes(input.action) ||
     typeof input.id !== "string" ||
@@ -327,18 +510,30 @@ export async function walletAction(
         );
       return previous;
     }
-    if (wallet.held)
+    if (
+      wallet.held ||
+      (live && (await hasRehearsalCredit(tx, shop, customerId)))
+    )
       throw new PoolError("Cardbits activity is paused for payment review.");
     let openingId: string | null = null,
       copyId: string | null = null;
     const delta = input.action === "pack" ? -input.amount : input.amount;
     if (input.action === "pack") {
       const series = await tx.series.findFirst({
-        where: { id: input.id, shop, staffTest: true, status: "LIVE" },
+        where: { id: input.id, shop, staffTest: !live, status: "LIVE" },
       });
       if (
         !series ||
-        (config.series[series.handle] ?? (deskEnabled(shop) && series.handle.startsWith("cb-workspace-") && series.packVariantId==="qa:"+series.handle ? Math.round(Number(series.packPrice)*100):null)) !== input.amount ||
+        (live
+          ? isWalletPool(series.buildRules)
+            ? Math.round(Number(series.packPrice) * 100)
+            : null
+          : (config!.series[series.handle] ??
+            (deskEnabled(shop) &&
+            series.handle.startsWith("cb-workspace-") &&
+            series.packVariantId === "qa:" + series.handle
+              ? Math.round(Number(series.packPrice) * 100)
+              : null))) !== input.amount ||
         series.commitHash !== input.version
       )
         throw new PoolError(
@@ -346,7 +541,8 @@ export async function walletAction(
         );
       if (wallet.balance < input.amount)
         throw new PoolError("Your Cardbits balance is too low.");
-      const orderId = "cardbit-test:" + randomUUID();
+      const orderId =
+        (live ? "cardbit-wallet:" : "cardbit-test:") + randomUUID();
       const draw = await drawForOrderInTransaction(
         tx,
         {
@@ -362,12 +558,12 @@ export async function walletAction(
             },
           ],
         },
-        series.id,
+        { id: series.id, staffTest: !live },
       );
       if (draw.shortfall.length || draw.pulls.length !== series.cardsPerPack)
         throw new PoolError("This edition is sold out.");
       openingId = draw.pulls[0].id;
-      // The test receipt is the order record. Recovery workers must not send it to Shopify fulfillment.
+      // Wallet orders hold physical cards in the vault. They have no Shopify pack line to fulfill.
       const now = new Date();
       await tx.packOrder.update({
         where: { orderId },
@@ -379,28 +575,50 @@ export async function walletAction(
         },
       });
     } else {
-      const dynamic=deskEnabled(shop);
-      if(dynamic){
+      const dynamic = live || deskEnabled(shop);
+      const merchant = live ? "cardbit:merchant" : HOUSE;
+      if (dynamic) {
         await lockBook(tx);
-        const book=await readBook(tx);
-        const p=await tx.pull.findFirst({where:{id:input.id,shop,customerId,status:"REVEALED",shipRequestId:null,series:{staffTest:true}},
-          select:{slot:{select:{card:{select:{variantId:true}}}}}});
-        const ref=p&&book.refs[book.variants[p.slot.card.variantId]];
-        if(!ref||currentOffer(ref,book.policy)!==input.amount||input.version!=="price:"+input.amount) throw new PoolError("The Cardbits offer changed. Review the current value.");
+        const book = await readBook(tx);
+        const p = await tx.pull.findFirst({
+          where: {
+            id: input.id,
+            shop,
+            customerId,
+            status: "REVEALED",
+            shipRequestId: null,
+            series: { staffTest: !live },
+          },
+          select: {
+            slot: { select: { card: { select: { variantId: true } } } },
+          },
+        });
+        const ref = p && book.refs[book.variants[p.slot.card.variantId]];
+        if (
+          !ref ||
+          currentOffer(ref, book.policy) !== input.amount ||
+          input.version !== "price:" + input.amount
+        )
+          throw new PoolError(
+            "The Cardbits offer changed. Review the current value.",
+          );
       }
-      const offer = dynamic?null:await tx.cardbitBuyback.findFirst({
-        where: {
-          copyId: input.id,
-          shop,
-          customerId,
-          acceptedAt: null,
-          expiresAt: { gt: new Date() },
-        },
-      });
+      const offer = dynamic
+        ? null
+        : await tx.cardbitBuyback.findFirst({
+            where: {
+              copyId: input.id,
+              shop,
+              customerId,
+              acceptedAt: null,
+              expiresAt: { gt: new Date() },
+            },
+          });
       if (
-        !dynamic && (!offer ||
-        offer.amount !== input.amount ||
-        offer.expiresAt.toISOString() !== input.version)
+        !dynamic &&
+        (!offer ||
+          offer.amount !== input.amount ||
+          offer.expiresAt.toISOString() !== input.version)
       )
         throw new PoolError("This buyback offer changed or expired.");
       const acquired = await tx.pull.updateMany({
@@ -410,24 +628,34 @@ export async function walletAction(
           customerId,
           status: "REVEALED",
           shipRequestId: null,
-          series: { staffTest: true },
-          ...(dynamic ? {listings:{none:{status:{in:["ACTIVE" as const,"CHECKOUT" as const]}}},tradeItems:{none:{trade:{status:"PENDING" as const}}}} : {}),
+          series: { staffTest: !live },
+          ...(dynamic
+            ? {
+                listings: {
+                  none: {
+                    status: { in: ["ACTIVE" as const, "CHECKOUT" as const] },
+                  },
+                },
+                tradeItems: { none: { trade: { status: "PENDING" as const } } },
+              }
+            : {}),
         },
-        data: { customerId: HOUSE, transferredAt: new Date() },
+        data: { customerId: merchant, transferredAt: new Date() },
       });
       if (acquired.count !== 1)
         throw new PoolError("This copy is no longer available for buyback.");
-      if(!dynamic) await tx.cardbitBuyback.update({
-        where: { copyId: input.id },
-        data: { acceptedAt: new Date() },
-      });
+      if (!dynamic)
+        await tx.cardbitBuyback.update({
+          where: { copyId: input.id },
+          data: { acceptedAt: new Date() },
+        });
       await tx.pullTransfer.create({
         data: {
           shop,
           pullId: input.id,
           fromCustomerId: customerId,
-          toCustomerId: HOUSE,
-          reason: "CARDBIT_TEST_BUYBACK",
+          toCustomerId: merchant,
+          reason: live ? "CARDBIT_BUYBACK" : "CARDBIT_TEST_BUYBACK",
         },
       });
       copyId = input.id;

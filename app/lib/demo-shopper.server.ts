@@ -1,3 +1,4 @@
+import { topups } from "./cardbit-topups.server";
 import { createHash, randomInt, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { reviewWorkspaceEnabled as enabled, readBook, lockBook, quoteFor, type Identity } from "../workspace/book.server";
@@ -239,6 +240,8 @@ export function shopAction(
         : "Demo Card •0002 · Declined",
       result.approved ? amount : 0,
     );
+    const bonus = topups.find((tier) => tier.amount === amount)?.bonus;
+    if (result.approved && bonus) entry("Cardbits Top-Up Bonus", bonus);
   } else if (action === "open") {
     const pack = catalog.packs.find((p) => p.id === id);
     if (!pack)
@@ -392,6 +395,7 @@ export function shopperView(
     catalog?.archivedCards?.filter((card) => visibleCardIds.has(card.id)) ?? [];
   return {
     historyCards,
+    topupPromotions: true,
     version: state.version,
     account: { id: accountRef, name, bits: balance },
     used,
