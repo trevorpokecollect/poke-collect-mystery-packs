@@ -443,6 +443,11 @@ model CardbitReceipt {
   eventKey    String
   customerId  String
   fingerprint String
+  actorId     String?
+  reason      String?
+  balanceAfter Int?
+  source      String  @default("wallet")
+  qualifyingPaidCents Int @default(0)
   kind        String
   delta       Int
   openingId   String?
@@ -469,4 +474,37 @@ model CardbitDemoAccount {
   state      Json
 
   @@id([shop, customerId])
+}
+
+model CardbitDeskBook {
+  shop          String @id
+  revision      Int @default(0)
+  policy        Json
+  actor         String?
+  referenceDate String?
+  refreshedAt   DateTime?
+  // Exact-printing reference prices. Shopify alone supplies available quantities.
+  references    Json
+  variants      Json
+}
+
+model CardbitDeskTick {
+  id     String @id @default(cuid())
+  shop   String
+  key    String
+  at     DateTime
+  bits   Int?
+  market Int?
+  @@unique([shop, key, at])
+}
+
+model CardbitVaultMark {
+  shop     String
+  customer String
+  source   String
+  day      String
+  at       DateTime
+  bits     Int?
+  market   Int?
+  @@id([shop, customer, source, day])
 }

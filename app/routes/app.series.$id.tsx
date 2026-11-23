@@ -213,6 +213,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         return { ok: "Removed." };
       }
       case "launch": {
+        if (series.handle.startsWith("cb-owner-") && !series.staffTest && isCardbit(session.shop)) {
+          const { liveWorkspace } = await import("../workspace/mode.server");
+          if (!liveWorkspace(session.shop)) throw Error("The Cardbit owner workspace is disabled.");
+          const { verifyWorkspaceLaunch } = await import("../workspace/pools.server");
+          await verifyWorkspaceLaunch(db, admin, series.id);
+        }
         await db.card.deleteMany({ where: { seriesId: series.id, quantity: 0 } });
         const { packs } = await launch(admin, series.id);
         return { ok: `Launched with ${packs} packs.` };

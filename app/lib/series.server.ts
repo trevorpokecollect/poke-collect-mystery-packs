@@ -1,3 +1,5 @@
+import { liveWorkspace } from "../workspace/mode.server";
+import { lockPackVariantDraft } from "./series-draft-lock.server";
 // Admin-side series management: creating a series, filling its card pool from
 // Shopify variants, and launching it (which also sets the pack's inventory).
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
@@ -84,31 +86,38 @@ export async function createSeries(
   if (!variant) throw new Error("That pack product variant wasn't found.");
   // A pack can hold one draft at a time. The draft may sit alongside the pack's live series
   // (so the next pool is ready before this one sells out); launch waits for that series to close.
-  const inUse = await db.series.findFirst({
-    where: { shop, packVariantId: variant.id, status: "DRAFT" },
-    include: { _count: { select: { cards: true } } },
-  });
-  // An empty draft (e.g. left by a pool build that failed) holds nothing, so it gives way.
-  if (inUse && inUse._count.cards === 0) {
-    await db.series.delete({ where: { id: inUse.id } });
-  } else if (inUse) {
-    throw new Error(`That pack already has a draft, "${inUse.title}". Launch or discard it first.`);
-  }
-  // A later series can reuse a title (e.g. re-running "Series 1"), so make the handle unique.
-  const base = slugify(input.title) || "series";
-  let handle = base;
-  for (let n = 2; await db.series.findUnique({ where: { shop_handle: { shop, handle } } }); n++) handle = `${base}-${n}`;
-  return db.series.create({
-    data: {
-      shop,
-      title: input.title,
-      handle,
-      packProductId: variant.product.id,
-      packVariantId: variant.id,
-      packPrice: variant.price,
-      autoOpenDays: input.autoOpenDays,
-      cardsPerPack: Math.min(10, Math.max(1, Math.floor(input.cardsPerPack ?? 1))),
-    },
+  const create = async (client: Prisma.TransactionClient) => {
+    const inUse = await client.series.findFirst({
+      where: { shop, packVariantId: variant.id, status: "DRAFT" },
+      include: { _count: { select: { cards: true } } },
+    });
+    // An empty draft (e.g. left by a pool build that failed) holds nothing, so it gives way.
+    if (inUse && inUse._count.cards === 0) {
+      await client.series.delete({ where: { id: inUse.id } });
+    } else if (inUse) {
+      throw new Error(`That pack already has a draft, "${inUse.title}". Launch or discard it first.`);
+    }
+    // A later series can reuse a title (e.g. re-running "Series 1"), so make the handle unique.
+    const base = slugify(input.title) || "series";
+    let handle = base;
+    for (let n = 2; await client.series.findUnique({ where: { shop_handle: { shop, handle } } }); n++) handle = `${base}-${n}`;
+    return client.series.create({
+      data: {
+        shop,
+        title: input.title,
+        handle,
+        packProductId: variant.product.id,
+        packVariantId: variant.id,
+        packPrice: variant.price,
+        autoOpenDays: input.autoOpenDays,
+        cardsPerPack: Math.min(10, Math.max(1, Math.floor(input.cardsPerPack ?? 1))),
+      },
+    });
+  };
+  if (!liveWorkspace(shop)) return create(db);
+  return db.$transaction(async tx => {
+    await lockPackVariantDraft(tx, shop, variant.id);
+    return create(tx);
   });
 }
 

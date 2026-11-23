@@ -10,41 +10,44 @@ export class PoolError extends Error {}
 
 /** Creates one slot per physical card, shuffles them and commits to the order. */
 export async function launchSeries(db: PrismaClient, seriesId: string) {
-  return db.$transaction(async (tx) => {
-    const series = await tx.series.findUniqueOrThrow({
-      where: { id: seriesId },
-      include: { cards: true },
-    });
-    if (series.status !== "DRAFT") {
-      throw new PoolError("Only a draft series can be launched.");
-    }
-    const copies = series.cards.flatMap((card) =>
-      Array.from({ length: card.quantity }, () => card),
-    );
-    if (copies.length === 0) {
-      throw new PoolError("Add at least one card before launching.");
-    }
+  return db.$transaction(tx => launchSeriesInTransaction(tx, seriesId));
+}
 
-    const order = secureShuffle(copies);
-    const salt = newSalt();
-    const commitHash = commitmentHash(
-      salt,
-      order.map((card) => card.variantId),
-    );
+export async function launchSeriesInTransaction(tx: Prisma.TransactionClient, seriesId: string) {
+  await tx.$queryRaw`SELECT id FROM "Series" WHERE id=${seriesId} FOR UPDATE`;
+  const series = await tx.series.findUniqueOrThrow({
+    where: { id: seriesId },
+    include: { cards: true },
+  });
+  if (series.status !== "DRAFT") {
+    throw new PoolError("Only a draft series can be launched.");
+  }
+  const copies = series.cards.flatMap((card) =>
+    Array.from({ length: card.quantity }, () => card),
+  );
+  if (copies.length === 0) {
+    throw new PoolError("Add at least one card before launching.");
+  }
 
-    await tx.slot.deleteMany({ where: { seriesId } });
-    await tx.slot.createMany({
-      data: order.map((card, position) => ({
-        seriesId,
-        cardId: card.id,
-        position,
-      })),
-    });
+  const order = secureShuffle(copies);
+  const salt = newSalt();
+  const commitHash = commitmentHash(
+    salt,
+    order.map((card) => card.variantId),
+  );
 
-    return tx.series.update({
-      where: { id: seriesId },
-      data: { status: "LIVE", salt, commitHash, launchedAt: new Date() },
-    });
+  await tx.slot.deleteMany({ where: { seriesId } });
+  await tx.slot.createMany({
+    data: order.map((card, position) => ({
+      seriesId,
+      cardId: card.id,
+      position,
+    })),
+  });
+
+  return tx.series.update({
+    where: { id: seriesId },
+    data: { status: "LIVE", salt, commitHash, launchedAt: new Date() },
   });
 }
 

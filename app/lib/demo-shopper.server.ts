@@ -1,8 +1,9 @@
 import { createHash, randomInt, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { reviewWorkspaceEnabled as enabled, readBook, lockBook, quoteFor, type Identity } from "../workspace/book.server";
 import { samplePack } from "./cardbit.server";
 
-export type DemoCard = {
+export type DemoCard = Identity & {
   id: string;
   name: string;
   priceBits: number;
@@ -426,7 +427,7 @@ export async function demoAccount(
   };
   if (!input) {
     const state = await load(db);
-    if (state.version === seed.version) return { state, result: {} };
+    if (state.version === seed.version && !enabled(shop)) return { state, result: {}, prices: undefined };
   }
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"demo-shopper/" + shop + "/" + customerId},0))::text`;
@@ -449,13 +450,24 @@ export async function demoAccount(
       // Only its version changes. Never restore the starting wallet or orders here.
       state.version = seed.version;
     }
-    const result = input
-      ? shopAction(state, catalog, input, quotedVersion)
-      : {};
+    let prices: Record<string,number|null> | undefined;
+    let current=catalog;
+    if (enabled(shop)) {
+      await lockBook(tx);
+      const book=await readBook(tx);
+      prices=Object.fromEntries(catalog.cards.map(c=>[c.id,quoteFor(c,book)]));
+      current={...catalog,cards:catalog.cards.map(c=>({...c,buybackBits:prices![c.id]}))};
+      if (input?.action==="buyback" && !state.requests?.[input.requestId]) {
+        const copy=state.copies.find(c=>c.id===input.id && c.status==="held");
+        if (!copy || !prices[copy.cardId] || input.amount!==prices[copy.cardId])
+          throw new DemoError("catalog_changed","The Cardbits offer changed. Review the current price.");
+      }
+    }
+    const result = input ? shopAction(state, current, input, quotedVersion) : {};
     await tx.cardbitDemoAccount.update({
       where,
       data: { state: jsonState(state) },
     });
-    return { state, result };
+    return { state, result, prices };
   });
 }

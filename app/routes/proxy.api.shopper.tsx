@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { gunzipSync } from "node:zlib";
+import { unpack, type Bundle } from "../workspace/demo-catalog.server";
 import type { LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { isCardbit } from "../lib/cardbit.server";
@@ -7,27 +7,11 @@ import {
   demoAccount,
   DemoError,
   shopperView,
-  type Catalog,
   type ShopperState,
 } from "../lib/demo-shopper.server";
 import { gql } from "../lib/orders.server";
 import { json, proxyContext } from "../lib/proxy.server";
 
-type Bundle = { version: string; data: string };
-const catalogCache = new Map<string, Catalog>();
-function unpack(archive: Bundle): Catalog {
-  const cached = catalogCache.get(archive.version);
-  if (cached) return cached;
-  const bytes = gunzipSync(Buffer.from(archive.data, "base64"), {
-    maxOutputLength: 4 * 1024 * 1024,
-  });
-  if (createHash("sha256").update(bytes).digest("hex") !== archive.version)
-    throw new Error("Invalid demo catalog.");
-  const catalog: Catalog = JSON.parse(bytes.toString());
-  if (catalogCache.size >= 4) catalogCache.clear();
-  catalogCache.set(archive.version, catalog);
-  return catalog;
-}
 function proof(shop: string, customerId: string, day: number) {
   return createHmac("sha256", process.env.SHOPIFY_API_SECRET!)
     .update(JSON.stringify(["cardbit-demo", shop, customerId, day]))
@@ -117,7 +101,7 @@ async function handle({ request }: LoaderFunctionArgs) {
     );
   try {
     const catalog = unpack(archive);
-    const { state, result } = await demoAccount(
+    const { state, result, prices } = await demoAccount(
       db,
       shop,
       customerId,
@@ -137,6 +121,7 @@ async function handle({ request }: LoaderFunctionArgs) {
       .slice(0, 24);
     return json({
       ...result,
+      ...(prices ? { prices } : {}),
       proof: proof(shop, customerId, day),
       ...(url.searchParams.get("catalog") === archive.version
         ? {}

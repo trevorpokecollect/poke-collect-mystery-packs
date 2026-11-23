@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
+import { reviewWorkspaceEnabled as deskEnabled, readBook, lockBook } from "../workspace/book.server";
+import {offer as currentOffer} from "../workspace/model";
 import { isCardbit } from "./cardbit.server";
 import { drawForOrderInTransaction, PoolError } from "./pool.server";
 import { gql } from "./orders.server";
@@ -70,7 +72,7 @@ export async function walletView(
         shop,
         staffTest: true,
         status: "LIVE",
-        handle: { in: Object.keys(config.series) },
+        OR: [{handle:{in:Object.keys(config.series)}},...(deskEnabled(shop)?[{handle:{startsWith:"cb-workspace-"},packVariantId:{startsWith:"qa:cb-workspace-"}}]:[])],
       },
       select: {
         id: true,
@@ -78,6 +80,7 @@ export async function walletView(
         handle: true,
         commitHash: true,
         cardsPerPack: true,
+        packPrice: true,
       },
     }),
     db.cardbitBuyback.findMany({
@@ -96,14 +99,20 @@ export async function walletView(
       select: { kind: true, delta: true, openingId: true, createdAt: true },
     }),
   ]);
+  let dynamic: {copyId:string;amount:number;version:string}[]|undefined;
+  if(deskEnabled(shop)){
+    const [book,pulls]=await Promise.all([readBook(db),db.pull.findMany({where:{shop,customerId,status:"REVEALED",shipRequestId:null,series:{staffTest:true},listings:{none:{status:{in:["ACTIVE","CHECKOUT"]}}},tradeItems:{none:{trade:{status:"PENDING"}}}},select:{id:true,slot:{select:{card:{select:{variantId:true}}}}}})]);
+    dynamic=pulls.flatMap(p=>{const ref=book.refs[book.variants[p.slot.card.variantId]], amount=ref?currentOffer(ref,book.policy):null;
+      return amount?[{copyId:p.id,amount,version:"price:"+amount}]:[];});
+  }
   return {
     enabled: true,
     mode: "staging",
     accountRef: digest([shop, customerId]),
     balance: wallet?.balance ?? 0,
     held: !!wallet?.held,
-    packs: series.map((s) => ({ ...s, price: config.series[s.handle] })),
-    offers,
+    packs: series.map((s) => ({ ...s, price: config.series[s.handle] ?? Math.round(Number(s.packPrice)*100) })),
+    offers:dynamic??offers,
     history,
     topups: Object.entries(config.variants)
       .filter(([id]) => /^gid:\/\/shopify\/ProductVariant\/\d+$/.test(id))
@@ -329,7 +338,7 @@ export async function walletAction(
       });
       if (
         !series ||
-        config.series[series.handle] !== input.amount ||
+        (config.series[series.handle] ?? (deskEnabled(shop) && series.handle.startsWith("cb-workspace-") && series.packVariantId==="qa:"+series.handle ? Math.round(Number(series.packPrice)*100):null)) !== input.amount ||
         series.commitHash !== input.version
       )
         throw new PoolError(
@@ -370,7 +379,16 @@ export async function walletAction(
         },
       });
     } else {
-      const offer = await tx.cardbitBuyback.findFirst({
+      const dynamic=deskEnabled(shop);
+      if(dynamic){
+        await lockBook(tx);
+        const book=await readBook(tx);
+        const p=await tx.pull.findFirst({where:{id:input.id,shop,customerId,status:"REVEALED",shipRequestId:null,series:{staffTest:true}},
+          select:{slot:{select:{card:{select:{variantId:true}}}}}});
+        const ref=p&&book.refs[book.variants[p.slot.card.variantId]];
+        if(!ref||currentOffer(ref,book.policy)!==input.amount||input.version!=="price:"+input.amount) throw new PoolError("The Cardbits offer changed. Review the current value.");
+      }
+      const offer = dynamic?null:await tx.cardbitBuyback.findFirst({
         where: {
           copyId: input.id,
           shop,
@@ -380,9 +398,9 @@ export async function walletAction(
         },
       });
       if (
-        !offer ||
+        !dynamic && (!offer ||
         offer.amount !== input.amount ||
-        offer.expiresAt.toISOString() !== input.version
+        offer.expiresAt.toISOString() !== input.version)
       )
         throw new PoolError("This buyback offer changed or expired.");
       const acquired = await tx.pull.updateMany({
@@ -393,12 +411,13 @@ export async function walletAction(
           status: "REVEALED",
           shipRequestId: null,
           series: { staffTest: true },
+          ...(dynamic ? {listings:{none:{status:{in:["ACTIVE" as const,"CHECKOUT" as const]}}},tradeItems:{none:{trade:{status:"PENDING" as const}}}} : {}),
         },
         data: { customerId: HOUSE, transferredAt: new Date() },
       });
       if (acquired.count !== 1)
         throw new PoolError("This copy is no longer available for buyback.");
-      await tx.cardbitBuyback.update({
+      if(!dynamic) await tx.cardbitBuyback.update({
         where: { copyId: input.id },
         data: { acceptedAt: new Date() },
       });
