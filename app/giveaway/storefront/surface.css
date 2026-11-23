@@ -1,0 +1,231 @@
+.cbg {
+  --ink: #f6f5ff;
+  --dim: #b9bfd4;
+  --line: #363e59;
+  --accent: #ffbd72;
+  color: var(--ink);
+  background: #131827;
+  border: 1px solid #303852;
+  border-radius: 22px;
+  max-width: 1060px;
+  margin: 24px auto;
+  padding: clamp(16px, 4vw, 44px);
+  font:
+    16px/1.5 Inter,
+    system-ui,
+    sans-serif;
+  color-scheme: dark;
+  box-sizing: border-box;
+}
+.cbg * {
+  box-sizing: border-box;
+}
+.cbg [hidden] {
+  display: none !important;
+}
+.cbg h1,
+.cbg h2,
+.cbg p {
+  margin: 0;
+  color: inherit;
+}
+.cbg p,
+.cbg small {
+  color: var(--dim);
+}
+.cbg h2 {
+  font:
+    750 20px/1.24 Inter,
+    system-ui,
+    sans-serif;
+  letter-spacing: -0.035em;
+}
+.cbg .cbg-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.17em;
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffce9a;
+}
+.cbg-hero {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: clamp(18px, 4vw, 38px);
+  background:
+    radial-gradient(ellipse at 95% -60%, #4658a9 0, transparent 68%),
+    linear-gradient(120deg, #222941, #2d3453);
+  border-radius: 15px;
+  border: 1px solid #47516e;
+  margin-bottom: 16px;
+}
+.cbg-hero h1 {
+  font:
+    800 clamp(38px, 6vw, 70px)/1.06 Inter,
+    system-ui,
+    sans-serif;
+  letter-spacing: -0.065em;
+  margin: 10px 0 8px;
+}
+.cbg-hero h1 span {
+  color: var(--accent);
+}
+.cbg-cutoff {
+  display: grid;
+  flex-shrink: 0;
+}
+.cbg-cutoff span,
+.cbg-cutoff small {
+  color: var(--dim);
+  font-size: 13px;
+}
+.cbg-cutoff strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.cbg-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.cbg-panel {
+  padding: clamp(16px, 3vw, 25px);
+  background: #1b2133;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin: 0 0 14px;
+}
+.cbg-panel h2 {
+  margin: 0 0 12px;
+}
+.cbg-heading,
+.cbg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cbg-heading strong {
+  color: var(--accent);
+}
+.cbg-row {
+  border-top: 1px solid var(--line);
+  padding: 13px 0;
+}
+.cbg-row:last-child {
+  padding-bottom: 0;
+}
+.cbg-row div {
+  min-width: 0;
+}
+.cbg-row small,
+.cbg-panel label {
+  display: block;
+  color: var(--dim);
+  font-size: 13px;
+}
+.cbg :is(a, button).cbg-btn,
+.cbg select {
+  line-height: 1.3;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #343e61;
+  border: 1px solid #5b658b;
+  border-radius: 8px;
+  padding: 10px 14px;
+  text-decoration: none;
+  min-height: 42px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+.cbg .cbg-btn.primary {
+  background: #ffbc71;
+  color: #192137;
+  border-color: #ffbc71;
+}
+.cbg a {
+  color: #c0caff;
+}
+.cbg button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.cbg :focus-visible {
+  outline: 3px solid #ffbc71;
+  outline-offset: 3px;
+}
+.cbg [data-entry] p,
+.cbg [data-entry] label {
+  margin-bottom: 12px;
+}
+.cbg [data-entry] input {
+  accent-color: #ffbc71;
+}
+.cbg .cbg-complete {
+  color: #a4dfbe;
+  font-size: 13px;
+}
+.cbg .cbg-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.cbg footer,
+.cbg [data-message] {
+  font-size: 13px;
+  color: var(--dim);
+}
+.cbg [data-message]:not(:empty) {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+.cbg [data-free] {
+  white-space: pre-wrap;
+}
+.cbg button {
+  white-space: normal;
+}
+.cbg select {
+  display: block;
+  max-width: 100%;
+}
+.cbg .cbg-link-input {
+  width: 100%;
+  padding: 8px;
+  margin: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+@media (max-width: 700px) {
+  .cbg-columns {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .cbg-hero {
+    align-items: start;
+    flex-direction: column;
+  }
+  .cbg-hero h1 {
+    font-size: clamp(36px, 9vw, 52px);
+  }
+  .cbg-cutoff {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .cbg-cutoff strong {
+    font-size: 16px;
+  }
+  .cbg {
+    margin: 12px auto;
+  }
+  .cbg-row {
+    gap: 8px;
+  }
+}

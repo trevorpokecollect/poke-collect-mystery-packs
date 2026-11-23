@@ -1,0 +1,73 @@
+{% comment %}
+  "Earn X giveaway entries with this purchase" badge for product pages. Asks the app (through the
+  app proxy at /apps/packs/campaigns/estimate) how many entries the selected variant and quantity earn,
+  and updates when the shopper changes either. Renders nothing when the purchase earns no entries.
+{% endcomment %}
+{%- liquid
+  assign current = product.selected_or_first_available_variant
+-%}
+{%- if product and current -%}
+<div
+  class="pcg-badge"
+  data-pcg-badge="product"
+  data-proxy="/apps/packs/campaigns"
+  data-giveaway="{{ block.settings.giveaway | strip | escape }}"
+  data-product="{{ product.id }}"
+  data-variant="{{ current.id }}"
+  data-text="{{ block.settings.text | escape }}"
+  data-text-one="{{ block.settings.text_one | escape }}"
+  hidden
+  {{ block.shopify_attributes }}
+>
+  <span class="pcg-badge__icon" aria-hidden="true"></span>
+  <span class="pcg-badge__text" aria-live="polite"></span>
+  {%- if block.settings.link_url != blank -%}
+    <a class="pcg-badge__link" href="{{ block.settings.link_url }}">{{ block.settings.link_label | escape }}</a>
+  {%- endif -%}
+  <script type="application/json" data-pcg-variants>
+    [{%- for v in product.variants -%}{"id":{{ v.id }},"price":{{ v.price }}}{%- unless forloop.last -%},{%- endunless -%}{%- endfor -%}]
+  </script>
+</div>
+<script src="{{ 'entries-badge.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Giveaway entries badge",
+  "target": "section",
+  "stylesheet": "entries-badge.css",
+  "enabled_on": { "templates": ["product"] },
+  "settings": [
+    {
+      "type": "text",
+      "id": "text",
+      "label": "Badge text",
+      "default": "Earn [entries] giveaway entries with this purchase",
+      "info": "[entries] is replaced with the number and [giveaway] with the giveaway's title."
+    },
+    {
+      "type": "text",
+      "id": "text_one",
+      "label": "Badge text for 1 entry",
+      "default": "Earn 1 giveaway entry with this purchase"
+    },
+    {
+      "type": "text",
+      "id": "giveaway",
+      "label": "Giveaway link name (optional)",
+      "info": "Leave blank to use the newest open giveaway that gives entries for purchases."
+    },
+    {
+      "type": "url",
+      "id": "link_url",
+      "label": "Giveaway page link (optional)"
+    },
+    {
+      "type": "text",
+      "id": "link_label",
+      "label": "Link label",
+      "default": "Details"
+    }
+  ]
+}
+{% endschema %}

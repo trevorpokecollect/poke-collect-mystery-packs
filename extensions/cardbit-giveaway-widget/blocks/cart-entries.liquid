@@ -1,0 +1,49 @@
+{% comment %}
+  "Your cart earns X giveaway entries" badge for the cart page. Reads the cart from /cart.js and
+  asks the app (through the app proxy at /apps/packs/campaigns/estimate) for the estimate, refreshing
+  when the cart changes. Renders nothing when the cart earns no entries.
+{% endcomment %}
+<div
+  class="pcg-badge pcg-badge--cart"
+  data-pcg-badge="cart"
+  data-proxy="/apps/packs/campaigns"
+  data-giveaway="{{ block.settings.giveaway | strip | escape }}"
+  data-text="{{ block.settings.text | escape }}"
+  data-text-one="{{ block.settings.text_one | escape }}"
+  hidden
+  {{ block.shopify_attributes }}
+>
+  <span class="pcg-badge__icon" aria-hidden="true"></span>
+  <span class="pcg-badge__text" aria-live="polite"></span>
+</div>
+<script src="{{ 'entries-badge.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Giveaway entries (cart)",
+  "target": "section",
+  "stylesheet": "entries-badge.css",
+  "enabled_on": { "templates": ["cart"] },
+  "settings": [
+    {
+      "type": "text",
+      "id": "text",
+      "label": "Badge text",
+      "default": "Your order earns [entries] entries in [giveaway]",
+      "info": "[entries] is replaced with the number and [giveaway] with the giveaway's title."
+    },
+    {
+      "type": "text",
+      "id": "text_one",
+      "label": "Badge text for 1 entry",
+      "default": "Your order earns 1 entry in [giveaway]"
+    },
+    {
+      "type": "text",
+      "id": "giveaway",
+      "label": "Giveaway link name (optional)",
+      "info": "Leave blank to use the newest open giveaway that gives entries for purchases."
+    }
+  ]
+}
+{% endschema %}

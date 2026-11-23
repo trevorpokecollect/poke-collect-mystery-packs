@@ -1,3 +1,5 @@
+import { reverseReferralOrder } from "../giveaway/purchases.server";
+import { enabled } from "../workspace/mode.server";
 import { reviewFunding } from "../lib/cardbits.server";
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -20,6 +22,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, payload, shop } = await authenticate.webhook(request);
   const refund = payload as RefundPayload;
   const orderId = `gid://shopify/Order/${refund.order_id}`;
+  if(enabled(shop)) await reverseReferralOrder(db,shop,orderId);
   await reviewFunding(db,shop,orderId,admin);
 
   // A refunded Vault Marketplace purchase: hold the seller's credit for staff to decide.

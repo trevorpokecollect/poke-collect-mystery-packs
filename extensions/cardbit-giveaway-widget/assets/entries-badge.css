@@ -1,0 +1,30 @@
+/* "Earn X entries" badges, in the giveaway widget's red/ink/yellow look. */
+.pcg-badge {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px;
+  margin: 12px 0; padding: 10px 14px;
+  border-radius: 10px; border: 1px solid rgba(226, 47, 57, 0.35);
+  background: #fff5f5; color: #161616;
+  font-family: "Helvetica Neue", Arial, sans-serif; font-size: 0.95em; line-height: 1.35;
+}
+.pcg-badge[hidden] { display: none; }
+/* The daily popup embed's lines show only once placed (see daily-popup.js). */
+.pcg-badge--auto:not(.pcg-badge--placed) { display: none !important; }
+.pcg-badge--auto { cursor: pointer; transition: background-color 0.2s, border-color 0.2s; }
+.pcg-badge--auto:hover, .pcg-badge--auto:focus-visible { background: #ffe9ea; border-color: #4057f5; }
+.pcg-badge--cart.pcg-badge--auto { max-width: none; margin: 0 0 12px; }
+.pcg-badge__icon {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(120deg, #4057f5, #b81d27);
+  box-shadow: 0 3px 8px rgba(226, 47, 57, 0.3);
+  position: relative;
+}
+/* A small ticket star, drawn so no image or font is needed. */
+.pcg-badge__icon::before {
+  content: ""; position: absolute; inset: 6px;
+  background: #ffd800;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.pcg-badge__text { flex: 1; min-width: 12em; font-weight: 700; }
+.pcg-badge__link { color: #b81d27; font-weight: 700; font-size: 0.9em; text-decoration: underline; }
+.pcg-badge--cart { justify-content: flex-start; }
+@media (min-width: 750px) { .pcg-badge--cart { max-width: 480px; margin-left: auto; } }

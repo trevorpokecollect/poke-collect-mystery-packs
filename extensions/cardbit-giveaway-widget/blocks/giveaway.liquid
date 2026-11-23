@@ -1,0 +1,85 @@
+{% comment %}
+  Cardbit Giveaways entry widget. Talks to the app through the app proxy at /apps/packs/campaigns.
+{% endcomment %}
+<div
+  class="pcg{% case block.settings.layout %}{% when 'three' %} pcg--wide pcg--three{% when 'wide' %} pcg--wide{% endcase %}{% if block.settings.edge_to_edge and block.settings.layout == 'three' %} pcg--bleed{% endif %}"
+  data-pcg
+  data-slug="{{ block.settings.slug | escape }}"
+  data-proxy="/apps/packs/campaigns"
+  data-gads="{{ block.settings.google_ads_send_to | escape }}"
+  data-pixel="{{ block.settings.meta_pixel_id | escape }}"
+  style="--pcg-accent: {{ block.settings.accent }}; --pcg-radius: {{ block.settings.radius }}px;"
+  {{ block.shopify_attributes }}
+>
+  <div class="pcg__loading" aria-live="polite">Loading giveaway…</div>
+</div>
+
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+<script src="{{ 'giveaway.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Giveaway",
+  "target": "section",
+  "stylesheet": "giveaway.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "slug",
+      "label": "Giveaway link name",
+      "info": "The link name shown on the giveaway's page in the app, under On your store (for example delta-reign). The giveaway title also works. Leave blank for the newest open giveaway."
+    },
+    {
+      "type": "select",
+      "id": "layout",
+      "label": "Layout",
+      "options": [
+        { "value": "three", "label": "Three columns, full width" },
+        { "value": "wide", "label": "Two columns" },
+        { "value": "narrow", "label": "One column" }
+      ],
+      "default": "three",
+      "info": "Three columns (prize, entry form, ways to enter) fills the section's width; good for the homepage. Columns stack on phones."
+    },
+    {
+      "type": "checkbox",
+      "id": "edge_to_edge",
+      "label": "Stretch to the edges of the screen",
+      "info": "Three columns only. Ignores the section's page width.",
+      "default": false
+    },
+    {
+      "type": "header",
+      "content": "Ad tracking"
+    },
+    {
+      "type": "text",
+      "id": "google_ads_send_to",
+      "label": "Google Ads conversion (send_to)",
+      "info": "Fires once per visitor when they enter. Your \"Giveaway Entry\" conversion. Leave blank to turn off."
+    },
+    {
+      "type": "text",
+      "id": "meta_pixel_id",
+      "label": "Meta Pixel ID",
+      "info": "Sends a Lead event once per visitor when they enter. Leave blank to turn off."
+    },
+    {
+      "type": "color",
+      "id": "accent",
+      "label": "Accent color",
+      "default": "#4057F5"
+    },
+    {
+      "type": "range",
+      "id": "radius",
+      "label": "Corner radius",
+      "min": 0,
+      "max": 24,
+      "step": 2,
+      "unit": "px",
+      "default": 22
+    }
+  ]
+}
+{% endschema %}

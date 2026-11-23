@@ -1,3 +1,9 @@
+import {
+  ownerView as giveawayDesk,
+  manage as manageGiveaway,
+  entryExport,
+} from "../giveaway/service.server";
+import { closeDue } from "../giveaway/draw.server";
 import { liveWorkspace } from "../workspace/mode.server";
 import { workspacePackProducts } from "../workspace/pack-products.server";
 import { marketApproved } from "../workspace/market.server";
@@ -49,11 +55,14 @@ export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST" || !actor)
     return json({ error: "Workspace unavailable." }, 403);
   const data = await request.text();
-  if (data.length > 180000)
+  if (data.length > 7600000)
     return json({ error: "Request is too large." }, 413);
   try {
     const input = JSON.parse(data);
-    const { admin, session } = await unauthenticated.admin(shop);
+    if (data.length > 180000 && input.action !== "giveaway-campaign")
+      return json({ error: "Request is too large." }, 413);
+    const installation = await unauthenticated.admin(shop);
+    const { admin, session } = installation;
     if (session.shop !== shop)
       return json({ error: "Incorrect Cardbit installation." }, 403);
     const direct = liveWorkspace(shop);
@@ -76,6 +85,25 @@ export async function action({ request }: ActionFunctionArgs) {
         if (input.action==="shelf") return json(await shelfPage(db,input));
         if (input.action==="fileCopy") return json(await confirmFiled(db,input.copy,input.slot));
         return json(await staffShipping(db,admin,input,actor));
+      case "giveaway-campaign": {
+        const { campaignDesk } = await import("../giveaway/campaigns.server");
+        return json(await campaignDesk(installation, input));
+      }
+      case "giveaway-products": {
+        const { campaignProducts } =
+          await import("../giveaway/campaigns.server");
+        return json(await campaignProducts(admin, input.search));
+      }
+      case "giveaway-export":
+        return json(await entryExport(db, input));
+      case "giveaway-desk":
+        return json(await giveawayDesk(db, input));
+      case "giveaway-manage":
+        await manageGiveaway(db, actor, input);
+        return json(await giveawayDesk(db, input));
+      case "giveaway-close":
+        await closeDue(db, admin);
+        return json(await giveawayDesk(db, input));
       case "home": {
         const [book, series, customers, packProducts] = await Promise.all([
           readBook(db),

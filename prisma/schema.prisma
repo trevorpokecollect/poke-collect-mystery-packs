@@ -586,3 +586,463 @@ model CardbitShelfParcel {
   updatedAt     DateTime @updatedAt
   @@index([shop, orderId])
 }
+
+// The Cardbit daily drawing uses the same transaction and wallet database as paid funding.
+model CardbitGiveawayConfig {
+  shop String @id
+  enabled Boolean @default(false)
+  rulesUrl String @default("")
+  freeInstructions String @default("")
+  referralEntries Int @default(500)
+  shareEntries Int @default(100)
+  updatedAt DateTime @updatedAt
+}
+
+model CardbitGiveawayPerson {
+  shop String
+  customerId String
+  code String @unique @default(uuid())
+  referredBy String?
+  whatnotAt DateTime?
+  region String
+  ageConfirmedAt DateTime
+  held Boolean @default(false)
+  @@id([shop, customerId])
+}
+
+model CardbitGiveawayRound {
+  shop String
+  day String
+  opensAt DateTime
+  closesAt DateTime
+  seed String
+  commitment String
+  closedAt DateTime?
+  winnerId String?
+  participantCount Int @default(0)
+  totalEntries Int @default(0)
+  snapshot Json?
+  snapshotHash String?
+  notifiedAt DateTime?
+  @@id([shop, day])
+  @@index([shop, closedAt, closesAt])
+}
+
+model CardbitGiveawayEvent {
+  id String @id @default(cuid())
+  shop String
+  day String
+  customerId String
+  key String
+  kind String
+  entries Int
+  voided Boolean @default(false)
+  note String?
+  actor String?
+  postedAt DateTime @default(now())
+  @@unique([shop, key])
+  @@index([shop, day, customerId])
+}
+
+model CardbitGiveawayAudit {
+  id String @id @default(cuid())
+  shop String
+  actor String
+  action String
+  detail String
+  createdAt DateTime @default(now())
+  @@index([shop, createdAt])
+}
+
+// Reused giveaway campaign, entrant, audit and prize-queue records.
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  ENDED
+  ARCHIVED
+}
+
+model Campaign {
+  id            String         @id @default(cuid())
+  shop          String
+  slug          String
+  title         String
+  description   String?
+  prize         String?
+  imageUrl      String?
+  status        CampaignStatus @default(DRAFT)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  timezone      String         @default("America/New_York")
+  // Purchase rules (base points, product/bundle rules, boosters). Validated by
+  // app/lib/entries/rules.ts before it is saved.
+  purchaseRules Json?
+  // Bot policy thresholds; see app/lib/bot/policy.ts for the default.
+  riskPolicy    Json?
+  // Branding for the storefront widget (colors, copy).
+  theme         Json?
+  // Winner email, consolation discount, Klaviyo and outbound webhook settings.
+  // Shape: app/lib/settings.ts.
+  settings      Json?
+  rulesText     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  actions     EntryAction[]
+  entrants    Entrant[]
+  events      EntryEvent[]
+  orders      OrderLog[]
+  draws       Draw[]
+  dailyPrizes DailyPrize[]
+  dailyQueue  DailyQueueItem[]
+
+  @@unique([shop, slug])
+  @@index([shop, status])
+}
+
+enum ActionType {
+  SIGNUP
+  REFERRAL
+  SOCIAL_FOLLOW
+  VISIT_URL
+  DAILY_CHECKIN
+  SECRET_CODE
+  ALTERNATE_ENTRY
+  CUSTOM
+  POLL
+  QUESTION
+  WATCH_VIDEO
+  SOCIAL_SHARE
+  SMS_OPTIN
+}
+
+model EntryAction {
+  id         String     @id @default(cuid())
+  campaignId String
+  campaign   Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type       ActionType
+  label      String
+  entries    Int        @default(1)
+  // Type-specific settings, e.g. { url } for VISIT_URL or { code } for SECRET_CODE.
+  config     Json?
+  mandatory  Boolean    @default(false)
+  repeatable Boolean    @default(false)
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+
+  events    EntryEvent[]
+  responses ActionResponse[]
+}
+
+// Answers to POLL and QUESTION actions.
+model ActionResponse {
+  id        String      @id @default(cuid())
+  actionId  String
+  action    EntryAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  entrantId String
+  entrant   Entrant     @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  answer    String
+  createdAt DateTime    @default(now())
+
+  @@unique([actionId, entrantId])
+}
+
+enum EntrantStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  HELD
+  DISQUALIFIED
+}
+
+model Entrant {
+  id                 String        @id @default(cuid())
+  campaignId         String
+  campaign           Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  email              String
+  // Canonical form (lowercased, gmail dots/+tags stripped) used for de-duplication.
+  emailNormalized    String
+  name               String?
+  shopifyCustomerId  String?
+  status             EntrantStatus @default(PENDING_VERIFICATION)
+  verifiedAt         DateTime?
+  referralCode       String        @unique
+  referredById       String?
+  referredBy         Entrant?      @relation("Referrals", fields: [referredById], references: [id])
+  referrals          Entrant[]     @relation("Referrals")
+  riskScore          Int           @default(0)
+  // Hashed (HMAC) network/device identifiers; raw IPs are never stored.
+  ipHash             String?
+  subnetHash         String?
+  deviceHash         String?
+  userAgent          String?
+  utm                Json?
+  marketingConsent   Boolean       @default(false)
+  // Consolation discount code sent after the draw, if any.
+  discountCode       String?
+  klaviyoSyncedAt    DateTime?
+  // Set by the SMS_OPTIN action: E.164 number and when the entrant agreed to texts.
+  phone              String?
+  smsConsentAt       DateTime?
+  // Whether they were already on the store's lists before entering (Shopify customer record),
+  // so analytics can count genuinely new customers and subscribers. Null until checked.
+  existingCustomer   Boolean?
+  emailWasSubscribed Boolean?
+  smsWasSubscribed   Boolean?
+  listsCheckedAt     DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  events      EntryEvent[]
+  responses   ActionResponse[]
+  riskSignals RiskSignal[]
+  otps        EmailOtp[]
+  wins        Winner[]
+
+  @@unique([campaignId, emailNormalized])
+  @@index([campaignId, status])
+  @@index([campaignId, ipHash])
+  @@index([campaignId, subnetHash])
+  @@index([campaignId, deviceHash])
+  @@index([campaignId, phone])
+}
+
+enum EntrySource {
+  ACTION
+  PURCHASE
+  REFERRAL
+  ADJUSTMENT
+  ROLLBACK
+  IMPORT
+}
+
+model EntryEvent {
+  id         String       @id @default(cuid())
+  campaignId String
+  campaign   Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  entrantId  String
+  entrant    Entrant      @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  source     EntrySource
+  actionId   String?
+  action     EntryAction? @relation(fields: [actionId], references: [id], onDelete: SetNull)
+  orderLogId String?
+  orderLog   OrderLog?    @relation(fields: [orderLogId], references: [id], onDelete: SetNull)
+  // Positive to award, negative to roll back.
+  entries    Int
+  note       String?
+  // Prevents double-awarding (e.g. "action:<id>:<day>" or "order:<id>").
+  dedupeKey  String?
+  createdAt  DateTime     @default(now())
+
+  @@unique([campaignId, dedupeKey])
+  @@index([entrantId])
+}
+
+enum OrderLogStatus {
+  ENTRIES
+  NO_ENTRIES
+  NO_USER
+  ROLLED_BACK_EDIT
+  ROLLED_BACK_CANCELLED
+}
+
+model OrderLog {
+  id             String         @id @default(cuid())
+  campaignId     String
+  campaign       Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  shopifyOrderId String
+  orderName      String?
+  email          String?
+  status         OrderLogStatus
+  entries        Int            @default(0)
+  // Per-rule breakdown from the scoring engine, shown in the admin order log.
+  breakdown      Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  events EntryEvent[]
+
+  @@unique([campaignId, shopifyOrderId])
+}
+
+model RiskSignal {
+  id        String   @id @default(cuid())
+  entrantId String
+  entrant   Entrant  @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  code      String
+  weight    Int
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([entrantId])
+}
+
+model EmailOtp {
+  id        String    @id @default(cuid())
+  entrantId String
+  entrant   Entrant   @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([entrantId])
+}
+
+// Sliding-window counters for rate limiting (key = scope:hash).
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
+model Draw {
+  id            String   @id @default(cuid())
+  campaignId    String
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Hex seed and a hash of the eligible-entrant snapshot, so a draw can be re-verified.
+  seed          String
+  snapshotHash  String
+  totalEntries  Int
+  eligibleCount Int
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  winners    Winner[]
+  dailyPrize DailyPrize?
+}
+
+model Winner {
+  id             String    @id @default(cuid())
+  drawId         String
+  draw           Draw      @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  entrantId      String
+  entrant        Entrant   @relation(fields: [entrantId], references: [id], onDelete: Cascade)
+  position       Int
+  notifiedAt     DateTime?
+  forfeited      Boolean   @default(false)
+  // Prize claim: the winner confirms shipping details through a tokenized link.
+  claimedAt      DateTime?
+  claimData      Json?
+  // Daily prizes: the $0 Shopify order created when the winner claims.
+  prizeOrderId   String?
+  prizeOrderName String?
+}
+
+// Prize images uploaded from the admin, served publicly at /images/<id>.
+model CampaignImage {
+  id          String   @id @default(cuid())
+  shop        String
+  contentType String
+  data        Bytes
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  shop      String
+  actor     String?
+  action    String
+  target    String?
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
+}
+
+enum DailyPrizeStatus {
+  // Picked and held back in Shopify (moved from available to reserved).
+  RESERVED
+  // Drawn; the unit stays reserved until the prize is sent.
+  DRAWN
+  // Sent to the winner; the reserved unit was removed from inventory.
+  SENT
+  // Back in normal stock: nobody entered, or the merchant released or swapped it.
+  RELEASED
+}
+
+// One prize per day for giveaways with the daily draw on (settings.daily). Each picks a
+// product from inventory, reserves one unit, and is drawn from that day's entries only.
+model DailyPrize {
+  id              String           @id @default(cuid())
+  campaignId      String
+  campaign        Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Local date (in the campaign timezone) of the draw that closes this prize's day.
+  periodKey       String
+  opensAt         DateTime
+  drawAt          DateTime
+  productId       String
+  variantId       String
+  productHandle   String?
+  title           String
+  imageUrl        String?
+  value           Float
+  inventoryItemId String
+  locationId      String
+  // Where the reserved unit came from: "available" or "safety_stock". Released units go back there.
+  reservedFrom    String           @default("available")
+  // Bundle prizes: every reserved line as PrizeItem[] (app/lib/bundles.ts). The single-product
+  // fields above then hold the first line, with title/value/imageUrl for the whole bundle.
+  items           Json?
+  status          DailyPrizeStatus @default(RESERVED)
+  drawId          String?          @unique
+  draw            Draw?            @relation(fields: [drawId], references: [id], onDelete: SetNull)
+  note            String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([campaignId, periodKey])
+  @@index([status, drawAt])
+}
+
+// Products the merchant lined up as upcoming daily prizes. Each day's pick takes the item
+// pinned to that day, else the next unpinned one in stock; an empty queue falls back to the
+// automatic pick.
+model DailyQueueItem {
+  id         String    @id @default(cuid())
+  campaignId String
+  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  productId  String
+  title      String
+  imageUrl   String?
+  position   Int
+  // Local date (YYYY-MM-DD, the draw's date) this item must be the prize for.
+  pinnedDate String?
+  // A bundle: BundlePart[] (app/lib/bundles.ts). productId/title/imageUrl then describe it.
+  bundle     Json?
+  usedAt     DateTime?
+  prizeId    String?
+  // Why it was passed over last time (e.g. out of stock).
+  note       String?
+  createdAt  DateTime  @default(now())
+
+  @@index([campaignId, usedAt, position])
+}
+
+// Daily count of clicks on a giveaway's follow/join buttons (Whatnot etc.), for the ad report.
+// Holds no personal data: one row per store, Central Time date, giveaway link name and platform.
+model FollowClickDay {
+  id        String   @id @default(cuid())
+  shop      String
+  // YYYY-MM-DD in America/Chicago.
+  date      String
+  // The giveaway's link name (Campaign.slug) when the click was counted.
+  giveaway  String
+  platform  String
+  clicks    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([shop, date, giveaway, platform])
+  @@index([date])
+}
+
+// Small app-wide values the app keeps up to date itself, e.g. the refreshed Instagram API token
+// (key "instagram_token"). Secrets here never leave the server.
+model AppValue {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

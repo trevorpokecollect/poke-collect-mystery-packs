@@ -52,3 +52,11 @@ api_version = "2026-10"
 [build]
 # Keep the Railway URLs; don't let `shopify app dev` rewrite them.
 automatically_update_urls_on_dev = false
+
+[[webhooks.subscriptions]]
+  topics = ["orders/updated"]
+  uri = "/webhooks/cardbit-campaign-orders"
+
+[[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/webhooks/cardbit-campaign-privacy"

@@ -1,0 +1,20 @@
+# Thank-you and order status page block: "You earned N entries in <giveaway>" for the order.
+api_version = "2026-07"
+
+[[extensions]]
+name = "Cardbit giveaway entries (thank-you and order status)"
+handle = "cardbit-giveaway-thank-you"
+type = "ui_extension"
+uid = "39526096-20bb-4155-be06-ba0a0bd12352"
+
+[[extensions.targeting]]
+module = "./src/ThankYou.jsx"
+target = "purchase.thank-you.block.render"
+
+[[extensions.targeting]]
+module = "./src/OrderStatus.jsx"
+target = "customer-account.order-status.block.render"
+
+[extensions.capabilities]
+# Calls the app's /api/order-entries endpoint with a session token.
+network_access = true

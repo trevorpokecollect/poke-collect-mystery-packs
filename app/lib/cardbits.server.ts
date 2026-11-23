@@ -1,3 +1,4 @@
+import { capturePaidEntries, lockDesk, recordReferralPurchase, reviewPaidEntries } from "../giveaway/entries.server";
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
@@ -294,6 +295,7 @@ export async function recordFunding(
 ) {
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${shop + "/" + order.id},0))::text`;
+    if (liveWorkspace(shop) && order.paidCents) await lockDesk(tx);
     const before = await lock(tx, shop, order.customerId);
     const key = "fund:" + order.id;
     const old = await tx.cardbitReceipt.findUnique({
@@ -333,6 +335,7 @@ export async function recordFunding(
           balanceAfter: before.balance + order.amount + order.bonus,
         },
       });
+    await capturePaidEntries(tx, shop, order);
     return paid;
   });
 }
@@ -433,6 +436,7 @@ export async function reviewFunding(
   }
   await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${shop + "/" + orderId},0))::text`;
+    if (liveWorkspace(shop)) await lockDesk(tx);
     const receipt = await tx.cardbitReceipt.findUnique({
       where: { shop_eventKey: { shop, eventKey: "fund:" + orderId } },
     });
@@ -445,6 +449,7 @@ export async function reviewFunding(
         data: { held: true },
       });
     }
+    await reviewPaidEntries(tx, shop, orderId);
     await tx.cardbitReceipt.upsert({
       where: { shop_eventKey: { shop, eventKey: "review:" + orderId } },
       create: {
@@ -492,6 +497,7 @@ export async function walletAction(
   )
     throw new PoolError("Review the offer again.");
   return db.$transaction(async (tx) => {
+    if (live && input.action === "pack") await lockDesk(tx);
     const wallet = await lock(tx, shop, customerId);
     const eventKey = customerId + "/" + input.requestId,
       fingerprint = digest([
@@ -668,6 +674,7 @@ export async function walletAction(
       where: { shop_customerId: { shop, customerId } },
       data: { balance: { increment: delta } },
     });
+    if (live && input.action === "pack") await recordReferralPurchase(tx, shop, customerId, eventKey);
     return tx.cardbitReceipt.create({
       data: {
         shop,

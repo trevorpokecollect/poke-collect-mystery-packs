@@ -1,0 +1,180 @@
+{% comment %}
+  Daily giveaway popup (app embed): a floating launcher on every page that opens the
+  giveaway widget in a dialog, and opens itself once per draw for visitors who haven't
+  entered today. Turn it on in Theme settings > App embeds.
+{% endcomment %}
+{%- if block.settings.slug != blank -%}
+<div
+  class="pcg-pop pcg-pop--{{ block.settings.position }} pcg-pop--mobile-{{ block.settings.mobile_launcher | default: 'tab' }}"
+  data-pcg-pop
+  data-auto="{{ block.settings.open_automatically }}"
+  data-delay="{{ block.settings.delay }}"
+  style="--pcg-accent: {{ block.settings.accent }}; --pcg-pop-bottom: {{ block.settings.bottom | default: 96 }}px;"
+>
+  <button class="pcg-pop__launcher" type="button" aria-haspopup="dialog" hidden>
+    <canvas class="pcg-pop__rain" aria-hidden="true"></canvas>
+    <img class="pcg-pop__thumb" alt="" hidden>
+    <span class="pcg-pop__text">
+      <b>{{ block.settings.button_text | escape }}</b>
+      <small data-pcg-pop-sub>Enter Free</small>
+    </span>
+  </button>
+  <dialog class="pcg-pop__dialog" aria-label="{{ block.settings.button_text | escape }}">
+    <button class="pcg-pop__close" type="button" aria-label="Close">&times;</button>
+    <div
+      class="pcg"
+      data-pcg
+      data-slug="{{ block.settings.slug | escape }}"
+      data-proxy="/apps/packs/campaigns"
+      style="--pcg-accent: {{ block.settings.accent }};"
+    >
+      <div class="pcg__loading" aria-live="polite">Loading giveaway…</div>
+    </div>
+    {%- if block.settings.monthly_url != blank -%}
+      <a class="pcg-pop__monthly" href="{{ block.settings.monthly_url }}">{{ block.settings.monthly_label | escape }} &rarr;</a>
+    {%- endif -%}
+    <button class="pcg-pop__done" type="button">Close</button>
+  </dialog>
+</div>
+{%- comment -%}
+  "Earns +N entries in today's draw" lines: under the buy buttons on product pages and in the
+  cart drawer, placed by daily-popup.js. Skipped where the theme already has the app's blocks.
+{%- endcomment -%}
+{%- if block.settings.product_entries and template.name == 'product' and product -%}
+  {%- assign pcg_current = product.selected_or_first_available_variant -%}
+  <div class="pcg-badge pcg-badge--auto" data-pcg-badge="product" data-pcg-auto="product" data-proxy="/apps/packs/campaigns"
+    data-giveaway="{{ block.settings.slug | strip | escape }}" data-product="{{ product.id }}" data-variant="{{ pcg_current.id }}"
+    data-text="Enter Today's Giveaway Free To Earn +[entries] Entries With This Purchase" data-text-one="Enter Today's Giveaway Free To Earn +1 Entry With This Purchase"
+    data-entered-text="This Earns +[entries] Entries In Today's Draw" data-entered-text-one="This Earns +1 Entry In Today's Draw"
+    role="button" tabindex="0" hidden>
+    <span class="pcg-badge__icon" aria-hidden="true"></span>
+    <span class="pcg-badge__text" aria-live="polite"></span>
+    <a class="pcg-badge__link" href="#daily-giveaway" data-entered-label="See Today's Prize">Enter Free</a>
+    <script type="application/json" data-pcg-variants>
+      [{%- for v in product.variants -%}{"id":{{ v.id }},"price":{{ v.price }}}{%- unless forloop.last -%},{%- endunless -%}{%- endfor -%}]
+    </script>
+  </div>
+{%- endif -%}
+{%- if block.settings.cart_entries -%}
+  <div class="pcg-badge pcg-badge--cart pcg-badge--auto" data-pcg-badge="cart" data-pcg-auto="cart" data-proxy="/apps/packs/campaigns"
+    data-giveaway="{{ block.settings.slug | strip | escape }}"
+    data-text="Enter Today's Giveaway Free To Earn +[entries] Entries With This Order" data-text-one="Enter Today's Giveaway Free To Earn +1 Entry With This Order"
+    data-entered-text="Your Cart Earns +[entries] Entries In Today's Draw" data-entered-text-one="Your Cart Earns +1 Entry In Today's Draw"
+    role="button" tabindex="0" hidden>
+    <span class="pcg-badge__icon" aria-hidden="true"></span>
+    <span class="pcg-badge__text" aria-live="polite"></span>
+    <a class="pcg-badge__link" href="#daily-giveaway" data-entered-label="See Today's Prize">Enter Free</a>
+  </div>
+{%- endif -%}
+{%- if block.settings.product_entries or block.settings.cart_entries -%}
+  {{ 'entries-badge.css' | asset_url | stylesheet_tag }}
+  <script src="{{ 'entries-badge.js' | asset_url }}" defer></script>
+{%- endif -%}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+<script src="{{ 'giveaway.js' | asset_url }}" defer></script>
+<script src="{{ 'daily-popup.js' | asset_url }}" defer></script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Daily giveaway popup",
+  "target": "body",
+  "stylesheet": "giveaway.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "slug",
+      "label": "Giveaway link name",
+      "info": "The daily giveaway's link name from the app (On your store), e.g. daily-giveaway."
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button text",
+      "default": "Daily Giveaway"
+    },
+    {
+      "type": "checkbox",
+      "id": "open_automatically",
+      "label": "Open automatically",
+      "info": "Once per draw, for visitors who haven't entered today. On phones it waits for a second page view or a scroll halfway down the page.",
+      "default": false
+    },
+    {
+      "type": "range",
+      "id": "delay",
+      "label": "Open after",
+      "min": 0,
+      "max": 30,
+      "step": 1,
+      "unit": "s",
+      "default": 6
+    },
+    {
+      "type": "select",
+      "id": "position",
+      "label": "Button position",
+      "options": [
+        { "value": "right", "label": "Bottom right" },
+        { "value": "left", "label": "Bottom left" }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "bottom",
+      "label": "Distance from bottom",
+      "min": 12,
+      "max": 200,
+      "step": 4,
+      "unit": "px",
+      "default": 96,
+      "info": "Raise the button above other corner buttons, like a chat bubble. Phones use up to 84px."
+    },
+    {
+      "type": "select",
+      "id": "mobile_launcher",
+      "label": "On phones",
+      "options": [
+        { "value": "tab", "label": "Gift icon in the header, next to the cart" },
+        { "value": "button", "label": "Same button as on desktop" },
+        { "value": "none", "label": "No button (popup and links only)" }
+      ],
+      "default": "tab",
+      "info": "The gift icon shows a red dot until the visitor has entered today. If the theme's header icons can't be found, the desktop button shows instead. Any link to #daily-giveaway (e.g. in your announcement bar or menu) opens the popup."
+    },
+    {
+      "type": "checkbox",
+      "id": "product_entries",
+      "label": "Show entries on product pages",
+      "default": true,
+      "info": "\"This Earns +N Entries In Today's Draw\" under the buy buttons."
+    },
+    {
+      "type": "checkbox",
+      "id": "cart_entries",
+      "label": "Show entries in the cart drawer",
+      "default": true,
+      "info": "\"Your Cart Earns +N Entries In Today's Draw\" above checkout."
+    },
+    {
+      "type": "url",
+      "id": "monthly_url",
+      "label": "Monthly giveaway page",
+      "info": "Adds an \"Also enter our monthly giveaway\" link under the daily giveaway."
+    },
+    {
+      "type": "text",
+      "id": "monthly_label",
+      "label": "Monthly link text",
+      "default": "Also Enter Our Monthly Giveaway"
+    },
+    {
+      "type": "color",
+      "id": "accent",
+      "label": "Accent color",
+      "default": "#4057F5"
+    }
+  ]
+}
+{% endschema %}

@@ -1,0 +1,16 @@
+{
+  "earnedHeading": {
+    "one": "You earned 1 entry",
+    "other": "You earned {{count}} entries"
+  },
+  "earnedBody": {
+    "one": "This order earned 1 entry in {{giveaway}}. Good luck!",
+    "other": "This order earned {{count}} entries in {{giveaway}}. Good luck!"
+  },
+  "pendingHeading": "Adding your giveaway entries…",
+  "pendingBody": {
+    "one": "This order should earn about 1 entry in {{giveaway}}. It will show here in a moment.",
+    "other": "This order should earn about {{count}} entries in {{giveaway}}. They will show here in a moment."
+  },
+  "slowBody": "Your entries are on their way. They're added a few minutes after your order is confirmed."
+}
