@@ -20,7 +20,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, payload, shop } = await authenticate.webhook(request);
   const refund = payload as RefundPayload;
   const orderId = `gid://shopify/Order/${refund.order_id}`;
-  await reviewFunding(db,shop,orderId);
+  await reviewFunding(db,shop,orderId,admin);
 
   // A refunded Vault Marketplace purchase: hold the seller's credit for staff to decide.
   await flagMarketOrder(db, orderId, "The buyer was refunded.");

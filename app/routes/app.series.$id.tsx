@@ -159,6 +159,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const editable = series.status === "DRAFT";
 
   try {
+    if (series.handle.startsWith("cb-owner-") && !series.staffTest && isCardbit(session.shop) && series.status === "DRAFT") {
+      if (intent === "launch" || await db.cardbitLaunchBatch.findFirst({where:{seriesId:series.id}})) {
+        return {error:"Review and confirm this pool in the Cardbit owner workspace."};
+      }
+    }
     switch (intent) {
       case "addCards": {
         if (!editable) return { error: "Cards can't change after launch." };
