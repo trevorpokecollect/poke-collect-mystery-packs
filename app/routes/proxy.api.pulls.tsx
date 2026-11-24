@@ -9,6 +9,7 @@ import { shippingStatuses, shipStatusFor } from "../lib/shipping-status.server";
 import { packShelf } from "../lib/shelf.server";
 import { FREE_SHIPPING_CARDS, SHIP_FEE } from "../lib/vault.server";
 import { hasMarketAccess, listedOnMarket, recentSales } from "../lib/market.server";
+import { withStripeTopups } from "../lib/payments/stripe.server";
 
 async function openingHistory(database: typeof db, shop: string, customerId: string) {
   const orders = await database.packOrder.findMany({where:{shop,customerId},select:{orderId:true}});
@@ -67,7 +68,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Seed for "You Might Also Like" (Shopify's storefront product recommendations).
   const seed = live[0]?.series.packProductId ?? pulls[0]?.series.packProductId ?? null;
   return json({
-    ...(cardbit ? {cardbits: await walletView(db,shop,viewer.customerId)} : {}),
+    ...(cardbit ? {cardbits: withStripeTopups(await walletView(db,shop,viewer.customerId),shop)} : {}),
     // Order-link visitors who aren't logged in only see that order; they can log in for the rest.
     signedIn: !!viewer.customerId,
     ...(cardbit ? { cardbitVersion: 1, orderLink: !!viewer.openToken,

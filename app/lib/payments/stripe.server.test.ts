@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 import { describe, expect, it } from "vitest";
 import { CARDBIT_SHOP as shop } from "../cardbit.server";
-import { stripeConfig, verifyTopupSession, type StripeConfig } from "./stripe.server";
+import { stripeConfig, verifyTopupSession, withStripeTopups, type StripeConfig } from "./stripe.server";
 
 const prices = {
   "50950076727458": "price_ten",
@@ -87,5 +87,24 @@ describe("Stripe webhook signatures", () => {
     expect(stripe.webhooks.constructEvent(payload, header, "whsec_abc").id).toBe("evt_1");
     expect(() => stripe.webhooks.constructEvent(payload, header, "whsec_other")).toThrow();
     expect(() => stripe.webhooks.constructEvent(payload.replace("evt_1", "evt_2"), header, "whsec_abc")).toThrow();
+  });
+});
+
+describe("withStripeTopups", () => {
+  it("offers only priced packages through Stripe, and leaves the wallet alone when Stripe is off", () => {
+    const view = { enabled: true, checkoutReady: false, topups: [] as unknown[] };
+    expect(withStripeTopups(view, shop, env)).toMatchObject({
+      payment: "stripe",
+      checkoutReady: true,
+      topups: [
+        { variant: "50950076727458", amount: 1000, bonus: 0 },
+        { variant: "50950076792994", amount: 10000, bonus: 500 },
+      ],
+    });
+    expect(withStripeTopups(view, shop, { ...env, CARDBIT_PAYMENT_PROVIDER: "" })).toBe(view);
+    expect(withStripeTopups({ enabled: false }, shop, env)).toEqual({ enabled: false });
+  });
+  it("returns shoppers to the storefront wallet by default", () => {
+    expect(stripeConfig(shop, env)?.returnUrl).toBe("https://cardbit.com/?cb=cardbits&topup={CHECKOUT_SESSION_ID}");
   });
 });

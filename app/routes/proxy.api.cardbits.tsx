@@ -3,12 +3,13 @@ import db from "../db.server";
 import { walletAction, walletAccess, walletView } from "../lib/cardbits.server";
 import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
+import { withStripeTopups } from "../lib/payments/stripe.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
   if (!viewer?.customerId || !walletAccess(shop, viewer.customerId))
     return json({ error: "Sign in to Cardbit." }, 401);
-  return json(await walletView(db, shop, viewer.customerId));
+  return json(withStripeTopups(await walletView(db, shop, viewer.customerId), shop));
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {

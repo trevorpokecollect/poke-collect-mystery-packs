@@ -5,6 +5,7 @@
 import Stripe from "stripe";
 import type { PrismaClient } from "@prisma/client";
 import { isCardbit } from "../cardbit.server";
+import { topups } from "../cardbit-topups.server";
 import {
   creditTopupPayment,
   holdTopupPayment,
@@ -23,7 +24,8 @@ export type StripeConfig = {
   returnUrl: string;
 };
 
-const DEFAULT_RETURN = "https://cardbit.com/pages/cardbits?topup={CHECKOUT_SESSION_ID}";
+// The storefront's My Cardbits page; the theme shows progress until the webhook credits the payment.
+const DEFAULT_RETURN = "https://cardbit.com/?cb=cardbits&topup={CHECKOUT_SESSION_ID}";
 
 export function stripeConfig(shop: string, env = process.env): StripeConfig | null {
   if (!isCardbit(shop, env) || env.CARDBIT_PAYMENT_PROVIDER !== "stripe") return null;
@@ -58,6 +60,23 @@ export function stripeConfig(shop: string, env = process.env): StripeConfig | nu
   const returnUrl = env.STRIPE_TOPUP_RETURN_URL || DEFAULT_RETURN;
   if (!/^https:\/\//.test(returnUrl) || !returnUrl.includes("{CHECKOUT_SESSION_ID}")) return null;
   return { secretKey, publishableKey, webhookSecret, live, prices, returnUrl };
+}
+
+/**
+ * Tells the storefront wallet to sell top-ups through Stripe Checkout when Stripe is on: only
+ * packages with a configured Stripe price are offered. A wallet that is off is returned as is.
+ */
+export function withStripeTopups<T extends { enabled: boolean }>(view: T, shop: string, env = process.env) {
+  const config = view.enabled ? stripeConfig(shop, env) : null;
+  if (!config) return view;
+  return {
+    ...view,
+    payment: "stripe" as const,
+    checkoutReady: true,
+    topups: topups
+      .filter((t) => config.prices[t.variant])
+      .map(({ variant, amount, bonus }) => ({ variant, amount, bonus })),
+  };
 }
 
 const clients = new Map<string, Stripe>();
