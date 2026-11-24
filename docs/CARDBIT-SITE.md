@@ -70,3 +70,18 @@ Unchanged sources: retail and buyback come from Poke-Collect's per-card buylist 
 - Coinflow sandbox keys (Trevor).
 - Shippo account (Trevor) — Pirate Ship has no public API.
 - Transactional email sender for hello@cardbit.com (Postmark or Resend).
+
+## Published policy the site must enforce
+
+- Vault shipping: $6 or 600 Cardbits per shipment, free for shipments over 30 cards. US addresses only.
+- Excluded states: AL, HI, ID, MN, NV, NY, UT, WA. Block top-ups, pack purchases and shipping
+  when either the billing address or the request IP geolocates to one of them. Check on the server
+  at each of those three actions, not only at sign-up.
+- Home page: no Just Pulled section or live pull ticker.
+
+## Approved design to port (cardbit-theme)
+
+- Hero banners: main a9fb38f (`assets/cardbit-hero-scenes.js`, `cardbit-latch-rig-cut.webp`,
+  hero code in `cardbit-storefront.js`, "Full-width hero scenes" CSS in `cardbit-flair.css`).
+- Policies page: main (from `cardbit-policies-v2`).
+- How It Works: PR #1, branch `cardbit-how-it-works-live`.
