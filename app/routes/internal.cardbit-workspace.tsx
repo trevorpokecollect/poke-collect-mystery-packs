@@ -26,6 +26,7 @@ import { refresh } from "../workspace/sources.server";
 import { vault } from "../workspace/portfolio.server";
 import { shelfPage,confirmFiled } from "../workspace/shelf.server";
 import { staffShipping } from "../workspace/fulfillment.server";
+import { inventoryTotals } from "../workspace/totals.server";
 function verifiedActor(request: Request) {
   const key = process.env.CARDBIT_DESK_SECRET,
     owner = process.env.CARDBIT_OWNER_EMAIL?.trim().toLowerCase(),
@@ -163,6 +164,8 @@ export async function action({ request }: ActionFunctionArgs) {
       case "refresh":
         await refresh(db, admin);
         return json({ ok: true });
+      case "totals":
+        return json(await inventoryTotals(db, admin));
       case "portfolio":
         return json(
           await vault(
