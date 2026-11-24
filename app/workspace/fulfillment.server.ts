@@ -424,7 +424,7 @@ export async function staffShipping(
       select: {
         id: true,
         status: true,
-        slot: { select: { card: { select: { title: true } } } },
+        slot: { select: { card: { select: { title: true, imageUrl: true } } } },
       },
     });
     return {
@@ -438,6 +438,7 @@ export async function staffShipping(
         id: p.id,
         name: p.status === "UNOPENED" ? "Unopened card" : p.slot.card.title,
         quantity: 1,
+        image: p.status === "UNOPENED" ? null : p.slot.card.imageUrl,
       })),
       shipments: [],
     };
@@ -450,11 +451,20 @@ export async function staffShipping(
     return {
       order,
       adminUrl,
+      // What the customer picked and paid at checkout. Shopify's API does not list label rates;
+      // a label purchase without codes keeps this buyer-selected method when it is available.
+      shipping: order.shippingLine
+        ? {
+            title: order.shippingLine.title,
+            price: order.shippingLine.originalPriceSet?.shopMoney ?? null,
+          }
+        : null,
       items: await orderItems(admin, order.id),
       shipments: shipments.map((s) => ({
         id: s.id,
         name: s.assignedLocation.name,
         status: s.status,
+        delivery: s.deliveryMethod?.presentedName ?? null,
         reason: eligibility(order, s),
         parcel: saved.find((p) => p.id === s.id)
           ? doc(saved.find((p) => p.id === s.id)!)
