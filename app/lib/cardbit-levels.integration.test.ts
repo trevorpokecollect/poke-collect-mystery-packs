@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { CARDBIT_SHOP as shop } from "./cardbit.server";
 import { recordFunding, walletAction } from "./cardbits.server";
 import { launchSeries } from "./pool.server";
+import { reverseSparks, sparksView } from "./cardbit-sparks.server";
 import { dailyCheckIn, reverseXp, rewardsView, setAvatar } from "./cardbit-levels.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -20,6 +21,7 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
     vi.stubEnv("CARDBIT_QA_CUSTOMERS", qa + "," + other);
     vi.stubEnv("CARDBIT_TEST_SERIES", '{"levels-qa":1000}');
     vi.stubEnv("CARDBIT_LEVELS", "on");
+    vi.stubEnv("CARDBIT_SPARKS", "on");
   });
   afterAll(async () => {
     await db.pullTransfer.deleteMany({ where: { shop } });
@@ -29,6 +31,8 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
     await db.cardbitReceipt.deleteMany({ where: { shop } });
     await db.cardbitWallet.deleteMany({ where: { shop } });
     await db.cardbitXpEvent.deleteMany({ where: { shop } });
+    await db.cardbitSparkTxn.deleteMany({ where: { shop } });
+    await db.cardbitSparkWallet.deleteMany({ where: { shop } });
     await db.cardbitProfile.deleteMany({ where: { shop } });
     await db.$disconnect();
     vi.unstubAllEnvs();
@@ -39,7 +43,7 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
       data: {
         shop, staffTest: true, handle: "levels-qa", title: "Levels QA",
         packProductId: "lv-pack", packVariantId: "lv-pack-variant", packPrice: 10, cardsPerPack: 1,
-        cards: { create: [{ productId: "lv-card", variantId: "lv-card-variant", title: "Card", tier: "Base", marketValue: 1, quantity: 5 }] },
+        cards: { create: [{ productId: "lv-card", variantId: "lv-card-variant", title: "Card", tier: "Base", marketValue: 1, quantity: 6 }] },
       },
     });
     const live = await launchSeries(db, s.id);
@@ -50,11 +54,21 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
     await walletAction(db, shop, qa, { ...buy, requestId: randomUUID() });
     expect((await rewardsView(db, shop, qa)).xp).toBe(250);
     expect((await rewardsView(db, shop, other)).xp).toBe(0);
+    // No active buyback offer for the pulled card, so each 1,000 Cardbit opening earns 50 Sparks, once.
+    expect((await sparksView(db, shop, qa)).balance).toBe(100);
+    expect((await sparksView(db, shop, other)).balance).toBe(0);
+    const firstKey = qa + "/" + buy.requestId;
+    await Promise.all([1, 2].map(() => db.$transaction((tx) => reverseSparks(tx, shop, firstKey, "refund"))));
+    expect((await sparksView(db, shop, qa)).balance).toBe(50);
+    vi.stubEnv("CARDBIT_SPARKS", "off");
+    await walletAction(db, shop, qa, { ...buy, requestId: randomUUID() });
+    expect((await sparksView(db, shop, qa)).balance).toBe(50);
+    vi.stubEnv("CARDBIT_SPARKS", "on");
 
     const key = "pack:" + qa + "/" + buy.requestId;
     await Promise.all([1, 2].map(() => db.$transaction((tx) => reverseXp(tx, shop, key, "refund"))));
     await db.$transaction((tx) => reverseXp(tx, shop, key, "refund"));
-    expect((await rewardsView(db, shop, qa)).xp).toBe(125);
+    expect((await rewardsView(db, shop, qa)).xp).toBe(250); // three openings (375) minus one reversal
   });
 
   it("checks in once per Central day and tracks the streak", async () => {

@@ -504,6 +504,28 @@ model CardbitXpEvent {
   @@index([shop, customerId, createdAt])
 }
 
+// Sparks: consolation currency, no cash value, not transferable, spent only in the Spark Shop.
+model CardbitSparkWallet {
+  shop       String
+  customerId String
+  balance    Int    @default(0)
+  @@id([shop, customerId])
+}
+
+model CardbitSparkTxn {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  eventKey   String
+  kind       String
+  delta      Int
+  source     String?
+  note       String?
+  createdAt  DateTime @default(now())
+  @@unique([shop, eventKey])
+  @@index([shop, customerId, createdAt])
+}
+
 model CardbitDemoAccount {
   shop       String
   customerId String

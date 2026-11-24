@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { isCardbit } from "./cardbit.server";
+import { sparksEnabled } from "./cardbit-sparks.server";
 import {
   AVATAR_COLORS,
   ICONS,
@@ -153,7 +154,10 @@ export async function setAvatar(
 }
 
 export async function rewardsView(db: PrismaClient, shop: string, customerId: string, at = new Date()) {
-  const profile = await db.cardbitProfile.findUnique({ where: { shop_customerId: { shop, customerId } } });
+  const [profile, sparkWallet] = await Promise.all([
+    db.cardbitProfile.findUnique({ where: { shop_customerId: { shop, customerId } } }),
+    sparksEnabled(shop) ? db.cardbitSparkWallet.findUnique({ where: { shop_customerId: { shop, customerId } } }) : null,
+  ]);
   const xp = profile?.xp ?? 0;
   const progress = levelProgress(xp);
   const day = cardbitDay(at);
@@ -172,5 +176,6 @@ export async function rewardsView(db: PrismaClient, shop: string, customerId: st
     spinner: { current: spinnerFor(progress.level), tiers: SPINNER_TIERS },
     rules: XP_RULES,
     features: engagementFlags(),
+    sparks: sparksEnabled(shop) ? { balance: sparkWallet?.balance ?? 0 } : null,
   };
 }
