@@ -80,6 +80,8 @@ export async function action({ request }: ActionFunctionArgs) {
       case "packShipment":
       case "shipParcel":
       case "releasePick":
+      case "swapPick":
+      case "removePick":
       case "buyLabel":
       case "labelStatus":
         if (!direct) return json({error:"Physical operations require the Cardbit owner workspace."},403);
