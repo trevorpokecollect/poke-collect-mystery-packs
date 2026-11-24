@@ -27,6 +27,8 @@ type Card = {
 };
 type StockMap = {
   variantId: string;
+  // Cardbit's own Shopify price for this listing (set by Card Broker, mirroring Poke-Collect).
+  price?: number | null;
   productId: string;
   condition: string;
   card: Card;
@@ -51,6 +53,10 @@ type Link = {
   merchantVariantId: string;
 };
 
+const cents = (n: unknown) =>
+  typeof n === "number" && Number.isFinite(n) && n > 0 && n <= 1000000
+    ? Math.round(n * 100)
+    : null;
 export async function site<T>(path: string, params: URLSearchParams) {
   const key = process.env.CARD_BROKER_API_KEY,
     base = process.env.CARD_BROKER_API_URL;
@@ -124,22 +130,24 @@ async function cardbitInventory(admin: AdminApiContext) {
       shop: { myshopifyDomain: string };
       nodes: ({
         id: string;
+        price: string;
         product: { id: string; productType: string };
       } | null)[];
     }>(
       admin,
       `#graphql
-      query WorkspaceVariantOwnership($ids:[ID!]!){shop{myshopifyDomain} nodes(ids:$ids){... on ProductVariant{id product{id productType}}}}`,
+      query WorkspaceVariantOwnership($ids:[ID!]!){shop{myshopifyDomain} nodes(ids:$ids){... on ProductVariant{id price product{id productType}}}}`,
       { ids },
     );
     if (data.shop.myshopifyDomain !== CARDBIT_SHOP)
       throw Error("Incorrect Cardbit inventory installation.");
     const owned = new Map(
-      data.nodes.filter((n) => !!n).map((n) => [n!.id, n!.product]),
+      data.nodes.filter((n) => !!n).map((n) => [n!.id, n!]),
     );
     for (const row of rows) {
       const id = shopifyId(row.variantId, "ProductVariant"),
-        product = id ? owned.get(id) : null;
+        node = id ? owned.get(id) : null,
+        product = node?.product;
       if (
         id &&
         product &&
@@ -148,7 +156,7 @@ async function cardbitInventory(admin: AdminApiContext) {
           product.productType,
         )
       )
-        matched.push({ ...row, variantId: id });
+        matched.push({ ...row, variantId: id, price: cents(Number(node!.price)) });
     }
     if (data.nodes.some(Boolean)) ownedVariant = true;
   }
@@ -190,10 +198,6 @@ function merchantVariants(raw: unknown) {
   }
   return map;
 }
-const cents = (n: unknown) =>
-  typeof n === "number" && Number.isFinite(n) && n > 0 && n <= 1000000
-    ? Math.round(n * 100)
-    : null;
 function stockRow(v: StockMap): InputRow {
   const c = v.card;
   return {
@@ -271,14 +275,19 @@ async function shopperJapanesePrintings(admin: AdminApiContext) {
   return rows;
 }
 
-// The merchant's printing endpoint also covers cards without a Shopify listing.
-async function verifyJapaneseBuylist(
+// Poke-Collect's per-printing buylist endpoint quotes any exact printing, listed or not, so no
+// merchant variant map is needed. English retail is Cardbit's own listing price (Card Broker keeps
+// it equal to Poke-Collect retail); Japanese retail stays market plus the 20% markup, applied once.
+async function verifyBuylist(
   refs: References,
   mapped: Map<string, string>,
   date: string,
+  listed: Map<string, number>,
 ) {
   const pending = Object.values(refs).filter(
-    (r) => r.key.split("|")[1] === "ja" && !mapped.has(r.key) && r.market,
+    (r) =>
+      !mapped.has(r.key) &&
+      (r.key.split("|")[1] === "ja" ? !!r.market : listed.has(r.key)),
   );
   let cursor = 0;
   async function worker() {
@@ -300,7 +309,7 @@ async function verifyJapaneseBuylist(
       );
       if (!reply.ok)
         throw Error(
-          "Poke-Collect could not verify the Japanese buylist. Retry the pricing refresh.",
+          "Poke-Collect could not verify the buylist. Retry the pricing refresh.",
         );
       const q = await reply.json();
       const cash = cents(q.cash);
@@ -315,14 +324,16 @@ async function verifyJapaneseBuylist(
         q.hiddenBy
       )
         continue;
+      const japanese = ref.key.split("|")[1] === "ja";
+      if (!japanese) ref.retail = listed.get(ref.key)!;
+      else ref.retail ??= Math.round((ref.market! * 120) / 100);
       ref.cash = cash;
-      ref.retail ??= Math.round((ref.market! * 120) / 100);
       ref.retailDate = date;
       ref.quoteSource = "merchant";
     }
   }
   await Promise.all(
-    Array.from({ length: Math.min(3, pending.length) }, worker),
+    Array.from({ length: Math.min(6, pending.length) }, worker),
   );
 }
 
@@ -525,7 +536,17 @@ export async function refresh(db: PrismaClient, admin: AdminApiContext) {
       r.retailDate = today;
     }
   }
-  if (marketApproved()) await verifyJapaneseBuylist(refs, links, today);
+  const listed = new Map<string, number>();
+  for (const v of stock) {
+    const key = printingKey(
+      v.card.tcgplayerId,
+      v.card.language,
+      v.card.printing,
+      v.condition,
+    );
+    if (key && v.price && key.split("|")[1] !== "ja") listed.set(key, v.price);
+  }
+  await verifyBuylist(refs, links, today, listed);
   for (const v of stock) {
     const key = printingKey(
       v.card.tcgplayerId,

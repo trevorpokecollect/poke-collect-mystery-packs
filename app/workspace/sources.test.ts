@@ -70,10 +70,12 @@ function wire(
     };
     marketField?: boolean;
     otherShop?: boolean;
+    english?: string;
   } = {},
 ) {
+  const base = opts.english ? { ...printing, language: "en" } : printing;
   const c =
-    opts.marketField === false ? { ...printing, market: undefined } : printing;
+    opts.marketField === false ? { ...base, market: undefined } : base;
   mocks.gql.mockImplementation(async (_admin: unknown, document: string) => {
     if (document.includes("JapaneseShopperCatalogs"))
       return { customers: { nodes: [], pageInfo: { hasNextPage: false } } };
@@ -86,6 +88,7 @@ function wire(
             : [
                 {
                   id: shopifyVariant,
+                  price: opts.english ?? "4.00",
                   product: {
                     id: product,
                     productType: "Pokemon Japanese Single",
@@ -143,7 +146,9 @@ function wire(
       },
       sets: { items: [{ id: "test", name: "Test Set" }] },
       cards: {
-        items: [{ ...c, language: "en", market: { market: "999.00" } }, c],
+        items: opts.english
+          ? [c, { ...c, language: "ja" }]
+          : [{ ...c, language: "en", market: { market: "999.00" } }, c],
       },
     };
     expect(u.pathname.startsWith("/api/v1/")).toBe(true);
@@ -284,3 +289,14 @@ it.each([true, false])(
     });
   },
 );
+
+it("prices listed English singles from Poke-Collect's printing buylist without a merchant variant map", async () => {
+  wire({ links: [], hasSnapshot: false, english: "3.10" });
+  await refresh(db, admin);
+  expect(mocks.change.mock.calls[0][1].refs["101|en|holo|near mint"]).toMatchObject({
+    cash: 125,
+    retail: 310,
+    quoteSource: "merchant",
+  });
+  expect(mocks.change.mock.calls[0][1].variants[shopifyVariant]).toBe("101|en|holo|near mint");
+});
