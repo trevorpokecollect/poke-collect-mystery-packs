@@ -282,7 +282,7 @@ async function verifyBuylist(
   refs: References,
   mapped: Map<string, string>,
   date: string,
-  listed: Map<string, number>,
+  listed: Map<string, { retail: number; date: string }>,
 ) {
   const pending = Object.values(refs).filter(
     (r) =>
@@ -325,10 +325,15 @@ async function verifyBuylist(
       )
         continue;
       const japanese = ref.key.split("|")[1] === "ja";
-      if (!japanese) ref.retail = listed.get(ref.key)!;
-      else ref.retail ??= Math.round((ref.market! * 120) / 100);
+      if (!japanese) {
+        const last = listed.get(ref.key)!;
+        ref.retail = last.retail;
+        ref.retailDate = last.date;
+      } else {
+        ref.retail ??= Math.round((ref.market! * 120) / 100);
+        ref.retailDate = date;
+      }
       ref.cash = cash;
-      ref.retailDate = date;
       ref.quoteSource = "merchant";
     }
   }
@@ -536,7 +541,18 @@ export async function refresh(db: PrismaClient, admin: AdminApiContext) {
       r.retailDate = today;
     }
   }
-  const listed = new Map<string, number>();
+  // A sold-out or pooled listing leaves Shopify stock, but copies already in vaults still need a
+  // buyback quote: keep the last listing retail Cardbit observed (with its date) for that printing.
+  const listed = new Map<string, { retail: number; date: string }>();
+  for (const r of Object.values(old.refs))
+    if (
+      r.quoteSource === "merchant" &&
+      r.retail &&
+      r.retailDate &&
+      r.key.split("|")[1] !== "ja" &&
+      !links.has(r.key)
+    )
+      listed.set(r.key, { retail: r.retail, date: r.retailDate });
   for (const v of stock) {
     const key = printingKey(
       v.card.tcgplayerId,
@@ -544,7 +560,8 @@ export async function refresh(db: PrismaClient, admin: AdminApiContext) {
       v.card.printing,
       v.condition,
     );
-    if (key && v.price && key.split("|")[1] !== "ja") listed.set(key, v.price);
+    if (key && v.price && key.split("|")[1] !== "ja")
+      listed.set(key, { retail: v.price, date: today });
   }
   await verifyBuylist(refs, links, today, listed);
   for (const v of stock) {
