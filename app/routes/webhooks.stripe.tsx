@@ -20,5 +20,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
   // A thrown error returns 500 so Stripe retries; every handler is idempotent.
   const result = await handleStripeEvent(db, stripe, config, CARDBIT_SHOP, event);
+  // One line per event (ids and outcome only) so staff can trace credits and reversals in logs.
+  console.log(`Stripe ${event.type} ${event.id}: ${result}`);
   return Response.json({ received: true, result });
 };
