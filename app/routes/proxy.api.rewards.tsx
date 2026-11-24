@@ -9,14 +9,16 @@ import {
   setAvatar,
 } from "../lib/cardbit-levels.server";
 import { SpinError, dailySpin } from "../lib/cardbit-spinner.server";
+import { leaderboardEnabled, weeklyStandings } from "../lib/cardbit-leaderboard.server";
 import { ageConfirmed, AGE_REQUIRED } from "../lib/cardbit-age.server";
 
 /** Levels, daily check-in and Latch & Friends icons for the signed-in Cardbit customer. */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
   if (!levelsEnabled(shop)) return json({ enabled: false });
-  if (!viewer?.customerId) return json({ enabled: true, signedIn: false });
-  return json({ signedIn: true, ...(await rewardsView(db, shop, viewer.customerId)) });
+  const leaderboard = leaderboardEnabled(shop) ? await weeklyStandings(db, shop, viewer?.customerId) : null;
+  if (!viewer?.customerId) return json({ enabled: true, signedIn: false, leaderboard });
+  return json({ signedIn: true, ...(await rewardsView(db, shop, viewer.customerId)), leaderboard });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
