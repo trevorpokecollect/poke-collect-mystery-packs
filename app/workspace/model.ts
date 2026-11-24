@@ -145,7 +145,14 @@ export function printingKey(
     condition.trim().toLowerCase(),
   ].join("|");
 }
+/** Prize pools hold real singles for the Daily Spinner tiers or the Spark Shop. They are never sold as packs. */
+export const PRIZE_KINDS = ["spin-basic", "spin-bronze", "spin-silver", "spin-gold", "spin-cobalt", "spin-holo", "spark-shop"] as const;
+export type PrizeKind = (typeof PRIZE_KINDS)[number];
+/** Spark Shop singles top out at 200 Cardbits of value (the 1,000-Spark tier). */
+export const SPARK_SHOP_MAX = 200;
+export const prizeVariant = (k: PrizeKind) => "cardbit-prize:" + k;
 export type Recipe = {
+  prize?: PrizeKind;
   edition: Edition;
   title: string;
   packs: number;
@@ -190,6 +197,15 @@ export function validateRecipe(r: Recipe) {
     r.set.length > 200
   )
     throw Error("Check the pack count, price and inventory rules.");
+  if (
+    r.prize !== undefined &&
+    (!PRIZE_KINDS.includes(r.prize) ||
+      cardsPerPack(r.edition) !== 1 ||
+      (r.prize === "spark-shop" && r.max > SPARK_SHOP_MAX))
+  )
+    throw Error(
+      "Prize pools use one card per slot, and Spark Shop singles must be worth 200 Cardbits or less.",
+    );
   if (
     [r.minBigHits, r.minTopHits].some(
       (n) => n !== undefined && !isInt(n, 0, 1000),

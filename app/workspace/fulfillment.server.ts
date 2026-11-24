@@ -49,6 +49,7 @@ type Input = {
   fo: string;
   revision?: string;
   checked?: string[];
+  pick?: string;
   tracking?: string;
   carrier?: string;
   label?: LabelInput;
@@ -424,7 +425,7 @@ export async function staffShipping(
       select: {
         id: true,
         status: true,
-        slot: { select: { card: { select: { title: true } } } },
+        slot: { select: { card: { select: { title: true, imageUrl: true } } } },
       },
     });
     return {
@@ -438,6 +439,7 @@ export async function staffShipping(
         id: p.id,
         name: p.status === "UNOPENED" ? "Unopened card" : p.slot.card.title,
         quantity: 1,
+        image: p.status === "UNOPENED" ? null : p.slot.card.imageUrl,
       })),
       shipments: [],
     };
@@ -450,11 +452,22 @@ export async function staffShipping(
     return {
       order,
       adminUrl,
+      // What the customer picked and paid at checkout. Shopify's API does not list label rates;
+      // a label purchase without codes keeps this buyer-selected method when it is available.
+      shipping: order.shippingLine
+        ? {
+            title: order.shippingLine.title,
+            price: order.shippingLine.originalPriceSet?.shopMoney ?? null,
+          }
+        : null,
       items: await orderItems(admin, order.id),
       shipments: shipments.map((s) => ({
         id: s.id,
         name: s.assignedLocation.name,
         status: s.status,
+        delivery: s.deliveryMethod?.presentedName ?? null,
+        // Carrier-calculated checkout rates carry a service code; flat and free rates do not.
+        carrierRate: !!s.deliveryMethod?.serviceCode,
         reason: eligibility(order, s),
         parcel: saved.find((p) => p.id === s.id)
           ? doc(saved.find((p) => p.id === s.id)!)
@@ -614,6 +627,8 @@ export async function staffShipping(
         "Custody changed on a packed card. Review its order before shipping.",
       );
   }
+  if (input.action === "swapPick" || input.action === "removePick")
+    return changePick(db, admin, p, fo.id, input, actor);
   if (input.action === "packShipment") {
     const ids = manifest(p)
       .picks.map((i) => i.id)
@@ -716,4 +731,132 @@ export async function staffShipping(
     throw e;
   }
   return finish(db, p.id, p.orderId, p.revision, fid);
+}
+
+/**
+ * Fix a pick-list mistake before Shopify fulfills the order. The rejected copy leaves this parcel and
+ * goes back to "To file" in Storage slots for a re-check. Swap takes the next filed, unallocated copy of
+ * the same variant at the parcel's location (a vaulted card is rebound to it). Remove shrinks the
+ * shipment by one card, so Shopify must fulfill only what remains; vaulted cards can only be swapped.
+ */
+async function changePick(
+  db: PrismaClient,
+  admin: AdminApiContext,
+  p: CardbitShelfParcel,
+  fo: string,
+  input: Input,
+  actor: string,
+) {
+  if (!["READY", "PACKED"].includes(p.state) || p.labelState)
+    throw Error("This pick list can no longer be changed.");
+  const fs = await parcelFulfillments(admin, fo);
+  if (fs.some((f) => !manifest(p).prior.includes(f.id)))
+    throw Error(
+      "Shopify has recorded a fulfillment. Check it before changing cards.",
+    );
+  return db.$transaction(
+    async (tx) => {
+      await shelfLock(tx);
+      const fresh = await tx.cardbitShelfParcel.findFirst({
+        where: {
+          shop,
+          id: p.id,
+          revision: p.revision,
+          state: { in: ["READY", "PACKED"] },
+          labelState: null,
+        },
+      });
+      if (!fresh) throw Error("This pick list changed. Refresh it.");
+      const m = manifest(fresh),
+        pick = m.picks.find((c) => c.id === input.pick);
+      if (!pick) throw Error("This card is no longer on the pick list.");
+      const old = await tx.cardbitShelfCopy.findFirst({
+        where: { shop, id: pick.id, parcelId: p.id, shippedAt: null },
+      });
+      if (!old) throw Error("This card is no longer on the pick list.");
+      let picks = m.picks.filter((c) => c.id !== pick.id),
+        lines = m.lines,
+        coversAll = m.coversAll;
+      if (input.action === "swapPick") {
+        const next = await tx.cardbitShelfCopy.findFirst({
+          where: {
+            shop,
+            variantId: old.variantId,
+            id: { not: old.id },
+            slot: { not: null },
+            filedAt: { not: null },
+            poolSlotId: null,
+            parcelId: null,
+            shippedAt: null,
+            OR: [{ locationId: m.location }, { locationId: null }],
+          },
+          orderBy: [{ slot: "asc" }, { id: "asc" }],
+        });
+        if (!next)
+          throw Error(
+            "No other filed copy of this card is available. Remove it or return the pick list.",
+          );
+        await tx.cardbitShelfCopy.update({
+          where: { id: old.id },
+          data: { parcelId: null, filedAt: null, poolSlotId: null },
+        });
+        const claimed = await tx.cardbitShelfCopy.updateMany({
+          where: { shop, id: next.id, parcelId: null, poolSlotId: null },
+          data: {
+            parcelId: p.id,
+            ...(old.poolSlotId ? { poolSlotId: old.poolSlotId } : {}),
+          },
+        });
+        if (claimed.count !== 1)
+          throw Error("That copy was just taken. Try the swap again.");
+        if (old.poolSlotId)
+          await tx.cardbitShelfBinding.upsert({
+            where: { poolSlotId: old.poolSlotId },
+            create: { shop, poolSlotId: old.poolSlotId, copyId: next.id },
+            update: { copyId: next.id, boundAt: new Date() },
+          });
+        picks.push({
+          ...pick,
+          id: next.id,
+          slot: next.slot!,
+          title: next.title,
+          details: next.details,
+          image: next.image,
+        });
+      } else {
+        if (pick.pullId || old.poolSlotId)
+          throw Error(
+            "A vaulted card can't be dropped from its paid shipment. Swap it, or return the pick list and resolve the order in Shopify.",
+          );
+        lines = lines
+          .map((l) =>
+            l.id === pick.lineId ? { ...l, quantity: l.quantity - 1 } : l,
+          )
+          .filter((l) => l.quantity > 0);
+        if (!lines.length)
+          throw Error(
+            "This is the last card on the pick list. Return the pick list instead.",
+          );
+        coversAll = false;
+        await tx.cardbitShelfCopy.update({
+          where: { id: old.id },
+          data: { parcelId: null, filedAt: null },
+        });
+      }
+      picks = picks.sort((a, b) => a.slot - b.slot || a.id.localeCompare(b.id));
+      const data: Manifest = { ...m, picks, lines, coversAll };
+      return doc(
+        await tx.cardbitShelfParcel.update({
+          where: { id: p.id },
+          data: {
+            state: "READY",
+            actor,
+            revision: digest([data, p.revision]),
+            manifest: data as unknown as Prisma.InputJsonValue,
+          },
+        }),
+      );
+    },
+    { timeout: 30000 },
+  );
 }

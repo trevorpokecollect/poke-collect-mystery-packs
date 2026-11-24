@@ -469,6 +469,78 @@ model CardbitBuyback {
   @@index([shop, customerId])
 }
 
+model CardbitAgeConfirmation {
+  shop        String
+  customerId  String
+  source      String
+  confirmedAt DateTime @default(now())
+
+  @@id([shop, customerId])
+}
+
+// Cardbit levels: XP has no cash value. Each award is recorded once per event key.
+model CardbitProfile {
+  shop           String
+  customerId     String
+  xp             Int      @default(0)
+  iconId         String?
+  iconColor      String?
+  streak         Int      @default(0)
+  lastCheckInDay String?
+  updatedAt      DateTime @updatedAt
+  @@id([shop, customerId])
+}
+
+model CardbitXpEvent {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  eventKey   String
+  kind       String
+  xp         Int
+  source     String?
+  createdAt  DateTime @default(now())
+  @@unique([shop, eventKey])
+  @@index([shop, customerId, createdAt])
+}
+
+// Sparks: consolation currency, no cash value, not transferable, spent only in the Spark Shop.
+model CardbitSparkWallet {
+  shop       String
+  customerId String
+  balance    Int    @default(0)
+  @@id([shop, customerId])
+}
+
+model CardbitSparkTxn {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  eventKey   String
+  kind       String
+  delta      Int
+  source     String?
+  note       String?
+  createdAt  DateTime @default(now())
+  @@unique([shop, eventKey])
+  @@index([shop, customerId, createdAt])
+}
+
+// Daily Spinner: one stored result per customer per Cardbit day. Card prizes point at the vaulted pull.
+model CardbitSpin {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  day        String
+  tier       String
+  streak     Int      @default(0)
+  prizeKind  String
+  amount     Int?
+  pullId     String?  @unique
+  createdAt  DateTime @default(now())
+  @@unique([shop, customerId, day, tier])
+}
+
 model CardbitDemoAccount {
   shop       String
   customerId String
@@ -1045,4 +1117,53 @@ model AppValue {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// Cardbit bot and fraud guard (app/lib/cardbit-guard*.ts). One row per customer.
+model CardbitRiskProfile {
+  shop             String
+  customerId       String
+  // ok | review (shipping, buybacks, top-ups and free rewards paused) | blocked | trusted
+  status           String    @default("ok")
+  // [{ code, detail, at }] newest last
+  reasons          Json      @default("[]")
+  accountCreatedAt DateTime?
+  phoneVerifiedAt  DateTime?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  note             String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@id([shop, customerId])
+  @@index([shop, status])
+}
+
+// Keyed hashes of devices and payment cards seen per customer, to spot one person behind many accounts.
+model CardbitRiskSignal {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  // device | card
+  kind       String
+  valueHash  String
+  createdAt  DateTime @default(now())
+
+  @@unique([shop, kind, valueHash, customerId])
+  @@index([shop, kind, valueHash])
+}
+
+// What the guard refused, or would have refused while CARDBIT_GUARD=log.
+model CardbitGuardEvent {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String?
+  action     String
+  rule       String
+  detail     String?
+  enforced   Boolean
+  createdAt  DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([shop, customerId])
 }

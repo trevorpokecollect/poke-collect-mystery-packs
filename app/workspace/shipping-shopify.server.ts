@@ -16,12 +16,15 @@ export type OrderHeader = {
   createdAt: string;
   displayFinancialStatus: string;
   displayFulfillmentStatus: string;
-  shippingLine: { title: string } | null;
+  shippingLine: {
+    title: string;
+    originalPriceSet?: { shopMoney: { amount: string; currencyCode: string } };
+  } | null;
   customAttributes?: { key: string; value: string }[];
   tags?: string[];
   currentTotalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
 };
-const header = `id name test cancelledAt createdAt displayFinancialStatus displayFulfillmentStatus shippingLine{title} currentTotalPriceSet{shopMoney{amount currencyCode}}`;
+const header = `id name test cancelledAt createdAt displayFinancialStatus displayFulfillmentStatus shippingLine{title originalPriceSet{shopMoney{amount currencyCode}}} currentTotalPriceSet{shopMoney{amount currencyCode}}`;
 export function vaultReference(order: OrderHeader) {
   return (
     order.customAttributes?.find((a) => a.key === "_vault_request")?.value ||
@@ -34,17 +37,33 @@ export const shopifyOrderUrl = (id: string) =>
   "/orders/" +
   id.split("/").pop();
 export async function orderItems(admin: AdminApiContext, id: string) {
-  const items: { id: string; name: string; quantity: number }[] = [];
+  const items: {
+    id: string;
+    name: string;
+    quantity: number;
+    image?: string | null;
+  }[] = [];
   let after: string | null = null;
   do {
-    const page: { order: { lineItems: Page<(typeof items)[number]> } } =
+    const page: {
+      order: {
+        lineItems: Page<{
+          id: string;
+          name: string;
+          quantity: number;
+          image: { url: string } | null;
+        }>;
+      };
+    } =
       await gql(
         admin,
-        `query ShelfOrderItems($id:ID!,$after:String){order(id:$id){lineItems(first:100,after:$after){nodes{id name quantity} pageInfo{hasNextPage endCursor}}}}`,
+        `query ShelfOrderItems($id:ID!,$after:String){order(id:$id){lineItems(first:100,after:$after){nodes{id name quantity image{url}} pageInfo{hasNextPage endCursor}}}}`,
         { id, after },
       );
     const c = page.order.lineItems;
-    items.push(...c.nodes);
+    items.push(
+      ...c.nodes.map(({ image, ...n }) => ({ ...n, image: image?.url ?? null })),
+    );
     after = c.pageInfo.hasNextPage ? c.pageInfo.endCursor : null;
   } while (after);
   return items;
@@ -128,7 +147,11 @@ export type ParcelHeader = {
   id: string;
   status: string;
   supportedActions: { action: string }[];
-  deliveryMethod: { methodType: string } | null;
+  deliveryMethod: {
+    methodType: string;
+    presentedName?: string | null;
+    serviceCode?: string | null;
+  } | null;
   assignedLocation: {
     name: string;
     location: { id: string; isFulfillmentService: boolean } | null;
@@ -158,7 +181,7 @@ export async function orderDetail(admin: AdminApiContext, id: string) {
   if (!/^gid:\/\/shopify\/Order\/\d+$/.test(id))
     throw Error("Choose a Shopify order.");
   const fields =
-    "id status supportedActions{action} deliveryMethod{methodType} assignedLocation{name location{id isFulfillmentService}}";
+    "id status supportedActions{action} deliveryMethod{methodType presentedName serviceCode} assignedLocation{name location{id isFulfillmentService}}";
   let after: string | null = null,
     order: OrderHeader | undefined;
   const shipments: ParcelHeader[] = [];

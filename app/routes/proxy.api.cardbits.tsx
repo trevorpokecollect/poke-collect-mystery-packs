@@ -2,7 +2,9 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { walletAction, walletAccess, walletView } from "../lib/cardbits.server";
 import { PoolError } from "../lib/pool.server";
+import { AGE_REQUIRED, ageConfirmed } from "../lib/cardbit-age.server";
 import { json, proxyContext } from "../lib/proxy.server";
+import { guardRequest } from "../lib/cardbit-guard.server";
 import { withStripeTopups } from "../lib/payments/stripe.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -13,7 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, viewer } = await proxyContext(request);
+  const { shop, viewer, admin } = await proxyContext(request);
   if (!viewer?.customerId) return json({ error: "Sign in to Cardbit." }, 401);
   if (!walletAccess(shop, viewer.customerId))
     return json({ error: "Cardbits are unavailable." }, 404);
@@ -23,6 +25,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const input = await request.json().catch(() => null);
     if (!input || typeof input !== "object")
       throw new PoolError("Review the offer again.");
+    const refused = await guardRequest(request, {
+      db,
+      shop,
+      customerId: viewer.customerId,
+      action: (input as { action?: unknown }).action === "buyback" ? "buyback" : "pack",
+      admin,
+    });
+    if (refused) return refused;
+    // Buying a pack with Cardbits requires the customer's 18+ confirmation.
+    if ((input as { action?: unknown }).action === "pack" &&
+        !(await ageConfirmed(db, shop, viewer.customerId)))
+      return json(AGE_REQUIRED, 403);
     const receipt = await walletAction(db, shop, viewer.customerId, input);
     return json({
       receipt: receipt.id,

@@ -89,7 +89,9 @@ export async function launchWalletPool(
   if (draft.status !== "DRAFT" || draftRevision(draft) !== revision)
     throw Error("Your draft changed. Refresh and review it again.");
   await verifyWorkspaceLaunch(db, admin, id);
-  await verifyWalletChannel(admin, draft.packVariantId);
+  const prize = draft.packVariantId.startsWith("cardbit-prize:");
+  // Prize pools have no Shopify pack variant, so there is no checkout channel to close.
+  if (!prize) await verifyWalletChannel(admin, draft.packVariantId);
   await db.$transaction(
     async (tx) => {
       await lockPackVariantDraft(tx, shop, draft.packVariantId);
@@ -286,7 +288,7 @@ export async function launchWalletPool(
         data: {
           buildRules: asJson({
             ...(fresh.buildRules as object),
-            cardbitSalesChannel: "wallet",
+            cardbitSalesChannel: prize ? "prize" : "wallet",
           }),
         },
       });

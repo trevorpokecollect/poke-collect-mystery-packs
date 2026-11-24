@@ -71,6 +71,7 @@ function wire(
     marketField?: boolean;
     otherShop?: boolean;
     english?: string;
+    soldOut?: boolean;
   } = {},
 ) {
   const base = opts.english ? { ...printing, language: "en" } : printing;
@@ -135,7 +136,7 @@ function wire(
     );
     const pages: Record<string, unknown> = {
       inventory: {
-        items: [
+        items: opts.soldOut ? [] : [
           {
             variantId: "501",
             productId: "81",
@@ -299,4 +300,25 @@ it("prices listed English singles from Poke-Collect's printing buylist without a
     quoteSource: "merchant",
   });
   expect(mocks.change.mock.calls[0][1].variants[shopifyVariant]).toBe("101|en|holo|near mint");
+});
+
+it("keeps the last listing retail and its date for an English printing after it sells out", async () => {
+  const key = "101|en|holo|near mint";
+  wire({ links: [], hasSnapshot: false, english: "3.10", soldOut: true });
+  mocks.read.mockResolvedValue({
+    refs: {
+      [key]: {
+        key, name: "Test printing", set: "Test Set", number: "13", language: "English",
+        finish: "Holo", condition: "Near Mint", retail: 310, cash: 100, market: null,
+        quoteSource: "merchant", retailDate: "2026-11-20", marketDate: null,
+      },
+    },
+  });
+  await refresh(db, admin);
+  expect(mocks.change.mock.calls[0][1].refs[key]).toMatchObject({
+    cash: 125,
+    retail: 310,
+    retailDate: "2026-11-20",
+    quoteSource: "merchant",
+  });
 });

@@ -1,3 +1,4 @@
+import { validateRecipe as checkPrize } from "./model";
 import { describe, it, expect } from "vitest";
 import {
   planPool,
@@ -153,5 +154,20 @@ describe("Cardbit owner workspace", () => {
       bits: null,
       market: null,
     });
+  });
+});
+
+describe("prize pool recipes", () => {
+  const base = {
+    edition: "mystery", title: "Daily Spin Basic", packs: 10, price: 1000, language: "Any", set: "",
+    condition: "Near Mint", min: 0, max: 150, target: 100, copies: 1, minHits: 0, hit: 0,
+    tiers: [0, 1, 2, 3, 4].map((i) => ({ name: "T" + i, min: i * 100 })),
+  };
+  it("accepts known prize kinds on one-card editions and caps Spark Shop value", () => {
+    expect(() => checkPrize({ ...base, prize: "spin-basic" } as never)).not.toThrow();
+    expect(() => checkPrize({ ...base, prize: "spark-shop" } as never)).not.toThrow();
+    expect(() => checkPrize({ ...base, prize: "spark-shop", max: 500 } as never)).toThrow("Spark Shop");
+    expect(() => checkPrize({ ...base, prize: "spin-basic", edition: "booster", packs: 2 } as never)).toThrow("one card");
+    expect(() => checkPrize({ ...base, prize: "cash" } as never)).toThrow();
   });
 });

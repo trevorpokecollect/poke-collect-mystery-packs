@@ -19,6 +19,8 @@ import { offer as currentOffer } from "../workspace/model";
 import { isCardbit } from "./cardbit.server";
 import { drawForOrderInTransaction, PoolError } from "./pool.server";
 import { gql } from "./orders.server";
+import { awardPackXp } from "./cardbit-levels.server";
+import { awardPackSparks } from "./cardbit-sparks.server";
 
 type Tx = Prisma.TransactionClient;
 type Config = {
@@ -522,7 +524,8 @@ export async function walletAction(
     )
       throw new PoolError("Cardbits activity is paused for payment review.");
     let openingId: string | null = null,
-      copyId: string | null = null;
+      copyId: string | null = null,
+      packOrderId: string | null = null;
     const delta = input.action === "pack" ? -input.amount : input.amount;
     if (input.action === "pack") {
       const series = await tx.series.findFirst({
@@ -569,6 +572,7 @@ export async function walletAction(
       if (draw.shortfall.length || draw.pulls.length !== series.cardsPerPack)
         throw new PoolError("This edition is sold out.");
       openingId = draw.pulls[0].id;
+      packOrderId = orderId;
       // Wallet orders hold physical cards in the vault. They have no Shopify pack line to fulfill.
       const now = new Date();
       await tx.packOrder.update({
@@ -675,6 +679,10 @@ export async function walletAction(
       data: { balance: { increment: delta } },
     });
     if (live && input.action === "pack") await recordReferralPurchase(tx, shop, customerId, eventKey);
+    if (input.action === "pack") {
+      await awardPackXp(tx, shop, customerId, eventKey, input.amount);
+      await awardPackSparks(tx, { shop, customerId, receiptKey: eventKey, paidCardbits: input.amount, orderId: packOrderId! });
+    }
     return tx.cardbitReceipt.create({
       data: {
         shop,
