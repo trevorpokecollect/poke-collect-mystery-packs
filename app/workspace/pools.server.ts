@@ -14,6 +14,7 @@ import {
   poolRetail,
   validateRecipe,
   cardsPerPack,
+  prizeVariant,
   type Stock,
   type Recipe,
 } from "./model";
@@ -35,7 +36,12 @@ function nativeBuildRules(r: Recipe) {
   const per = cardsPerPack(r.edition);
   return {
     cardbitRecipe: r,
-    cardbitSalesChannel: "wallet",
+    cardbitSalesChannel: r.prize ? "prize" : "wallet",
+    ...(r.prize === "spark-shop"
+      ? { cardbitSparkShop: true }
+      : r.prize
+        ? { cardbitDailySpin: r.prize.slice("spin-".length) }
+        : {}),
     productType: "Pokemon Single,Pokemon Japanese Single",
     language: r.language === "Any" ? "" : r.language,
     condition: r.condition,
@@ -100,6 +106,7 @@ export function toView(s: SeriesView) {
     title: s.title,
     status: s.status,
     recipe: recipeOf(s.buildRules),
+    prize: recipeOf(s.buildRules)?.prize ?? null,
     commit: s.commitHash,
     revision: draftRevision(s),
     handle: s.handle,
@@ -178,10 +185,10 @@ export async function build(
       throw Error("This request was already used for different pool rules.");
     return toView(existing);
   }
-  const product = live
+  const product = live && !r.prize
     ? (await workspacePackProducts(admin))[r.edition]
     : undefined;
-  if (live && (!product || product.price !== r.price))
+  if (live && !r.prize && (!product || product.price !== r.price))
     throw Error(
       "The edition or its pack price changed in Shopify. Reload before saving the draft.",
     );
@@ -197,13 +204,14 @@ export async function build(
         throw Error("This request was already used for different pool rules.");
       return toView(previous);
     }
-    if (product) {
-      await lockPackVariantDraft(tx, shop, product.variantId);
+    const boundVariant = r.prize ? prizeVariant(r.prize) : product?.variantId;
+    if (boundVariant) {
+      await lockPackVariantDraft(tx, shop, boundVariant);
       const other = await tx.series.findFirst({
         where: {
           shop,
           staffTest: false,
-          packVariantId: product.variantId,
+          packVariantId: boundVariant,
           status: "DRAFT",
         },
         select: { title: true },
@@ -224,8 +232,8 @@ export async function build(
         title: r.title.trim(),
         handle,
         status: "DRAFT",
-        packVariantId: product?.variantId ?? "qa:" + handle,
-        packProductId: product?.productId ?? "qa:" + r.edition,
+        packVariantId: r.prize ? prizeVariant(r.prize) : (product?.variantId ?? "qa:" + handle),
+        packProductId: r.prize ? "cardbit-prize" : (product?.productId ?? "qa:" + r.edition),
         packPrice: r.price / 100,
         autoOpenDays: 0,
         cardsPerPack: cardsPerPack(r.edition),
@@ -333,18 +341,23 @@ export async function verifyWorkspaceLaunch(
   });
   if (!pool.reserveInventory)
     throw Error("This Cardbit pool must reserve its physical singles.");
-  const products = await workspacePackProducts(admin);
-  const bound = Object.values(products).find(
+  const prize = recipeOf(pool.buildRules)?.prize;
+  if (prize) {
+    if (pool.packVariantId !== prizeVariant(prize) || pool.cardsPerPack !== 1)
+      throw Error("This prize pool's binding changed. Review the draft before launch.");
+  }
+  const products = prize ? {} : await workspacePackProducts(admin);
+  const bound = prize ? null : Object.values(products).find(
     (product) =>
       product.variantId === pool.packVariantId &&
       product.productId === pool.packProductId,
   );
   if (
-    !bound ||
+    !prize && (!bound ||
     bound.price !== Math.round(Number(pool.packPrice) * 100) ||
     cardsPerPack(bound.edition) !== pool.cardsPerPack ||
     (recipeOf(pool.buildRules)?.price &&
-      recipeOf(pool.buildRules).price !== bound.price)
+      recipeOf(pool.buildRules).price !== bound.price))
   )
     throw Error(
       "The Cardbit pack product, price or pack size changed. Review the draft before launch.",
