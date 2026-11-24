@@ -1,3 +1,4 @@
+import { mailInLog } from "./mail-in.server";
 import type { PrismaClient } from "@prisma/client";
 import { CARDBIT_SHOP as shop } from "../lib/cardbit.server";
 import { activeRound, lockDesk, post } from "./entries.server";
@@ -205,6 +206,7 @@ export async function ownerView(
     })),
     audit,
     proof,
+    mailIn: await mailInLog(db),
   };
 }
 export async function manage(

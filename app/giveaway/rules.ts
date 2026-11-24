@@ -2,10 +2,12 @@ import { parseLocalDateTime } from "./time";
 
 export const DRAW_ZONE = "America/Chicago";
 export const PRIZE = 10_000;
+/** Residents of these states cannot enter Cardbit prize promotions (Official Rules, Eligibility). */
+export const EXCLUDED_STATES = ["AL", "FL", "NY"] as const;
 export const STATES =
-  "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split(
-    " ",
-  );
+  "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY"
+    .split(" ")
+    .filter((s) => !(EXCLUDED_STATES as readonly string[]).includes(s));
 export const SOCIAL = {
   whatnot: {
     label: "Whatnot",
@@ -87,9 +89,10 @@ export function giveawayTotals(
   }[],
   eligible: Set<string>,
 ) {
+  // A daily check-in or an accepted mail-in postcard enters the person in that drawing.
   const checked = new Set(
     events
-      .filter((e) => !e.voided && e.kind === "daily")
+      .filter((e) => !e.voided && (e.kind === "daily" || e.kind === "mail-in"))
       .map((e) => e.customerId),
   );
   const totals = new Map<string, number>();

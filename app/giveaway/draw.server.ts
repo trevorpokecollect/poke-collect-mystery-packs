@@ -36,19 +36,35 @@ export async function settleRound(
         where: { shop },
       });
       if (!cfg?.enabled || row.closedAt || row.closesAt > clock()) return false;
-      const [events, allowed, held] = await Promise.all([
-        tx.cardbitGiveawayEvent.findMany({ where: { shop, day } }),
+      const events = await tx.cardbitGiveawayEvent.findMany({
+        where: { shop, day },
+      });
+      // A mail-in postcard is the free method of entry: it needs no email consent or Whatnot visit.
+      const mailed = [
+        ...new Set(
+          events
+            .filter((e) => e.kind === "mail-in" && !e.voided)
+            .map((e) => e.customerId),
+        ),
+      ];
+      const [allowed, held] = await Promise.all([
         tx.cardbitGiveawayPerson.findMany({
           where: {
             shop,
-            customerId: { in: [...opted] },
             held: false,
-            whatnotAt: { not: null },
+            OR: [
+              { customerId: { in: [...opted] }, whatnotAt: { not: null } },
+              { customerId: { in: mailed } },
+            ],
           },
           select: { customerId: true, code: true },
         }),
         tx.cardbitWallet.findMany({
-          where: { shop, held: true, customerId: { in: [...opted] } },
+          where: {
+            shop,
+            held: true,
+            customerId: { in: [...new Set([...opted, ...mailed])] },
+          },
           select: { customerId: true },
         }),
       ]);

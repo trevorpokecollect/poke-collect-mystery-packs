@@ -11,8 +11,8 @@ import { defaultColor } from "./cardbit-levels";
 export const leaderboardEnabled = (shop: string, env: NodeJS.ProcessEnv = process.env) =>
   isCardbit(shop, env) && env.CARDBIT_LEADERBOARD === "on";
 
-/** Proposed weekly prizes in Cardbits for ranks 1 to 10 (not paid automatically). */
-export const WEEKLY_PRIZES = [5000, 3000, 2000, 1000, 1000, 500, 500, 500, 500, 500];
+/** Weekly prizes in Cardbits for ranks 1 to 10, 50,000 total (Official Rules draft; not paid automatically). */
+export const WEEKLY_PRIZES = [20000, 10000, 6000, 4000, 3000, 1400, 1400, 1400, 1400, 1400];
 
 /** The UTC instants bounding the Central-time week that contains `at`. */
 export function weekWindow(at = new Date()) {
@@ -36,8 +36,14 @@ export async function weeklyStandings(db: PrismaClient, shop: string, viewerId?:
     where: { shop, kind: "pack", createdAt: { gte: start, lt: end } },
     _sum: { delta: true },
   });
-  const ranked = rows
-    .map((r) => ({ customerId: r.customerId, score: -(r._sum.delta ?? 0) }))
+  // Accepted mail-in postcards add points (Official Rules, free method of entry).
+  const { mailInPoints } = await import("../giveaway/mail-in.server");
+  const mailed = await mailInPoints(db, start);
+  const scores = new Map<string, number>();
+  for (const r of rows) scores.set(r.customerId, -(r._sum.delta ?? 0));
+  for (const [id, points] of mailed) scores.set(id, (scores.get(id) ?? 0) + points);
+  const ranked = [...scores]
+    .map(([customerId, score]) => ({ customerId, score }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || a.customerId.localeCompare(b.customerId));
   const top = ranked.slice(0, 10);

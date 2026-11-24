@@ -14,6 +14,7 @@ import {
   recordReferralPurchase,
 } from "./entries.server";
 import { settleRound } from "./draw.server";
+import { logMailIn } from "./mail-in.server";
 import { reverseReferralOrder } from "./purchases.server";
 export function giveawaySuite(database: PrismaClient, enabled: boolean) {
   const id = (n: number) => "gid://shopify/Customer/" + n;
@@ -57,7 +58,7 @@ export function giveawaySuite(database: PrismaClient, enabled: boolean) {
         enterOrBonus(database, a, {
           intent: "whatnot",
           adult: false,
-          region: "AL",
+          region: "TN",
         }),
       ).rejects.toThrow("18");
       await expect(
@@ -70,7 +71,7 @@ export function giveawaySuite(database: PrismaClient, enabled: boolean) {
       await enterOrBonus(database, a, {
         intent: "whatnot",
         adult: true,
-        region: "AL",
+        region: "TN",
       });
       expect((await customerView(database, a, true)).total).toBe(100);
       expect((await customerView(database, a, true)).entered).toBe(false);
@@ -158,7 +159,7 @@ export function giveawaySuite(database: PrismaClient, enabled: boolean) {
       await enterOrBonus(database, c, {
         intent: "whatnot",
         adult: true,
-        region: "AL",
+        region: "TN",
       });
       await enterOrBonus(database, c, { intent: "enter" });
       await manage(database, "owner", {
@@ -216,7 +217,7 @@ export function giveawaySuite(database: PrismaClient, enabled: boolean) {
       });
       await enterOrBonus(database, person, {
         intent: "whatnot",
-        region: "AL",
+        region: "TN",
         adult: true,
       });
       vi.setSystemTime(closesAt);
@@ -232,10 +233,57 @@ export function giveawaySuite(database: PrismaClient, enabled: boolean) {
       expect((await customerView(database, person, true)).total).toBe(101);
       await enterOrBonus(database, person, {
         intent: "whatnot",
-        region: "AL",
+        region: "TN",
         adult: true,
       });
       expect((await customerView(database, person, true)).total).toBe(101);
+    });
+    it("enters an accepted postcard without email consent or Whatnot, once per drawing, and can win", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-12-03T20:00Z"));
+      const mailer = id(331);
+      const { day, closesAt } = drawWindow(new Date());
+      await manage(database, "owner", {
+        intent: "settings",
+        enabled: true,
+        rulesUrl: "/pages/rules",
+        freeInstructions: "Fixture free method",
+        referralEntries: 500,
+        shareEntries: 100,
+      });
+      const card = (ref: string, extra: Record<string, unknown> = {}) => ({
+        promo: "giveaway",
+        ref,
+        receivedOn: "2026-12-03",
+        postmarkedOn: "2026-12-01",
+        region: "TN",
+        adult: true,
+        ...extra,
+      });
+      const first = await logMailIn(database, "staff", card("MI-20261203-001"), mailer);
+      expect(first).toMatchObject({ status: "accepted", value: 101, period: day });
+      // Same log number again is a no-op; a reused number for another account is refused.
+      expect((await logMailIn(database, "staff", card("MI-20261203-001"), mailer)).id).toBe(first.id);
+      await expect(
+        logMailIn(database, "staff", card("MI-20261203-001"), id(332)),
+      ).rejects.toThrow("already used");
+      expect(
+        await logMailIn(database, "staff", card("MI-20261203-002"), mailer),
+      ).toMatchObject({ status: "rejected", reason: "Over the limit for this period" });
+      expect(
+        await logMailIn(database, "staff", card("MI-20261203-003", { region: "FL" }), id(333)),
+      ).toMatchObject({ status: "rejected" });
+      expect(
+        await logMailIn(database, "staff", card("MI-20261203-004"), null),
+      ).toMatchObject({ status: "rejected", reason: "No matching Cardbit account" });
+      vi.setSystemTime(closesAt);
+      // No one is subscribed to email marketing: only the postcard entrant is eligible.
+      expect(await settleRound(database, admin([]), day)).toBe(true);
+      const round = await database.cardbitGiveawayRound.findUniqueOrThrow({
+        where: { shop_day: { shop, day } },
+      });
+      expect(round.winnerId).toBe(mailer);
+      expect(round.totalEntries).toBe(101);
     });
   });
 }

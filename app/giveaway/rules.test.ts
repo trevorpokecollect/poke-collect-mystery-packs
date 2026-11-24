@@ -54,6 +54,20 @@ describe("Cardbit giveaway rules", () => {
       ),
     ).toEqual([{ entrantId: "a", entries: 101 }]);
   });
+  it("counts an accepted mail-in postcard as that person's entry for the drawing", () => {
+    const e = (customerId: string, kind: string, entries: number, voided = false) => ({
+      customerId,
+      kind,
+      entries,
+      voided,
+    });
+    expect(
+      giveawayTotals(
+        [e("m", "mail-in", 101), e("v", "mail-in", 101, true), e("v", "purchase", 50)],
+        new Set(["m", "v"]),
+      ),
+    ).toEqual([{ entrantId: "m", entries: 101 }]);
+  });
   it("reproduces the same draw and proof regardless of input order", () => {
     const s = "77".repeat(32),
       t = [
@@ -64,8 +78,9 @@ describe("Cardbit giveaway rules", () => {
     expect(snapshotHash(t)).toBe(snapshotHash([...t].reverse()));
     expect(drawWinners([], 1, s)).toEqual([]);
   });
-  it("uses verified invite and Cardbit pages; accepts 50 states and DC", () => {
-    expect(STATES).toHaveLength(51);
+  it("uses verified invite and Cardbit pages; accepts 50 states and DC minus excluded states", () => {
+    expect(STATES).toHaveLength(48);
+    for (const s of ["AL", "FL", "NY"]) expect(STATES).not.toContain(s);
     expect(STATES).toContain("DC");
     expect(STATES).not.toContain("PR");
     expect(SOCIAL.whatnot.href).toBe(

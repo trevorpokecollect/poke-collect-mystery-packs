@@ -104,6 +104,19 @@ export async function action({ request }: ActionFunctionArgs) {
       case "giveaway-manage":
         await manageGiveaway(db, actor, input);
         return json(await giveawayDesk(db, input));
+      case "giveaway-mail-in": {
+        const { logMailIn } = await import("../giveaway/mail-in.server");
+        const account = String(input.account ?? "").trim();
+        let customerId: string | null = null;
+        if (account)
+          try {
+            customerId = (await lookup(db, admin, account)).customerId;
+          } catch {
+            customerId = null;
+          }
+        await logMailIn(db, actor, input, customerId);
+        return json(await giveawayDesk(db, input));
+      }
       case "giveaway-close":
         await closeDue(db, admin);
         return json(await giveawayDesk(db, input));

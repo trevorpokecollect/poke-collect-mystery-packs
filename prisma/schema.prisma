@@ -1118,3 +1118,25 @@ model AppValue {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+// Mail-in (no purchase necessary) postcards logged by staff for the Daily Giveaway, Weekly
+// Leaderboard and Daily Spinner. One row per postcard; `ref` is the number written on the card.
+model CardbitMailIn {
+  id           String   @id @default(cuid())
+  shop         String
+  ref          String
+  customerId   String?
+  promo        String
+  period       String
+  receivedOn   String
+  postmarkedOn String?
+  region       String?
+  value        Int      @default(0)
+  status       String
+  reason       String?
+  spinId       String?
+  actor        String
+  createdAt    DateTime @default(now())
+  @@unique([shop, ref])
+  @@index([shop, promo, period, customerId])
+}
