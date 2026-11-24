@@ -52,11 +52,15 @@ export async function mailInPoints(db: PrismaClient, start: Date) {
       period: start.toISOString(),
     },
     _sum: { value: true },
+    _max: { createdAt: true },
   });
   return new Map(
     rows
       .filter((r) => r.customerId)
-      .map((r) => [r.customerId as string, r._sum.value ?? 0]),
+      .map((r) => [
+        r.customerId as string,
+        { points: r._sum.value ?? 0, last: r._max.createdAt?.getTime() ?? 0 },
+      ]),
   );
 }
 
@@ -123,7 +127,7 @@ export async function logMailIn(
         : input.adult !== true
           ? "Under 18 or age not confirmed"
           : "");
-  const base = { shop, ref, customerId, promo, receivedOn, postmarkedOn, region, actor };
+  const base = { shop, ref, customerId, promo, receivedOn, postmarkedOn, region, actor, createdAt: now };
 
   if (reason) {
     const period =

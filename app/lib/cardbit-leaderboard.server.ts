@@ -35,17 +35,23 @@ export async function weeklyStandings(db: PrismaClient, shop: string, viewerId?:
     by: ["customerId"],
     where: { shop, kind: "pack", createdAt: { gte: start, lt: end } },
     _sum: { delta: true },
+    _max: { createdAt: true },
   });
   // Accepted mail-in postcards add points (Official Rules, free method of entry).
   const { mailInPoints } = await import("../giveaway/mail-in.server");
   const mailed = await mailInPoints(db, start);
-  const scores = new Map<string, number>();
-  for (const r of rows) scores.set(r.customerId, -(r._sum.delta ?? 0));
-  for (const [id, points] of mailed) scores.set(id, (scores.get(id) ?? 0) + points);
+  const scores = new Map<string, { score: number; last: number }>();
+  const add = (id: string, points: number, at: number) => {
+    const prior = scores.get(id) ?? { score: 0, last: 0 };
+    scores.set(id, { score: prior.score + points, last: Math.max(prior.last, at) });
+  };
+  for (const r of rows) add(r.customerId, -(r._sum.delta ?? 0), r._max.createdAt?.getTime() ?? 0);
+  for (const [id, m] of mailed) add(id, m.points, m.last);
+  // Ties go to whoever reached the total first (Official Rules D3).
   const ranked = [...scores]
-    .map(([customerId, score]) => ({ customerId, score }))
+    .map(([customerId, v]) => ({ customerId, score: v.score, last: v.last }))
     .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score || a.customerId.localeCompare(b.customerId));
+    .sort((a, b) => b.score - a.score || a.last - b.last || a.customerId.localeCompare(b.customerId));
   const top = ranked.slice(0, 10);
   const profiles = await db.cardbitProfile.findMany({
     where: { shop, customerId: { in: top.map((r) => r.customerId) } },
