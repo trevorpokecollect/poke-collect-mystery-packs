@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ageConfirmed, confirmAge } from "./cardbit-age.server";
+import { ageConfirmed, confirmAge, type AgeSource } from "./cardbit-age.server";
+
+type Where = { where: { shop_customerId: { shop: string; customerId: string } } };
+type AgeDb = Parameters<typeof ageConfirmed>[0];
 
 function fakeDb() {
   const rows = new Map<string, { source: string; confirmedAt: Date }>();
@@ -7,35 +10,36 @@ function fakeDb() {
   return {
     rows,
     cardbitAgeConfirmation: {
-      findUnique: async ({ where }: any) => rows.get(key(where.shop_customerId)) ?? null,
-      upsert: async ({ where, create }: any) => {
+      findUnique: async ({ where }: Where) => rows.get(key(where.shop_customerId)) ?? null,
+      upsert: async ({ where, create }: Where & { create: { source: string } }) => {
         const k = key(where.shop_customerId);
         if (!rows.has(k)) rows.set(k, { source: create.source, confirmedAt: new Date() });
         return rows.get(k)!;
       },
     },
-  } as any;
+  };
 }
+const asDb = (db: ReturnType<typeof fakeDb>) => db as unknown as AgeDb;
 
 describe("Cardbit 18+ confirmation", () => {
   it("is unconfirmed until the customer confirms", async () => {
-    const db = fakeDb();
+    const fake = fakeDb(), db = asDb(fake);
     expect(await ageConfirmed(db, "hhuuev-81.myshopify.com", "gid://shopify/Customer/1")).toBeNull();
     await confirmAge(db, "hhuuev-81.myshopify.com", "gid://shopify/Customer/1", "signup");
     expect(await ageConfirmed(db, "hhuuev-81.myshopify.com", "gid://shopify/Customer/1")).toBeInstanceOf(Date);
   });
 
   it("keeps the first confirmation and scopes it to store and customer", async () => {
-    const db = fakeDb();
+    const fake = fakeDb(), db = asDb(fake);
     const first = await confirmAge(db, "a.myshopify.com", "gid://shopify/Customer/1", "signup");
     const again = await confirmAge(db, "a.myshopify.com", "gid://shopify/Customer/1", "prompt");
     expect(again).toBe(first);
-    expect(db.rows.get("a.myshopify.com|gid://shopify/Customer/1").source).toBe("signup");
+    expect(fake.rows.get("a.myshopify.com|gid://shopify/Customer/1")?.source).toBe("signup");
     expect(await ageConfirmed(db, "b.myshopify.com", "gid://shopify/Customer/1")).toBeNull();
     expect(await ageConfirmed(db, "a.myshopify.com", "gid://shopify/Customer/2")).toBeNull();
   });
 
   it("rejects unknown sources", async () => {
-    await expect(confirmAge(fakeDb(), "a", "c", "other" as any)).rejects.toThrow();
+    await expect(confirmAge(asDb(fakeDb()), "a", "c", "other" as AgeSource)).rejects.toThrow();
   });
 });
