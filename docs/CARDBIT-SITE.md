@@ -1,0 +1,72 @@
+# Cardbit standalone site (branch `cardbit-site`)
+
+Cardbit's own website with Coinflow as the processor, built **alongside** the Shopify setup.
+Trevor's rule (Nov 24 2026): nothing here may change how Cardbit on Shopify, its theme, or
+Card Broker for Cardbit-on-Shopify work today. Shopify must stay usable with another processor.
+
+## Separation
+
+| Piece | Shopify setup (unchanged) | Standalone site |
+| --- | --- | --- |
+| Packs code | branch `cardbit` | branch `cardbit-site` (never merged into `cardbit` without Trevor's OK) |
+| Railway | `cardbit-mystery-packs / production / app` | `cardbit-mystery-packs / site / app-site` (own environment) |
+| Database | production Postgres | the `site` environment's own Postgres |
+| Card Broker | Shopify listings + shelf intake to production | extra destination, OFF by default (`CARDBIT_SITE_INTAKE=on`), posts to the site origin only |
+| Domain | cardbit.com (Shopify) | Railway test URL until Trevor chooses which setup goes live |
+| Stock | real stock | test stock only until Trevor approves moving real stock |
+
+Pushes to `cardbit-site` do not deploy production: CI deploys only `cardbit`, and
+`scripts/start-cardbit.sh` refuses any branch but `cardbit` on the production service.
+The site environment gets its own guarded start script, like `stripe-test`.
+
+## Stock model (site database is the source of truth)
+
+One row per physical copy. Shopify IDs are not used.
+
+```
+SiteCopy
+  id            cuid
+  printingKey   lookKey(game, set, number) + finish + language   -- same folding as shelf.server.ts
+  tcgplayerId   Int?            -- from Card Broker's catalog match
+  title, setName, number, name, finish, language, condition, image
+  slot, pocket  Int?            -- storage address (20/slot, 20 slots/box, 100/shelf)
+  status        FOR_SALE | POOLED | VAULTED | SHIP_LOCKED | SHIPPED | SOLD_BACK_PENDING | REMOVED
+  retailBits    Int?            -- 100% Poke-Collect retail in Cardbits, refreshed daily
+  ownerId       String?         -- site customer when VAULTED / SHIP_LOCKED
+  poolSlotId    String? unique  -- pack slot when POOLED
+  orderId       String?
+  receiptKey    String          -- Card Broker eventKey + unit, unique (idempotent intake)
+  updatedAt
+```
+
+Rules:
+- A status change is one conditional UPDATE (`WHERE id = ? AND status = ?`). A copy can only be sold,
+  pooled, vaulted or shipped once. The last copy has exactly one winner.
+- Every change writes a `SiteCopyEvent` row (from, to, actor, reason, idempotency key) for audit.
+- Buyback returns a VAULTED copy to FOR_SALE at full retail after the Cardbits credit commits.
+- Pool building selects FOR_SALE copies and moves them to POOLED inside the launch transaction.
+
+## Card Broker → site intake
+
+`POST /internal/site-intake` on the site origin, same auth shape as `/internal/cardbit-shelf-intake`
+(Bearer secret, `x-cardbit-shop`), but its own secret `CARDBIT_SITE_INTAKE_SECRET`.
+
+```
+{ eventKey, quantity, title, game, setName, number, name, finish, language, condition,
+  tcgplayerId?, image? }
+```
+
+No Shopify variant or location. Replays with the same eventKey return the original result.
+Card Broker change: a second flush (`flushSiteIntake`) next to `flushShelfIntake`, reading from
+its own queue, only when `CARDBIT_SITE_INTAKE=on`. The existing Shopify flush is untouched.
+
+## Pricing
+
+Unchanged sources: retail and buyback come from Poke-Collect's per-card buylist lookup
+(`buylist.server.ts`), which does not depend on Cardbit's Shopify store.
+
+## Open items
+
+- Coinflow sandbox keys (Trevor).
+- Shippo account (Trevor) — Pirate Ship has no public API.
+- Transactional email sender for hello@cardbit.com (Postmark or Resend).
