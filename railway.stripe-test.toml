@@ -1,4 +1,0 @@
-# Used only by the app service in the cardbit-mystery-packs / stripe-test environment
-# (set as that service's config file path). Production keeps railway.toml.
-[deploy]
-startCommand = "sh scripts/start-cardbit-stripe-test.sh"
