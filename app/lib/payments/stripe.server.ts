@@ -4,6 +4,7 @@
 // CARDBIT_STRIPE_LIVE_APPROVED=yes, which only Trevor may authorize.
 import Stripe from "stripe";
 import type { PrismaClient } from "@prisma/client";
+import { flagPaymentRisk, recordSignal } from "../cardbit-guard.server";
 import { isCardbit } from "../cardbit.server";
 import { topups } from "../cardbit-topups.server";
 import {
@@ -96,6 +97,8 @@ export async function createTopupCheckout(
   shop: string,
   customerId: string,
   variant: string,
+  /** From the fraud guard: "any" forces 3D Secure (new accounts, first or large top-ups). */
+  threeDSecure: "any" | "automatic" = "automatic",
 ) {
   const tier = topupPackage(variant);
   const price = config.prices[variant];
@@ -109,9 +112,10 @@ export async function createTopupCheckout(
       client_reference_id: customerId.split("/").pop(),
       metadata: { shop, customer: customerId, variant, cardbits: String(tier.amount), bonus: String(tier.bonus) },
       payment_intent_data: { metadata: { shop, customer: customerId, variant } },
+      payment_method_options: { card: { request_three_d_secure: threeDSecure } },
     },
     // One open Checkout per customer, package and minute: a double click reuses it.
-    { idempotencyKey: `topup:${customerId}:${variant}:${Math.floor(Date.now() / 60_000)}` },
+    { idempotencyKey: `topup:${customerId}:${variant}:${threeDSecure}:${Math.floor(Date.now() / 60_000)}` },
   );
   if (!session.client_secret) return null;
   return { clientSecret: session.client_secret, publishableKey: config.publishableKey };
@@ -169,7 +173,7 @@ export type StripeEventResult =
 /** Handles one signature-verified Stripe event. Safe to replay. */
 export async function handleStripeEvent(
   db: PrismaClient,
-  stripe: Pick<Stripe, "checkout" | "charges">,
+  stripe: Pick<Stripe, "checkout" | "charges"> & Partial<Pick<Stripe, "paymentIntents">>,
   config: StripeConfig,
   shop: string,
   event: Stripe.Event,
@@ -194,6 +198,7 @@ export async function handleStripeEvent(
       });
       const receipt = await creditTopupPayment(db, shop, payment);
       if (!receipt) return "not-verified";
+      if (!before) await recordCardSignal(db, stripe, shop, payment.customerId, payment.paymentId);
       return before ? "already-credited" : "credited";
     }
     case "charge.refunded": {
@@ -212,8 +217,20 @@ export async function handleStripeEvent(
     case "charge.dispute.created":
     case "charge.dispute.funds_withdrawn": {
       const paymentId = await disputedIntent(stripe, event.data.object);
-      if (!paymentId || !(await ours(db, shop, paymentId))) return "ignored";
+      const customerId = paymentId ? await ours(db, shop, paymentId) : null;
+      if (!paymentId || !customerId) return "ignored";
       await holdTopupPayment(db, shop, "stripe", paymentId);
+      if (event.type === "charge.dispute.created")
+        await flagPaymentRisk(db, shop, customerId, "stripe-dispute", paymentId);
+      return "held";
+    }
+    case "radar.early_fraud_warning.created": {
+      // The card issuer reported likely fraud: freeze the wallet and send the account to review.
+      const paymentId = await disputedIntent(stripe, event.data.object);
+      const customerId = paymentId ? await ours(db, shop, paymentId) : null;
+      if (!paymentId || !customerId) return "ignored";
+      await holdTopupPayment(db, shop, "stripe", paymentId);
+      await flagPaymentRisk(db, shop, customerId, "stripe-efw", paymentId);
       return "held";
     }
     case "charge.dispute.closed": {
@@ -235,7 +252,10 @@ export async function handleStripeEvent(
 const intentId = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : (value?.id ?? null);
 
-async function disputedIntent(stripe: Pick<Stripe, "charges">, dispute: Stripe.Dispute) {
+async function disputedIntent(
+  stripe: Pick<Stripe, "charges">,
+  dispute: Pick<Stripe.Dispute, "payment_intent" | "charge"> | Pick<Stripe.Radar.EarlyFraudWarning, "payment_intent" | "charge">,
+) {
   const direct = intentId(dispute.payment_intent);
   if (direct) return direct;
   const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
@@ -243,10 +263,36 @@ async function disputedIntent(stripe: Pick<Stripe, "charges">, dispute: Stripe.D
   return intentId((await stripe.charges.retrieve(chargeId)).payment_intent);
 }
 
-/** Only payments this app credited are reversed; other Stripe activity is left alone. */
+/**
+ * Only payments this app credited are acted on; other Stripe activity is left alone.
+ * Returns the credited customer, or null.
+ */
 async function ours(db: PrismaClient, shop: string, paymentId: string) {
-  return !!(await db.cardbitReceipt.findUnique({
+  const receipt = await db.cardbitReceipt.findUnique({
     where: { shop_eventKey: { shop, eventKey: "fund:stripe:" + paymentId } },
-    select: { id: true },
-  }));
+    select: { customerId: true },
+  });
+  return receipt?.customerId ?? null;
+}
+
+/**
+ * Records the card's fingerprint for the fraud guard (3+ accounts on one card go to review).
+ * Best effort: a lookup failure never blocks a credit that has already been written.
+ */
+async function recordCardSignal(
+  db: PrismaClient,
+  stripe: Partial<Pick<Stripe, "paymentIntents">>,
+  shop: string,
+  customerId: string,
+  paymentId: string,
+) {
+  if (!stripe.paymentIntents) return;
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentId, { expand: ["latest_charge"] });
+    const charge = typeof intent.latest_charge === "object" ? intent.latest_charge : null;
+    const fingerprint = charge?.payment_method_details?.card?.fingerprint;
+    if (fingerprint) await recordSignal(db, shop, customerId, "card", fingerprint);
+  } catch (error) {
+    console.error(`Stripe card signal for ${paymentId} was not recorded`, error instanceof Error ? error.message : error);
+  }
 }

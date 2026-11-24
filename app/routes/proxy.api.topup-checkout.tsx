@@ -3,10 +3,12 @@ import db from "../db.server";
 import { walletAccess } from "../lib/cardbits.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { createTopupCheckout, stripeClient, stripeConfig } from "../lib/payments/stripe.server";
+import { topupPackage } from "../lib/payments/topup-payments.server";
+import { guardRequest, topupCheck } from "../lib/cardbit-guard.server";
 
 // POST { variant } → { clientSecret, publishableKey } for Stripe embedded Checkout.
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, viewer } = await proxyContext(request);
+  const { shop, viewer, admin } = await proxyContext(request);
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   if (!viewer?.customerId) return json({ error: "Sign in to Cardbit." }, 401);
   const config = stripeConfig(shop);
@@ -14,7 +16,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "Cardbits top-ups are not available yet." }, 404);
   const input = await request.json().catch(() => null);
   const variant = typeof input?.variant === "string" ? input.variant : "";
-  const checkout = await createTopupCheckout(stripeClient(config), config, shop, viewer.customerId, variant);
+  const tier = topupPackage(variant);
+  if (!tier) return json({ error: "Choose a Cardbits package." }, 400);
+  // Fraud guard: rate limits and bot checks, then new-account and daily top-up limits.
+  const refused = await guardRequest(request, { db, shop, customerId: viewer.customerId, action: "topup", admin });
+  if (refused) return refused;
+  const check = await topupCheck(db, shop, viewer.customerId, tier.amount, admin);
+  if (!check.allowed) return json({ error: check.message ?? "This top-up is not available right now." }, 403);
+  const checkout = await createTopupCheckout(
+    stripeClient(config), config, shop, viewer.customerId, variant, check.threeDSecure,
+  );
   if (!checkout) return json({ error: "Choose a Cardbits package." }, 400);
   return json(checkout);
 };

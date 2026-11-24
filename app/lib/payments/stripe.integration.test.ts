@@ -164,5 +164,18 @@ describe.skipIf(!url)("Stripe top-ups on disposable Postgres", () => {
     expect(
       await handleStripeEvent(db, s, config, shop, event("charge.dispute.created", { payment_intent: "pi_test_unknown" })),
     ).toBe("ignored");
+    expect(
+      await handleStripeEvent(db, s, config, shop, event("radar.early_fraud_warning.created", { payment_intent: "pi_test_unknown" })),
+    ).toBe("ignored");
+  });
+
+  it("holds the wallet on an early fraud warning for a credited payment", async () => {
+    const pi = "pi_test_efw_" + Date.now();
+    const s = fakeStripe(paidSession(pi, intruder));
+    await handleStripeEvent(db, s, config, shop, event("checkout.session.completed", { id: "cs_test_" + pi }));
+    expect(
+      await handleStripeEvent(db, s, config, shop, event("radar.early_fraud_warning.created", { payment_intent: pi, charge: "ch_x" })),
+    ).toBe("held");
+    expect(await walletView(db, shop, intruder)).toMatchObject({ held: true });
   });
 });
