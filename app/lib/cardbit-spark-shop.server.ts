@@ -54,7 +54,7 @@ export async function buySparkShopCard(
   customerId: string,
   input: { cardId: unknown; requestId: unknown; sparks: unknown },
 ) {
-  if (!sparksEnabled(shop)) throw new SparkShopError("The Spark Shop is not open yet.");
+  if (!sparksEnabled(shop, customerId)) throw new SparkShopError("The Spark Shop is not open yet.");
   if (
     typeof input.cardId !== "string" ||
     input.cardId.length > 64 ||

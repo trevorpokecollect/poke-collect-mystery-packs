@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { isCardbit } from "./cardbit.server";
+import { featureOn } from "./cardbit-flags.server";
 import { cardbitDay, levelProgress, previousDay, spinnerFor } from "./cardbit-levels";
 import { awardXp } from "./cardbit-levels.server";
 import { sparksEnabled } from "./cardbit-sparks.server";
@@ -18,9 +18,9 @@ import {
 type Tx = Prisma.TransactionClient;
 export const SPIN_TABLE_KEY = "cardbit:spin-table";
 
-/** Off until official rules, a free entry method and Trevor's approval exist (CARDBIT_SPINNER=on). */
-export const spinnerEnabled = (shop: string, env: NodeJS.ProcessEnv = process.env) =>
-  isCardbit(shop, env) && env.CARDBIT_SPINNER === "on";
+/** Off until official rules, a free entry method and Trevor's approval exist (CARDBIT_SPINNER=on; "qa" = QA customers only). */
+export const spinnerEnabled = (shop: string, customerId?: string | null, env: NodeJS.ProcessEnv = process.env) =>
+  featureOn("CARDBIT_SPINNER", shop, customerId, env);
 
 /** A Daily Spin pool is a series marked in its build rules; it is never sold as a pack. */
 export const dailySpinRules = (tier: string) => ({ path: ["cardbitDailySpin"], equals: tier });
@@ -72,7 +72,7 @@ async function drawSpinCard(tx: Tx, shop: string, customerId: string, tier: stri
  * transaction. Calling again that day (refresh, replay, retry) returns the stored result only.
  */
 export async function dailySpin(db: PrismaClient, shop: string, customerId: string, at = new Date()) {
-  if (!spinnerEnabled(shop)) throw new SpinError("The Daily Spinner is not open yet.");
+  if (!spinnerEnabled(shop, customerId)) throw new SpinError("The Daily Spinner is not open yet.");
   const day = cardbitDay(at);
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`INSERT INTO "CardbitProfile" (shop, "customerId", "updatedAt") VALUES (${shop}, ${customerId}, NOW()) ON CONFLICT (shop, "customerId") DO NOTHING`;
@@ -94,7 +94,7 @@ export async function dailySpin(db: PrismaClient, shop: string, customerId: stri
       else slice = slices.filter((s) => s.kind !== "card").sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0))[0];
     }
     // Sparks slices pay XP while Sparks are off.
-    const kind = slice.kind === "sparks" && !sparksEnabled(shop) ? "xp" : slice.kind;
+    const kind = slice.kind === "sparks" && !sparksEnabled(shop, customerId) ? "xp" : slice.kind;
     const amount = kind === "card" ? null : slice.amount!;
     const spin = await tx.cardbitSpin.create({
       data: { shop, customerId, day, tier, streak, prizeKind: kind, amount, pullId },

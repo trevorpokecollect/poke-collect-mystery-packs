@@ -15,15 +15,15 @@ import { ageConfirmed, AGE_REQUIRED } from "../lib/cardbit-age.server";
 /** Levels, daily check-in and Latch & Friends icons for the signed-in Cardbit customer. */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
-  if (!levelsEnabled(shop)) return json({ enabled: false });
-  const leaderboard = leaderboardEnabled(shop) ? await weeklyStandings(db, shop, viewer?.customerId) : null;
+  if (!levelsEnabled(shop, viewer?.customerId)) return json({ enabled: false });
+  const leaderboard = leaderboardEnabled(shop, viewer?.customerId) ? await weeklyStandings(db, shop, viewer?.customerId) : null;
   if (!viewer?.customerId) return json({ enabled: true, signedIn: false, leaderboard });
   return json({ signedIn: true, ...(await rewardsView(db, shop, viewer.customerId)), leaderboard });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
-  if (!levelsEnabled(shop)) return json({ error: "Rewards are not open yet." }, 404);
+  if (!levelsEnabled(shop, viewer?.customerId)) return json({ error: "Rewards are not open yet." }, 404);
   if (!viewer?.customerId) return json({ error: "Sign In to Cardbit." }, 401);
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   const input = (await request.json().catch(() => null)) as

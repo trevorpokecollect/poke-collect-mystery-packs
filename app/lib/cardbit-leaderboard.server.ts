@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
-import { isCardbit } from "./cardbit.server";
+import { featureOn, flagMode, isQaCustomer } from "./cardbit-flags.server";
 import { defaultColor } from "./cardbit-levels";
 
 /**
@@ -8,8 +8,8 @@ import { defaultColor } from "./cardbit-levels";
  * to Sunday 23:59 Central). Demo Openings and free spins never create pack receipts, so they never
  * count. Prizes are paid by staff only after Trevor approves payouts; nothing here awards Cardbits.
  */
-export const leaderboardEnabled = (shop: string, env: NodeJS.ProcessEnv = process.env) =>
-  isCardbit(shop, env) && env.CARDBIT_LEADERBOARD === "on";
+export const leaderboardEnabled = (shop: string, customerId?: string | null, env: NodeJS.ProcessEnv = process.env) =>
+  featureOn("CARDBIT_LEADERBOARD", shop, customerId, env);
 
 /** Proposed weekly prizes in Cardbits for ranks 1 to 10 (not paid automatically). */
 export const WEEKLY_PRIZES = [5000, 3000, 2000, 1000, 1000, 500, 500, 500, 500, 500];
@@ -29,7 +29,15 @@ export function weekWindow(at = new Date()) {
 const alias = (customerId: string) =>
   "Collector " + createHash("sha256").update(customerId).digest("hex").slice(0, 4).toUpperCase();
 
-export async function weeklyStandings(db: PrismaClient, shop: string, viewerId?: string, at = new Date()) {
+export async function weeklyStandings(
+  db: PrismaClient,
+  shop: string,
+  viewerId?: string,
+  at = new Date(),
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  // In QA mode only QA customers are ranked, so real customers never appear in a test leaderboard.
+  const qaOnly = flagMode("CARDBIT_LEADERBOARD", env) === "qa";
   const { start, end } = weekWindow(at);
   const rows = await db.cardbitReceipt.groupBy({
     by: ["customerId"],
@@ -38,7 +46,7 @@ export async function weeklyStandings(db: PrismaClient, shop: string, viewerId?:
   });
   const ranked = rows
     .map((r) => ({ customerId: r.customerId, score: -(r._sum.delta ?? 0) }))
-    .filter((r) => r.score > 0)
+    .filter((r) => r.score > 0 && (!qaOnly || isQaCustomer(r.customerId, env)))
     .sort((a, b) => b.score - a.score || a.customerId.localeCompare(b.customerId));
   const top = ranked.slice(0, 10);
   const profiles = await db.cardbitProfile.findMany({

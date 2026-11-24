@@ -8,7 +8,7 @@ import { AGE_REQUIRED, ageConfirmed } from "../lib/cardbit-age.server";
 /** Spark Shop listing (prices in Sparks only) and purchases for the signed-in customer. */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
-  if (!sparksEnabled(shop)) return json({ enabled: false });
+  if (!sparksEnabled(shop, viewer?.customerId)) return json({ enabled: false });
   const cards = await sparkShopView(db, shop);
   const wallet = viewer?.customerId ? await sparksView(db, shop, viewer.customerId) : null;
   return json({ enabled: true, signedIn: !!viewer?.customerId, balance: wallet?.balance ?? null, cards });
@@ -16,7 +16,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
-  if (!sparksEnabled(shop)) return json({ error: "The Spark Shop is not open yet." }, 404);
+  if (!sparksEnabled(shop, viewer?.customerId)) return json({ error: "The Spark Shop is not open yet." }, 404);
   if (!viewer?.customerId) return json({ error: "Sign In to Cardbit." }, 401);
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   if (!(await ageConfirmed(db, shop, viewer.customerId))) return json(AGE_REQUIRED, 403);

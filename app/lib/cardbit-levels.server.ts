@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { isCardbit } from "./cardbit.server";
+import { featureOn } from "./cardbit-flags.server";
 import { sparksEnabled } from "./cardbit-sparks.server";
 import {
   AVATAR_COLORS,
@@ -19,16 +19,16 @@ import {
 type Tx = Prisma.TransactionClient;
 type Db = PrismaClient | Tx;
 
-/** Levels stay off until the Cardbit release sets CARDBIT_LEVELS=on. */
-export const levelsEnabled = (shop: string, env: NodeJS.ProcessEnv = process.env) =>
-  isCardbit(shop, env) && env.CARDBIT_LEVELS === "on";
+/** Levels stay off until CARDBIT_LEVELS=on (everyone) or "qa" (CARDBIT_QA_CUSTOMERS only). */
+export const levelsEnabled = (shop: string, customerId?: string | null, env: NodeJS.ProcessEnv = process.env) =>
+  featureOn("CARDBIT_LEVELS", shop, customerId, env);
 
 /** Prize features stay off until official rules, a free entry method and Trevor's approval exist. */
-export const engagementFlags = (env: NodeJS.ProcessEnv = process.env) => ({
-  spinner: env.CARDBIT_SPINNER === "on",
-  leaderboard: env.CARDBIT_LEADERBOARD === "on",
-  sparks: env.CARDBIT_SPARKS === "on",
-  subscriptions: env.CARDBIT_SUBSCRIPTIONS === "on",
+export const engagementFlags = (shop: string, customerId?: string | null, env: NodeJS.ProcessEnv = process.env) => ({
+  spinner: featureOn("CARDBIT_SPINNER", shop, customerId, env),
+  leaderboard: featureOn("CARDBIT_LEADERBOARD", shop, customerId, env),
+  sparks: featureOn("CARDBIT_SPARKS", shop, customerId, env),
+  subscriptions: featureOn("CARDBIT_SUBSCRIPTIONS", shop, customerId, env),
 });
 
 export class LevelError extends Error {}
@@ -74,7 +74,7 @@ export async function awardXp(
 
 /** XP for a paid Cardbits pack opening. Demo Openings never call this. */
 export function awardPackXp(tx: Tx, shop: string, customerId: string, receiptKey: string, cardbitsSpent: number) {
-  if (!levelsEnabled(shop)) return Promise.resolve(null);
+  if (!levelsEnabled(shop, customerId)) return Promise.resolve(null);
   return awardXp(tx, {
     shop,
     customerId,
@@ -156,8 +156,9 @@ export async function setAvatar(
 export async function rewardsView(db: PrismaClient, shop: string, customerId: string, at = new Date()) {
   const [profile, sparkWallet] = await Promise.all([
     db.cardbitProfile.findUnique({ where: { shop_customerId: { shop, customerId } } }),
-    sparksEnabled(shop) ? db.cardbitSparkWallet.findUnique({ where: { shop_customerId: { shop, customerId } } }) : null,
+    sparksEnabled(shop, customerId) ? db.cardbitSparkWallet.findUnique({ where: { shop_customerId: { shop, customerId } } }) : null,
   ]);
+  const features = engagementFlags(shop, customerId);
   const xp = profile?.xp ?? 0;
   const progress = levelProgress(xp);
   const day = cardbitDay(at);
@@ -175,13 +176,13 @@ export async function rewardsView(db: PrismaClient, shop: string, customerId: st
     icons: ICONS.map((i) => ({ ...i, unlocked: iconUnlocked(i, progress.level) })),
     spinner: { current: spinnerFor(progress.level), tiers: SPINNER_TIERS },
     rules: XP_RULES,
-    features: engagementFlags(),
-    spin: engagementFlags().spinner
+    features,
+    spin: features.spinner
       ? await db.cardbitSpin.findUnique({
           where: { shop_customerId_day: { shop, customerId, day } },
           select: { prizeKind: true, amount: true, pullId: true, tier: true },
         })
       : null,
-    sparks: sparksEnabled(shop) ? { balance: sparkWallet?.balance ?? 0 } : null,
+    sparks: features.sparks ? { balance: sparkWallet?.balance ?? 0 } : null,
   };
 }

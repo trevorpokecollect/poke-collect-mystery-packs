@@ -1,14 +1,14 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { isCardbit } from "./cardbit.server";
+import { featureOn } from "./cardbit-flags.server";
 import { readBook } from "../workspace/book.server";
 import { offer as currentOffer } from "../workspace/model";
 import { SPARK_RATE_PERCENT, SPARK_TIERS, sparksForOpening } from "./cardbit-sparks";
 
 type Tx = Prisma.TransactionClient;
 
-/** Sparks stay off until Trevor approves them for customers (CARDBIT_SPARKS=on). */
-export const sparksEnabled = (shop: string, env: NodeJS.ProcessEnv = process.env) =>
-  isCardbit(shop, env) && env.CARDBIT_SPARKS === "on";
+/** Sparks stay off until Trevor approves them (CARDBIT_SPARKS=on, or "qa" for CARDBIT_QA_CUSTOMERS only). */
+export const sparksEnabled = (shop: string, customerId?: string | null, env: NodeJS.ProcessEnv = process.env) =>
+  featureOn("CARDBIT_SPARKS", shop, customerId, env);
 
 async function lockSparkWallet(tx: Tx, shop: string, customerId: string) {
   await tx.$executeRaw`INSERT INTO "CardbitSparkWallet" (shop, "customerId") VALUES (${shop}, ${customerId}) ON CONFLICT (shop, "customerId") DO NOTHING`;
@@ -25,7 +25,7 @@ export async function awardPackSparks(
   tx: Tx,
   input: { shop: string; customerId: string; receiptKey: string; paidCardbits: number; orderId: string },
 ) {
-  if (!sparksEnabled(input.shop)) return null;
+  if (!sparksEnabled(input.shop, input.customerId)) return null;
   const eventKey = "spark:" + input.receiptKey;
   const existing = await tx.cardbitSparkTxn.findUnique({ where: { shop_eventKey: { shop: input.shop, eventKey } } });
   if (existing) return existing;
