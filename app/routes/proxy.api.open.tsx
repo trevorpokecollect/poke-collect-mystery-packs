@@ -5,6 +5,8 @@ import { PoolError, revealPull } from "../lib/pool.server";
 import { finalizeOrder } from "../lib/orders.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { cardLanguages } from "../lib/card-language.server";
+import { enabled as pricesEnabled, readBook } from "../workspace/book.server";
+import { offer } from "../workspace/model";
 
 // Reveals a pack. The card was decided at payment; this only marks it opened and returns it.
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -25,8 +27,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     // The language picks the English or Japanese card back shown before a big hit turns over.
     const languageOf = await cardLanguages(admin, result.cards.concat(result.card).map((c) => c.productId));
+    // Cardbit reveals show each card's current Cardbits buyback offer, the same figure the vault offers.
+    const book = isCardbit(shop) && pricesEnabled(shop) ? await readBook(db).catch(() => null) : null;
+    const bitsFor = (variantId: string) => {
+      const ref = book?.refs[book.variants[variantId]];
+      return ref ? offer(ref, book!.policy) : null;
+    };
     const view = (c: { title: string; tier: string; imageUrl: string | null; productId: string; variantId: string; copyId: string; slotIndex: number; heldByViewer: boolean }) => ({
       ...(isCardbit(shop) ? {copyId: c.copyId, slotIndex: c.slotIndex, variantId: c.variantId, productId: c.productId, heldByViewer: c.heldByViewer} : {}),
+      ...(book ? {buybackBits: bitsFor(c.variantId)} : {}),
       title: c.title,
       tier: c.tier,
       imageUrl: c.imageUrl,
