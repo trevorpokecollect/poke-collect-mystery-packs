@@ -34,7 +34,7 @@ describe.skipIf(!url)("Daily Spinner integration", () => {
   });
 
   it("stays closed while the flag is off", async () => {
-    await expect(dailySpin(db, shop, a)).rejects.toThrow("not open");
+    await expect(dailySpin(db, shop, a, "basic")).rejects.toThrow("not available");
   });
 
   it("awards one stored result per day, reserves each prize copy once, and falls back when the pool is empty", async () => {
@@ -48,16 +48,41 @@ describe.skipIf(!url)("Daily Spinner integration", () => {
     });
     await launchSeries(db, s.id);
     const day = new Date("2026-11-24T18:00:00Z");
-    const [one, two] = await Promise.all([dailySpin(db, shop, a, day), dailySpin(db, shop, a, day)]);
+    const [one, two] = await Promise.all([dailySpin(db, shop, a, "basic", day), dailySpin(db, shop, a, "basic", day)]);
     expect(one.id).toBe(two.id);
     expect(one.prizeKind).toBe("card");
     const pull = await db.pull.findUniqueOrThrow({ where: { id: one.pullId! } });
     expect(pull).toMatchObject({ customerId: a, status: "REVEALED" });
     // The only copy is gone, so another customer's card slice falls back to XP.
-    const other = await dailySpin(db, shop, b, day);
+    const other = await dailySpin(db, shop, b, "basic", day);
     expect(other).toMatchObject({ prizeKind: "xp", amount: 40, pullId: null });
     expect(await db.pull.count({ where: { shop, seriesId: s.id } })).toBe(1);
-    expect((await dailySpin(db, shop, a, new Date("2026-11-25T18:00:00Z"))).prizeKind).toBe("xp");
+    expect((await dailySpin(db, shop, a, "basic", new Date("2026-11-25T18:00:00Z"))).prizeKind).toBe("xp");
     expect(await db.cardbitSpin.count({ where: { shop, customerId: c } })).toBe(0);
+  });
+
+  it("gives each unlocked tier its own daily spin and refuses locked tiers", async () => {
+    const day = new Date("2026-11-26T18:00:00Z");
+    await expect(dailySpin(db, shop, c, "bronze", day)).rejects.toThrow("Reach Level 5");
+    await expect(dailySpin(db, shop, c, "nope", day)).rejects.toThrow("Choose a spin");
+    // Level 5 needs 1,600 XP.
+    await db.cardbitProfile.update({ where: { shop_customerId: { shop, customerId: c } }, data: { xp: 1600 } }).catch(async () =>
+      db.cardbitProfile.create({ data: { shop, customerId: c, xp: 1600 } }),
+    );
+    const basic = await dailySpin(db, shop, c, "basic", day);
+    const bronze = await dailySpin(db, shop, c, "bronze", day);
+    expect(basic.id).not.toBe(bronze.id);
+    expect((await dailySpin(db, shop, c, "bronze", day)).replay).toBe(true);
+    expect(await db.cardbitSpin.count({ where: { shop, customerId: c } })).toBe(2);
+  });
+
+  it("lists every tier with today's result and odds", async () => {
+    const { spinsView } = await import("./cardbit-spinner.server");
+    const view = await spinsView(db, shop, c, 5, 0, new Date("2026-11-26T18:00:00Z"));
+    expect(view.map((t) => [t.id, t.unlocked, !!t.result])).toEqual([
+      ["basic", true, true], ["bronze", true, true], ["silver", false, false],
+      ["gold", false, false], ["cobalt", false, false], ["holo", false, false],
+    ]);
+    expect(view[0].odds.every((o) => o.kind !== "card")).toBe(true);
   });
 });

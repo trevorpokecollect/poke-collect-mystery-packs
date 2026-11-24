@@ -1,6 +1,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { featureOn } from "./cardbit-flags.server";
 import { sparksEnabled } from "./cardbit-sparks.server";
+import { spinsView } from "./cardbit-spinner.server";
+import { STREAK_CARD_BONUS } from "./cardbit-spinner";
 import {
   AVATAR_COLORS,
   ICONS,
@@ -12,6 +14,7 @@ import {
   levelProgress,
   packXp,
   previousDay,
+  rankFor,
   spinnerFor,
   type AvatarColor,
 } from "./cardbit-levels";
@@ -163,26 +166,31 @@ export async function rewardsView(db: PrismaClient, shop: string, customerId: st
   const progress = levelProgress(xp);
   const day = cardbitDay(at);
   const streakAlive = profile?.lastCheckInDay === day || profile?.lastCheckInDay === previousDay(day);
+  const streak = streakAlive ? (profile?.streak ?? 0) : 0;
+  const monthStart = new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1));
+  const month = await db.cardbitXpEvent.aggregate({
+    where: { shop, customerId, createdAt: { gte: monthStart } },
+    _sum: { xp: true },
+  });
+  const monthXp = Math.max(0, month._sum.xp ?? 0);
   return {
     enabled: true,
     ...progress,
     checkedInToday: profile?.lastCheckInDay === day,
-    streak: streakAlive ? (profile?.streak ?? 0) : 0,
+    streak,
     avatar: {
       iconId: profile?.iconId ?? null,
       color: (profile?.iconColor as AvatarColor | null) ?? defaultColor(customerId),
     },
     colors: AVATAR_COLORS,
     icons: ICONS.map((i) => ({ ...i, unlocked: iconUnlocked(i, progress.level) })),
+    rank: rankFor(progress.level),
+    monthXp,
     spinner: { current: spinnerFor(progress.level), tiers: SPINNER_TIERS },
+    streakBonus: { perDay: STREAK_CARD_BONUS.perDay, maxDays: STREAK_CARD_BONUS.maxDays },
     rules: XP_RULES,
     features,
-    spin: features.spinner
-      ? await db.cardbitSpin.findUnique({
-          where: { shop_customerId_day: { shop, customerId, day } },
-          select: { prizeKind: true, amount: true, pullId: true, tier: true },
-        })
-      : null,
+    spins: features.spinner ? await spinsView(db, shop, customerId, progress.level, streak, at) : null,
     sparks: features.sparks ? { balance: sparkWallet?.balance ?? 0 } : null,
   };
 }

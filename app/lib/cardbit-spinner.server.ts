@@ -1,12 +1,13 @@
 import { randomInt, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { featureOn } from "./cardbit-flags.server";
-import { cardbitDay, levelProgress, previousDay, spinnerFor } from "./cardbit-levels";
+import { SPINNER_TIERS, cardbitDay, levelProgress, previousDay } from "./cardbit-levels";
 import { awardXp } from "./cardbit-levels.server";
 import { sparksEnabled } from "./cardbit-sparks.server";
 import { drawForOrderInTransaction } from "./pool.server";
 import {
   DEFAULT_SPIN_TABLE,
+  displayOdds,
   pickSlice,
   totalWeight,
   validTable,
@@ -68,19 +69,26 @@ async function drawSpinCard(tx: Tx, shop: string, customerId: string, tier: stri
 }
 
 /**
- * One spin per customer per Cardbit day. The server rolls, stores the result and awards it in one
- * transaction. Calling again that day (refresh, replay, retry) returns the stored result only.
+ * One spin per unlocked tier per customer per Cardbit day. The server rolls, stores the result and
+ * awards it in one transaction. Calling again that day (refresh, replay, retry) returns the stored
+ * result only.
  */
-export async function dailySpin(db: PrismaClient, shop: string, customerId: string, at = new Date()) {
-  if (!spinnerEnabled(shop, customerId)) throw new SpinError("The Daily Spinner is not open yet.");
+export async function dailySpin(db: PrismaClient, shop: string, customerId: string, tierId: unknown, at = new Date()) {
+  if (!spinnerEnabled(shop, customerId)) throw new SpinError("The Daily Spin is not available right now.");
+  const spinner = SPINNER_TIERS.find((t) => t.id === tierId);
+  if (!spinner) throw new SpinError("Choose a spin from the list.");
+  const tier = spinner.id;
   const day = cardbitDay(at);
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     await tx.$executeRaw`INSERT INTO "CardbitProfile" (shop, "customerId", "updatedAt") VALUES (${shop}, ${customerId}, NOW()) ON CONFLICT (shop, "customerId") DO NOTHING`;
     await tx.$queryRaw`SELECT "customerId" FROM "CardbitProfile" WHERE shop=${shop} AND "customerId"=${customerId} FOR UPDATE`;
-    const stored = await tx.cardbitSpin.findUnique({ where: { shop_customerId_day: { shop, customerId, day } } });
+    const stored = await tx.cardbitSpin.findUnique({
+      where: { shop_customerId_day_tier: { shop, customerId, day, tier } },
+    });
     if (stored) return { ...stored, replay: true };
     const profile = await tx.cardbitProfile.findUniqueOrThrow({ where: { shop_customerId: { shop, customerId } } });
-    const tier = spinnerFor(levelProgress(profile.xp).level).id;
+    if (levelProgress(profile.xp).level < spinner.minLevel)
+      throw new SpinError(`Reach Level ${spinner.minLevel} to unlock the ${spinner.name}.`);
     const streak =
       profile.lastCheckInDay === day || profile.lastCheckInDay === previousDay(day) ? profile.streak : 0;
     const table = await spinTable(tx);
@@ -113,8 +121,72 @@ export async function dailySpin(db: PrismaClient, shop: string, customerId: stri
     }
     return { ...spin, replay: false };
   });
+  return { ...result, card: await spinCard(db, result.pullId) };
 }
 
-export async function todaysSpin(db: PrismaClient, shop: string, customerId: string, at = new Date()) {
-  return db.cardbitSpin.findUnique({ where: { shop_customerId_day: { shop, customerId, day: cardbitDay(at) } } });
+/** The won card's public details (no value): title, image and rarity. */
+async function spinCard(db: PrismaClient, pullId: string | null) {
+  if (!pullId) return null;
+  const pull = await db.pull.findUnique({
+    where: { id: pullId },
+    select: { slot: { select: { card: { select: { title: true, imageUrl: true, tier: true } } } } },
+  });
+  return pull ? pull.slot.card : null;
+}
+
+/** Cards a tier can land on today: the remaining copies in its live Daily Spin pools. */
+async function spinCards(db: PrismaClient, shop: string, tier: string) {
+  const series = await db.series.findMany({
+    where: { shop, status: "LIVE", staffTest: false, buildRules: dailySpinRules(tier) },
+    select: {
+      cards: {
+        select: {
+          title: true,
+          imageUrl: true,
+          tier: true,
+          _count: { select: { slots: { where: { claimed: false, voided: false } } } },
+        },
+      },
+    },
+  });
+  return series
+    .flatMap((s) => s.cards)
+    .filter((c) => c._count.slots > 0)
+    .map((c) => ({ title: c.title, imageUrl: c.imageUrl, rarity: c.tier, left: c._count.slots }));
+}
+
+/**
+ * Every Daily Spin tier for the rewards page: whether it is unlocked, today's stored result, and
+ * what it can land on with the odds of the current table (card odds already include the streak).
+ */
+export async function spinsView(
+  db: PrismaClient,
+  shop: string,
+  customerId: string,
+  level: number,
+  streak: number,
+  at = new Date(),
+) {
+  const day = cardbitDay(at);
+  const [table, today] = await Promise.all([
+    spinTable(db),
+    db.cardbitSpin.findMany({ where: { shop, customerId, day } }),
+  ]);
+  const sparksOn = sparksEnabled(shop, customerId);
+  return Promise.all(
+    SPINNER_TIERS.map(async (t) => {
+      const slices = weightedSlices(table[t.id] ?? DEFAULT_SPIN_TABLE[t.id], streak);
+      const cards = await spinCards(db, shop, t.id);
+      const usable = cards.length ? slices : slices.filter((s) => s.kind !== "card");
+      const odds = displayOdds(usable).map((o) => (o.kind === "sparks" && !sparksOn ? { ...o, kind: "xp" as const } : o));
+      const done = today.find((s) => s.tier === t.id) ?? null;
+      return {
+        ...t,
+        unlocked: level >= t.minLevel,
+        result: done ? { prizeKind: done.prizeKind, amount: done.amount, card: await spinCard(db, done.pullId) } : null,
+        odds,
+        cards: cards.slice(0, 40),
+      };
+    }),
+  );
 }

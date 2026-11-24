@@ -27,7 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!viewer?.customerId) return json({ error: "Sign In to Cardbit." }, 401);
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   const input = (await request.json().catch(() => null)) as
-    | { action?: unknown; iconId?: unknown; color?: unknown }
+    | { action?: unknown; iconId?: unknown; color?: unknown; tier?: unknown }
     | null;
   try {
     if (input?.action === "checkin") {
@@ -36,8 +36,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
     if (input?.action === "spin") {
       if (!(await ageConfirmed(db, shop, viewer.customerId))) return json(AGE_REQUIRED, 403);
-      const spin = await dailySpin(db, shop, viewer.customerId);
-      return json({ result: { prizeKind: spin.prizeKind, amount: spin.amount, pullId: spin.pullId, replay: spin.replay }, ...(await rewardsView(db, shop, viewer.customerId)) });
+      const spin = await dailySpin(db, shop, viewer.customerId, input.tier);
+      return json({
+        result: { tier: spin.tier, prizeKind: spin.prizeKind, amount: spin.amount, card: spin.card, replay: spin.replay },
+        ...(await rewardsView(db, shop, viewer.customerId)),
+      });
     }
     if (input?.action === "avatar") {
       await setAvatar(db, shop, viewer.customerId, { iconId: input.iconId, color: input.color });

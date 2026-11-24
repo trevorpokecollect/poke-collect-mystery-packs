@@ -14,6 +14,12 @@ export const DEFAULT_SPIN_TABLE: SpinTable = {
     { kind: "sparks", amount: 25, weight: 300 },
     { kind: "xp", amount: 25, weight: 530 },
   ],
+  bronze: [
+    { kind: "card", weight: 30 },
+    { kind: "sparks", amount: 75, weight: 150 },
+    { kind: "sparks", amount: 35, weight: 300 },
+    { kind: "xp", amount: 35, weight: 520 },
+  ],
   silver: [
     { kind: "card", weight: 40 },
     { kind: "sparks", amount: 100, weight: 150 },
@@ -31,6 +37,12 @@ export const DEFAULT_SPIN_TABLE: SpinTable = {
     { kind: "sparks", amount: 250, weight: 200 },
     { kind: "sparks", amount: 100, weight: 300 },
     { kind: "xp", amount: 100, weight: 350 },
+  ],
+  holo: [
+    { kind: "card", weight: 220 },
+    { kind: "sparks", amount: 400, weight: 200 },
+    { kind: "sparks", amount: 150, weight: 280 },
+    { kind: "xp", amount: 150, weight: 300 },
   ],
 };
 

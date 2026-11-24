@@ -40,7 +40,8 @@ describe("Cardbit levels", () => {
     expect(ICONS.every((i) => !i.animated)).toBe(true);
     expect(spinnerFor(1).id).toBe("basic");
     expect(spinnerFor(10).id).toBe("silver");
-    expect(spinnerFor(50).id).toBe("cobalt");
+    expect(spinnerFor(50).id).toBe("holo");
+    expect(spinnerFor(39).id).toBe("cobalt");
   });
 
   it("makes initials and a stable default color", () => {

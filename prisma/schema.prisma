@@ -538,7 +538,7 @@ model CardbitSpin {
   amount     Int?
   pullId     String?  @unique
   createdAt  DateTime @default(now())
-  @@unique([shop, customerId, day])
+  @@unique([shop, customerId, day, tier])
 }
 
 model CardbitDemoAccount {

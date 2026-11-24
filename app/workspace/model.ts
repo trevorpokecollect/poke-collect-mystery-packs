@@ -146,7 +146,7 @@ export function printingKey(
   ].join("|");
 }
 /** Prize pools hold real singles for the Daily Spinner tiers or the Spark Shop. They are never sold as packs. */
-export const PRIZE_KINDS = ["spin-basic", "spin-silver", "spin-gold", "spin-cobalt", "spark-shop"] as const;
+export const PRIZE_KINDS = ["spin-basic", "spin-bronze", "spin-silver", "spin-gold", "spin-cobalt", "spin-holo", "spark-shop"] as const;
 export type PrizeKind = (typeof PRIZE_KINDS)[number];
 /** Spark Shop singles top out at 200 Cardbits of value (the 1,000-Spark tier). */
 export const SPARK_SHOP_MAX = 200;

@@ -46,14 +46,30 @@ export function packXp(cardbitsSpent: number, packs = 1) {
 
 export type SpinnerTier = { id: string; name: string; minLevel: number };
 /** Daily Spinner tiers by level. Prize tables live in the Daily Spin pool, not here. */
+/** Every unlocked tier spins once per Cardbit day, so leveling up adds more free spins. */
 export const SPINNER_TIERS: SpinnerTier[] = [
-  { id: "basic", name: "Basic Spinner", minLevel: 1 },
-  { id: "silver", name: "Silver Spinner", minLevel: 10 },
-  { id: "gold", name: "Gold Spinner", minLevel: 25 },
-  { id: "cobalt", name: "Cobalt Spinner", minLevel: 40 },
+  { id: "basic", name: "Basic Spin", minLevel: 1 },
+  { id: "bronze", name: "Bronze Spin", minLevel: 5 },
+  { id: "silver", name: "Silver Spin", minLevel: 10 },
+  { id: "gold", name: "Gold Spin", minLevel: 20 },
+  { id: "cobalt", name: "Cobalt Spin", minLevel: 30 },
+  { id: "holo", name: "Holo Spin", minLevel: 40 },
 ];
 export const spinnerFor = (level: number) =>
   [...SPINNER_TIERS].reverse().find((t) => level >= t.minLevel)!;
+export const unlockedSpinners = (level: number) => SPINNER_TIERS.filter((t) => level >= t.minLevel);
+
+/** Collector ranks shown beside the level number. */
+export const RANKS = [
+  { minLevel: 1, name: "Rookie" },
+  { minLevel: 5, name: "Collector" },
+  { minLevel: 10, name: "Curator" },
+  { minLevel: 20, name: "Archivist" },
+  { minLevel: 30, name: "Vaultkeeper" },
+  { minLevel: 40, name: "Legend" },
+  { minLevel: 50, name: "Mythic" },
+] as const;
+export const rankFor = (level: number) => [...RANKS].reverse().find((r) => level >= r.minLevel)!.name;
 
 export type Icon = { id: string; name: string; minLevel: number; animated?: boolean; subscription?: boolean };
 /** Latch & Friends. Basic static icons are open at level 1; the rest unlock by level. */

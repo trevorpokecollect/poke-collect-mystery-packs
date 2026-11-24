@@ -96,8 +96,9 @@ describe.skipIf(!url)("prize pools launch with a physical reservation and feed t
     const view = await walletView(db, shop, winner);
     expect((view as { packs?: { id: string }[] }).packs?.some((p) => p.id === spin.id)).toBeFalsy();
 
-    const result = await dailySpin(db, shop, winner, new Date("2026-11-24T18:00:00Z"));
+    const result = await dailySpin(db, shop, winner, "basic", new Date("2026-11-24T18:00:00Z"));
     expect(result.prizeKind).toBe("card");
+    expect(result.card).toMatchObject({ title: expect.any(String) });
     const pull = await db.pull.findUniqueOrThrow({ where: { id: result.pullId! } });
     expect(pull).toMatchObject({ seriesId: spin.id, customerId: winner, status: "REVEALED" });
     expect((await recentPulls(db, shop, { limit: 30 })).some((p) => p.id === pull.id)).toBe(false);

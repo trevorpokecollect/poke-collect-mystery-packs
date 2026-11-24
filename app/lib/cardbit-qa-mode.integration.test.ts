@@ -40,8 +40,8 @@ describe.skipIf(!url)("Cardbit QA mode", () => {
     const view = await rewardsView(db, shop, qa);
     expect(view.features).toMatchObject({ spinner: true, sparks: true, leaderboard: true });
     expect(view.sparks).toEqual({ balance: 0 });
-    await expect(dailySpin(db, shop, qa)).resolves.toBeTruthy();
-    await expect(dailySpin(db, shop, real)).rejects.toThrow(/not open/);
+    await expect(dailySpin(db, shop, qa, "basic")).resolves.toBeTruthy();
+    await expect(dailySpin(db, shop, real, "basic")).rejects.toThrow(/not available/);
     await expect(
       buySparkShopCard(db, shop, real, { cardId: "x", requestId: randomUUID(), sparks: 250 }),
     ).rejects.toThrow(/not open/);

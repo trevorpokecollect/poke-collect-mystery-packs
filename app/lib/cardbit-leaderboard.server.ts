@@ -48,7 +48,7 @@ export async function weeklyStandings(
     .map((r) => ({ customerId: r.customerId, score: -(r._sum.delta ?? 0) }))
     .filter((r) => r.score > 0 && (!qaOnly || isQaCustomer(r.customerId, env)))
     .sort((a, b) => b.score - a.score || a.customerId.localeCompare(b.customerId));
-  const top = ranked.slice(0, 10);
+  const top = ranked.slice(0, 25);
   const profiles = await db.cardbitProfile.findMany({
     where: { shop, customerId: { in: top.map((r) => r.customerId) } },
     select: { customerId: true, iconId: true, iconColor: true },
