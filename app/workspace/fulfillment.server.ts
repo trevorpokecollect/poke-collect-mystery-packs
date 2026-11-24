@@ -465,6 +465,8 @@ export async function staffShipping(
         name: s.assignedLocation.name,
         status: s.status,
         delivery: s.deliveryMethod?.presentedName ?? null,
+        // Carrier-calculated checkout rates carry a service code; flat and free rates do not.
+        carrierRate: !!s.deliveryMethod?.serviceCode,
         reason: eligibility(order, s),
         parcel: saved.find((p) => p.id === s.id)
           ? doc(saved.find((p) => p.id === s.id)!)
