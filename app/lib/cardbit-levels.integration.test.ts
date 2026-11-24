@@ -82,9 +82,9 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
   });
 
   it("only lets a customer pick unlocked icons and listed colors", async () => {
-    await setAvatar(db, shop, other, { iconId: "smorsel", color: "mint" });
+    await setAvatar(db, shop, other, { iconId: "blazebit", color: "mint" });
     await expect(setAvatar(db, shop, other, { iconId: "latch-holo" })).rejects.toThrow("Reach Level 30");
     await expect(setAvatar(db, shop, other, { color: "#ff0000" })).rejects.toThrow();
-    expect((await rewardsView(db, shop, other)).avatar).toEqual({ iconId: "smorsel", color: "mint" });
+    expect((await rewardsView(db, shop, other)).avatar).toEqual({ iconId: "blazebit", color: "mint" });
   });
 });

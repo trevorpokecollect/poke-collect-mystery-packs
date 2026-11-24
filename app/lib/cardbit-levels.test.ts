@@ -36,7 +36,7 @@ describe("Cardbit levels", () => {
   });
 
   it("opens only basic icons at the start and better spinners with level", () => {
-    expect(ICONS.filter((i) => iconUnlocked(i, 1)).map((i) => i.id)).toEqual(["latch", "smorsel", "tidepip", "mossbit"]);
+    expect(ICONS.filter((i) => iconUnlocked(i, 1)).map((i) => i.id)).toEqual(["latch", "blazebit", "driplink", "mossbit"]);
     expect(ICONS.every((i) => !i.animated)).toBe(true);
     expect(spinnerFor(1).id).toBe("basic");
     expect(spinnerFor(10).id).toBe("silver");

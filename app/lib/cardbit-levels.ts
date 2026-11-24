@@ -59,15 +59,15 @@ export type Icon = { id: string; name: string; minLevel: number; animated?: bool
 /** Latch & Friends. Basic static icons are open at level 1; the rest unlock by level. */
 export const ICONS: Icon[] = [
   { id: "latch", name: "Latch", minLevel: 1 },
-  { id: "smorsel", name: "Smorsel", minLevel: 1 },
-  { id: "tidepip", name: "Tidepip", minLevel: 1 },
+  { id: "blazebit", name: "Blazebit", minLevel: 1 },
+  { id: "driplink", name: "Driplink", minLevel: 1 },
   { id: "mossbit", name: "Mossbit", minLevel: 1 },
   { id: "zappix", name: "Zappix", minLevel: 5 },
-  { id: "frostnib", name: "Frostnib", minLevel: 5 },
-  { id: "shardle", name: "Shardle", minLevel: 10 },
+  { id: "cryobyte", name: "Cryobyte", minLevel: 5 },
+  { id: "glitchog", name: "Glitchog", minLevel: 10 },
   { id: "phantab", name: "Phantab", minLevel: 10 },
-  { id: "skytab", name: "Skytab", minLevel: 15 },
-  { id: "foldrake", name: "Foldrake", minLevel: 15 },
+  { id: "nimbyte", name: "Nimbyte", minLevel: 15 },
+  { id: "wyrmware", name: "Wyrmware", minLevel: 15 },
   { id: "latch-gold", name: "Latch Gold", minLevel: 20 },
   { id: "latch-holo", name: "Latch Holo", minLevel: 30 },
 ];
