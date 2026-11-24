@@ -9,6 +9,7 @@ import { readBook } from "./book.server";
 import { details, draftRevision } from "./pools.server";
 import { launchWalletPool } from "./launch.server";
 import { dailySpin, SPIN_TABLE_KEY } from "../lib/cardbit-spinner.server";
+import { latestTopTierPull, recentPulls } from "../lib/recent-pulls.server";
 import { sparkShopView } from "../lib/cardbit-spark-shop.server";
 import { walletView } from "../lib/cardbits.server";
 vi.mock("../lib/orders.server", () => ({ gql: vi.fn() }));
@@ -99,6 +100,8 @@ describe.skipIf(!url)("prize pools launch with a physical reservation and feed t
     expect(result.prizeKind).toBe("card");
     const pull = await db.pull.findUniqueOrThrow({ where: { id: result.pullId! } });
     expect(pull).toMatchObject({ seriesId: spin.id, customerId: winner, status: "REVEALED" });
+    expect((await recentPulls(db, shop, { limit: 30 })).some((p) => p.id === pull.id)).toBe(false);
+    expect((await latestTopTierPull(db, shop))?.id).not.toBe(pull.id);
   });
 
   it("launches a Spark Shop pool that lists in Sparks only", async () => {

@@ -15,6 +15,9 @@ export function topTierName(tierRules: unknown): string | null {
 /** Pulls the customer has seen. Unopened packs never show, so nothing is given away before the reveal. */
 const SEEN = { status: { in: ["REVEALED", "FULFILLING"] as ("REVEALED" | "FULFILLING")[] }, revealedAt: { not: null } };
 
+/** Daily Spin and Spark Shop prizes are not pack pulls, so the public feeds never show them. */
+const NOT_PRIZE = { NOT: { packVariantId: { startsWith: "cardbit-prize:" } } };
+
 const SELECT = {
   id: true,
   revealedAt: true,
@@ -41,7 +44,7 @@ function publicPull(p: Row) {
 /** Newest revealed pulls, optionally only from packs sold through one product. */
 export async function recentPulls(db: Db, shop: string, opts: { productId?: string | null; limit?: number } = {}) {
   const rows = await db.pull.findMany({
-    where: { shop, ...SEEN, ...(opts.productId ? { series: { packProductId: opts.productId } } : {}) },
+    where: { shop, ...SEEN, series: { ...NOT_PRIZE, ...(opts.productId ? { packProductId: opts.productId } : {}) } },
     orderBy: { revealedAt: "desc" },
     take: Math.min(Math.max(opts.limit ?? 12, 1), 30),
     select: SELECT,
@@ -57,7 +60,7 @@ export function featuredTiers(tierRules: unknown): string[] {
 /** The newest revealed Master or Legendary card (or a series' own top tier), across every pack line or one product. */
 export async function latestTopTierPull(db: Db, shop: string, productId?: string | null) {
   const series = await db.series.findMany({
-    where: { shop, status: { not: "DRAFT" }, ...(productId ? { packProductId: productId } : {}) },
+    where: { shop, status: { not: "DRAFT" }, ...NOT_PRIZE, ...(productId ? { packProductId: productId } : {}) },
     select: { id: true, tierRules: true },
   });
   if (!series.length) return null;
