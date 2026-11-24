@@ -3,6 +3,7 @@ import db from "../db.server";
 import { PoolError } from "../lib/pool.server";
 import { json, proxyContext } from "../lib/proxy.server";
 import { isCardbit } from "../lib/cardbit.server";
+import { guardRequest, shipHold } from "../lib/cardbit-guard.server";
 import { parcelAddress, quoteParcel } from "../lib/cardbit-shipping.server";
 import { vaultedPulls, cancelShipment, PICKUP_LOCATION, requestShipment } from "../lib/vault.server";
 
@@ -19,6 +20,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const body = (await request.json().catch(() => ({}))) as { pickup?: boolean; pullIds?: unknown; cancel?: boolean; quote?: boolean; address?: unknown; quoteKey?: string };
+    const action = body.cancel === true ? "ship-cancel" : body.quote === true ? "ship-quote" : "ship";
+    const refused = await guardRequest(request, { db, shop, customerId: viewer.customerId, action, admin });
+    if (refused) return refused;
+    if (action === "ship" && viewer.customerId) {
+      const held = await shipHold(db, shop, viewer.customerId, admin);
+      if (held) return held;
+    }
     if (body.cancel === true) return json({ cancelled: true, ...(await cancelShipment(db, admin, shop, viewer)) });
     const pullIds = Array.isArray(body.pullIds) ? body.pullIds.filter((id): id is string => typeof id === "string").slice(0, 1000) : undefined;
     let destination;

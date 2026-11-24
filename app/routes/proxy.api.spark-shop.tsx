@@ -4,6 +4,7 @@ import { json, proxyContext } from "../lib/proxy.server";
 import { sparksEnabled, sparksView } from "../lib/cardbit-sparks.server";
 import { SparkShopError, buySparkShopCard, sparkShopView } from "../lib/cardbit-spark-shop.server";
 import { AGE_REQUIRED, ageConfirmed } from "../lib/cardbit-age.server";
+import { guardRequest } from "../lib/cardbit-guard.server";
 
 /** Spark Shop listing (prices in Sparks only) and purchases for the signed-in customer. */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -15,11 +16,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop, viewer } = await proxyContext(request);
+  const { shop, viewer, admin } = await proxyContext(request);
   if (!sparksEnabled(shop, viewer?.customerId)) return json({ error: "The Spark Shop is not open yet." }, 404);
   if (!viewer?.customerId) return json({ error: "Sign In to Cardbit." }, 401);
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   if (!(await ageConfirmed(db, shop, viewer.customerId))) return json(AGE_REQUIRED, 403);
+  const refused = await guardRequest(request, { db, shop, customerId: viewer.customerId, action: "spark-shop", admin });
+  if (refused) return refused;
   try {
     const input = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const result = await buySparkShopCard(db, shop, viewer.customerId, {

@@ -21,6 +21,7 @@ export default function App() {
       <s-app-nav>
         <s-link href="/app">Pack series</s-link>
         {pricingDesk && <s-link href="/app/pricing-desk">Pricing desk</s-link>}
+        {pricingDesk && <s-link href="/app/risk">Security review</s-link>}
         <s-link href="/app/series/new">New series</s-link>
         <s-link href="/app/vault">Vault shipments</s-link>
         <s-link href="/app/marketplace">Vault marketplace</s-link>

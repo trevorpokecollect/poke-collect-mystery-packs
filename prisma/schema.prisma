@@ -1118,3 +1118,52 @@ model AppValue {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+// Cardbit bot and fraud guard (app/lib/cardbit-guard*.ts). One row per customer.
+model CardbitRiskProfile {
+  shop             String
+  customerId       String
+  // ok | review (shipping, buybacks, top-ups and free rewards paused) | blocked | trusted
+  status           String    @default("ok")
+  // [{ code, detail, at }] newest last
+  reasons          Json      @default("[]")
+  accountCreatedAt DateTime?
+  phoneVerifiedAt  DateTime?
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  note             String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@id([shop, customerId])
+  @@index([shop, status])
+}
+
+// Keyed hashes of devices and payment cards seen per customer, to spot one person behind many accounts.
+model CardbitRiskSignal {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  // device | card
+  kind       String
+  valueHash  String
+  createdAt  DateTime @default(now())
+
+  @@unique([shop, kind, valueHash, customerId])
+  @@index([shop, kind, valueHash])
+}
+
+// What the guard refused, or would have refused while CARDBIT_GUARD=log.
+model CardbitGuardEvent {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String?
+  action     String
+  rule       String
+  detail     String?
+  enforced   Boolean
+  createdAt  DateTime @default(now())
+
+  @@index([shop, createdAt])
+  @@index([shop, customerId])
+}

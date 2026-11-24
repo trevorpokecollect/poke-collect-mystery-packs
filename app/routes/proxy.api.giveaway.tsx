@@ -5,6 +5,7 @@ import { enabled } from "../workspace/mode.server";
 import { subscribers } from "../giveaway/consent.server";
 import { enterOrBonus } from "../giveaway/entries.server";
 import { customerView, promptView } from "../giveaway/service.server";
+import { guardRequest } from "../lib/cardbit-guard.server";
 async function handle(request: Request, mutate: boolean) {
   const { shop, viewer, admin } = await proxyContext(request);
   if (!enabled(shop) || !admin)
@@ -20,6 +21,10 @@ async function handle(request: Request, mutate: boolean) {
       .startsWith("application/json")
   )
     return json({ error: "Use the giveaway page to enter." }, 415);
+  if (mutate) {
+    const refused = await guardRequest(request, { db, shop, customerId: id, action: "giveaway", admin });
+    if (refused) return refused;
+  }
   try {
     const prompt = new URL(request.url).searchParams.get("view") === "prompt";
     if (prompt && !mutate) return json(await promptView(db, id));
