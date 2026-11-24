@@ -8,6 +8,8 @@ import {
   rewardsView,
   setAvatar,
 } from "../lib/cardbit-levels.server";
+import { SpinError, dailySpin } from "../lib/cardbit-spinner.server";
+import { ageConfirmed, AGE_REQUIRED } from "../lib/cardbit-age.server";
 
 /** Levels, daily check-in and Latch & Friends icons for the signed-in Cardbit customer. */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -30,13 +32,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const result = await dailyCheckIn(db, shop, viewer.customerId);
       return json({ checkIn: result, ...(await rewardsView(db, shop, viewer.customerId)) });
     }
+    if (input?.action === "spin") {
+      if (!(await ageConfirmed(db, shop, viewer.customerId))) return json(AGE_REQUIRED, 403);
+      const spin = await dailySpin(db, shop, viewer.customerId);
+      return json({ result: { prizeKind: spin.prizeKind, amount: spin.amount, pullId: spin.pullId, replay: spin.replay }, ...(await rewardsView(db, shop, viewer.customerId)) });
+    }
     if (input?.action === "avatar") {
       await setAvatar(db, shop, viewer.customerId, { iconId: input.iconId, color: input.color });
       return json(await rewardsView(db, shop, viewer.customerId));
     }
     return json({ error: "Unknown action." }, 400);
   } catch (error) {
-    if (error instanceof LevelError) return json({ error: error.message }, 409);
+    if (error instanceof LevelError || error instanceof SpinError) return json({ error: error.message }, 409);
     throw error;
   }
 };

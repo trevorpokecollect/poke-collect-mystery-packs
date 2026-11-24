@@ -526,6 +526,21 @@ model CardbitSparkTxn {
   @@index([shop, customerId, createdAt])
 }
 
+// Daily Spinner: one stored result per customer per Cardbit day. Card prizes point at the vaulted pull.
+model CardbitSpin {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  day        String
+  tier       String
+  streak     Int      @default(0)
+  prizeKind  String
+  amount     Int?
+  pullId     String?  @unique
+  createdAt  DateTime @default(now())
+  @@unique([shop, customerId, day])
+}
+
 model CardbitDemoAccount {
   shop       String
   customerId String

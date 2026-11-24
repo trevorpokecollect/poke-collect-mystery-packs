@@ -176,6 +176,12 @@ export async function rewardsView(db: PrismaClient, shop: string, customerId: st
     spinner: { current: spinnerFor(progress.level), tiers: SPINNER_TIERS },
     rules: XP_RULES,
     features: engagementFlags(),
+    spin: engagementFlags().spinner
+      ? await db.cardbitSpin.findUnique({
+          where: { shop_customerId_day: { shop, customerId, day } },
+          select: { prizeKind: true, amount: true, pullId: true, tier: true },
+        })
+      : null,
     sparks: sparksEnabled(shop) ? { balance: sparkWallet?.balance ?? 0 } : null,
   };
 }
