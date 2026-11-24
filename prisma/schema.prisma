@@ -478,6 +478,32 @@ model CardbitAgeConfirmation {
   @@id([shop, customerId])
 }
 
+// Cardbit levels: XP has no cash value. Each award is recorded once per event key.
+model CardbitProfile {
+  shop           String
+  customerId     String
+  xp             Int      @default(0)
+  iconId         String?
+  iconColor      String?
+  streak         Int      @default(0)
+  lastCheckInDay String?
+  updatedAt      DateTime @updatedAt
+  @@id([shop, customerId])
+}
+
+model CardbitXpEvent {
+  id         String   @id @default(cuid())
+  shop       String
+  customerId String
+  eventKey   String
+  kind       String
+  xp         Int
+  source     String?
+  createdAt  DateTime @default(now())
+  @@unique([shop, eventKey])
+  @@index([shop, customerId, createdAt])
+}
+
 model CardbitDemoAccount {
   shop       String
   customerId String

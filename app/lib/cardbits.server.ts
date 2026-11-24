@@ -19,6 +19,7 @@ import { offer as currentOffer } from "../workspace/model";
 import { isCardbit } from "./cardbit.server";
 import { drawForOrderInTransaction, PoolError } from "./pool.server";
 import { gql } from "./orders.server";
+import { awardPackXp } from "./cardbit-levels.server";
 
 type Tx = Prisma.TransactionClient;
 type Config = {
@@ -675,6 +676,7 @@ export async function walletAction(
       data: { balance: { increment: delta } },
     });
     if (live && input.action === "pack") await recordReferralPurchase(tx, shop, customerId, eventKey);
+    if (input.action === "pack") await awardPackXp(tx, shop, customerId, eventKey, input.amount);
     return tx.cardbitReceipt.create({
       data: {
         shop,
