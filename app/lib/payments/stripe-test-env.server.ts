@@ -8,7 +8,25 @@ import { stripeConfig } from "./stripe.server";
 export function stripeTestEnv(env = process.env) {
   if (env.RAILWAY_ENVIRONMENT_NAME !== "stripe-test" || env.CARDBIT_WORKSPACE_MODE) return null;
   const config = stripeConfig(CARDBIT_SHOP, env);
-  if (!config || config.live) return null;
+  if (!config || config.live) {
+    // Names which setting is wrong, never its value.
+    let prices = false;
+    try {
+      prices = !!JSON.parse(env.STRIPE_TOPUP_PRICES || "null");
+    } catch {
+      /* reported below */
+    }
+    console.error("stripe-test: Stripe settings incomplete", {
+      shop: env.CARDBIT_STOREFRONT_SHOP === CARDBIT_SHOP,
+      provider: env.CARDBIT_PAYMENT_PROVIDER === "stripe",
+      secret: /^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY ?? ""),
+      publishable: /^pk_test_/.test(env.STRIPE_PUBLISHABLE_KEY ?? ""),
+      webhook: /^whsec_/.test(env.STRIPE_WEBHOOK_SECRET ?? ""),
+      prices,
+      returnUrl: /^https:\/\/.*\{CHECKOUT_SESSION_ID\}/.test(env.STRIPE_TOPUP_RETURN_URL ?? ""),
+    });
+    return null;
+  }
   const customers = (env.CARDBIT_QA_CUSTOMERS ?? "")
     .split(",")
     .map((c) => c.trim())
