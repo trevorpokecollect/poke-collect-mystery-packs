@@ -89,23 +89,40 @@ export async function directory(db: PrismaClient, admin: AdminApiContext) {
       select: { customerId: true },
     }),
   ]);
-  // Shopify customers without Cardbits activity have no wallet row yet. List the most recently
-  // updated ones too, so a signed-up customer appears before their first ledger entry.
-  const recent = await gql<{ customers: { nodes: CustomerRecord[] } }>(
-    admin,
-    `#graphql
-    query RecentWorkspaceCustomers{customers(first:100,sortKey:UPDATED_AT,reverse:true){nodes{id displayName email}}}`,
-  ).catch(() => ({ customers: { nodes: [] as CustomerRecord[] } }));
+  // Every Cardbit Shopify customer is a Cardbits account (the site has no other way to buy),
+  // so list them all, including those without a wallet row yet.
+  const shopify: CustomerRecord[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < 40; page++) {
+    const data: {
+      customers: {
+        nodes: CustomerRecord[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    } = await gql(
+      admin,
+      `#graphql
+      query AllWorkspaceCustomers($after:String){customers(first:250,after:$after,sortKey:UPDATED_AT,reverse:true){nodes{id displayName email} pageInfo{hasNextPage endCursor}}}`,
+      { after },
+    );
+    shopify.push(...data.customers.nodes);
+    if (!data.customers.pageInfo.hasNextPage) break;
+    after = data.customers.pageInfo.endCursor;
+  }
   const seen = new Set(wallets.map((r) => r.customerId));
   const rows = [
     ...demo.map((r) => ({ ...r, source: "shopper" as const })),
     ...wallets.map((r) => ({ ...r, source: "wallet" as const })),
-    ...recent.customers.nodes
+    ...shopify
       .filter((c) => !seen.has(c.id))
       .map((c) => ({ customerId: c.id, source: "wallet" as const })),
   ].filter((r) => gid.test(r.customerId));
-  const ids = [...new Set(rows.map((r) => r.customerId))],
-    names = new Map<string, { displayName: string; email: string | null }>();
+  const names = new Map<string, { displayName: string; email: string | null }>(
+      shopify.map((c) => [c.id, c]),
+    ),
+    ids = [...new Set(rows.map((r) => r.customerId))].filter(
+      (id) => !names.has(id),
+    );
   for (let i = 0; i < ids.length; i += 100) {
     const data = await gql<{
       nodes: ({
