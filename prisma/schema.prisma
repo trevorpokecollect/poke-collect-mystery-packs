@@ -469,6 +469,15 @@ model CardbitBuyback {
   @@index([shop, customerId])
 }
 
+model CardbitAgeConfirmation {
+  shop        String
+  customerId  String
+  source      String
+  confirmedAt DateTime @default(now())
+
+  @@id([shop, customerId])
+}
+
 model CardbitDemoAccount {
   shop       String
   customerId String

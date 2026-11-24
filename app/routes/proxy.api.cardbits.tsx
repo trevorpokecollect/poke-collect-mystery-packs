@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { walletAction, walletAccess, walletView } from "../lib/cardbits.server";
 import { PoolError } from "../lib/pool.server";
+import { AGE_REQUIRED, ageConfirmed } from "../lib/cardbit-age.server";
 import { json, proxyContext } from "../lib/proxy.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -22,6 +23,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const input = await request.json().catch(() => null);
     if (!input || typeof input !== "object")
       throw new PoolError("Review the offer again.");
+    // Buying a pack with Cardbits requires the customer's 18+ confirmation.
+    if ((input as { action?: unknown }).action === "pack" &&
+        !(await ageConfirmed(db, shop, viewer.customerId)))
+      return json(AGE_REQUIRED, 403);
     const receipt = await walletAction(db, shop, viewer.customerId, input);
     return json({
       receipt: receipt.id,
