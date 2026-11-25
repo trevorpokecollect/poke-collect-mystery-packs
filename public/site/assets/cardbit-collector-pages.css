@@ -1,0 +1,150 @@
+/* Account and catalog layouts share the theme's merchant-selected accent. */
+#cardbit-store .cc-page {max-width:1180px;min-width:0;padding-block:clamp(24px,4vw,56px) 72px}
+#cardbit-store .cc-tabs {display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--cb-border);margin-bottom:clamp(22px,3vw,36px);padding-bottom:4px}
+#cardbit-store .cc-tab,#cardbit-store .cc-filter {display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 15px;color:var(--cb-muted);border-radius:8px;font-size:.94rem;font-weight:650;min-height:44px}
+#cardbit-store .cc-tab[aria-current],#cardbit-store .cc-filter[aria-current] {color:var(--cb-text);background:var(--cb-high);box-shadow:inset 0 -2px var(--cb-accent)}
+#cardbit-store .cc-tab:hover,#cardbit-store .cc-filter:hover {color:var(--cb-text);background:var(--cb-panel)}
+#cardbit-store .cc-intro {display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+#cardbit-store .cc-heading {margin-bottom:22px}
+#cardbit-store .cc-heading h1 {line-height:1.06;letter-spacing:-.015em;font-size:clamp(2.35rem,5.2vw,4.35rem)}
+#cardbit-store .cc-heading .cb-lead {margin-top:8px;font-size:1.03rem}
+#cardbit-store .cc-demo {display:inline-block;font-size:.78rem;font-weight:650;color:var(--cb-muted);margin:0 0 11px}
+#cardbit-store .cc-feature,#cardbit-store .cc-entry {display:grid;grid-template-columns:minmax(0,1.3fr) minmax(180px,.85fr);position:relative;overflow:hidden;isolation:isolate;border:1px solid var(--cb-border);border-radius:20px;background:linear-gradient(120deg,#1f3035,#192427 50%,#132024);min-height:240px}
+#cardbit-store .cc-feature-copy,#cardbit-store .cc-entry>div:first-child {align-self:center;padding:clamp(23px,4.5vw,56px);position:relative;z-index:1}
+#cardbit-store .cc-feature-copy h2 {font-size:clamp(1.9rem,4.3vw,3.75rem);line-height:1.05;margin:8px 0 12px;letter-spacing:-.015em;overflow-wrap:anywhere}
+#cardbit-store .cc-feature-copy>p:not(.cb-kicker) {font-size:1rem;color:var(--cb-muted);max-width:40ch}
+#cardbit-store .cc-feature .cb-actions {margin-top:22px}
+#cardbit-store .cc-pack-art {isolation:isolate;display:grid;place-items:center;position:relative;background:radial-gradient(ellipse at 50% 65%,color-mix(in srgb,var(--cc-foil,#61cfda) 17%,transparent),transparent 70%);min-width:0}
+#cardbit-store .cc-pack-art::before {content:"";position:absolute;left:22%;right:22%;height:12%;bottom:8%;border-radius:50%;background:#080c10;filter:blur(14px);opacity:.7}
+#cardbit-store .cc-pack-art img {z-index:1;height:clamp(200px,22vw,285px);width:auto;max-width:86%;object-fit:contain;margin:18px 0;transform:rotate(7deg);filter:drop-shadow(1px 8px 7px #0008)}
+#cardbit-store .cc-member-hero:has(.cc-pack-art[hidden]) {grid-template-columns:1fr}
+#cardbit-store .cc-entry .cb-login {margin:0;max-width:420px;padding:0;background:transparent;border:0}
+#cardbit-store .cc-entry .cb-login .cb-kicker {display:none}
+#cardbit-store .cc-entry .cb-login h2 {font-size:clamp(1.65rem,3vw,2.5rem)}
+#cardbit-store .cc-stats {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+#cardbit-store .cc-stat {min-width:0;background:var(--cb-panel);border:1px solid var(--cb-border);border-radius:13px;padding:clamp(12px,2.3vw,26px);display:grid;gap:4px}
+#cardbit-store .cc-stat strong {font-size:clamp(1.6rem,3vw,2.6rem);font-variant-numeric:tabular-nums;line-height:1.1}
+#cardbit-store .cc-stat span {display:flex;align-items:center;justify-content:space-between;gap:4px;font-size:.9rem;color:var(--cb-muted)}
+#cardbit-store .cc-stat:hover,#cardbit-store .cc-line:hover {border-color:var(--cb-accent)}
+#cardbit-store .cc-fan {display:flex;align-items:center;justify-content:center;padding:32px 22px;isolation:isolate}
+#cardbit-store .cc-fan .cb-card-image {flex:0 1 37%;max-width:145px;aspect-ratio:63/88;background:#21272b;border-radius:7%;box-shadow:0 7px 15px #0008;overflow:hidden}
+#cardbit-store .cc-fan .cb-card-image+.cb-card-image {margin-left:-14%}
+#cardbit-store .cc-fan .cb-card-image:first-child {transform:translateY(4%) rotate(-11deg)}
+#cardbit-store .cc-fan .cb-card-image:nth-child(3) {transform:translateY(4%) rotate(11deg)}
+#cardbit-store .cc-fan img {object-fit:contain;width:100%;height:100%}
+#cardbit-store .cc-ledger {border:1px solid var(--cb-border);border-radius:13px;overflow:hidden;background:var(--cb-panel)}
+#cardbit-store .cc-line,#cardbit-store .cc-pack-row {display:flex;justify-content:space-between;align-items:center;gap:15px;padding:17px 20px;border-bottom:1px solid var(--cb-border);min-width:0}
+#cardbit-store .cc-line:last-child,#cardbit-store .cc-pack-row:last-child {border:0}
+#cardbit-store .cc-line small,#cardbit-store .cc-pack-row small {display:block;color:var(--cb-muted);margin-top:3px}
+#cardbit-store .cc-line>span:last-child {display:flex;align-items:center;gap:8px;text-align:right;font-size:.84rem;color:var(--cb-gold)}
+#cardbit-store .cc-pack-row>span {flex:1}
+#cardbit-store .cc-pack-row img {object-fit:contain}
+#cardbit-store .cc-filters {display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px}
+#cardbit-store .cc-search {display:flex;gap:10px;align-items:center;background:var(--cb-panel);border:1px solid var(--cb-border);border-radius:9px;padding:0 12px;max-width:620px;color:var(--cb-muted)}
+#cardbit-store .cc-search input {flex:1;min-width:0;min-height:44px;border:0;color:var(--cb-text);background:transparent;font:inherit}
+#cardbit-store .cc-search:focus-within {outline:2px solid var(--cb-accent);outline-offset:2px}
+#cardbit-store .cc-filter-note {display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:16px}
+#cardbit-store .cc-status {display:flex;align-items:center;gap:14px;border:1px solid var(--cb-border);border-radius:12px;padding:17px 21px;background:var(--cb-panel)}
+#cardbit-store .cc-status svg {flex:none;color:var(--cb-gold)}
+#cardbit-store .cc-status p {color:var(--cb-muted);font-size:.9rem}
+#cardbit-store .cc-pool-summary {margin:28px 0 40px;padding:clamp(18px,3vw,28px);border:1px solid var(--cb-border);border-radius:14px;background:var(--cb-panel)}
+#cardbit-store .cc-pool-summary .cb-data {margin-bottom:0}
+#cardbit-store .cc-pool-summary dd,#cardbit-store .cc-page .cb-data dd {overflow-wrap:anywhere}
+#cardbit-store .cc-compare {display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#cardbit-store .cc-compare-col {background:var(--cb-panel);border:1px solid var(--cb-border);padding:clamp(12px,2.2vw,24px);border-radius:14px;min-width:0}
+#cardbit-store .cc-compare-col label {display:grid;gap:6px;font-size:.83rem;color:var(--cb-muted);font-weight:650}
+#cardbit-store .cc-compare-col select {width:100%;padding:9px 6px;min-height:44px;background:var(--cb-bg);color:var(--cb-text);border:1px solid var(--cb-border);border-radius:6px;font:inherit}
+#cardbit-store .cc-compare-col .cc-pack-art img {height:clamp(135px,20vw,230px);transform:none}
+#cardbit-store .cc-compare-col .cb-secondary {width:100%}
+#cardbit-store .cc-table {border-collapse:collapse;width:100%;table-layout:fixed;font-size:.9rem;margin:20px 0}
+#cardbit-store .cc-table :is(td,th) {text-align:start;padding:12px 9px;border-bottom:1px solid var(--cb-border);vertical-align:top;overflow-wrap:anywhere}
+#cardbit-store .cc-table thead {color:var(--cb-gold)}
+#cardbit-store .cc-table th:first-child {width:24%}
+#cardbit-store .cc-shop-filters {display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));align-items:end}
+#cardbit-store .cc-shop-filters .cb-search {grid-column:1/-1}
+#cardbit-store .cc-shop-filters label select {min-height:42px}
+#cardbit-store .cc-zoom {max-width:min(420px,100%);margin:0 auto}
+#cardbit-store .cc-zoom .cb-card-view {width:100%;max-width:100%}
+#cardbit-store .cc-single-tools {margin:12px auto 0;text-align:center}
+#cardbit-store .cc-ship-preview {display:flex;flex-wrap:wrap;gap:15px;align-items:center;margin:18px 0}
+#cardbit-store .cc-member-list {list-style:none;padding:0;display:grid;gap:8px}
+#cardbit-store .cc-member-list li {display:flex;gap:16px;align-items:center;border-bottom:1px solid var(--cb-border);padding:12px 0}
+#cardbit-store .cc-member-list img {width:46px;height:64px;object-fit:contain}
+#cardbit-store .cc-member-list small {display:block;color:var(--cb-muted)}
+#cardbit-store .cc-member-section {scroll-margin-top:90px;margin-top:30px}
+#cardbit-store .cc-member-section h2 {margin-bottom:10px}
+#cardbit-store .cc-member-section [role="alert"] {color:var(--cb-text)}
+#cardbit-store .cc-open-later {display:flex;align-items:center;gap:10px;padding:12px 0;color:var(--cb-text)}
+#cardbit-store .cc-open-later input {width:18px;height:18px;accent-color:var(--cb-accent)}
+#cardbit-store .cc-art-missing {font-size:.77rem;color:var(--cb-muted);padding:6px;text-align:center}
+@media (max-width:620px) {
+  #cardbit-store .cc-page {padding-top:19px}
+  #cardbit-store .cc-tabs {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px}
+  #cardbit-store .cc-tab {flex-direction:column;gap:3px;padding:6px 2px;font-size:.75rem}
+  #cardbit-store .cc-feature,#cardbit-store .cc-entry {grid-template-columns:minmax(0,1.45fr) minmax(94px,.75fr);min-height:195px}
+  #cardbit-store .cc-feature-copy,#cardbit-store .cc-entry>div:first-child {padding:18px 0 18px 16px}
+  #cardbit-store .cc-entry {grid-template-columns:minmax(0,1fr)}
+  #cardbit-store .cc-entry>div:first-child {padding:22px}
+  #cardbit-store .cc-entry>.cc-pack-art {display:none}
+  #cardbit-store .cc-feature-copy h2 {font-size:1.85rem}
+  #cardbit-store .cc-feature-copy>p:not(.cb-kicker) {font-size:.87rem}
+  #cardbit-store .cc-feature .cc-pack-art img {max-width:84%;height:auto;max-height:175px}
+  #cardbit-store .cc-stats {gap:6px}
+  #cardbit-store .cc-stat {padding:13px 8px}
+  #cardbit-store .cc-stat span {font-size:.73rem}
+  #cardbit-store .cc-stat span svg {display:none}
+  #cardbit-store .cc-fan {padding:15px 7px}
+  #cardbit-store .cc-intro {gap:5px;margin-bottom:12px}
+  #cardbit-store .cc-intro .cc-heading {margin-bottom:8px}
+  #cardbit-store .cc-filter {font-size:.79rem;padding:8px}
+  #cardbit-store .cc-table {font-size:.78rem}
+  #cardbit-store .cc-table :is(td,th) {padding:9px 5px}
+  #cardbit-store .cc-pack-row,#cardbit-store .cc-line {padding:13px 10px;gap:9px}
+  #cardbit-store .cc-compare {gap:7px}
+}
+
+/* Edition facts and the five-tier value guide */
+#cardbit-store .cg-guide { margin: 28px 0 36px; border: 1px solid var(--cb-border); border-radius: 14px; background: var(--cb-panel); }
+#cardbit-store .cg-guide summary { display: flex; align-items: center; justify-content: space-between; padding: 18px clamp(12px,3vw,28px); font-size: 18px; font-weight: 700; cursor: pointer; list-style: none; }
+#cardbit-store .cg-guide summary::-webkit-details-marker { display: none; }
+#cardbit-store .cg-guide summary svg { transform: rotate(90deg); }
+#cardbit-store .cg-guide[open] summary svg { transform: rotate(-90deg); }
+#cardbit-store .cg-guide > div { padding: 0 clamp(12px,3vw,28px) 22px; }
+#cardbit-store .cg-basics { margin: 0 0 16px; color: var(--cb-muted); font-size: 14px; }
+#cardbit-store .cg-basics span { margin: 0 .2em; }
+#cardbit-store .cg-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1px; margin: 0 0 18px; overflow: hidden; background: var(--cb-border); border: 1px solid var(--cb-border); border-radius: 10px; }
+#cardbit-store .cg-metrics > div { padding: 14px 12px; background: var(--cb-bg); min-width: 0; }
+#cardbit-store .cg-metrics dt, #cardbit-store .cg-spec > span, #cardbit-store .cg-chase > span { font-size: 12px; color: var(--cb-muted); }
+#cardbit-store .cg-metrics dd { margin: 4px 0 0; font-size: clamp(17px,2.1vw,24px); font-weight: 700; font-variant-numeric: tabular-nums; }
+#cardbit-store :is(.cg-tier-row,.cg-tier-head) { display: grid; grid-template-columns: 1.25fr .72fr 1.2fr .75fr; align-items: center; gap: 8px; text-align: right; }
+#cardbit-store :is(.cg-tier-row,.cg-tier-head) > :first-child { text-align: left; }
+#cardbit-store .cg-tier-head { color: var(--cb-muted); padding: 8px 4px; font-size: 12px; }
+#cardbit-store .cg-tier-row { color: var(--cb-text); border-top: 1px solid var(--cb-border); padding: 10px 4px; min-height: 44px; text-decoration: none; font-size: 14px; font-variant-numeric: tabular-nums; }
+#cardbit-store .cg-tier-row:hover { background: var(--cb-high); }
+#cardbit-store .cg-tier-name, #cardbit-store .cg-tier-row > :last-child { display: flex; align-items: center; gap: 6px; }
+#cardbit-store .cg-tier-name { font-weight: 700; }
+#cardbit-store .cg-tier-row > :last-child { justify-content: flex-end; }
+#cardbit-store .cg-note { margin: 16px 0 12px; font-size: 13px; color: var(--cb-muted); line-height: 1.6; max-width: 76ch; }
+#cardbit-store :is(.cg-guide summary,.cg-tier-row,.cg-column select):focus-visible { outline: 2px solid var(--cb-accent); outline-offset: -2px; }
+
+/* Align like-for-like details while keeping both editions visible on phones. */
+#cardbit-store .cg-compare { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); column-gap: clamp(8px,2vw,20px); max-width: 960px; }
+#cardbit-store .cg-column { display: grid; grid-template-rows: subgrid; grid-row: span 9; min-width: 0; overflow: hidden; border: 1px solid var(--cb-border); border-radius: 14px; background: var(--cb-panel); }
+#cardbit-store .cg-compare-top { padding: 12px 12px 0; background: linear-gradient(165deg,color-mix(in srgb,var(--edition) 11%,var(--cb-panel)),var(--cb-panel) 82%); }
+#cardbit-store .cg-compare-top select { width: 100%; min-height: 44px; padding: 6px; border-radius: 8px; border: 1px solid var(--cb-border); color: var(--cb-text); background: var(--cb-bg); font: inherit; font-weight: 700; }
+#cardbit-store .cg-compare-top .cc-pack-art img { height: clamp(116px,18vw,205px); margin: 14px 0; transform: none; }
+#cardbit-store .cg-spec, #cardbit-store .cg-chase { display: grid; align-content: start; justify-items: start; gap: 3px; padding: 10px clamp(10px,2vw,22px); border-top: 1px solid var(--cb-border); min-width: 0; }
+#cardbit-store .cg-spec strong, #cardbit-store .cg-chase strong { font-size: clamp(15px,1.6vw,21px); line-height: 1.3; overflow-wrap: anywhere; }
+#cardbit-store .cg-spec strong .cb-reference, #cardbit-store .cg-chase small .cb-reference { font: inherit; white-space: normal; }
+#cardbit-store .cg-chase { padding-block: 16px; gap: 8px; }
+#cardbit-store .cg-chase > img { width: 74px; height: 100px; object-fit: contain; border-radius: 5px; }
+#cardbit-store .cg-chase small { color: var(--cb-text); }
+#cardbit-store .cg-column > a { margin: 0 10px 12px; }
+@media (max-width: 620px) {
+  #cardbit-store .cg-metrics { grid-template-columns: 1fr 1fr; }
+  #cardbit-store .cg-tier-row, #cardbit-store .cg-tier-head { gap: 3px; font-size: 12px; }
+  #cardbit-store .cg-tier-name { gap: 3px; }
+  #cardbit-store .cg-tier-name svg { width: 15px; height: 15px; }
+  #cardbit-store .cg-compare-top { padding: 7px 6px 0; }
+  #cardbit-store .cg-compare-top select { font-size: 13px; }
+}

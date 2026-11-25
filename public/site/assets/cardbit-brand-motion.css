@@ -1,0 +1,278 @@
+/* Cardbit's approved horizontal lockup has a 2091 × 419 artboard. */
+#cardbit-store .cb-brand {display:inline-flex;align-items:center;min-height:44px}
+#cardbit-store .cb-lockup {display:block;position:relative;isolation:isolate;width:clamp(144px,13.2vw,183px);aspect-ratio:2091/419}
+#cardbit-store .cb-lockup .cb-logo-exact {position:absolute;inset:0;max-height:none;width:100%;height:100%}
+#cardbit-store .cb-lockup .cb-logo-base {position:absolute;inset:0 auto 0 0;max-height:none;width:17.294118%;height:100%;object-fit:fill}
+#cardbit-store .cb-logo-layers {position:absolute;inset:0;pointer-events:none;transform-origin:8.65% 55%}
+#cardbit-store .cb-lockup img.cb-logo-tile {position:absolute;max-width:none;max-height:none}
+#cardbit-store .cb-assembling .cb-logo-exact {clip-path:inset(0 0 0 17.3%)}
+#cardbit-store .cb-assembling .cb-logo-layers {animation:cb-mark-turn .88s cubic-bezier(.18,.82,.2,1) both}
+#cardbit-store .cb-assembling .cb-logo-tile {animation:cb-assemble .59s cubic-bezier(.18,.81,.25,1) var(--delay) both}
+@keyframes cb-mark-turn {
+  from {transform:perspective(160px) translateX(-4px) rotateY(-64deg) rotateZ(-8deg) scale(.85)}
+  68% {transform:perspective(160px) translateX(.7px) rotateY(9deg) rotateZ(2deg) scale(1.025)}
+  to {transform:none}
+}
+@keyframes cb-assemble {
+  from {transform:translate(var(--dx),var(--dy)) rotate(-12deg) scale(.64);opacity:0}
+  28% {opacity:1}
+  80% {transform:translate(.6px,.15px) rotate(1deg) scale(1.06)}
+  to {transform:none;opacity:1}
+}
+
+#cardbit-store .cb-home-studio {background:linear-gradient(108deg,#0e1518 6%,#102226 64%,#0d1417 100%);border-color:#2b3a3c}
+#cardbit-store .cb-home-studio::before {background-image:linear-gradient(90deg,#0b1114e8,#0e191bb0),var(--cb-showroom,none);opacity:.27}
+#cardbit-store .cb-home-studio .cb-hero-grid {grid-template-columns:.9fr 1.1fr;min-height:clamp(425px,36vw,575px);gap:0}
+#cardbit-store .cb-home-studio .cb-hero-copy {padding-block:clamp(32px,4.2vw,76px);max-width:540px}
+#cardbit-store .cb-home-studio h1 {margin:17px 0 20px}
+#cardbit-store .cb-home-studio h1 em {color:#7cf2e9}
+#cardbit-store .cb-hero-copy>p:not(.cb-kicker){color:#c2cfce;max-width:40ch}
+#cardbit-store .cb-home-studio .cb-kicker {color:#76e6de;font-size:.78rem;letter-spacing:.145em}
+#cardbit-store .cb-home-studio .cb-kicker i {width:24px}
+#cardbit-store .cb-home-studio .cb-hero-copy>small {color:#afc0bf;font-size:.83rem}
+#cardbit-store .cb-workshop {margin:0;min-width:0;align-self:center;position:relative;padding:10px 0 13px}
+#cardbit-store .cb-workshop-stage {position:relative;aspect-ratio:3/2;overflow:hidden;background:#0d1417;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 9%,#000 93%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 9%,#000 93%,transparent)}
+#cardbit-store .cb-workshop-stage::after {content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,#0f1d20 0%,transparent 9%,transparent 91%,#102023 100%);opacity:.55}
+#cardbit-store .cb-workshop-stage img,#cardbit-store .cb-workshop-stage video {position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
+#cardbit-store .cb-workshop figcaption {position:relative;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px 16px;margin-top:-2px;font-size:.85rem;color:#c1d6d3}
+#cardbit-store .cb-workshop-caption {font-weight:620;letter-spacing:0}
+#cardbit-store .cb-film-status:empty {display:none}
+#cardbit-store .cb-workshop-controls {display:inline-flex;align-items:center;gap:3px}
+#cardbit-store .cb-workshop-controls button {min-height:44px;min-width:44px;padding:6px 9px;border:0;background:transparent;border-radius:8px;color:#a9ddd8;font-size:.82rem;line-height:1.3;font-weight:600}
+#cardbit-store .cb-workshop-controls button:hover {background:#1c3539;color:#eafffa}
+#cardbit-store .cb-workshop-controls [data-latch-control=sound] {font-weight:500;color:#b5c9c7}
+#cardbit-store .cb-foot-main img {width:135px;height:auto}
+#cardbit-store .cb-textlink,#cardbit-store .cb-crumb a:hover {color:#77e8df}
+#cardbit-store .cb-header {background:#0b1114;border-color:#273235}
+#cardbit-store .cb-footer {background:#0e1518}
+#cardbit-store .cb-balance {background:#14292b;border-color:#305154;color:#a5f5ed}
+#cardbit-store .cb-secondary {background:#1b292d;border-color:#3f5356;color:#f1f8f7}
+#cardbit-store :is(.cb-secondary,.cb-ghost,.cb-balance,.cb-binder-link):hover:not(:disabled) {background:#253a3d;border-color:#587d7e}
+#cardbit-store .cb-navlink[aria-current] {text-decoration-color:var(--cb-accent)}
+#cardbit-store .cb-edition-line,#cardbit-store .cb-card-tail strong {color:#c5e6e3}
+#cardbit-store .cb-back-choice[aria-pressed=true] {background:#baf0e9;border-color:#baf0e9;color:#101c1e}
+#cardbit-store .cbop button.cbop-primary,#cardbit-store .lo-player button.lo-action:not(:disabled) {
+  background:var(--cb-accent);border-color:#77eee5;color:var(--cb-on-accent,#082223)}
+#cardbit-store :is(a,button,input,select,summary):focus-visible {outline-color:#74f2e7}
+#cardbit-store .cbop :focus-visible {outline-color:#74f2e7}
+#cardbit-store .cb-back-study {background:radial-gradient(ellipse at 76% 40%,#294144,#172428 55%,#131c20)}
+@media(max-width:850px) {
+  #cardbit-store .cb-head {gap:12px}
+  #cardbit-store .cb-nav {gap:15px}
+}
+@media(max-width:730px){
+  #cardbit-store .cb-lockup {width:132px}
+  #cardbit-store .cb-head {gap:0 8px}
+  #cardbit-store .cb-nav {gap:clamp(9px,3.3vw,24px);flex-wrap:wrap}
+  #cardbit-store .cb-home-studio .cb-hero-grid {grid-template-columns:1fr;min-height:0;gap:0}
+  #cardbit-store .cb-home-studio .cb-hero-copy {padding:27px 0 0;max-width:36rem}
+  #cardbit-store .cb-home-studio h1 {font-size:clamp(49px,10vw,66px);margin:12px 0 14px}
+  #cardbit-store .cb-home-studio .cb-hero-copy>p:not(.cb-kicker) {font-size:1rem;line-height:1.48}
+  #cardbit-store .cb-home-studio .cb-actions {margin-top:18px}
+  #cardbit-store .cb-workshop {justify-self:center;width:min(100%,480px);padding:4px 0 12px}
+  #cardbit-store .cb-workshop figcaption {gap:0 8px}
+}
+@media(max-width:385px) {
+  #cardbit-store .cb-head {width:calc(100% - 24px);grid-template-columns:minmax(0,1fr) auto;gap:0 7px}
+  #cardbit-store .cb-lockup {width:111px}
+  #cardbit-store .cb-account :is(.cb-balance,.cb-binder-link) {font-size:.78rem;padding:7px 8px;min-height:44px}
+  #cardbit-store .cb-account svg {display:none}
+  #cardbit-store .cb-nav {gap:0 12px;min-width:0}
+  #cardbit-store .cb-workshop figcaption {font-size:.78rem}
+}
+@media(prefers-reduced-motion:reduce){
+  #cardbit-store .cb-assembling .cb-logo-exact {clip-path:none}
+  #cardbit-store .cb-logo-layers {display:none}
+}
+/* Primary navigation and storefront merchandising. */
+#cardbit-store .cb-navlink{display:inline-flex;align-items:center;gap:7px;min-height:44px;white-space:nowrap}
+#cardbit-store .cb-navlink:hover,#cardbit-store .cb-navlink[aria-current]{text-decoration:none;color:#b2fff3}
+#cardbit-store .cb-nav-icon{width:21px;height:21px;display:inline-block;flex:none;background:currentColor;color:#82ded3;
+  -webkit-mask:var(--nav-art) center/contain no-repeat;mask:var(--nav-art) center/contain no-repeat;transform-origin:50% 60%}
+.cb-nav-packs{--nav-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 3 2 1 2-1 3 1 3-1 2 1 2-1v18l-2-1-2 1-3-1-3 1-2-1-2 1zM6 7h12M6 17h12m-6-8 2 3-2 3-2-3z'/%3E%3C/svg%3E")}
+.cb-nav-chase{--nav-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='10' cy='10' r='6.3'/%3E%3Cpath d='m14.8 14.8 5.5 5.5M6.8 9a3.6 3.6 0 0 1 2.8-2.4'/%3E%3C/svg%3E")}
+.cb-nav-shop{--nav-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linejoin='round'%3E%3Cg transform='rotate(-8 12 12)'%3E%3Crect x='5.7' y='2.6' width='12.6' height='18.7' rx='1.5'/%3E%3Cpath d='M8.4 5.9h7.2v7.6H8.4zm0 10.4h7m-7 2h4'/%3E%3C/g%3E%3C/svg%3E")}
+.cb-nav-help{--nav-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M9.4 9a2.7 2.7 0 1 1 4.4 2.2c-1.2.9-1.9 1.4-1.9 3'/%3E%3Ccircle cx='11.9' cy='17' r='.95' fill='black' stroke='none'/%3E%3C/svg%3E")}
+@keyframes cb-nav-enter{from{opacity:.4;transform:translateY(2px) scale(.88)}to{opacity:1;transform:none}}
+@keyframes cb-nav-pack{25%{transform:translateY(-2px) rotate(-13deg)}60%{transform:rotate(8deg)}}
+@keyframes cb-nav-search{25%{transform:translate(-2px,-2px) rotate(-10deg)}65%{transform:translate(2px,-1px) rotate(7deg)}}
+@keyframes cb-nav-card{42%{transform:perspective(65px) rotateY(58deg) rotate(-7deg)}75%{transform:perspective(65px) rotateY(-9deg)}}
+@keyframes cb-nav-question{40%{transform:translateY(-2px) rotate(13deg)}72%{transform:rotate(-7deg)}}
+@media(prefers-reduced-motion:no-preference){
+  .cb-nav-packs{--cb-move:cb-nav-pack}.cb-nav-chase{--cb-move:cb-nav-search}.cb-nav-shop{--cb-move:cb-nav-card}.cb-nav-help{--cb-move:cb-nav-question}
+  .cb-navlink:is(:hover,:focus-visible,:active) .cb-nav-icon{animation:var(--cb-move) .58s ease-in-out}
+  .cb-navlink .cb-nav-icon{animation:cb-nav-enter .55s ease-out backwards}
+  .cb-navlink:nth-child(2) .cb-nav-icon{animation-delay:.08s}.cb-navlink:nth-child(3) .cb-nav-icon{animation-delay:.16s}.cb-navlink:nth-child(4) .cb-nav-icon{animation-delay:.24s}
+  .cb-navlink:is(:hover,:focus-visible,:active) .cb-nav-icon{animation-name:var(--cb-move);animation-delay:0s}
+}
+#cardbit-store .cb-home-studio h1{font-size:clamp(3.05rem,5vw,5.15rem);letter-spacing:-.015em;line-height:1.07;margin:0 0 1.2rem}
+#cardbit-store .cb-home-studio .cb-hero-tag{line-height:1.52;max-width:36ch}
+#cardbit-store .cb-hero-tag strong{color:#f6faf9;font-weight:700}
+#cardbit-store .cb-home-studio .cb-hero-copy{padding-right:12px}
+#cardbit-store .cb-workshop-controls{gap:6px}
+#cardbit-store .cb-workshop-controls button,#cardbit-store .cb-feed-control{display:inline-grid;place-items:center;width:44px;height:44px;border:1px solid #385051;
+  border-radius:50%;background:#14272a;color:#caf6f0;padding:0;line-height:1;cursor:pointer}
+#cardbit-store .cb-workshop-controls button:hover,#cardbit-store .cb-feed-control:hover{background:#224044;color:#fff}
+#cardbit-store .cb-workshop-controls [data-latch-control=sound]{color:#caf6f0}
+#cardbit-store .cb-workshop [hidden],#cardbit-store .cb-feed-control[hidden]{display:none}
+#cardbit-store .cb-home-stack{gap:clamp(2.4rem,4vw,4.5rem);padding-top:clamp(1.4rem,2.6vw,2.6rem)}
+#cardbit-store .cb-pull-feed{min-width:0}
+#cardbit-store .cb-feed-heading{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+#cardbit-store .cb-feed-heading h2{font-size:clamp(1.35rem,2vw,1.85rem);line-height:1.1;margin:0;letter-spacing:0}
+#cardbit-store .cb-feed-sample{font-size:.77rem;letter-spacing:.025em;color:#b4c8c7}
+#cardbit-store .cb-feed-control{margin-left:auto}
+#cardbit-store .cb-feed-items {
+  list-style: none;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(245px, 1fr);
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  padding: 4px 3px 9px;
+  margin: 0;
+}
+#cardbit-store .cb-feed-items li { list-style: none; min-width: 0; margin: 0; scroll-snap-align: start; }
+#cardbit-store .cb-feed-card, #cardbit-store .cb-chase-link {
+  display: grid;
+  grid-template-columns: var(--cb-pull-art) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: 12px;
+  row-gap: 6px;
+  min-width: 0;
+}
+#cardbit-store .cb-feed-card {
+  --cb-pull-art: clamp(84px, 6vw, 96px);
+  min-height: 148px;
+  height: 100%;
+  padding: 12px;
+  border: 1px solid #36484e;
+  border-radius: 11px;
+  background: linear-gradient(130deg, #1b2a30, #141e22 75%);
+}
+#cardbit-store .cb-feed-card:hover, #cardbit-store .cb-chase-link:hover { background: #1c3034; }
+#cardbit-store .cb-mini-scan {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: var(--cb-pull-art);
+  aspect-ratio: 5 / 7;
+  position: relative;
+  border-radius: 5% / 3.6%;
+  background: #253437;
+  color: #9dc2c0;
+}
+#cardbit-store .cb-mini-scan img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+}
+#cardbit-store .cb-pull-copy, #cardbit-store .cb-pull-quote { grid-column: 2; min-width: 0; }
+#cardbit-store .cb-pull-copy { align-self: end; }
+#cardbit-store .cb-pull-name { display: block; color: #f4f8f7; font-size: 1rem; line-height: 1.25; font-weight: 650; overflow-wrap: anywhere; }
+#cardbit-store .cb-pull-meta { display: block; margin-top: 3px; color: #b8c9ca; font-size: .79rem; line-height: 1.4; overflow-wrap: anywhere; }
+#cardbit-store .cb-pull-quote { display: grid; align-self: start; justify-items: start; gap: 1px; line-height: 1.3; }
+#cardbit-store .cb-pull-label { color: #bfd0ce; font-size: .75rem; }
+#cardbit-store .cb-pull-amount { color: #b3f4e6; font-size: .94rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+#cardbit-store .cb-pull-amount .cb-reference { font: inherit; gap: .23em; color: inherit; }
+#cardbit-store .cb-pull-amount .cb-reference img { width: 1em; height: 1.08em; }
+#cardbit-store .cb-offer-unavailable { font-size: .79rem; line-height: 1.4; color: #c0cccf; }
+#cardbit-store .cb-shelf { grid-template-columns: repeat(auto-fit, minmax(min(100%, 211px), 1fr)); }
+#cardbit-store #cb-pack-counter{scroll-margin-top:18px}
+#cardbit-store #cb-pack-counter:focus{outline:none}
+#cardbit-store .cb-pack-tile{border:1px solid #344145;border-radius:13px;overflow:hidden;background:#131d21;align-self:stretch}
+#cardbit-store .cb-pack-art{display:block}
+#cardbit-store .cb-pack-tile .cb-niche{border:0;border-radius:0;border-bottom:1px solid #344145}
+#cardbit-store .cb-pack-info{padding:13px 12px 10px}
+#cardbit-store .cb-edition-name{display:block}
+#cardbit-store .cb-pack-info .cb-tile-head{margin:0;align-items:baseline}
+#cardbit-store .cb-tile-head h3{font-size:clamp(1rem,1.45vw,1.25rem)}
+#cardbit-store .cb-tile-price{display:block;margin-top:4px;color:#a8ece2;font-weight:700;font-size:.9rem;font-variant-numeric:tabular-nums}
+#cardbit-store .cb-pack-info .cb-chase-heading{margin:13px 0 5px;padding-top:10px;border-top:1px solid #344145;font-size:.76rem;color:#c3d4d2;font-weight:650}
+#cardbit-store .cb-chase-list{list-style:none;margin:0;padding:0}
+#cardbit-store .cb-chase-list li{margin:0;list-style:none}
+#cardbit-store .cb-chase-link {
+  --cb-pull-art: 50px;
+  padding: 9px 3px;
+  gap: 4px 11px;
+  border-radius: 5px;
+}
+#cardbit-store .cb-chase-list li + li { border-top: 1px solid #29353a; }
+#cardbit-store .cb-chase-link .cb-pull-name { font-size: .9rem; }
+#cardbit-store .cb-chase-link .cb-pull-meta { font-size: .74rem; }
+#cardbit-store .cb-chase-link .cb-pull-amount { font-size: .86rem; }
+#cardbit-store .cb-chase-link .cb-pull-label { font-size: .72rem; }
+#cardbit-store .cb-pull-tier { color: var(--cb-pull-tier, #c2cdcf); font-weight: 650; }
+#cardbit-store .cb-tier-glow .cb-mini-scan {
+  box-shadow: 0 0 0 1px var(--cb-pull-tier), 0 0 7px var(--cb-pull-tier);
+  box-shadow: 0 0 0 1.25px var(--cb-pull-tier), 0 0 7px color-mix(in srgb, var(--cb-pull-tier) 66%, transparent), 0 0 13px color-mix(in srgb, var(--cb-pull-tier) 28%, transparent);
+}
+@media (forced-colors: active) {
+  #cardbit-store .cb-tier-glow .cb-mini-scan { outline: 1px solid CanvasText; }
+}
+#cardbit-store .cb-pack-tile:hover h3{text-decoration:none}
+#cardbit-store .cb-edition-name:is(:focus-visible,:hover) h3{text-decoration:underline}
+#cardbit-store .cb-pack-info .cb-chase-empty{color:#b6c8c6;margin:10px 0 5px}
+#cardbit-store .cb-pack-page-head h1{margin:0}
+#cardbit-store .cb-feed-items:focus-within{outline-offset:3px}
+#cardbit-store .cb-kicker,#cardbit-store .cb-chip,#cardbit-store .cb-shop-filters label>span,#cardbit-store .cb-facts small,
+#cardbit-store .cb-data dt,#cardbit-store .cb-detail-copy>small,#cardbit-store .cb-tier-filters,#cardbit-store .cb-reference{text-transform:none}
+@media(max-width:730px){
+  #cardbit-store .cb-nav{width:100%;justify-content:space-between;gap:5px;flex-wrap:nowrap}
+  #cardbit-store .cb-navlink{gap:5px;font-size:13px;padding:8px 0}
+  #cardbit-store .cb-nav-icon{width:18px;height:18px}
+  #cardbit-store .cb-home-studio h1{font-size:clamp(2.45rem,10.8vw,4.15rem);margin:0 0 13px}
+  #cardbit-store .cb-pack-info{padding:10px 9px}
+}
+@media(max-width:360px){
+  #cardbit-store .cb-navlink{font-size:12px;gap:3px}
+  #cardbit-store .cb-nav-icon{width:15px;height:15px}
+  #cardbit-store .cb-pack-info .cb-tile-head svg{display:none}
+}
+@media (max-width: 600px) {
+  #cardbit-store .cb-feed-items { grid-auto-columns: min(87%, 325px); }
+  #cardbit-store .cb-feed-card { --cb-pull-art: clamp(86px, 24vw, 100px); }
+  #cardbit-store .cb-shelf { grid-template-columns: 1fr; gap: 18px; }
+  #cardbit-store .cb-pack-tile { display: grid; grid-template-columns: minmax(100px, 36%) minmax(0, 1fr); }
+  #cardbit-store .cb-pack-tile .cb-niche { height: clamp(135px, 38vw, 175px); border: 0; border-radius: 0; }
+  #cardbit-store .cb-pack-info { display: contents; }
+  #cardbit-store .cb-edition-name { align-self: center; padding: 14px; }
+  #cardbit-store .cb-pack-info .cb-tile-head h3 { font-size: 1.15rem; }
+  #cardbit-store .cb-pack-info .cb-chase-heading { grid-column: 1 / -1; margin: 0; padding: 10px 14px 2px; }
+  #cardbit-store .cb-chase-list { grid-column: 1 / -1; padding: 0 14px 6px; }
+  #cardbit-store .cb-chase-link { --cb-pull-art: 48px; grid-template-columns: var(--cb-pull-art) minmax(0, 1fr) max-content; grid-template-rows: auto; gap: 10px; padding: 9px 0; }
+  #cardbit-store .cb-chase-link .cb-mini-scan, #cardbit-store .cb-chase-link .cb-pull-copy, #cardbit-store .cb-chase-link .cb-pull-quote { grid-row: 1; align-self: center; }
+  #cardbit-store .cb-chase-link .cb-pull-quote { grid-column: 3; justify-items: end; max-width: 8rem; text-align: right; }
+  #cardbit-store .cb-pack-info .cb-chase-empty { grid-column: 1 / -1; padding: 0 14px; }
+}
+@media (max-width: 360px) {
+  #cardbit-store .cb-chase-link { gap: 8px; }
+  #cardbit-store .cb-chase-link .cb-pull-amount .cb-reference img { display: none; }
+}
+
+#cardbit-store .cb-wallet-link,
+#cardbit-store .cb-wallet-link .cb-balance {display:inline-flex;align-items:center;justify-content:center;gap:6px}
+#cardbit-store .cb-wallet-link {min-height:44px;color:inherit;text-decoration:none;font-size:.88rem;font-weight:650}
+#cardbit-store .cb-wallet-link:hover .cb-buy-label {text-decoration:underline;text-underline-offset:3px}
+#cardbit-store .cb-wallet-link .cb-balance {font-variant-numeric:tabular-nums}
+#cardbit-store .cb-wallet-link:focus-visible {outline:2px solid #a5f5ed;outline-offset:3px;border-radius:6px}
+@media(max-width:570px) {
+  #cardbit-store .cb-wallet-link {font-size:.78rem;gap:4px}
+  #cardbit-store .cb-account .cb-binder-link span {display:none}
+  #cardbit-store .cb-account .cb-binder-link {min-width:34px;justify-content:center;padding-inline:6px}
+  #cardbit-store .cb-account .cb-binder-link svg {display:block}
+}
+@media(max-width:385px) {
+  #cardbit-store .cb-lockup {width:clamp(68px,25vw,96px)}
+  #cardbit-store .cb-wallet-link .cb-balance {padding-inline:5px}
+}

@@ -1,0 +1,228 @@
+/* Cardbit flair: Outfit ExtraBold display type, pack tilt + holo, rarity sheen and glows, Latch reactions, confetti.
+   Every motion effect is off when the visitor prefers reduced motion. Loaded after cardbit-polish.css. */
+
+@font-face { font-family:'Cardbit Outfit'; src:url('cardbit-outfit-800-latin.woff2') format('woff2'); font-weight:800; font-style:normal; font-display:swap;
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Cardbit Outfit'; src:url('cardbit-outfit-800-latin-ext.woff2') format('woff2'); font-weight:800; font-style:normal; font-display:swap;
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+
+/* Display type: headings, buttons, prices and Cardbits amounts. Body stays Atkinson. */
+:root { --cb-display:'Cardbit Outfit','Cardbit Atkinson',system-ui,sans-serif; }
+#cardbit-store :is(h1,h2,h3,h4),
+#cardbit-store :is(button,.cb-primary,.cb-secondary,.cb-button,[role="button"]),
+#cardbit-store :is(.cb-price,.cb-package-number,.cb-package-price,.cb-package-flag,.cb-balance,[data-wallet-balance],.cb-reference),
+.lo-bits strong, .cbop-bits strong, .cbf-latch b, .cbf-ticker-tier,
+.cbx-signin :is(h1,h2,h3,button), .cbg-amount strong, .cbw-amount,
+[class^="cbw"] :is(h1,h2,h3,button) {
+  font-family:var(--cb-display); font-weight:800; letter-spacing:-.01em;
+}
+#cardbit-store :is(h1,h2) { letter-spacing:-.02em; }
+
+/* 1. Pack wrappers tilt with the pointer; a holo shine is clipped to the wrapper art. */
+.cbf-tilt-host { position:relative; transform-style:preserve-3d; transition:transform .45s cubic-bezier(.2,.8,.3,1); will-change:transform; }
+.cbf-tilt-host.cbf-tilting { transform:perspective(900px) rotateX(var(--cbf-rx,0)) rotateY(var(--cbf-ry,0)) scale(1.02) !important; transition-duration:.12s !important; }
+.cbf-holo {
+  position:absolute; inset:0; z-index:2; pointer-events:none; opacity:0; transition:opacity .35s;
+  background:
+    radial-gradient(circle at var(--cbf-mx,50%) var(--cbf-my,50%), #ffffff73 0%, #ffffff00 38%),
+    linear-gradient(115deg, #ff7ad900 20%, #ff7ad955 34%, #7af7ff55 46%, #b4ff7a4d 56%, #ffd27a55 66%, #ff7ad900 80%);
+  background-size:100% 100%, 240% 240%;
+  background-position:center, calc(100% - var(--cbf-mx,50%)) calc(100% - var(--cbf-my,50%));
+  mix-blend-mode:color-dodge;
+  -webkit-mask:var(--cbf-mask) center / contain no-repeat; mask:var(--cbf-mask) center / contain no-repeat;
+}
+.cbf-tilt-host.cbf-tilting > .cbf-holo { opacity:.85; }
+
+/* 2. Card sheen on hover, stronger for rarer cards. */
+.cbf-sheen { position:relative; isolation:isolate; transition:transform .3s cubic-bezier(.2,.8,.3,1), box-shadow .3s; }
+.cbf-sheen::after {
+  content:""; position:absolute; inset:0; z-index:3; border-radius:inherit; pointer-events:none; opacity:0; transition:opacity .3s;
+  background:linear-gradient(115deg, transparent 25%, #ffffff40 40%, #9be7ff40 48%, #ffd6f740 55%, transparent 70%);
+  background-size:250% 250%; background-position:var(--cbf-mx,50%) var(--cbf-my,50%); mix-blend-mode:overlay;
+}
+.cbf-sheen.cbf-tilting { transform:perspective(900px) rotateX(calc(var(--cbf-rx,0) * .5)) rotateY(calc(var(--cbf-ry,0) * .5)) translateY(-2px); }
+.cbf-sheen.cbf-tilting::after { opacity:.35; }
+.cbf-sheen[data-cbf-tier="uncommon"].cbf-tilting::after { opacity:.5; }
+.cbf-sheen[data-cbf-tier="rare"].cbf-tilting::after { opacity:.7; }
+.cbf-sheen:is([data-cbf-tier="epic"],[data-cbf-tier="legendary"],[data-cbf-tier="master"]).cbf-tilting::after { opacity:1; mix-blend-mode:color-dodge; }
+.cbf-sheen:is([data-cbf-tier="rare"],[data-cbf-tier="epic"],[data-cbf-tier="legendary"],[data-cbf-tier="master"]):is(:hover,:focus-visible,.cbf-tilting) {
+  box-shadow:0 0 0 1px color-mix(in srgb, var(--cbf-glow) 60%, transparent), 0 10px 34px color-mix(in srgb, var(--cbf-glow) 30%, transparent);
+}
+
+/* 3. Cardbits balance bump while it counts. */
+.cbf-bump { animation:cbf-bump .45s cubic-bezier(.2,1.4,.4,1); }
+@keyframes cbf-bump { 40% { transform:scale(1.09); filter:drop-shadow(0 0 8px #ffb65c99); } }
+
+/* 4. Confetti canvas sits over everything and never takes clicks. */
+.cbf-confetti { position:fixed; inset:0; width:100vw; height:100vh; z-index:2147483000; pointer-events:none; }
+
+/* 5. Rarity glow behind a revealed card. */
+.cbf-reveal-glow { position:relative; }
+.cbf-reveal-glow::before {
+  content:""; position:absolute; left:50%; top:45%; width:min(120%,560px); aspect-ratio:1; z-index:0; pointer-events:none;
+  transform:translate(-50%,-50%) scale(.6); border-radius:50%; opacity:0;
+  background:radial-gradient(circle, color-mix(in srgb, var(--cbf-glow) 55%, transparent) 0%, color-mix(in srgb, var(--cbf-glow) 18%, transparent) 40%, transparent 68%);
+  animation:cbf-glow 2.4s ease-out forwards;
+}
+@keyframes cbf-glow { 0% { opacity:0; transform:translate(-50%,-50%) scale(.6); } 18% { opacity:1; transform:translate(-50%,-50%) scale(1); } 100% { opacity:0; transform:translate(-50%,-50%) scale(1.15); } }
+
+/* Latch cheers for Epic and Legendary pulls. */
+.cbf-latch { position:absolute; right:3%; bottom:12%; z-index:6; display:flex; align-items:flex-end; gap:6px; pointer-events:none; animation:cbf-latch-in 3.2s cubic-bezier(.2,1.2,.4,1) forwards; }
+.cbf-latch img { width:clamp(64px,12vw,110px); height:auto; filter:drop-shadow(0 6px 18px #0009); }
+.cbf-latch b { margin-bottom:58%; padding:6px 12px; border-radius:14px 14px 14px 4px; background:#faf8f3; color:#17213b; font-size:clamp(.85rem,1.6vw,1.05rem); white-space:nowrap; box-shadow:0 0 0 3px var(--cbf-glow,#ffb65c), 0 8px 22px #0008; }
+.cbf-latch:not(:has(img)) b { margin-bottom:0; }
+@keyframes cbf-latch-in { 0% { opacity:0; transform:translateY(30px) scale(.8); } 12% { opacity:1; transform:translateY(-6px) scale(1.04); } 20% { transform:none; } 85% { opacity:1; } 100% { opacity:0; transform:translateY(8px); } }
+.cbf-latch.is-still { animation:none; opacity:1; }
+
+/* Live ticker on Just Pulled. */
+.cbf-ticker { display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:8px 12px; border:1px solid #33416a; border-radius:12px; background:#121a2f; overflow:hidden; font-size:.85rem; }
+.cbf-ticker-live { display:inline-flex; align-items:center; gap:6px; flex:none; color:#ff8fa3; font-weight:800; text-transform:uppercase; letter-spacing:.06em; font-size:.72rem; }
+.cbf-ticker-live::before { content:""; width:8px; height:8px; border-radius:50%; background:currentColor; animation:cbf-pulse 1.6s infinite; }
+.cbf-ticker-live[data-demo] { color:#aeb8d8; }
+.cbf-ticker-live[data-demo]::before { animation:none; }
+.cbf-ticker-track { position:relative; flex:1; min-width:0; height:1.5em; }
+.cbf-ticker-item { position:absolute; inset:0; display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#e7ebf7; animation:cbf-tick-in .5s cubic-bezier(.2,.8,.3,1); }
+.cbf-ticker-tier { color:var(--cbf-glow,#d7deed); }
+.cbf-ticker-when { color:#8e98b8; }
+@keyframes cbf-tick-in { from { opacity:0; transform:translateY(60%); } to { opacity:1; transform:none; } }
+@keyframes cbf-pulse { 50% { opacity:.35; } }
+
+/* Odds-left meters: share of each tier still sealed in the pack line. */
+.cbf-odds { margin:12px 0 4px; padding:12px 14px; border:1px solid #33416a; border-radius:12px; background:#121a2f; }
+.cbf-odds h3, #cardbit-store .cbf-odds h3 { margin:0 0 8px; font-size:1rem; line-height:1.2; }
+.cbf-odds ul { display:grid; gap:7px; margin:0; padding:0; list-style:none; }
+.cbf-odds li { display:grid; grid-template-columns:6.5em 1fr auto; align-items:center; gap:10px; font-size:.8rem; }
+.cbf-odds-bar { height:8px; border-radius:999px; background:#232d4a; overflow:hidden; }
+.cbf-odds-bar i { display:block; height:100%; width:var(--cbf-left,0%); border-radius:inherit; background:var(--cbf-glow,#9fb0ff); transition:width .8s cubic-bezier(.2,.8,.3,1); }
+.cbf-odds-count { font-variant-numeric:tabular-nums; color:#c3c9da; }
+.cbf-odds p { margin:8px 0 0; color:#8e98b8; font-size:.74rem; }
+
+/* Vault set progress with badges. */
+.cbf-sets { margin:18px 0; }
+.cbf-sets h3, #cardbit-store .cbf-sets h3 { margin:0 0 10px; font-size:1.15rem; }
+.cbf-set-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr)); gap:10px; margin:0; padding:0; list-style:none; }
+.cbf-set { display:grid; gap:6px; padding:12px; border:1px solid #33416a; border-radius:12px; background:#121a2f; }
+.cbf-set-head { display:flex; justify-content:space-between; gap:8px; font-weight:700; font-size:.88rem; }
+.cbf-set-head span { color:#c3c9da; font-variant-numeric:tabular-nums; }
+.cbf-set-bar { height:6px; border-radius:999px; background:#232d4a; overflow:hidden; }
+.cbf-set-bar i { display:block; height:100%; width:var(--cbf-done,0%); background:linear-gradient(90deg,#4057f5,#b47aff); border-radius:inherit; }
+.cbf-set-badges { display:flex; flex-wrap:wrap; gap:5px; }
+.cbf-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:999px; font-size:.68rem; font-weight:800; border:1px solid currentColor; }
+.cbf-badge-starter { color:#62e987; }
+.cbf-badge-half { color:#538fff; }
+.cbf-badge-hit { color:#b47aff; }
+.cbf-badge-complete { color:#ffb65c; }
+
+@media (max-width: 560px) {
+  .cbf-latch { top:4%; bottom:auto; right:3%; flex-direction:row-reverse; align-items:flex-start; }
+  .cbf-latch img { width:56px; }
+  .cbf-latch b { margin:8px 0 0; border-radius:14px 4px 14px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cbf-tilt-host, .cbf-tilt-host.cbf-tilting, .cbf-sheen, .cbf-sheen.cbf-tilting { transform:none !important; transition:none !important; }
+  .cbf-holo, .cbf-sheen::after { display:none; }
+  .cbf-bump, .cbf-latch, .cbf-ticker-item, .cbf-ticker-live::before { animation:none !important; }
+  .cbf-reveal-glow::before { animation:none; opacity:.8; transform:translate(-50%,-50%); }
+  .cbf-confetti { display:none; }
+  .cbf-odds-bar i { transition:none; }
+}
+
+/* Home hero carousel: four banners at half the old hero height, each with its own animation. */
+#cardbit-store .cbh { position:relative; overflow:hidden; height:clamp(260px,23vw,320px); border-bottom:1px solid #2b3a3c;
+  background:linear-gradient(108deg,#0e1518 6%,#102226 64%,#0d1417 100%); isolation:isolate; }
+#cardbit-store .cbh-track { position:absolute; inset:0; }
+#cardbit-store .cbh-slide { position:absolute; inset:0; opacity:0; visibility:hidden; transition:opacity .6s ease, visibility 0s linear .6s; }
+#cardbit-store .cbh-slide.is-active { opacity:1; visibility:visible; transition:opacity .6s ease; z-index:1; }
+#cardbit-store .cbh-inner { height:100%; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:center; gap:24px; }
+#cardbit-store .cbh-copy { position:relative; z-index:2; max-width:520px; padding-bottom:30px; }
+#cardbit-store .cbh-copy :is(h1,h2) { margin:0 0 10px; font-size:clamp(2rem,3.6vw,3.25rem); line-height:1.02; letter-spacing:-.02em; color:#f6faf9; }
+#cardbit-store .cbh-copy h1 em { color:#7cf2e9; font-style:normal; }
+#cardbit-store .cbh-copy p { margin:0 0 14px; color:#c2cfce; max-width:42ch; font-size:clamp(.92rem,1.1vw,1.02rem); line-height:1.45; }
+#cardbit-store .cbh-copy .cbh-kicker { margin:0 0 8px; color:#76e6de; font-size:.76rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+#cardbit-store .cbh-copy .cb-actions { margin:0; }
+#cardbit-store .cbh-art { position:relative; height:100%; display:flex; align-items:center; justify-content:center; margin:0; }
+/* Slide 1: the Latch studio film, scaled to the shorter banner. */
+#cardbit-store .cbh-art-studio .cb-workshop { height:100%; width:100%; margin:0; display:flex; flex-direction:column; justify-content:center; }
+#cardbit-store .cbh-art-studio .cb-workshop-stage { height:calc(100% - 44px); width:auto; aspect-ratio:3/2; margin:0 auto; background:transparent; }
+#cardbit-store .cbh-art-studio figcaption { position:absolute; right:0; bottom:42px; z-index:3; }
+#cardbit-store .cbh-packs.is-active .cbh-copy > * { animation:cbh-rise .7s cubic-bezier(.2,.8,.3,1) both; }
+#cardbit-store .cbh-packs.is-active .cbh-copy > :nth-child(2) { animation-delay:.08s; }
+#cardbit-store .cbh-packs.is-active .cbh-copy > :nth-child(3) { animation-delay:.16s; }
+/* Slides 2-4: rendered Latch films, poster until the film plays. */
+  -webkit-mask:radial-gradient(ellipse 72% 78% at 50% 50%, #000 62%, transparent 100%); mask:radial-gradient(ellipse 72% 78% at 50% 50%, #000 62%, transparent 100%); }
+/* Slide 2: Cardbits coins float in and bob. */
+#cardbit-store .cbh-count { color:#ffb65c; font-variant-numeric:tabular-nums; }
+/* Slide 3: XP bar fills and the level ticks up. */
+/* Slide 4: three steps light up in order. */
+/* Controls */
+#cardbit-store .cbh-controls { position:absolute; z-index:4; left:50%; bottom:10px; transform:translateX(-50%); display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:999px; background:#0b1214b3; backdrop-filter:blur(6px); }
+#cardbit-store .cbh-controls button { display:grid; place-items:center; min-width:32px; height:32px; padding:0; border:0; border-radius:999px; background:transparent; color:#e7f3f2; cursor:pointer; }
+#cardbit-store .cbh-controls button:hover { background:#ffffff14; }
+#cardbit-store .cbh-controls button:focus-visible { outline:3px solid #ffb65c; outline-offset:1px; }
+#cardbit-store [data-hero-prev] svg { transform:scaleX(-1); }
+#cardbit-store .cbh-dots { display:flex; gap:2px; }
+#cardbit-store .cbh-controls .cbh-dot { min-width:24px; width:24px; }
+#cardbit-store .cbh-dot::before { content:""; width:8px; height:8px; border-radius:999px; background:#6f8483; transition:width .3s, background .3s; }
+#cardbit-store .cbh-dot[aria-current="true"]::before { width:18px; background:#00e6e1; }
+@keyframes cbh-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+@media (max-width: 720px) {
+  #cardbit-store .cbh { height:330px; }
+  #cardbit-store .cbh-inner { grid-template-columns:1fr; align-content:start; padding-top:22px; }
+  #cardbit-store .cbh-copy { max-width:57%; padding-bottom:0; }
+  #cardbit-store .cbh-copy :is(h1,h2) { font-size:clamp(1.7rem,7.4vw,2.3rem); }
+  #cardbit-store .cbh-copy p { font-size:.88rem; }
+  #cardbit-store .cbh-art-studio figcaption { display:none; }
+  #cardbit-store .cbh-copy .cb-actions .cb-primary, #cardbit-store .cbh-copy .cb-actions .cb-secondary { min-height:40px; padding:8px 14px; font-size:.86rem; }
+}
+@media (max-width: 380px) {
+  #cardbit-store .cbh-copy { max-width:100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #cardbit-store .cbh-slide { transition:none; }
+  #cardbit-store .cbh-slide.is-active *, #cardbit-store .cbh-slide.is-active { animation:none !important; }
+  #cardbit-store .cbh-coin { opacity:1; }
+  #cardbit-store .cbh-xp i { width:100%; }
+  #cardbit-store .cbh-lv-from { display:none; }
+  #cardbit-store .cbh-lv-to { position:static; opacity:1; }
+}
+
+/* Giveaway slide small print */
+#cardbit-store .cbh-copy p.cbh-fine { margin:8px 0 0; font-size:11px; line-height:1.3; opacity:.72; max-width:none; }
+#cardbit-store .cbh-copy .cbh-fine a { color:inherit; text-decoration:underline; }
+
+/* Full-width hero scenes (cardbit-hero-scenes.js) */
+#cardbit-store .cbh-scene { position:absolute; inset:0; z-index:0; pointer-events:none; }
+#cardbit-store .cbh-scene canvas { display:block; width:100%; height:100%; }
+#cardbit-store .cbh-scene::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,#0d1417f2 0%,#0d1417cc 26%,#0d141766 44%,#0d141700 60%); }
+#cardbit-store .cbh-slide .cbh-inner { position:relative; z-index:2; grid-template-columns:minmax(0,1fr); }
+#cardbit-store .cbh-copy { text-shadow:0 2px 14px #0009; }
+#cardbit-store .cbh-copy .cbh-clock { margin:0 0 12px; color:#ffd9a0; font-weight:700; letter-spacing:.02em; }
+#cardbit-store .cbh-copy .cbh-clock b { font-family:var(--cb-display); font-variant-numeric:tabular-nums; color:#ffb65c; font-size:1.15em; margin-left:.25em; }
+#cardbit-store .cbh-how .cbh-copy { max-width:40%; }
+#cardbit-store .cbh-how-steps { position:absolute; z-index:3; left:47%; right:3%; top:16px; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+#cardbit-store .cbh-how-step { display:flex; align-items:center; justify-content:center; gap:8px; min-height:40px; padding:6px 10px; border:1px solid #2f4140; border-radius:999px; background:#0f1c1fd9; color:#c9d6d5; font:700 .84rem/1.1 inherit; cursor:pointer; transition:background .25s, border-color .25s, color .25s, transform .25s; }
+#cardbit-store .cbh-how-step b { display:grid; place-items:center; width:24px; height:24px; flex:none; border-radius:50%; background:#24363a; color:#e7f3f2; font-family:var(--cb-display); font-size:.85rem; }
+#cardbit-store .cbh-how-step:hover { border-color:#00e6e1; color:#fff; }
+#cardbit-store .cbh-how-step.is-active { border-color:#00e6e1; background:#0f2a2c; color:#fff; transform:translateY(-2px); box-shadow:0 0 18px #00e6e140; }
+#cardbit-store .cbh-how-step.is-active b { background:#00e6e1; color:#0b1416; }
+#cardbit-store .cbh-how-step:focus-visible, #cardbit-store .cbh-how-toggle button:focus-visible { outline:3px solid #ffb65c; outline-offset:2px; }
+#cardbit-store .cbh-how-short { display:none; }
+#cardbit-store .cbh-how-toggle { position:absolute; z-index:3; left:47%; right:3%; top:64px; display:flex; justify-content:center; gap:6px; }
+#cardbit-store .cbh-how-toggle[hidden] { display:none; }
+#cardbit-store .cbh-how-toggle button { min-height:32px; padding:4px 12px; border:1px solid #3a4b4d; border-radius:999px; background:#0f1c1fd9; color:#c9d6d5; font:700 .78rem/1 inherit; cursor:pointer; }
+#cardbit-store .cbh-how-toggle button[aria-pressed="true"] { border-color:#ffb65c; color:#ffb65c; background:#2a2012; }
+@media (max-width: 720px) {
+  #cardbit-store .cbh-scene::after { background:linear-gradient(90deg,#0d1417e6 0%,#0d1417b3 40%,#0d141733 62%,#0d141700 75%); }
+  #cardbit-store .cbh-how .cbh-copy { max-width:100%; }
+  #cardbit-store .cbh-levels .cbh-copy p:not(.cbh-kicker) { display:none; }
+  #cardbit-store .cbh-how .cbh-copy :is(h1,h2) { font-size:1.6rem; margin-bottom:8px; }
+  #cardbit-store .cbh-how .cbh-scene::after { background:linear-gradient(180deg,#0d1417e6 0%,#0d1417aa 30%,#0d141700 48%); }
+  #cardbit-store .cbh-how-steps { left:10px; right:10px; top:auto; bottom:54px; gap:5px; }
+  #cardbit-store .cbh-how-step { min-height:34px; padding:4px 6px; gap:5px; font-size:.72rem; }
+  #cardbit-store .cbh-how-step b { width:20px; height:20px; font-size:.75rem; }
+  #cardbit-store .cbh-how-step > span:not(.cbh-how-short) { display:none; }
+  #cardbit-store .cbh-how-short { display:inline; }
+  #cardbit-store .cbh-how-toggle { left:auto; right:10px; top:18px; flex-direction:column; align-items:stretch; }
+  #cardbit-store .cbh-how-toggle button { min-height:28px; font-size:.7rem; padding:3px 8px; }
+}
+@media (prefers-reduced-motion: reduce) { #cardbit-store .cbh-how-step { transition:none; } }
