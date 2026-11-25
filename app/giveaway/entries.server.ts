@@ -10,16 +10,16 @@ import { drawWindow, isSocial, paidEntries, SOCIAL, STATES } from "./rules";
 
 export type Tx = Prisma.TransactionClient;
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
-export async function lockDesk(tx: Tx) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${shop + "/daily-giveaway"}, 0))::text`;
+export async function lockDesk(tx: Tx, store = shop) {
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${store + "/daily-giveaway"}, 0))::text`;
 }
-export async function activeRound(tx: Tx, now: Date) {
+export async function activeRound(tx: Tx, now: Date, store = shop) {
   const win = drawWindow(now),
     seed = newSeed();
   return tx.cardbitGiveawayRound.upsert({
-    where: { shop_day: { shop, day: win.day } },
+    where: { shop_day: { shop: store, day: win.day } },
     update: {},
-    create: { shop, ...win, seed, commitment: sha(seed) },
+    create: { shop: store, ...win, seed, commitment: sha(seed) },
   });
 }
 type EventInput = {
@@ -31,10 +31,10 @@ type EventInput = {
   note?: string;
   actor?: string;
 };
-export async function post(tx: Tx, input: EventInput) {
+export async function post(tx: Tx, input: EventInput, store = shop) {
   return tx.cardbitGiveawayEvent.upsert({
-    where: { shop_key: { shop, key: input.key } },
-    create: { shop, ...input },
+    where: { shop_key: { shop: store, key: input.key } },
+    create: { shop: store, ...input },
     update: {},
   });
 }
@@ -91,13 +91,14 @@ export async function enterOrBonus(
   db: PrismaClient,
   customerId: string,
   body: Record<string, unknown>,
+  store = shop,
 ) {
   return db.$transaction(async (tx) => {
-    await lockDesk(tx);
-    const cfg = await tx.cardbitGiveawayConfig.findUnique({ where: { shop } });
+    await lockDesk(tx, store);
+    const cfg = await tx.cardbitGiveawayConfig.findUnique({ where: { shop: store } });
     if (!cfg?.enabled) throw Error("The daily giveaway is paused.");
     const now = new Date(),
-      { day } = await activeRound(tx, now);
+      { day } = await activeRound(tx, now, store);
     if (
       body.intent === "enter" &&
       body.expectedDay != null &&
@@ -105,17 +106,17 @@ export async function enterOrBonus(
     )
       throw Error("The daily draw changed. Tap again to join the new draw.");
     let person = await tx.cardbitGiveawayPerson.findUnique({
-      where: { shop_customerId: { shop, customerId } },
+      where: { shop_customerId: { shop: store, customerId } },
     });
     const wallet = await tx.cardbitWallet.findUnique({
-      where: { shop_customerId: { shop, customerId } },
+      where: { shop_customerId: { shop: store, customerId } },
       select: { held: true },
     });
     if (person?.held || wallet?.held)
       throw Error("Your entry is under review.");
     const key = "daily:" + day + ":" + customerId;
     const tapped = await tx.cardbitGiveawayEvent.findUnique({
-      where: { shop_key: { shop, key } },
+      where: { shop_key: { shop: store, key } },
     });
     if (body.intent === "whatnot") {
       if (!person) {
@@ -127,12 +128,12 @@ export async function enterOrBonus(
         const referrer =
           typeof body.ref === "string" && /^[a-f0-9-]{36}$/i.test(body.ref)
             ? await tx.cardbitGiveawayPerson.findFirst({
-                where: { shop, code: body.ref, held: false },
+                where: { shop: store, code: body.ref, held: false },
               })
             : null;
         person = await tx.cardbitGiveawayPerson.create({
           data: {
-            shop,
+            shop: store,
             customerId,
             region,
             ageConfirmedAt: now,
@@ -145,7 +146,7 @@ export async function enterOrBonus(
         });
       } else if (!person.whatnotAt) {
         await tx.cardbitGiveawayPerson.update({
-          where: { shop_customerId: { shop, customerId } },
+          where: { shop_customerId: { shop: store, customerId } },
           data: { whatnotAt: now },
         });
       }
@@ -155,7 +156,7 @@ export async function enterOrBonus(
         key: "whatnot:" + customerId,
         kind: "whatnot",
         entries: SOCIAL.whatnot.entries,
-      });
+      }, store);
       return;
     }
     if (!person?.whatnotAt) throw Error("Visit Whatnot once before entering.");
@@ -166,11 +167,11 @@ export async function enterOrBonus(
         key: "whatnot:" + customerId,
         kind: "whatnot",
         entries: SOCIAL.whatnot.entries,
-      });
+      }, store);
       if (bonus.day !== day) {
         const used = await tx.cardbitGiveawayEvent.findUnique({
           where: {
-            shop_key: { shop, key: "daily:" + bonus.day + ":" + customerId },
+            shop_key: { shop: store, key: "daily:" + bonus.day + ":" + customerId },
           },
         });
         if (!used)
@@ -185,7 +186,7 @@ export async function enterOrBonus(
         key,
         kind: "daily",
         entries: 1,
-      });
+      }, store);
       if (entry.voided) throw Error("Your entry is under review.");
       return { day, entered: true, dailyEntries: 1 };
     }
@@ -202,7 +203,7 @@ export async function enterOrBonus(
         key: network + ":" + customerId,
         kind: network,
         entries: SOCIAL[network].entries,
-      });
+      }, store);
       return;
     }
     if (body.intent === "share" && cfg.shareEntries) {
@@ -212,7 +213,7 @@ export async function enterOrBonus(
         key: "share:" + day + ":" + customerId,
         kind: "share",
         entries: cfg.shareEntries,
-      });
+      }, store);
       return;
     }
     throw Error("Choose an available giveaway action.");

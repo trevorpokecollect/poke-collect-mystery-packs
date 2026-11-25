@@ -11,16 +11,16 @@ export const configDefaults = {
   shareEntries: 100,
 };
 
-export async function promptView(db: PrismaClient, customerId: string | null) {
+export async function promptView(db: PrismaClient, customerId: string | null, store = shop) {
   const config = await db.cardbitGiveawayConfig.findUnique({
-    where: { shop },
+    where: { shop: store },
     select: { enabled: true },
   });
   if (!config?.enabled) return { enabled: false };
   const { day, closesAt } = drawWindow(new Date());
   const window = { enabled: true, day, closesAt: closesAt.toISOString() };
   if (!customerId) return { ...window, signedIn: false };
-  const account = { shop_customerId: { shop, customerId } };
+  const account = { shop_customerId: { shop: store, customerId } };
   const [person, wallet, entry] = await Promise.all([
     db.cardbitGiveawayPerson.findUnique({
       where: account,
@@ -28,7 +28,7 @@ export async function promptView(db: PrismaClient, customerId: string | null) {
     }),
     db.cardbitWallet.findUnique({ where: account, select: { held: true } }),
     db.cardbitGiveawayEvent.findUnique({
-      where: { shop_key: { shop, key: "daily:" + day + ":" + customerId } },
+      where: { shop_key: { shop: store, key: "daily:" + day + ":" + customerId } },
       select: { voided: true },
     }),
   ]);
@@ -55,30 +55,31 @@ export async function customerView(
   db: PrismaClient,
   customerId: string | null,
   subscribed: boolean,
+  store = shop,
 ) {
   const { day, closesAt } = drawWindow(new Date());
   const [cfg, round, person, events, claimed, winners, wallet] =
     await Promise.all([
-      db.cardbitGiveawayConfig.findUnique({ where: { shop } }),
+      db.cardbitGiveawayConfig.findUnique({ where: { shop: store } }),
       db.cardbitGiveawayRound.findUnique({
-        where: { shop_day: { shop, day } },
+        where: { shop_day: { shop: store, day } },
         select: { commitment: true },
       }),
       customerId
         ? db.cardbitGiveawayPerson.findUnique({
-            where: { shop_customerId: { shop, customerId } },
+            where: { shop_customerId: { shop: store, customerId } },
           })
         : null,
       customerId
         ? db.cardbitGiveawayEvent.findMany({
-            where: { shop, day, customerId, voided: false },
+            where: { shop: store, day, customerId, voided: false },
             select: { kind: true, entries: true },
           })
         : [],
       customerId
         ? db.cardbitGiveawayEvent.findMany({
             where: {
-              shop,
+              shop: store,
               customerId,
               kind: { in: ["whatnot", "facebook", "instagram"] },
             },
@@ -86,14 +87,14 @@ export async function customerView(
           })
         : [],
       db.cardbitGiveawayRound.findMany({
-        where: { shop, closedAt: { not: null }, winnerId: { not: null } },
+        where: { shop: store, closedAt: { not: null }, winnerId: { not: null } },
         orderBy: { day: "desc" },
         take: 7,
         select: { day: true, winnerId: true, totalEntries: true },
       }),
       customerId
         ? db.cardbitWallet.findUnique({
-            where: { shop_customerId: { shop, customerId } },
+            where: { shop_customerId: { shop: store, customerId } },
             select: { held: true },
           })
         : null,

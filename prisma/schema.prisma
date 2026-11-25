@@ -1307,6 +1307,21 @@ model SiteWallet {
   updatedAt  DateTime @updatedAt
 }
 
+// Marketing consent for the standalone site (Welcome Rewards and the Daily Giveaway email requirement).
+model SiteMarketing {
+  customerId     String    @id
+  emailOptInAt   DateTime?
+  emailOptOutAt  DateTime?
+  smsPhone       String?   @unique // E.164, US only
+  smsRequestedAt DateTime?
+  smsConfirmedAt DateTime?
+  smsOptOutAt    DateTime?
+  termsVersion   String?
+  ip             String?
+  syncedAt       DateTime?
+  updatedAt      DateTime  @updatedAt
+}
+
 model SiteLedger {
   id             String   @id @default(cuid())
   customerId     String
