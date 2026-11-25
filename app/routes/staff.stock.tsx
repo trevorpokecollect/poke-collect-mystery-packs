@@ -86,6 +86,12 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
+  if (process.env.CARDBIT_SITE !== "on") return notFound();
+  // Signed out → sign in first (signed-in non-staff still get a plain 404).
+  if (!(await resolve(request))) {
+    const u = new URL(request.url);
+    return new Response(null, { status: 303, headers: { Location: `/sign-in?return_to=${encodeURIComponent(u.pathname + u.search)}` } });
+  }
   const staff = await gate(request);
   if (!staff) return notFound();
   const url = new URL(request.url);
