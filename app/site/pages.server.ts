@@ -4,8 +4,8 @@
 import policies from "./partials/policies.html?raw";
 import { assetUrl } from "./shell.server";
 
-// Official Rules are a counsel-review draft (Nov 24 2026) and are not committed. Drop the approved
-// HTML body at app/site/partials/official-rules.html to publish it at /official-rules.
+// Official Rules body (Trevor approved showing it, Nov 24 2026). Source: the rules thread's
+// official-rules-page.html with the draft banner and counsel review notes removed.
 const optional = import.meta.glob("./partials/official-rules.html", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const officialRules = optional["./partials/official-rules.html"] ?? null;
 

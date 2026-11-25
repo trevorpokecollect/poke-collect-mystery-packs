@@ -21,7 +21,7 @@ Everything here is inert unless `CARDBIT_SITE=on` (set only on `cardbit-mystery-
 | `/packs/*`, `/chase`, `/shop/*`, `/ship-together/*`, `/account/*`, `/orders`, `/shipments/*`, `/vault/*`, `/binder/*`, `/openings/*`, `/cardbits`, `/help`, `/demo/*`, `/latch/*` | `routes/$.tsx` (shell; client renders the page) |
 | `/how-it-works` | redirect to `/help` |
 | `/policies` | `routes/policies.tsx`, server-rendered |
-| `/official-rules` | `routes/official-rules.tsx`; 404 until the counsel-approved body is added at `app/site/partials/official-rules.html` |
+| `/official-rules` | `routes/official-rules.tsx`, server-rendered from `app/site/partials/official-rules.html` (rules text owned by the sweepstakes rules thread; draft banner and counsel notes stripped) |
 
 Note: `public/packs/` exists, so a bare `/packs` gets a static-directory 301 to `/packs/`; the page still renders.
 
