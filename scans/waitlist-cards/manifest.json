@@ -378,5 +378,105 @@
     "era": "vintage",
     "rarity": "Rare Holo",
     "source_url": "https://images.pokemontcg.io/neo2/1_hires.png"
+  },
+  {
+    "file": "leafeon-vmax-alt-evs.png",
+    "name": "Leafeon VMAX",
+    "set": "Evolving Skies",
+    "number": "205/203",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Rare Secret (Alternate Art)",
+    "source_url": "https://assets.tcgdex.net/en/swsh/swsh7/205/high.png"
+  },
+  {
+    "file": "glaceon-vmax-alt-evs.png",
+    "name": "Glaceon VMAX",
+    "set": "Evolving Skies",
+    "number": "209/203",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Rare Secret (Alternate Art)",
+    "source_url": "https://assets.tcgdex.net/en/swsh/swsh7/209/high.png"
+  },
+  {
+    "file": "blaziken-vmax-alt-cre.png",
+    "name": "Blaziken VMAX",
+    "set": "Chilling Reign",
+    "number": "201/198",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Rare Secret (Alternate Art)",
+    "source_url": "https://assets.tcgdex.net/en/swsh/swsh6/201/high.png"
+  },
+  {
+    "file": "latias-ex-sir-ssp.png",
+    "name": "Latias ex",
+    "set": "Surging Sparks",
+    "number": "239/191",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://assets.tcgdex.net/en/sv/sv08/239/high.png"
+  },
+  {
+    "file": "terapagos-ex-sir-scr.png",
+    "name": "Terapagos ex",
+    "set": "Stellar Crown",
+    "number": "170/142",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://assets.tcgdex.net/en/sv/sv07/170/high.png"
+  },
+  {
+    "file": "dragapult-ex-sir-pre.png",
+    "name": "Dragapult ex",
+    "set": "Prismatic Evolutions",
+    "number": "165/131",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://assets.tcgdex.net/en/sv/sv08.5/165/high.png"
+  },
+  {
+    "file": "lillies-clefairy-ex-sir-jtg.png",
+    "name": "Lillie's Clefairy ex",
+    "set": "Journey Together",
+    "number": "184/159",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://assets.tcgdex.net/en/sv/sv09/184/high.png"
+  },
+  {
+    "file": "zapdos-ex-sar-sv2a.png",
+    "name": "Zapdos ex (サンダーex)",
+    "set": "Pokémon Card 151 (sv2a)",
+    "number": "204/165",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Special Art Rare (SAR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV2a/204/high.png"
+  },
+  {
+    "file": "alakazam-holo-base.png",
+    "name": "Alakazam",
+    "set": "Base Set",
+    "number": "1/102",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://assets.tcgdex.net/en/base/base1/1/high.png"
+  },
+  {
+    "file": "ho-oh-holo-neo-revelation.png",
+    "name": "Ho-Oh",
+    "set": "Neo Revelation",
+    "number": "7/64",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://assets.tcgdex.net/en/neo/neo3/7/high.png"
   }
 ]
