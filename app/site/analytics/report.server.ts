@@ -658,3 +658,115 @@ export async function customers(db: PrismaClient, input: { from?: unknown; to?: 
     cohorts: cohorts.map((c) => ({ week: c.week, size: num(c.size), weeks: c.w.map(Number) })),
   };
 }
+
+// ---------- Cardbit metrics (stage 3) ----------
+
+/**
+ * Pack results, pool health, buybacks, vault, shipping and rewards cost. Card value = the copy's
+ * retail Cardbits (Poke-Collect retail basis, 100 Cardbits = $1), falling back to the printing's price.
+ * Range numbers cover openings, buybacks, shipments and rewards in the range; pools and vault are "now".
+ */
+export async function metrics(db: PrismaClient, input: { from?: unknown; to?: unknown }, deps: AnalyticsDeps = {}) {
+  const tz = deps.tz ?? TZ;
+  const r = parseRange(input.from, input.to, deps.now, tz);
+  const ids = await staffIds(db, deps.env ?? process.env);
+  const ns = (col: string) => notStaff(Prisma.raw(col), ids);
+  const value = Prisma.sql`coalesce(c."retailBits", sp."retailBits", 0)`;
+  const [packs, tiers, pools, vault, ship, late, rewards] = await Promise.all([
+    // Per pack: openings, Cardbits taken, retail value of the cards pulled, and buybacks paid on those pulls.
+    db.$queryRaw<{ id: string; title: string | null; price: number | null; n: bigint; bits: bigint; cards: bigint; value: bigint; sold_back: bigint; buyback_bits: bigint }[]>`
+      WITH o AS (
+        SELECT o.id, o."packId", o."priceBits" FROM "SiteOpening" o
+        WHERE NOT o.demo AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end} AND ${notStaff(Prisma.sql`o."customerId"`, ids)}
+      ),
+      c AS (
+        SELECT c.id, c."openingId", ${value} v FROM "SiteCopy" c LEFT JOIN "SitePrice" sp ON sp."printingKey" = c."printingKey"
+        WHERE c."openingId" IN (SELECT id FROM o)
+      ),
+      b AS (SELECT l.ref, sum(l.delta) bits FROM "SiteLedger" l WHERE l.kind = 'BUYBACK' AND l.ref IN (SELECT id FROM c) GROUP BY l.ref)
+      SELECT o."packId" id, max(p.title) title, max(p."priceBits") price, count(DISTINCT o.id) n,
+             coalesce((SELECT sum(o2."priceBits") FROM o o2 WHERE o2."packId" = o."packId"), 0) bits,
+             count(c.id) cards, coalesce(sum(c.v), 0) value, count(b.ref) sold_back, coalesce(sum(b.bits), 0) buyback_bits
+      FROM o LEFT JOIN "SitePack" p ON p.id = o."packId" LEFT JOIN c ON c."openingId" = o.id LEFT JOIN b ON b.ref = c.id
+      GROUP BY o."packId" ORDER BY bits DESC`,
+    db.$queryRaw<{ tier: string | null; n: bigint; value: bigint }[]>`
+      SELECT c."pulledTier" tier, count(*) n, coalesce(sum(${value}), 0) value
+      FROM "SiteCopy" c LEFT JOIN "SitePrice" sp ON sp."printingKey" = c."printingKey"
+      JOIN "SiteOpening" o ON o.id = c."openingId"
+      WHERE NOT o.demo AND o."createdAt" >= ${r.start} AND o."createdAt" < ${r.end} AND ${notStaff(Prisma.sql`o."customerId"`, ids)}
+      GROUP BY 1 ORDER BY value DESC`,
+    // Pools now: cards, packs left, retail value, internal EV vs target, last restock.
+    db.$queryRaw<{ id: string; title: string; active: boolean; price: number; per: number; target: number | null; band: number; cards: bigint; value: bigint; top: bigint | null; version: number | null; live_at: Date | null }[]>`
+      SELECT p.id, p.title, p.active, p."priceBits" price, p."cardsPerPack" per, p."targetEvPct" target, p."evBandPct" band,
+             count(c.id) cards, coalesce(sum(${value}), 0) value, max(${value}) top,
+             (SELECT max(version) FROM "SiteRestock" s WHERE s."packId" = p.id AND s.status = 'LIVE') version,
+             (SELECT max("liveAt") FROM "SiteRestock" s WHERE s."packId" = p.id AND s.status = 'LIVE') live_at
+      FROM "SitePack" p
+      LEFT JOIN "SiteCopy" c ON c."packId" = p.id AND c.status = 'POOLED' AND NOT c.demo
+      LEFT JOIN "SitePrice" sp ON sp."printingKey" = c."printingKey"
+      GROUP BY p.id ORDER BY p.active DESC, p."sortOrder", p.title`,
+    db.$queryRaw<{ status: string; n: bigint; value: bigint; holders: bigint }[]>`
+      SELECT c.status, count(*) n, coalesce(sum(${value}), 0) value, count(DISTINCT c."ownerId") holders
+      FROM "SiteCopy" c LEFT JOIN "SitePrice" sp ON sp."printingKey" = c."printingKey"
+      WHERE NOT c.demo AND c.status IN ('VAULTED', 'SHIP_LOCKED', 'FOR_SALE', 'DRAFT') AND (c."ownerId" IS NULL OR ${ns('c."ownerId"')})
+      GROUP BY 1`,
+    db.$queryRaw<{ n: bigint; cards: bigint; fee_cents: bigint; fee_bits: bigint; postage: bigint; labeled: bigint; shipped: bigint; delivered: bigint; avg_hours: number | null }[]>`
+      SELECT count(*) n, coalesce(sum("cardCount"), 0) cards, coalesce(sum("feeCents"), 0) fee_cents, coalesce(sum("feeBits"), 0) fee_bits,
+             coalesce(sum("postageCents"), 0) postage, count(*) FILTER (WHERE "postageCents" IS NOT NULL) labeled,
+             count(*) FILTER (WHERE "shippedAt" IS NOT NULL) shipped, count(*) FILTER (WHERE "deliveredAt" IS NOT NULL) delivered,
+             avg(extract(epoch FROM ("shippedAt" - "createdAt")) / 3600) FILTER (WHERE "shippedAt" IS NOT NULL) avg_hours
+      FROM "SiteShipment" WHERE NOT (status = ANY(${SHIP_DONE}::text[])) AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end} AND ${ns('"customerId"')}`,
+    db.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) n FROM "SiteShipment"
+      WHERE status = 'PAID' AND "shippedAt" IS NULL AND "processBy" < ${deps.now ?? new Date()} AND ${ns('"customerId"')}`,
+    // Free Cardbits handed out, by where they came from (idempotency key prefix: welcome, giveaway, spin…).
+    db.$queryRaw<{ kind: string; source: string; n: bigint; bits: bigint }[]>`
+      SELECT kind, split_part("idempotencyKey", ':', 1) source, count(*) n, coalesce(sum(delta), 0) bits
+      FROM "SiteLedger"
+      WHERE kind IN ('REWARD', 'BONUS') AND delta > 0 AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end} AND ${ns('"customerId"')}
+      GROUP BY 1, 2 ORDER BY bits DESC`,
+  ]);
+  const packRows = packs.map((p) => {
+    const bits = num(p.bits), val = num(p.value), bb = num(p.buyback_bits);
+    return {
+      id: p.id, title: p.title ?? p.id, priceBits: p.price ?? 0, opened: num(p.n), bits, cards: num(p.cards), valueBits: val,
+      returnPct: bits ? val / bits : 0, soldBack: num(p.sold_back), buybackBits: bb, buybackRate: num(p.cards) ? num(p.sold_back) / num(p.cards) : 0,
+      netBits: bits - bb,
+    };
+  });
+  const totalBits = packRows.reduce((a, p) => a + p.bits, 0), totalVal = packRows.reduce((a, p) => a + p.valueBits, 0);
+  const totalCards = packRows.reduce((a, p) => a + p.cards, 0), totalSold = packRows.reduce((a, p) => a + p.soldBack, 0);
+  const totalBb = packRows.reduce((a, p) => a + p.buybackBits, 0);
+  const v = (s: string) => vault.find((x) => x.status === s);
+  const s = ship[0];
+  const rewardRows = rewards.map((x) => ({ kind: x.kind, source: x.source, n: num(x.n), bits: num(x.bits) }));
+  return {
+    range: { from: r.from, to: r.to, days: r.days, hourly: false, tz },
+    packs: {
+      opened: packRows.reduce((a, p) => a + p.opened, 0), bits: totalBits, cards: totalCards, valueBits: totalVal,
+      returnPct: totalBits ? totalVal / totalBits : 0, soldBack: totalSold, buybackBits: totalBb,
+      buybackRate: totalCards ? totalSold / totalCards : 0, netBits: totalBits - totalBb, rows: packRows,
+    },
+    tiers: tiers.map((t) => ({ tier: t.tier ?? "No Tier", n: num(t.n), valueBits: num(t.value) })),
+    pools: pools.map((p) => {
+      const cards = num(p.cards), left = p.per ? Math.floor(cards / p.per) : 0, val = num(p.value);
+      const ev = left && p.price ? val / (left * p.price) : 0;
+      return {
+        id: p.id, title: p.title, active: p.active, priceBits: p.price, cardsPerPack: p.per, cards, packsLeft: left, valueBits: val,
+        topBits: num(p.top), evPct: ev, targetPct: p.target == null ? null : p.target / 100, bandPct: p.band / 100,
+        restockVersion: p.version, restockedAt: p.live_at?.toISOString() ?? null,
+      };
+    }),
+    vault: {
+      cards: num(v("VAULTED")?.n), valueBits: num(v("VAULTED")?.value), holders: num(v("VAULTED")?.holders),
+      shipLocked: num(v("SHIP_LOCKED")?.n), forSale: num(v("FOR_SALE")?.n), forSaleBits: num(v("FOR_SALE")?.value), draft: num(v("DRAFT")?.n),
+    },
+    shipping: {
+      requests: num(s.n), cards: num(s.cards), feeCents: num(s.fee_cents), feeBits: num(s.fee_bits), postageCents: num(s.postage),
+      labeled: num(s.labeled), shipped: num(s.shipped), delivered: num(s.delivered), avgHoursToShip: s.avg_hours == null ? null : Math.round(Number(s.avg_hours) * 10) / 10,
+      // Fees count Cardbits at 100 = $1 against postage actually bought.
+      netCents: num(s.fee_cents) + num(s.fee_bits) - num(s.postage), late: num(late[0].n),
+    },
+    rewards: { bits: rewardRows.reduce((a, x) => a + x.bits, 0), rows: rewardRows },
+  };
+}

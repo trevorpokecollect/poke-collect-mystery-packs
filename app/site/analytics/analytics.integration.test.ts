@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { classifySource, cleanPath, parseUserAgent, recordPulse } from "./track.server";
-import { customers, funnel, live, overview, parseRange, sales, traffic, zonedMidnight } from "./report.server";
+import { customers, funnel, live, metrics, overview, parseRange, sales, traffic, zonedMidnight } from "./report.server";
 import { assertAllowedRegion, geoLookupFor, isAnonymous } from "../region.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -190,5 +190,36 @@ describe.skipIf(!url)("analytics", () => {
     expect(c.methods).toEqual([{ key: "unknown", n: 1 }]);
     expect(c.cohorts.at(-1)).toMatchObject({ size: 1 });
     expect(c.cohorts.at(-1)!.weeks[0]).toBe(1);
+  });
+  it("reports pack return, pool health, vault, shipping and rewards cost", async () => {
+    const now = new Date();
+    await db.siteShipment.deleteMany({ where: { idempotencyKey: { startsWith: "an-" } } });
+    await db.siteCopy.deleteMany({ where: { receiptKey: { startsWith: "an-" } } });
+    await db.sitePack.upsert({ where: { id: "cobalt" }, create: { id: "cobalt", title: "Mystery Pack", priceBits: 1000, active: true, targetEvPct: 110 }, update: { title: "Mystery Pack", priceBits: 1000, cardsPerPack: 1, active: true, targetEvPct: 110 } });
+    const card = (k: string, extra: Record<string, unknown>) => ({
+      receiptKey: "an-" + k, printingKey: "an-p-" + k, title: "Card " + k, game: "Pokemon", setName: "Base", number: k, name: "Card", finish: "Holo",
+      language: "English", condition: "NM", lookKey: "an-l-" + k, faceKey: "an-f-" + k, ...extra,
+    });
+    const o1 = await db.siteOpening.create({ data: { customerId: buyerId, packId: "cobalt", priceBits: 1000, createdAt: new Date(now.getTime() - 60_000) } });
+    const o2 = await db.siteOpening.create({ data: { customerId: buyerId, packId: "cobalt", priceBits: 1000, createdAt: new Date(now.getTime() - 60_000) } });
+    const oStaff = await db.siteOpening.create({ data: { customerId: staffId, packId: "cobalt", priceBits: 1000 } });
+    await db.siteCopy.create({ data: card("1", { status: "VAULTED", ownerId: buyerId, openingId: o1.id, retailBits: 1500, pulledTier: "Rare" }) });
+    await db.siteCopy.create({ data: card("2", { status: "VAULTED", ownerId: staffId, openingId: oStaff.id, retailBits: 90000, pulledTier: "Legendary" }) });
+    await db.siteCopy.create({ data: card("3", { status: "REMOVED", openingId: o2.id, retailBits: 500, pulledTier: "Common" }) });
+    for (const k of ["4", "5", "6"]) await db.siteCopy.create({ data: card(k, { status: "POOLED", packId: "cobalt", retailBits: 1100 }) });
+    await db.siteLedger.create({ data: { customerId: buyerId, delta: 400, balanceAfter: 400, kind: "BUYBACK", ref: (await db.siteCopy.findFirstOrThrow({ where: { receiptKey: "an-3" } })).id, idempotencyKey: "an:bb3" } });
+    await db.siteLedger.create({ data: { customerId: buyerId, delta: 200, balanceAfter: 600, kind: "REWARD", idempotencyKey: "welcome:email:" + buyerId } });
+    await db.siteLedger.create({ data: { customerId: staffId, delta: 9999, balanceAfter: 9999, kind: "REWARD", idempotencyKey: "welcome:email:" + staffId } });
+    const ship = { toName: "Ash", toAddress: {}, cardCount: 2, idempotencyKey: "", processBy: new Date(now.getTime() - 3600_000), customerId: buyerId };
+    await db.siteShipment.create({ data: { ...ship, idempotencyKey: "an-s1", status: "PAID", feeKind: "USD", feeCents: 600 } });
+    await db.siteShipment.create({ data: { ...ship, idempotencyKey: "an-s2", status: "DELIVERED", feeKind: "CARDBITS", feeBits: 600, postageCents: 450, shippedAt: new Date(now.getTime() - 1800_000), createdAt: new Date(now.getTime() - 3600_000), deliveredAt: now } });
+
+    const m = await metrics(db, {}, { env, now });
+    expect(m.packs).toMatchObject({ opened: 2, bits: 2000, cards: 2, valueBits: 2000, returnPct: 1, soldBack: 1, buybackBits: 400, buybackRate: 0.5, netBits: 1600 });
+    expect(m.tiers.map((t) => t.tier).sort()).toEqual(["Common", "Rare"]);
+    expect(m.pools.find((p) => p.id === "cobalt")).toMatchObject({ cards: 3, packsLeft: 3, valueBits: 3300, evPct: 1.1, targetPct: 1.1 });
+    expect(m.vault).toMatchObject({ cards: 1, valueBits: 1500, holders: 1 });
+    expect(m.shipping).toMatchObject({ requests: 2, cards: 4, feeCents: 600, feeBits: 600, postageCents: 450, shipped: 1, delivered: 1, avgHoursToShip: 0.5, netCents: 750, late: 1 });
+    expect(m.rewards).toEqual({ bits: 200, rows: [{ kind: "REWARD", source: "welcome", n: 1, bits: 200 }] });
   });
 });
