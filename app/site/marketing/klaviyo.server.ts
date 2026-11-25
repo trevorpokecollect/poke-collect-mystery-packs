@@ -344,7 +344,9 @@ export async function pollSmsConfirmations(deps: KlaviyoDeps, cfg: Config, limit
   const now = deps.now?.() ?? new Date();
   const since = new Date(now.getTime() - 14 * 86400_000);
   const rows = await deps.db.siteMarketing.findMany({
-    where: { smsConfirmedAt: null, smsPhone: { not: null }, smsRequestedAt: { gte: since } },
+    // The 14 days run from when the number was last sent to Klaviyo, so numbers collected before the text line was
+    // approved still get their confirmation window once KLAVIYO_SMS_LIST_ID is set.
+    where: { smsConfirmedAt: null, smsPhone: { not: null }, smsRequestedAt: { not: null }, syncedAt: { gte: since } },
     orderBy: { smsRequestedAt: "asc" },
     take: limit,
   });

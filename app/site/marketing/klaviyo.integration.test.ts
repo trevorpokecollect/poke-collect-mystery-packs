@@ -155,10 +155,10 @@ describe.skipIf(!url)("site Klaviyo sync", () => {
     expect((await db.siteKlaviyoEvent.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("SENT");
   });
 
-  it("subscribes a requested phone for Klaviyo double opt-in and credits 300 Cardbits once confirmed", async () => {
+  it("subscribes a requested phone for Klaviyo double opt-in and credits 300 Cardbits once confirmed, even when collected weeks before the text line opened", async () => {
     process.env.CARDBIT_SITE_WELCOME = "on";
     const smsEnv = { ...env, KLAVIYO_SMS_LIST_ID: "SMS1" } as NodeJS.ProcessEnv;
-    await db.siteMarketing.update({ where: { customerId: fan.id }, data: { smsPhone: "+12565550123", smsRequestedAt: new Date(Date.now() - 30_000), syncedAt: null } });
+    await db.siteMarketing.update({ where: { customerId: fan.id }, data: { smsPhone: "+12565550123", smsRequestedAt: new Date(Date.now() - 30 * 86400_000), syncedAt: null } });
     smsConfirmed = false;
     const k = fakeKlaviyo();
     const r1 = await runKlaviyoSync({ db, env: smsEnv, fetch: k.fetch });
