@@ -1347,6 +1347,7 @@ model SiteCopy {
   packId      String? // set while POOLED in a SitePack pool
   openingId   String? // pack opening that delivered this copy
   position    Int?
+  demo        Boolean  @default(false) // staff-marked demo stock; removed by Wipe Demo before launch
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@unique([slot, pocket])
@@ -1425,6 +1426,7 @@ model SiteOpening {
   packId     String
   priceBits  Int
   sealed     Boolean  @default(false)
+  demo       Boolean  @default(false) // given free from the staff Demo panel
   createdAt  DateTime @default(now())
   @@index([customerId, createdAt])
 }

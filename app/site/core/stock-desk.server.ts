@@ -114,6 +114,7 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
         condition: r.condition,
         image: r.image,
         status: r.status,
+        demo: r.demo,
         packId: r.packId,
         owned: Boolean(r.ownerId),
         shelf: where?.shelf ?? null,
