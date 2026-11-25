@@ -1,6 +1,6 @@
 // Stock desk operations shared by /staff/stock (site staff) and /internal/site-stock (Card Broker).
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { POCKETS_PER_SLOT, SITE_FIRST_SLOT, priceKey, shelfAddress, shelfLabel } from "./stock.server";
+import { POCKETS_PER_SLOT, ROWS_PER_BOX, SITE_FIRST_SLOT, SLOTS_PER_ROW, priceKey, shelfAddress, shelfLabel } from "./stock.server";
 import { RestockError, stageRestock } from "./restock.server";
 
 export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
@@ -165,6 +165,20 @@ export async function moveToSlot(db: PrismaClient, actor: string, copyId: unknow
     await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: c.status, toStatus: c.status, actor, reason: `moved from ${from} to slot ${slot} pocket ${pocket}` } });
     return { id: c.id, slot, pocket, moved: true };
   });
+}
+
+/** Cards and slots used per row (box + row), for Card Broker's box/row claiming. Only rows holding cards are listed. */
+export async function boxSummary(db: PrismaClient) {
+  const rows = await db.$queryRaw<{ r: number; cards: bigint; slots: bigint }[]>`
+    SELECT (slot - ${SITE_FIRST_SLOT}) / ${SLOTS_PER_ROW} AS r, sum(n) AS cards, count(*) AS slots
+    FROM (SELECT slot, count(*) AS n FROM "SiteCopy" WHERE slot >= ${SITE_FIRST_SLOT} GROUP BY slot) s
+    GROUP BY 1 ORDER BY 1`;
+  return rows.map((x) => ({
+    box: Math.floor(Number(x.r) / ROWS_PER_BOX) + 1,
+    row: (Number(x.r) % ROWS_PER_BOX) + 1,
+    cards: Number(x.cards),
+    slotsUsed: Number(x.slots),
+  }));
 }
 
 export async function savePack(db: PrismaClient, id: string, price: unknown, cardsPerPack: unknown, active: boolean) {

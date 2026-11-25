@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { receiveSiteIntake } from "./stock.server";
-import { DeskError, listStock, moveToSlot, movePool, removeCopies, setListing, setPrice } from "./stock-desk.server";
+import { DeskError, boxSummary, listStock, moveToSlot, movePool, removeCopies, setListing, setPrice } from "./stock-desk.server";
 import { publishRestock } from "./restock.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -97,5 +97,20 @@ describe.skipIf(!url)("stock desk", () => {
     expect(ev).toMatchObject({ actor: "t", reason: "moved from slot 10001 pocket 1 to slot 10050 pocket 5", fromStatus: "DRAFT", toStatus: "DRAFT" });
     await db.siteCopy.update({ where: { id: z.id }, data: { status: "SHIP_LOCKED" } });
     await expect(moveToSlot(db, "t", z.id, 10070, null)).rejects.toThrow("locked for a shipment");
+  });
+
+  it("receives into a claimed box or row only, refuses when it's full, and reports cards per row", async () => {
+    // Row 2 of box 1 = slots 10031..10060.
+    const r = await receiveSiteIntake(db, { ...card("claim:1", 2, "Zubat"), firstSlot: 10031, lastSlot: 10060, area: "Box 1 · Row 2" });
+    expect(r.copies.map((c) => c.slot)).toEqual([10031, 10032]); // one Zubat per slot
+    const b2 = await receiveSiteIntake(db, { ...card("claim:2", 1, "Golbat"), firstSlot: 10151, lastSlot: 10300, area: "Box 2" });
+    expect(b2.copies[0].slot).toBe(10151);
+    await expect(receiveSiteIntake(db, { ...card("claim:3", 3, "Onix"), firstSlot: 10001, lastSlot: 10002, area: "Test Row" })).rejects.toThrow("Test Row has no room");
+    expect(await db.siteCopy.count({ where: { name: "Onix" } })).toBe(0);
+    await expect(receiveSiteIntake(db, { ...card("claim:4", 1, "Onix"), firstSlot: 500, lastSlot: 520 })).rejects.toThrow("Invalid slot range");
+    expect(await boxSummary(db)).toEqual([
+      { box: 1, row: 2, cards: 2, slotsUsed: 2 },
+      { box: 2, row: 1, cards: 1, slotsUsed: 1 },
+    ]);
   });
 });

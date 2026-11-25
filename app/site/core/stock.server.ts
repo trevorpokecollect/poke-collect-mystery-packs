@@ -20,6 +20,10 @@ export type SiteIntake = {
   condition: string;
   tcgplayerId?: number | null;
   image?: string | null;
+  /** Box or row the lister claimed in Card Broker (Trevor, Nov 25): copies go only into slots firstSlot..lastSlot. */
+  firstSlot?: number | null;
+  lastSlot?: number | null;
+  area?: string | null;
 };
 
 export class IntakeRejected extends Error {
@@ -52,6 +56,10 @@ export const priceKey = (printing: string, condition: string) => `${printing}|${
 export const SLOTS_PER_ROW = 30;
 export const ROWS_PER_BOX = 5;
 export const BOXES_PER_SHELF = 2;
+export const SLOTS_PER_BOX = SLOTS_PER_ROW * ROWS_PER_BOX;
+export const MAX_BOX = 600;
+/** First and last stored slot number in a box. */
+export const boxSlots = (box: number) => ({ first: SITE_FIRST_SLOT + (box - 1) * SLOTS_PER_BOX, last: SITE_FIRST_SLOT + box * SLOTS_PER_BOX - 1 });
 export const shelfAddress = (slot: number) => {
   const i = Math.max(0, slot - SITE_FIRST_SLOT);
   const box = Math.floor(i / (SLOTS_PER_ROW * ROWS_PER_BOX)) + 1;
@@ -92,8 +100,17 @@ export function validateIntake(raw: unknown): SiteIntake {
   const image = r.image;
   if (image != null && (typeof image !== "string" || !/^https:\/\//.test(image) || image.length > 2000))
     throw new IntakeRejected("Image must be an https URL.", 422);
+  const first = r.firstSlot, last = r.lastSlot;
+  if (first != null || last != null) {
+    if (!Number.isInteger(first) || !Number.isInteger(last) || (first as number) < SITE_FIRST_SLOT || (last as number) < (first as number) || (last as number) - (first as number) >= SLOTS_PER_BOX || (last as number) > boxSlots(MAX_BOX).last)
+      throw new IntakeRejected("Invalid slot range.", 422);
+  }
+  const area = typeof r.area === "string" ? r.area.slice(0, 60) : null;
   return {
     eventKey,
+    firstSlot: (first as number | null | undefined) ?? null,
+    lastSlot: (last as number | null | undefined) ?? null,
+    area,
     quantity: quantity as number,
     title: str("title", 500),
     game,
@@ -181,7 +198,8 @@ async function receiveRow(db: PrismaClient, row: SiteIntake, body: string): Prom
           (await tx.siteCopy.findMany({ where: { slot }, select: { pocket: true } })).map((c) => c.pocket),
         );
       const copies: Placed[] = [];
-      let slot = SITE_FIRST_SLOT;
+      const range = row.firstSlot && row.lastSlot ? { first: row.firstSlot, last: row.lastSlot } : null;
+      let slot = range ? range.first : SITE_FIRST_SLOT;
       for (let unit = 0; unit < row.quantity; unit++) {
         // A slot holds at most one copy of a printing (matches the production shelf's uniqueness).
         for (;;) {
@@ -189,6 +207,8 @@ async function receiveRow(db: PrismaClient, row: SiteIntake, body: string): Prom
           if (!s || (!s.clash && s.n < POCKETS_PER_SLOT)) break;
           slot++;
         }
+        if (range && slot > range.last)
+          throw new IntakeRejected(`${row.area || "Your box or row"} has no room for ${row.quantity > 1 ? "all of these" : "this card"}. Tap Done and claim the next one.`, 409);
         const taken = await pocketsTaken(slot);
         let pocket = 1;
         while (taken.has(pocket)) pocket++;

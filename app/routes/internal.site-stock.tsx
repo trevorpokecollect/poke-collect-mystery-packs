@@ -12,10 +12,11 @@
 //      {intent:"auto-restock-run"} runs the hourly automatic buyback restock now
 //      {intent:"remove", copyIds, reason} deletes unsold Draft/Active copies (→ REMOVED, pocket freed, logged)
 //      {intent:"slot", copyId, slot, pocket?} moves one copy to a chosen slot (10001+) and pocket
+//      {intent:"boxes"} cards and slots used per box (Card Broker box claiming)
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
-import { DeskError, listStock, moveToSlot, movePool, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
+import { DeskError, boxSummary, listStock, moveToSlot, movePool, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
 import { RestockError, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
 
 const deny = () => Response.json({ error: "Unavailable." }, { status: 403, headers: { "Cache-Control": "no-store" } });
@@ -87,6 +88,8 @@ export async function action({ request }: ActionFunctionArgs) {
       }
       case "remove":
         return Response.json({ ok: true, ...(await removeCopies(db, actor, b.copyIds, b.reason)) });
+      case "boxes":
+        return Response.json({ ok: true, boxes: await boxSummary(db) }, { headers: { "Cache-Control": "no-store" } });
       case "slot":
         return Response.json({ ok: true, ...(await moveToSlot(db, actor, b.copyId, b.slot, b.pocket)) });
       case "auto-restock-run":
