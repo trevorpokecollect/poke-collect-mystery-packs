@@ -1269,10 +1269,10 @@
     const day = iso => { try { return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); } catch { return ''; } };
     const tierLine = t => Object.entries(t || {}).filter(([k,n]) => k !== 'Unpriced' && n > 0).map(([k,n]) => number(n) + ' ' + esc(k)).join(', ');
     const rows = list.slice(0,8).map(r => {
-      const changes = r.starting ? 'Starting Pool' : [r.added ? '+' + plural(r.added,'card') : '', r.removed ? '−' + plural(r.removed,'card') : ''].filter(Boolean).join(' · ');
+      const changes = r.starting ? 'Starting Pool' : [r.added ? '+' + plural(r.added,'Card') : '', r.removed ? '−' + plural(r.removed,'Card') : ''].filter(Boolean).join(' · ');
       const tiers = !r.starting && r.added ? tierLine(r.addedTiers) : '';
-      return '<li><div><b>Version ' + number(r.version) + '</b><span>' + esc(day(r.at)) + '</span></div><p>' + esc(changes) + ' · ' + plural(r.poolSize,'card') + ' in Pool' +
-        (tiers ? '<br><small>Added: ' + tiers + '</small>' : '') + (r.note ? '<br><small>' + esc(r.note) + '</small>' : '') + '</p>' +
+      return '<li><div><b>Version ' + number(r.version) + '</b><span>' + esc(day(r.at)) + '</span></div><p>' + esc(changes) + ' · ' + plural(r.poolSize,'Card') + ' in Pool' +
+        (tiers ? '<br><small>Added: ' + tiers + '</small>' : '') + (r.note && !r.starting ? '<br><small>' + esc(r.note) + '</small>' : '') + '</p>' +
         '<a class="cb-textlink" href="/api/pool-version?pack=' + enc(pack.id) + '&amp;v=' + enc(r.version) + '" target="_blank" rel="noopener">Card List</a>' +
         '<code title="SHA-256 of every card ID in this version">' + esc(String(r.poolHash || '').slice(0,16)) + '…</code></li>';
     }).join('');

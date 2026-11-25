@@ -103,7 +103,7 @@ describe.skipIf(!url)("verified restocks", () => {
     const v2 = await publishRestock(db, "staff:a", "cobalt", "First cards");
     expect(v2).toMatchObject({ status: "LIVE", version: 2, poolSize: 4, note: "First cards", evPct: 50 });
     const v1 = await db.siteRestock.findFirstOrThrow({ where: { packId: "cobalt", version: 1 } });
-    expect(v1).toMatchObject({ poolSize: 0, note: "Starting pool" });
+    expect(v1).toMatchObject({ poolSize: 0, note: "Starting Pool" });
     expect(v2.poolHash).toBe(poolHashOf(a.map((c) => c.id)));
     await expect(publishRestock(db, "t", "cobalt")).rejects.toThrow(RestockError); // nothing staged
 
@@ -178,7 +178,7 @@ describe.skipIf(!url)("verified restocks", () => {
     const run = await runAutoRestock(db);
     expect(run).toMatchObject({ ran: true, routed: 1, held: 2, versions: [{ packId: "cobalt", version: 3 }] });
     const v3 = await db.siteRestock.findFirstOrThrow({ where: { packId: "cobalt", version: 3 } });
-    expect(v3).toMatchObject({ auto: true, actor: "auto-restock", note: "Buyback restock", addIds: [hit[0].id] });
+    expect(v3).toMatchObject({ auto: true, actor: "auto-restock", note: "Buyback Restock", addIds: [hit[0].id] });
     expect(v3.evPct).toBe(100); // (9,000 + 2,000) / 11 cards / 1,000
     // Japanese + Vintage don't fit Mystery and no other pack has a target: they wait in Draft.
     expect(await db.siteCopy.count({ where: { autoRestock: true, status: "DRAFT" } })).toBe(2);

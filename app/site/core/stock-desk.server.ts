@@ -143,6 +143,8 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
         status: r.status,
         demo: r.demo,
         packId: r.packId,
+        staged: r.restockId != null, // locked in a pack's pending restock
+        autoRestock: r.autoRestock, // sold back, waiting for the hourly automatic restock
         owned: Boolean(r.ownerId),
         shelf: where?.shelf ?? null,
         box: where?.box ?? null,

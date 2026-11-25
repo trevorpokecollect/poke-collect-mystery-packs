@@ -74,7 +74,7 @@ export async function ensureBaseline(tx: Tx, packId: string, actor = "system") {
       poolHash: poolHashOf(ids),
       poolSize: ids.length,
       tiers: await tierCounts(tx, pool, tierRules(pack?.tierRules)),
-      note: "Starting pool",
+      note: "Starting Pool",
       actor,
       liveAt: new Date(),
     },
@@ -334,7 +334,7 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
         const prev = await ensureBaseline(tx, packId, "auto-restock");
         // Only cards still waiting (staff may have listed or staged one meanwhile).
         const fresh = await tx.siteCopy.findMany({ where: { id: { in: cards.map((c) => c.id) }, autoRestock: true, status: "DRAFT", ownerId: null, restockId: null } });
-        return applyRestock(tx, st.pack, prev, fresh, null, { actor: "auto-restock", note: "Buyback restock", auto: true });
+        return applyRestock(tx, st.pack, prev, fresh, null, { actor: "auto-restock", note: "Buyback Restock", auto: true });
       },
       { timeout: 20_000 },
     );
