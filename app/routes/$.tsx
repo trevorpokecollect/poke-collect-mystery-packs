@@ -7,6 +7,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { SITE_ENABLED, htmlResponse, notFound, storefrontShell } from "../site/shell.server";
 import { shareFor } from "../site/share.server";
+import { isPublicPath } from "../site/seo.server";
 
 // First path segment -> page title before the client app takes over.
 const PAGES: Record<string, string> = {
@@ -40,7 +41,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const title = PAGES[base];
   if (!title) return htmlResponse(storefrontShell({ title: "Page Unavailable · cardbit" }), 404);
   void request;
-  return htmlResponse(storefrontShell({ title: `${title} · cardbit`, share: shareFor(path, `${title} · cardbit`) }));
+  return htmlResponse(storefrontShell({ title: `${title} · cardbit`, share: shareFor(path, `${title} · cardbit`), indexPath: isPublicPath(path) ? "/" + path : undefined }));
 };
 
 /** Shopify-era cardbit.com paths → new site paths. Exported for tests. */

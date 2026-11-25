@@ -1,3 +1,4 @@
+import { robotsTags } from "./seo.server";
 /**
  * Cardbit standalone site: HTML shell for the storefront pages.
  *
@@ -166,9 +167,11 @@ export interface ShellOptions {
   share?: Share;
   /** Extra data-* attributes on #cardbit-store. */
   data?: Record<string, string>;
+  /** Site path of a public page ("/packs"): indexable with a canonical link. Left out = noindex. */
+  indexPath?: string;
 }
 
-export function storefrontShell({ title = "cardbit · Packs and Singles", data = {}, share }: ShellOptions = {}): string {
+export function storefrontShell({ title = "cardbit · Packs and Singles", data = {}, share, indexPath }: ShellOptions = {}): string {
   const attrs: Record<string, string> = {
     id: "cardbit-store",
     "data-routing": "path",
@@ -213,7 +216,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#101619">
-    <meta name="robots" content="noindex, nofollow">
+    ${robotsTags(indexPath ?? null)}
     <meta name="referrer" content="same-origin">
     <title>${escapeAttr(title)}</title>
     ${shareMeta(share ?? { ...HOME_SHARE, title })}

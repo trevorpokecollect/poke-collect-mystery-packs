@@ -4,6 +4,7 @@
 import { createHash, randomInt } from "node:crypto";
 import type { Prisma, PrismaClient, SiteCopy, SiteCustomer } from "@prisma/client";
 import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.server";
+import { noteShortfall } from "../marketing/klaviyo.server";
 import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
@@ -61,7 +62,11 @@ function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule
     language: c.language,
     game: c.game,
     image: c.image,
-    rarity: null as string | null,
+    rarity: c.rarity ?? null,
+    kind: c.kind, // card | slab | sealed
+    ...(c.kind === "slab" ? { grader: c.grader, grade: c.grade, certNumber: c.certNumber } : {}),
+    ...(c.kind === "sealed" ? { sealedType: c.sealedType } : {}),
+    photos: Array.isArray(c.photos) ? (c.photos as string[]) : [],
     tier,
     priceBits: retail,
     retailBits: retail,
@@ -164,6 +169,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
         at: o.createdAt.toISOString(),
         createdAt: o.createdAt.toISOString(),
         sealed: o.sealed,
+        reversed: Boolean(o.reversedAt), // staff reversed it: Cardbits returned, cards back in stock
         cardCount: cards.length,
         cards: o.sealed ? [] : cards.map((c) => copyView(c, openingPrices)),
         rewards: o.sealed ? null : earned.get(o.id) ?? null,
@@ -243,6 +249,15 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
   const fingerprint = fingerprintOf(a);
   const key = `req:${reqId}`;
 
+  return storeTx(db, customer, a, reqId, fingerprint, key).catch((e) => {
+    // Klaviyo R02 "Not Enough Cardbits" reminder (no-op unless Klaviyo is configured).
+    if (e instanceof StoreError && e.code === "insufficient_bits")
+      void noteShortfall(db, customer, a).catch((err) => console.error("[site-klaviyo] shortfall", (err as Error).message));
+    throw e;
+  });
+}
+
+function storeTx(db: PrismaClient, customer: SiteCustomer, a: StoreAction, reqId: string, fingerprint: string, key: string): Promise<Result> {
   return db.$transaction(
     async (tx) => {
       await lockKey(tx, `site-customer:${customer.id}`);
@@ -370,7 +385,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
 export async function recentPulls(db: PrismaClient, limit = 12) {
   const take = Math.min(Math.max(Math.floor(limit) || 12, 1), 24);
   const openings = await db.siteOpening.findMany({
-    where: { sealed: false, demo: false, revealedAt: { not: null } },
+    where: { sealed: false, demo: false, revealedAt: { not: null }, reversedAt: null },
     orderBy: { revealedAt: "desc" },
     take,
     select: { id: true, packId: true, revealedAt: true },

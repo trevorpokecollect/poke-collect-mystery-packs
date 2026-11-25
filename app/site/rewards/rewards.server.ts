@@ -89,19 +89,21 @@ export async function siteProgress(db: PrismaClient | Tx, customerId: string) {
   return { level: levels ? levelProgress(profile?.xp ?? 0) : null, sparks: sparksOn ? wallet?.balance ?? 0 : null };
 }
 
-/** Wipe Demo: take back the XP and Sparks that demo openings earned, once each. */
+/** Wipe Demo and staff reversals: take back the XP and Sparks an opening earned (base + Cardbit Club bonus), once each. */
 export async function reverseOpeningRewards(tx: Tx, openingIds: string[], reason: string) {
   for (const id of openingIds) {
-    await reverseXp(tx, SITE_SHOP, xpKey(id), reason);
-    const award = await tx.cardbitSparkTxn.findUnique({ where: { shop_eventKey: { shop: SITE_SHOP, eventKey: sparkKey(id) } } });
-    if (!award || award.delta <= 0) continue;
-    const eventKey = "reverse:" + sparkKey(id);
-    if (await tx.cardbitSparkTxn.findUnique({ where: { shop_eventKey: { shop: SITE_SHOP, eventKey } } })) continue;
-    await tx.$queryRaw`SELECT "customerId" FROM "CardbitSparkWallet" WHERE shop=${SITE_SHOP} AND "customerId"=${award.customerId} FOR UPDATE`;
-    const wallet = await tx.cardbitSparkWallet.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId: award.customerId } } });
-    const take = Math.min(award.delta, Math.max(0, wallet?.balance ?? 0));
-    await tx.cardbitSparkTxn.create({ data: { shop: SITE_SHOP, customerId: award.customerId, eventKey, kind: "reversal", delta: -take, source: id, note: reason } });
-    if (take) await tx.cardbitSparkWallet.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: award.customerId } }, data: { balance: { decrement: take } } });
+    for (const key of [xpKey(id), subXpKey(id)]) await reverseXp(tx, SITE_SHOP, key, reason);
+    for (const key of [sparkKey(id), subSparkKey(id)]) {
+      const award = await tx.cardbitSparkTxn.findUnique({ where: { shop_eventKey: { shop: SITE_SHOP, eventKey: key } } });
+      if (!award || award.delta <= 0) continue;
+      const eventKey = "reverse:" + key;
+      if (await tx.cardbitSparkTxn.findUnique({ where: { shop_eventKey: { shop: SITE_SHOP, eventKey } } })) continue;
+      await tx.$queryRaw`SELECT "customerId" FROM "CardbitSparkWallet" WHERE shop=${SITE_SHOP} AND "customerId"=${award.customerId} FOR UPDATE`;
+      const wallet = await tx.cardbitSparkWallet.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId: award.customerId } } });
+      const take = Math.min(award.delta, Math.max(0, wallet?.balance ?? 0));
+      await tx.cardbitSparkTxn.create({ data: { shop: SITE_SHOP, customerId: award.customerId, eventKey, kind: "reversal", delta: -take, source: id, note: reason } });
+      if (take) await tx.cardbitSparkWallet.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: award.customerId } }, data: { balance: { decrement: take } } });
+    }
   }
 }
 
