@@ -406,6 +406,31 @@ export function routeCard(value: number, card: Pick<SiteCopy, "language" | "era"
   return best?.st ?? null;
 }
 
+/**
+ * Trim one pack's planned batch so the pool ends inside its EV band, or (if it already had cards) at least
+ * closer to target than before. Too high: drop the most valuable planned card; too low: drop the cheapest.
+ */
+export function trimToBand<T extends { v: number }>(
+  pack: { targetEvPct: number | null; evBandPct: number; cardsPerPack: number; priceBits: number },
+  base: { cards: number; retail: number },
+  planned: T[],
+): T[] {
+  if (pack.targetEvPct == null) return [];
+  const target = pack.targetEvPct;
+  const lo = target - pack.evBandPct;
+  const hi = target + pack.evBandPct;
+  const before = evPct(base.retail, base.cards, pack);
+  const gapBefore = before == null ? Infinity : Math.abs(before - target);
+  const kept = [...planned].sort((a, b) => b.v - a.v);
+  while (kept.length) {
+    const ev = evPct(base.retail + kept.reduce((a, x) => a + x.v, 0), base.cards + kept.length, pack)!;
+    if ((ev >= lo && ev <= hi) || (base.cards > 0 && Math.abs(ev - target) < gapBefore)) break;
+    if (ev > hi) kept.shift();
+    else kept.pop();
+  }
+  return kept;
+}
+
 const AUTO_KEY = "cardbit-site:auto-restock";
 /** A newly listed Draft card waits this long before the hourly auto-restock may pool it, so staff can Make Active first. */
 export const DRAFT_HOLD_MIN = 120;
@@ -443,6 +468,8 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
   if (!waiting.length) return { ran: true, ...none, retiered };
   const values = await retailOf(db, waiting);
   const states = await poolStates(db);
+  const base = new Map([...states].map(([id, st]) => [id, { cards: st.cards, retail: st.retail }]));
+  const valueOf = new Map(waiting.map((c, i) => [c.id, values[i] ?? 0]));
   const draftStates = [...states.values()].filter((st) => st.pack.autoDrafts);
   const plan = new Map<string, SiteCopy[]>();
   // Highest value first, so scarce chase cards go where they're needed most.
@@ -459,6 +486,20 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
     if (st.mix) st.mix = addType(st.mix, c);
     if (tierFor(v!, tierRules(st.pack.tierRules)) === st.topTier) st.top++;
     plan.set(st.pack.id, [...(plan.get(st.pack.id) ?? []), c]);
+  }
+  // Each pack's batch must leave its pool inside the EV band (or, for a pool that already had cards, closer
+  // to target). Card-by-card routing alone can seed an empty pool with one big card and then pile in
+  // everything that pulls EV back down without ever reaching the band; trim those batches instead.
+  for (const [packId, cards] of plan) {
+    const st = states.get(packId)!;
+    // Buybacks keep the routing they had before; only the listed-Draft part of a batch is trimmed.
+    const buybacks = cards.filter((c) => c.autoRestock);
+    const b0 = base.get(packId)!;
+    const withBuybacks = { cards: b0.cards + buybacks.length, retail: b0.retail + buybacks.reduce((a, c) => a + valueOf.get(c.id)!, 0) };
+    const listed = cards.filter((c) => !c.autoRestock).map((c) => ({ c, v: valueOf.get(c.id)! }));
+    const kept = [...buybacks, ...(listed.length ? trimToBand(st.pack, withBuybacks, listed).map((x) => x.c) : [])];
+    if (kept.length) plan.set(packId, kept);
+    else plan.delete(packId);
   }
   const versions: { packId: string; version: number }[] = [];
   let routed = 0,

@@ -7,7 +7,7 @@ import { priceKey, receiveSiteIntake } from "./stock.server";
 import { movePool, setListing } from "./stock-desk.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { storeAction, storeState } from "../store/store.server";
-import { eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
+import { eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, trimToBand, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
 import { autoTierRules } from "../store/tiers";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -236,6 +236,20 @@ describe.skipIf(!url)("verified restocks", () => {
     const later = await runAutoRestock(db, { now: new Date(Date.now() + 61 * 60_000) });
     expect(later.versions.map((v) => v.packId)).toEqual(["gold"]);
     expect((await db.siteCopy.findUniqueOrThrow({ where: { id: old[0].id } })).packId).toBe("gold");
+  });
+
+  it("trims an auto batch so a pool ends inside its EV band", () => {
+    const pack = { targetEvPct: 100, evBandPct: 5, cardsPerPack: 1, priceBits: 1000 };
+    const vs = (xs: number[]) => xs.map((v) => ({ v }));
+    // Empty pool, one big card: 405% EV, so nothing is added.
+    expect(trimToBand(pack, { cards: 0, retail: 0 }, vs([4050]))).toEqual([]);
+    // Empty pool: too high → drop the 5,000; then too low → drop the cheapest until EV is in band.
+    expect(trimToBand(pack, { cards: 0, retail: 0 }, vs([5000, 1000, 1000, 900, 800, 300])).map((x) => x.v)).toEqual([1000, 1000, 900]);
+    // Too low: drop the cheapest.
+    expect(trimToBand(pack, { cards: 0, retail: 0 }, vs([1000, 1000, 100])).map((x) => x.v)).toEqual([1000, 1000]);
+    // A pool that already has cards keeps a batch that moves it closer to target, even if still outside the band.
+    expect(trimToBand(pack, { cards: 10, retail: 20_000 }, vs([500])).map((x) => x.v)).toEqual([500]);
+    expect(trimToBand({ ...pack, targetEvPct: null }, { cards: 0, retail: 0 }, vs([1000]))).toEqual([]);
   });
 
   it("Auto-Fill From Drafts pools listed Drafts only for switched-on packs, after the hold, one pool per card", async () => {
