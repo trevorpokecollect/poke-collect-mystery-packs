@@ -177,3 +177,30 @@ describe("more sign-in options", () => {
     expect(renderEmail("signin_code", { code: "482913", minutes: 10 }).html).not.toContain("/sign-in/link");
   });
 });
+
+describe("iPhone app Sign in with Apple", () => {
+  it("accepts the app bundle IDs as audiences and signs the secret for them", async () => {
+    const { generateKeyPairSync } = await import("node:crypto");
+    const { appleExchange, appleAppIds } = await import("./core/oauth.server");
+    const pem = generateKeyPairSync("ec", { namedCurve: "P-256" }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const env = { APPLE_CLIENT_ID: "com.cardbit.web", APPLE_TEAM_ID: "T", APPLE_KEY_ID: "K", APPLE_PRIVATE_KEY: pem };
+    expect(appleAppIds(env)).toEqual(["com.cardbit.app", "com.cardbit.app.dev"]);
+    const idToken = (aud: string) => `x.${Buffer.from(JSON.stringify({ iss: "https://appleid.apple.com", aud, sub: "001", email: "a@privaterelay.appleid.com", email_verified: "true" })).toString("base64url")}.y`;
+    let sent: URLSearchParams | null = null;
+    const fetcher = (aud: string) => (async (_u: string, init: RequestInit) => {
+      sent = new URLSearchParams(String(init.body));
+      return new Response(JSON.stringify({ id_token: idToken(aud) }));
+    }) as never;
+    await expect(appleExchange("c", "com.cardbit.app", fetcher("com.cardbit.app"), env)).resolves.toMatchObject({ email: "a@privaterelay.appleid.com" });
+    expect(sent!.get("client_id")).toBe("com.cardbit.app");
+    expect(sent!.has("redirect_uri")).toBe(false);
+    const secretSub = JSON.parse(Buffer.from(sent!.get("client_secret")!.split(".")[1], "base64url").toString()).sub;
+    expect(secretSub).toBe("com.cardbit.app");
+    // Web codes keep the redirect URI and the Services ID.
+    await appleExchange("c", "com.cardbit.web", fetcher("com.cardbit.web"), env);
+    expect(sent!.get("redirect_uri")).toMatch(/\/auth\/apple\/callback$/);
+    // Wrong audience back from Apple, or a client ID that isn't ours, is refused.
+    await expect(appleExchange("c", "com.cardbit.app", fetcher("com.cardbit.web"), env)).rejects.toThrow();
+    await expect(appleExchange("c", "com.evil.app", fetcher("com.evil.app"), env)).rejects.toThrow();
+  });
+});
