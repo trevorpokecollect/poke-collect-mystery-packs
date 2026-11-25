@@ -25,6 +25,7 @@ function page(title: string, description: string, body: string, styles: string[]
     <meta name="description" content="${description}">
     <link rel="icon" type="image/png" href="${assetUrl("cardbit-brand-emblem.png")}">
     ${styles.map((name) => `<link rel="stylesheet" href="${assetUrl(name)}">`).join("\n    ")}
+    <style>body{margin:0;background:#101619;color:#f6faf9}</style>
   </head>
   <body>${body}</body>
 </html>`;
