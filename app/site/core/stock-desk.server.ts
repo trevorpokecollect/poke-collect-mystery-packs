@@ -1,6 +1,6 @@
 // Stock desk operations shared by /staff/stock (site staff) and /internal/site-stock (Card Broker).
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { POCKETS_PER_SLOT, SITE_FIRST_SLOT, priceKey, shelfAddress } from "./stock.server";
+import { POCKETS_PER_SLOT, SITE_FIRST_SLOT, priceKey, shelfAddress, shelfLabel } from "./stock.server";
 import { RestockError, stageRestock } from "./restock.server";
 
 export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
@@ -140,9 +140,9 @@ export async function moveToSlot(db: PrismaClient, actor: string, copyId: unknow
   const id = typeof copyId === "string" && copyId.length <= 60 ? copyId : "";
   if (!id) throw new DeskError("Choose a card first.");
   const slot = Number(slotIn);
-  if (!Number.isInteger(slot) || slot < SITE_FIRST_SLOT || slot > SITE_LAST_SLOT) throw new DeskError(`Enter a slot from ${SITE_FIRST_SLOT} to ${SITE_LAST_SLOT}.`);
+  if (!Number.isInteger(slot) || slot < SITE_FIRST_SLOT || slot > SITE_LAST_SLOT) throw new DeskError("Choose a Box, Row and Slot on the cardbit.com shelf.");
   const wantPocket = pocketIn === null || pocketIn === undefined || pocketIn === "" ? null : Number(pocketIn);
-  if (wantPocket !== null && (!Number.isInteger(wantPocket) || wantPocket < 1 || wantPocket > POCKETS_PER_SLOT)) throw new DeskError(`Pocket must be 1 to ${POCKETS_PER_SLOT}, or blank for the first free one.`);
+  if (wantPocket !== null && (!Number.isInteger(wantPocket) || wantPocket < 1 || wantPocket > POCKETS_PER_SLOT)) throw new DeskError(`Card position must be 1 to ${POCKETS_PER_SLOT}, or blank for the first free one.`);
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;
     const c = await tx.siteCopy.findUnique({ where: { id } });
@@ -150,14 +150,14 @@ export async function moveToSlot(db: PrismaClient, actor: string, copyId: unknow
     if (c.status === "SHIP_LOCKED") throw new DeskError("That card is locked for a shipment. Move it after the shipment is packed or released.");
     if (c.status === "SHIPPED" || c.status === "REMOVED") throw new DeskError("That card isn't on the shelf any more.");
     const others = await tx.siteCopy.findMany({ where: { slot, id: { not: c.id } }, select: { pocket: true, lookKey: true, faceKey: true, name: true } });
-    if (others.some((o) => o.lookKey === c.lookKey)) throw new DeskError(`Slot ${slot} already holds a copy of this printing. Choose another slot.`);
+    if (others.some((o) => o.lookKey === c.lookKey)) throw new DeskError(`${shelfLabel(slot)} already holds a copy of this printing. Choose another slot.`);
     const twin = others.find((o) => o.faceKey === c.faceKey);
-    if (twin) throw new DeskError(`Slot ${slot} already holds a ${twin.name}. A slot holds one card per name, so choose another slot.`);
-    if (others.length >= POCKETS_PER_SLOT) throw new DeskError(`Slot ${slot} is full (${POCKETS_PER_SLOT} cards).`);
+    if (twin) throw new DeskError(`${shelfLabel(slot)} already holds a ${twin.name}. A slot holds one card per name, so choose another slot.`);
+    if (others.length >= POCKETS_PER_SLOT) throw new DeskError(`${shelfLabel(slot)} is full (${POCKETS_PER_SLOT} cards).`);
     const taken = new Set(others.map((o) => o.pocket));
     let pocket = wantPocket ?? 1;
     if (wantPocket !== null) {
-      if (taken.has(wantPocket)) throw new DeskError(`Pocket ${wantPocket} in slot ${slot} is taken. Leave the pocket blank to use the first free one.`);
+      if (taken.has(wantPocket)) throw new DeskError(`Card ${wantPocket} in ${shelfLabel(slot)} is taken. Leave it blank to use the first free spot.`);
     } else while (taken.has(pocket)) pocket++;
     if (c.slot === slot && c.pocket === pocket) return { id: c.id, slot, pocket, moved: false };
     await tx.siteCopy.update({ where: { id: c.id }, data: { slot, pocket } });
@@ -240,6 +240,9 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
         autoRestock: r.autoRestock, // sold back, waiting for the hourly automatic restock
         owned: Boolean(r.ownerId),
         shelf: where?.shelf ?? null,
+        row: where?.row ?? null,
+        rowSlot: where?.rowSlot ?? null,
+        place: r.slot != null ? shelfLabel(r.slot, r.pocket) : null,
         box: where?.box ?? null,
         slot: r.slot,
         pocket: r.pocket,

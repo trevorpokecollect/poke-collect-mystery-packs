@@ -41,7 +41,7 @@ describe("desk view", () => {
       "trevor@example.com",
     );
     expect(html).toContain('src="https://img.test/c1.webp"');
-    expect(html).toContain("Slot 10001 · Pocket 3");
+    expect(html).toContain("Shelf 1 · Box 1 · Row 1 · Slot 1 · Card 3");
     expect(html).toContain("Fix Card");
     expect(html).toContain("Buy Label");
     expect(html).toContain("Overdue");

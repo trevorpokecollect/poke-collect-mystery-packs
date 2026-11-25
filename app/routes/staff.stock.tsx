@@ -6,7 +6,7 @@ import type { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 import { currentCustomer } from "../site/core/auth.server";
 import { esc } from "../site/core/simple-page";
-import { priceKey, shelfAddress } from "../site/core/stock.server";
+import { priceKey, shelfLabel } from "../site/core/stock.server";
 import { DeskError, movePool, setListing, setPrice } from "../site/core/stock-desk.server";
 import { RestockError, publishRestock, unstageRestock } from "../site/core/restock.server";
 import { DemoError, demoSummary, giveDemoPacks, giveDemoVaultCards, grantDemoCardbits, markDemo, wipeDemo } from "../site/core/demo.server";
@@ -16,8 +16,7 @@ const STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIP
 const resolve = (r: Request) => currentCustomer(prisma, r);
 const loc = (slot: number | null, pocket: number | null) => {
   if (slot == null) return "Unfiled";
-  const { box, shelf } = shelfAddress(slot);
-  return `Shelf ${shelf} · Box ${box} · Slot ${slot}${pocket != null ? ` · Pocket ${pocket}` : ""}`;
+  return shelfLabel(slot, pocket);
 };
 const bitsOrNull = (v: FormDataEntryValue | null) => {
   const s = String(v ?? "").replace(/[, ]/g, "");
