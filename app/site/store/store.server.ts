@@ -5,6 +5,10 @@ import { createHash, randomInt } from "node:crypto";
 import type { Prisma, PrismaClient, SiteCopy, SiteCustomer } from "@prisma/client";
 import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.server";
 import { priceKey } from "../core/stock.server";
+import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
+
+/** Shop key for site rows in shared Cardbit* tables (age, rewards, vault marks). */
+export const SITE_SHOP_KEY = "cardbit-site";
 const pk = (c: Pick<SiteCopy, "printingKey" | "condition">) => priceKey(c.printingKey, c.condition);
 
 type Tx = Prisma.TransactionClient;
@@ -227,6 +231,9 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
   const paid = ["open", "buy", "buyback"].includes(a.action);
   if (paid && (customer.frozenAt || customer.closedAt))
     throw new StoreError("account_frozen", "This account is on hold. Contact Support@cardbit.com.", 403);
+  // 18+ only: buying packs or singles needs a recorded age confirmation (sign-up checkbox or prompt).
+  if ((a.action === "open" || a.action === "buy") && !(await ageConfirmed(db, SITE_SHOP_KEY, customer.id)))
+    throw new StoreError(AGE_REQUIRED.code, AGE_REQUIRED.error, 403);
   const reqId = `${customer.id}:${a.requestId}`;
   const fingerprint = fingerprintOf(a);
   const key = `req:${reqId}`;

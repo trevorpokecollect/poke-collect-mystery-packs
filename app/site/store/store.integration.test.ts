@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { balanceOf, postLedger } from "../core/ledger.server";
 import { priceKey, receiveSiteIntake } from "../core/stock.server";
 import { sitePortfolio } from "./portfolio.server";
+import { confirmAge } from "../../lib/cardbit-age.server";
 import { DEFAULT_TIERS, drawCopies, recentPulls, singleKey, storeAction, storeState, StoreError, tierFor, tierRules } from "./store.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -24,6 +25,7 @@ const wipe = async () => {
   await db.siteLedger.deleteMany();
   await db.siteWallet.deleteMany();
   await db.cardbitVaultMark.deleteMany({ where: { shop: "cardbit-site" } });
+  await db.cardbitAgeConfirmation.deleteMany({ where: { shop: "cardbit-site" } });
   await db.siteCustomer.deleteMany({ where: { email: { endsWith: "@store.test" } } });
 };
 
@@ -54,6 +56,7 @@ describe.skipIf(!url)("site store", () => {
     await wipe();
     customer = await db.siteCustomer.create({ data: { email: "c@store.test" } });
     await postLedger(db, { customerId: customer.id, delta: 5000, kind: "ADJUST", idempotencyKey: `seed:${customer.id}` });
+    await confirmAge(db, "cardbit-site", customer.id, "signup");
   });
   afterAll(async () => {
     await wipe();
@@ -163,5 +166,12 @@ describe.skipIf(!url)("site store", () => {
     expect(p).toMatchObject({ market: 2468, marketApproved: true });
     expect(p.holdings[0]).toMatchObject({ market: 1234, marketDate: "2026-11-24" });
     expect(p.history).toHaveLength(1);
+  });
+
+  it("requires an 18+ confirmation before buying packs or singles", async () => {
+    await db.cardbitAgeConfirmation.deleteMany({ where: { shop: "cardbit-site" } });
+    await expect(storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" })).rejects.toMatchObject({ code: "AGE_REQUIRED", status: 403 });
+    await expect(storeAction(db, customer, { action: "buy", requestId: randomUUID(), id: "s_x" })).rejects.toMatchObject({ code: "AGE_REQUIRED" });
+    expect(await balanceOf(db, customer.id)).toBe(5000);
   });
 });
