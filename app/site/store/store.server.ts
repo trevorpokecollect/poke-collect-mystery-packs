@@ -30,10 +30,32 @@ async function pricesFor(db: PrismaClient | Tx, keys: string[]): Promise<Prices>
   return new Map(rows.map((r) => [r.printingKey, { retailBits: r.retailBits, buybackBits: r.buybackBits }]));
 }
 
+export type TierRule = { name: string; min: number };
+/** Default ladder (Cardbits of card value; 100 = $1) until staff set per-pack rules. */
+export const DEFAULT_TIERS: TierRule[] = [
+  { name: "Common", min: 0 },
+  { name: "Uncommon", min: 500 },
+  { name: "Rare", min: 1500 },
+  { name: "Epic", min: 5000 },
+  { name: "Legendary", min: 15000 },
+];
+export function tierRules(raw: unknown): TierRule[] {
+  if (!Array.isArray(raw)) return DEFAULT_TIERS;
+  const rules = raw.filter((r): r is TierRule => typeof r?.name === "string" && Number.isFinite(r?.min)).sort((a, b) => a.min - b.min);
+  return rules.length ? rules : DEFAULT_TIERS;
+}
+export function tierFor(valueBits: number | null, rules: TierRule[] = DEFAULT_TIERS): string | null {
+  if (valueBits == null) return null;
+  let tier: string | null = null;
+  for (const r of rules) if (valueBits >= r.min) tier = r.name;
+  return tier;
+}
+
 /** Card fields the storefront reads (same names as the theme catalog). */
-function cardView(c: SiteCopy, p: Price | undefined, id: string) {
+function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule[] = DEFAULT_TIERS) {
   const retail = c.retailBits ?? p?.retailBits ?? null;
   const buyback = p?.buybackBits ?? null;
+  const tier = tierFor(retail ?? buyback, rules);
   return {
     id,
     name: c.name,
@@ -46,7 +68,7 @@ function cardView(c: SiteCopy, p: Price | undefined, id: string) {
     game: c.game,
     image: c.image,
     rarity: null as string | null,
-    tier: null as string | null,
+    tier,
     priceBits: retail,
     retailBits: retail,
     buybackBits: buyback,
@@ -80,7 +102,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
       remaining: Math.floor(n / p.cardsPerPack),
       remainingCards: n,
       drawModel: "uniform-without-replacement",
-      cards: pool.map((c) => ({ ...cardView(c, prices.get(pk(c)), c.id), remaining: 1, chanceInPack: n >= p.cardsPerPack ? p.cardsPerPack / n : 0 })),
+      cards: pool.map((c) => ({ ...cardView(c, prices.get(pk(c)), c.id, tierRules(p.tierRules)), remaining: 1, chanceInPack: n >= p.cardsPerPack ? p.cardsPerPack / n : 0 })),
     };
   });
 
@@ -112,8 +134,13 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
   // Copies from pack openings may have been sold back since; keep the opening record intact.
   const openingCopies = await db.siteCopy.findMany({ where: { openingId: { in: openings.map((o) => o.id) } }, orderBy: { position: "asc" } });
   const openingPrices = await pricesFor(db, openingCopies.map(pk));
+  // Tier ladder per opening = its pack's rules (inactive packs too, so old pulls keep their tier).
+  const allPacks = await db.sitePack.findMany({ select: { id: true, tierRules: true } });
+  const packRules = new Map(allPacks.map((p) => [p.id, tierRules(p.tierRules)]));
+  const openingPack = new Map(openings.map((o) => [o.id, o.packId]));
+  const rulesFor = (c: SiteCopy) => packRules.get((c.openingId && openingPack.get(c.openingId)) || c.packId || "") ?? DEFAULT_TIERS;
   const copyView = (c: SiteCopy, p: Prices) => ({
-    ...cardView(c, p.get(pk(c)), c.id),
+    ...cardView(c, p.get(pk(c)), c.id, rulesFor(c)),
     physicalCopyId: singleKey(c),
     cardId: singleKey(c),
     status: c.ownerId === customer.id ? (c.status === "VAULTED" ? "held" : c.status === "SHIP_LOCKED" ? "shipping" : c.status === "SHIPPED" ? "shipped" : "returned") : "returned",
@@ -229,7 +256,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         const pool = await tx.siteCopy.findMany({ where: { packId: pack.id, status: "POOLED" }, orderBy: { id: "asc" } });
         if (pool.length < pack.cardsPerPack) throw new StoreError("sold_out", "This pack has sold out.");
         const opening = await tx.siteOpening.create({
-          data: { customerId: customer.id, packId: pack.id, priceBits: pack.priceBits, sealed: a.openLater === true },
+          data: { customerId: customer.id, packId: pack.id, priceBits: pack.priceBits, sealed: a.openLater === true, revealedAt: a.openLater === true ? null : new Date() },
         });
         await debit(pack.priceBits, "PACK", opening.id, `${pack.title}`);
         const prices = await pricesFor(tx, pool.map(pk));
@@ -247,7 +274,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
       } else if (a.action === "reveal") {
         const o = await tx.siteOpening.findFirst({ where: { id: a.id || "", customerId: customer.id } });
         if (!o) throw new StoreError("not_found", "This pack is unavailable.", 404);
-        if (o.sealed) await tx.siteOpening.update({ where: { id: o.id }, data: { sealed: false } });
+        if (o.sealed) await tx.siteOpening.update({ where: { id: o.id }, data: { sealed: false, revealedAt: new Date() } });
         result = { openingId: o.id };
       } else if (a.action === "buy") {
         const forSale = await tx.siteCopy.findMany({ where: { status: "FOR_SALE" }, orderBy: [{ slot: "asc" }, { pocket: "asc" }] });
@@ -294,4 +321,30 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
     },
     { timeout: 15_000 },
   );
+}
+
+/** Live Pulls feed: recent revealed, paid, non-demo pack pulls. Card fields only, no customer data. */
+export async function recentPulls(db: PrismaClient, limit = 12) {
+  const take = Math.min(Math.max(Math.floor(limit) || 12, 1), 24);
+  const openings = await db.siteOpening.findMany({
+    where: { sealed: false, demo: false, revealedAt: { not: null } },
+    orderBy: { revealedAt: "desc" },
+    take,
+    select: { id: true, packId: true, revealedAt: true },
+  });
+  if (!openings.length) return [];
+  const [copies, packs] = await Promise.all([
+    db.siteCopy.findMany({ where: { openingId: { in: openings.map((o) => o.id) }, demo: false }, orderBy: { position: "asc" } }),
+    db.sitePack.findMany({ where: { id: { in: [...new Set(openings.map((o) => o.packId))] } }, select: { id: true, tierRules: true } }),
+  ]);
+  const prices = await pricesFor(db, copies.map(pk));
+  const rules = new Map(packs.map((p) => [p.id, tierRules(p.tierRules)]));
+  const pulls = [];
+  for (const o of openings) {
+    for (const c of copies.filter((x) => x.openingId === o.id)) {
+      const v = cardView(c, prices.get(pk(c)), c.id, rules.get(o.packId) ?? DEFAULT_TIERS);
+      pulls.push({ id: c.id, name: v.name, set: v.set, number: v.number, image: v.image, tier: v.tier, packId: o.packId, at: o.revealedAt!.toISOString() });
+    }
+  }
+  return pulls.slice(0, take);
 }

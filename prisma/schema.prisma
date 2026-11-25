@@ -1416,6 +1416,7 @@ model SitePack {
   cardsPerPack Int      @default(1)
   active       Boolean  @default(false)
   sortOrder    Int      @default(0)
+  tierRules    Json? // [{name, min}] in Cardbits of card value, lowest first; null = default ladder
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -1427,8 +1428,10 @@ model SiteOpening {
   priceBits  Int
   sealed     Boolean  @default(false)
   demo       Boolean  @default(false) // given free from the staff Demo panel
+  revealedAt DateTime? // set when the cards are shown (immediately, or on reveal of a saved pack)
   createdAt  DateTime @default(now())
   @@index([customerId, createdAt])
+  @@index([revealedAt])
 }
 
 // Current price per printing (retail and buyback offer, in Cardbits). Staff-set or fed by Card Broker.

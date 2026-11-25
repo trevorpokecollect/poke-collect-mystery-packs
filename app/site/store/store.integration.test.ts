@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { balanceOf, postLedger } from "../core/ledger.server";
 import { priceKey, receiveSiteIntake } from "../core/stock.server";
-import { drawCopies, singleKey, storeAction, storeState, StoreError } from "./store.server";
+import { DEFAULT_TIERS, drawCopies, recentPulls, singleKey, storeAction, storeState, StoreError, tierFor, tierRules } from "./store.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -32,6 +32,17 @@ describe("draw", () => {
   });
 });
 
+describe("tiers", () => {
+  it("maps value to the ladder, falls back to default rules", () => {
+    expect(tierFor(null)).toBeNull();
+    expect(tierFor(0)).toBe("Common");
+    expect(tierFor(1500)).toBe("Rare");
+    expect(tierFor(20000)).toBe("Legendary");
+    expect(tierRules("junk")).toBe(DEFAULT_TIERS);
+    expect(tierFor(300, tierRules([{ name: "Hit", min: 200 }, { name: "Base", min: 0 }]))).toBe("Hit");
+  });
+});
+
 describe.skipIf(!url)("site store", () => {
   let customer: Awaited<ReturnType<typeof db.siteCustomer.create>>;
   beforeAll(() => {
@@ -44,7 +55,7 @@ describe.skipIf(!url)("site store", () => {
   });
   afterAll(async () => {
     await wipe();
-    await db.sitePack.updateMany({ data: { active: false } });
+    await db.sitePack.updateMany({ data: { active: false, tierRules: undefined } });
     await db.$disconnect();
   });
 
@@ -112,5 +123,23 @@ describe.skipIf(!url)("site store", () => {
     const frozen = await db.siteCustomer.update({ where: { id: customer.id }, data: { frozenAt: new Date() } });
     await expect(storeAction(db, frozen, { action: "buy", requestId: randomUUID(), id: singleKey(c) })).rejects.toMatchObject({ code: "account_frozen" });
     expect((await db.siteCopy.findFirstOrThrow()).status).toBe("FOR_SALE");
+  });
+
+  it("Live Pulls lists revealed paid pulls only, with pack tiers", async () => {
+    await receiveSiteIntake(db, { ...card("st:7", 2, "Snorlax"), priceBits: 2000, buybackBits: 1600 });
+    await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
+    await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 1000, cardsPerPack: 1 } });
+    await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt", openLater: true });
+    expect(await recentPulls(db)).toHaveLength(0); // sealed stays hidden
+    const r = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+    let pulls = await recentPulls(db);
+    expect(pulls).toHaveLength(1);
+    expect(pulls[0]).toMatchObject({ name: "Snorlax", packId: "cobalt", tier: "Rare" });
+    expect(Object.keys(pulls[0]).sort()).toEqual(["at", "id", "image", "name", "number", "packId", "set", "tier"]);
+    const state = await storeState(db, customer);
+    expect(state.binder[0].tier).toBe("Rare");
+    await db.siteOpening.updateMany({ data: { demo: true } });
+    expect(await recentPulls(db)).toHaveLength(0); // demo never shows
+    expect(r).toBeTruthy();
   });
 });
