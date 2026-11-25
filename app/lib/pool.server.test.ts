@@ -16,7 +16,7 @@ import {
 import { releaseUnneeded, rereserveForPulls, reservePool, unreserveForPulls } from "./inventory.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
 import { latestTopTierPull, recentPulls } from "./recent-pulls.server";
-import { addVaultCardsToShipment, deleteStrayVaultDrafts, moveVault, resolveCustomer, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
+import { addVaultCardsToShipment, deleteStrayVaultDrafts, moveVault, releaseOrderCards, resolveCustomer, returnShipmentToVault, expireShipments, markShipmentPaid, requestShipment, vaultedPulls } from "./vault.server";
 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error("Set TEST_DATABASE_URL to an empty Postgres database to run these tests.");
@@ -756,6 +756,54 @@ describe("vault", () => {
     expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(2);
     expect((await db.shipRequest.findUniqueOrThrow({ where: { id: paid } })).status).toBe("RETURNED");
     await expect(returnShipmentToVault(db, admin, SHOP, paid)).rejects.toThrow(/already closed/);
+  });
+
+  it("Release Order Cards: takes an order's vault cards back to stock with no refund, after Return To Vault", async () => {
+    const series = await makeReservedSeries(10);
+    const { admin, drafts, net } = vaultAdmin();
+    await reservePool(db, admin, series.id);
+    await launchSeries(db, series.id);
+    const kept = await drawForOrder(db, order(1));
+    const taken = await drawForOrder(db, order(2));
+    for (const p of [...kept.pulls, ...taken.pulls]) await revealPull(db, SHOP, p.id, viewer);
+    const reserved = async () => {
+      let n = 0;
+      for (const card of await db.card.findMany({ where: { seriesId: series.id } })) n += net(card.inventoryItemId!);
+      return n;
+    };
+    const before = await reserved();
+
+    // Cards on a live shipment must come back to the vault first.
+    await requestShipment(db, admin, SHOP, viewer);
+    await expect(releaseOrderCards(db, admin, SHOP, taken.pulls[0].orderName)).rejects.toThrow(/Return To Vault/);
+    await returnShipmentToVault(db, admin, SHOP, (drafts[0].input as { customAttributes: { value: string }[] }).customAttributes[0].value);
+
+    const preview = await releaseOrderCards(db, admin, SHOP, taken.pulls[0].orderName, { dryRun: true });
+    expect(preview.cards).toBe(2);
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(3);
+
+    const done = await releaseOrderCards(db, admin, SHOP, taken.pulls[0].orderName.replace("#", ""));
+    expect(done).toMatchObject({ cards: 2, released: 2, flagged: 0 });
+    expect(await vaultedPulls(db, SHOP, viewer)).toHaveLength(1);
+    expect((await db.pull.findMany({ where: { orderId: taken.pulls[0].orderId } })).every((p) => p.status === "VOIDED")).toBe(true);
+    expect(await reserved()).toBe(before - 2);
+    await expect(releaseOrderCards(db, admin, SHOP, taken.pulls[0].orderName)).rejects.toThrow(/already released/);
+  });
+
+  it("refuses Ship My Cards and pickup for a customer tagged blocked-chargeback", async () => {
+    await openedVaultOrder(2);
+    const { admin } = vaultAdmin();
+    const blocked = {
+      graphql: async (query: string, opts: { variables: Record<string, unknown> }) =>
+        query.includes("VaultCustomerTags")
+          ? new Response(JSON.stringify({ data: { customer: { tags: ["blocked-chargeback"] } } }))
+          : admin.graphql(query, opts),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(requestShipment(db, blocked as any, SHOP, viewer)).rejects.toThrow(/isn't available on this account/);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await expect(requestShipment(db, blocked as any, SHOP, viewer, { pickup: true })).rejects.toThrow(/Pick Up In Store isn't available/);
+    expect(await db.shipRequest.count()).toBe(0);
   });
 
   it("keeps Shopify's reserved count in step with the app through repeated ship, return and add cycles", async () => {

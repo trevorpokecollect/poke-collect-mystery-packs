@@ -4,8 +4,9 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { gql } from "./orders.server";
-import { rereserveForPulls, unreserveForPulls } from "./inventory.server";
-import { pullsForViewer, PoolError, type Viewer } from "./pool.server";
+import { releaseUnneeded, rereserveForPulls, unreserveForPulls } from "./inventory.server";
+import { syncPackStock } from "./series.server";
+import { pullsForViewer, PoolError, voidPulls, type Viewer } from "./pool.server";
 import { listedOnMarket, withdrawFromMarket } from "./market.server";
 
 export const SHIP_FEE = 5;
@@ -100,6 +101,11 @@ export async function requestShipment(
     if (country && country !== "US") {
       throw new PoolError("Ship My Cards is available for US addresses only. Email support@poke-collect.com and we'll sort out your shipment.");
     }
+  }
+
+  const owner = viewer.customerId ?? pulls.find((p) => p.customerId)?.customerId ?? null;
+  if (await customerBlocked(admin, owner)) {
+    throw new PoolError(`${pickup ? "Pick Up In Store" : "Ship My Cards"} isn't available on this account. Email support@poke-collect.com for help.`);
   }
 
   const fee = pickup ? 0 : shippingFeeFor(pulls.length);
@@ -786,4 +792,51 @@ export async function moveVault(db: Db, shop: string, fromCustomerId: string, to
   ]);
   console.log(`Moved vault from ${fromCustomerId} to ${toCustomerId}: ${pulls.length} pulls`);
   return summary;
+}
+
+/** Customers with this tag (e.g. after a chargeback) can't ship or pick up vault cards. */
+export const BLOCKED_TAG = "blocked-chargeback";
+
+export async function customerBlocked(admin: AdminApiContext, customerId: string | null) {
+  if (!customerId) return false;
+  const data = await gql(admin, `#graphql
+    query VaultCustomerTags($id: ID!) { customer(id: $id) { tags } }`, { id: customerId });
+  return ((data.customer?.tags as string[] | undefined) ?? []).includes(BLOCKED_TAG);
+}
+
+/**
+ * Customer service: takes a pack order's cards back, with no money moving. Used when the order
+ * can't be refunded in Shopify (an open chargeback blocks the refund page). Its unopened packs and
+ * vault cards are voided like a refund would, and the copies go back to normal store stock.
+ * Cards on a live shipment must be returned to the vault first; shipped cards are left alone.
+ */
+export async function releaseOrderCards(db: Db, admin: AdminApiContext, shop: string, orderInput: string, { dryRun = false } = {}) {
+  const number = orderInput.trim().match(/^#?(\d+)$/)?.[1];
+  if (!number) throw new PoolError("Enter a pack order number, like #262048.");
+  const orderName = `#${number}`;
+  const pulls = await db.pull.findMany({ where: { shop, orderName }, include: { shipRequest: true } });
+  if (pulls.length === 0) throw new PoolError(`${orderName} has no mystery pack cards.`);
+  const shipping = pulls.filter((p) => ["UNOPENED", "REVEALED"].includes(p.status) && p.shipRequest && ["PENDING", "PAID"].includes(p.shipRequest.status));
+  if (shipping.length) {
+    throw new PoolError(`${shipping.length} of ${orderName}'s cards are on a vault shipment. Click Return To Vault on that shipment first.`);
+  }
+  const live = pulls.filter((p) => ["UNOPENED", "REVEALED"].includes(p.status));
+  if (live.length === 0) throw new PoolError(`${orderName}'s cards were already released, refunded or shipped.`);
+  const summary = { orderName, cards: live.length, alreadyGone: pulls.length - live.length };
+  if (dryRun) return { ...summary, released: 0, flagged: 0 };
+
+  const orderId = live[0].orderId;
+  // Releasing cards that are on a pending invoice (or settled) left shipRequestId set; voidPulls skips those.
+  await db.pull.updateMany({ where: { id: { in: live.map((p) => p.id) }, shipRequestId: { not: null } }, data: { shipRequestId: null } });
+  await withdrawFromMarket(db, live.map((p) => p.id));
+  const voided = await voidPulls(db, orderId);
+  for (const seriesId of new Set(voided.map((p) => p.seriesId))) {
+    await releaseUnneeded(db, admin, seriesId);
+    // The pool is smaller now; keep the pack's stock equal to the cards left (best effort).
+    await syncPackStock(admin, seriesId).catch((e) => console.error(`Pack stock sync for ${seriesId} failed`, e));
+  }
+  await gql(admin, `#graphql
+    mutation VaultReleaseTag($id: ID!) { tagsAdd(id: $id, tags: ["mystery-cards-released"]) { userErrors { message } } }`, { id: orderId })
+    .catch((e) => console.error(`Tagging ${orderName} failed`, e));
+  return { ...summary, released: voided.length, flagged: live.length - voided.length };
 }
