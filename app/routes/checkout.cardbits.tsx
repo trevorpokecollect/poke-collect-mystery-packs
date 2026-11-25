@@ -38,18 +38,32 @@ function blocked(msg: string, returnTo: string, status = 400) {
   return htmlResponse(simplePage("Buy Cardbits", `<h1>Buy Cardbits</h1><p class="err" role="alert">${esc(msg)}</p><p><a href="${esc(returnTo)}">Back</a></p>`), status);
 }
 
-async function guard(request: Request, amountRaw: string | null, returnTo: string) {
+type Guarded =
+  | { res: Response; problem: { error: string; status: number; code?: string } }
+  | { res?: undefined; customer: NonNullable<Awaited<ReturnType<typeof currentCustomer>>>; amount: number };
+
+async function guard(request: Request, amountRaw: string | null, returnTo: string): Promise<Guarded> {
   const customer = await currentCustomer(db, request);
   if (!customer) {
     const here = `/checkout/cardbits?amount=${encodeURIComponent(amountRaw || "")}&return_to=${encodeURIComponent(returnTo)}`;
-    return { res: new Response(null, { status: 303, headers: { Location: `/sign-in?return_to=${encodeURIComponent(here)}` } }) };
+    return {
+      res: new Response(null, { status: 303, headers: { Location: `/sign-in?return_to=${encodeURIComponent(here)}` } }),
+      problem: { error: "Sign In to Continue.", status: 401, code: "sign_in" },
+    };
   }
+  const fail = (error: string, status = 400) => ({ res: blocked(error, returnTo, status), problem: { error, status } });
   const amount = Number(amountRaw);
-  if (!topupPackage(amount)) return { res: blocked("Choose a Cardbits package.", returnTo) };
-  if (customer.frozenAt || customer.closedAt) return { res: blocked("This account can't buy Cardbits right now. Contact hello@cardbit.com.", returnTo, 403) };
-  if (topupProvider() === "coinflow" && !coinflowConfigured()) return { res: blocked("Card checkout isn't open yet.", returnTo, 503) };
+  if (!topupPackage(amount)) return fail("Choose a Cardbits package.");
+  if (customer.frozenAt || customer.closedAt) return fail("This account can't buy Cardbits right now. Contact hello@cardbit.com.", 403);
+  if (topupProvider() === "coinflow" && !coinflowConfigured()) return fail("Card checkout isn't open yet.", 503);
   return { customer, amount };
 }
+
+// The storefront's Buy Cardbits dialog posts with Accept: application/json and gets
+// {redirect} (the hosted card checkout) or {error}. Same checks as the full-page form.
+const wantsJson = (request: Request) => (request.headers.get("accept") || "").includes("application/json");
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
@@ -62,13 +76,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
+  const asJson = wantsJson(request);
   const fd = await request.formData();
   const returnTo = safeReturn(String(fd.get("return_to") || "/"));
   const g = await guard(request, String(fd.get("amount") || ""), returnTo);
-  if (g.res) return g.res;
+  if (g.res) return asJson ? json({ error: g.problem.error, code: g.problem.code }, g.problem.status) : g.res;
   const state = String(fd.get("state") || "").trim().toUpperCase();
   const zip = String(fd.get("zip") || "").trim();
-  const again = (error: string, status = 400) => htmlResponse(form({ amount: g.amount, returnTo, state, zip, error }), status);
+  const again = (error: string, status = 400) =>
+    asJson ? json({ error }, status) : htmlResponse(form({ amount: g.amount, returnTo, state, zip, error }), status);
+  const go = (location: string) => (asJson ? json({ redirect: location }) : new Response(null, { status: 303, headers: { Location: location } }));
   if (!/^\d{5}$/.test(zip)) return again("Enter a 5-digit ZIP code.");
   const ip = clientIp(request);
   let region;
@@ -91,7 +108,7 @@ export async function action({ request }: ActionFunctionArgs) {
         success: callbackUrl,
         cancel: `${siteOrigin()}/checkout/cardbits?amount=${p.baseBits}&return_to=${encodeURIComponent(returnTo)}`,
       });
-      return new Response(null, { status: 303, headers: { Location: url } });
+      return go(url);
     } catch (e) {
       console.error("[site] stripe checkout failed", (e as Error).message);
       return again("Card checkout is unavailable right now. Please try again.", 502);
@@ -99,7 +116,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   try {
     const link = await createCheckoutLink({ topup, email: g.customer.email, ip, deviceId: String(fd.get("device_id") || "") || null, callbackUrl });
-    return new Response(null, { status: 303, headers: { Location: link } });
+    return go(link);
   } catch (e) {
     if (e instanceof CoinflowError) return again(e.message, 502);
     throw e;

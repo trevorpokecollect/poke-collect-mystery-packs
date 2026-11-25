@@ -14,6 +14,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   } catch (e) {
     if (!(e instanceof SignInError)) console.error("google callback failed", e);
     const msg = e instanceof SignInError ? e.message : "Google sign-in failed. Please try again.";
-    return new Response(null, { status: 303, headers: { Location: `/sign-in?error=${encodeURIComponent(msg)}` } });
+    return new Response(null, { status: 303, headers: { Location: `/?signin_error=${encodeURIComponent(msg)}` } });
   }
 }

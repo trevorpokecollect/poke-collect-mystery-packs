@@ -9,6 +9,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return new Response(null, { status: 303, headers: { Location: url, "Set-Cookie": cookie } });
   } catch (e) {
     const msg = e instanceof SignInError ? e.message : "Google sign-in is unavailable.";
-    return new Response(null, { status: 303, headers: { Location: `/sign-in?error=${encodeURIComponent(msg)}` } });
+    return new Response(null, { status: 303, headers: { Location: `/?signin_error=${encodeURIComponent(msg)}` } });
   }
 }
