@@ -8,3 +8,16 @@
 #cardbit-store [data-parcel-summary] .cb-note ul{margin:0;padding-left:18px}
 #cardbit-store [data-parcel-summary] .cb-secondary{width:100%;margin-bottom:10px}
 .ct-review-address{font-style:normal;line-height:1.5;margin:10px 0;padding:10px 12px;border:1px solid #354652;border-radius:10px}
+
+/* Ship Together: free shipping progress (30 cards or 10,000 Cardbits of card value). */
+#cardbit-store .ct-free { margin: .9rem 0; padding: .85rem .9rem; border: 1px solid #2a3542; border-radius: 12px; background: #121b22; display: grid; gap: .6rem; }
+#cardbit-store .ct-free.is-free { border-color: #00e6e1; box-shadow: 0 0 0 1px #00e6e133, 0 0 22px #00e6e126; }
+#cardbit-store .ct-free-head { margin: 0; display: flex; align-items: center; gap: .4rem; font: 800 .98rem/1.25 "Cardbit Outfit", Outfit, system-ui, sans-serif; color: #f6faf9; }
+#cardbit-store .ct-free.is-free .ct-free-head { color: #00e6e1; }
+#cardbit-store .ct-bar-top { display: flex; justify-content: space-between; gap: .5rem; font-size: .82rem; color: #c2cfce; margin-bottom: .3rem; }
+#cardbit-store .ct-bar-top span:last-child { font-variant-numeric: tabular-nums; }
+#cardbit-store .ct-bar-track { height: 10px; border-radius: 99px; background: #1f2a35; overflow: hidden; }
+#cardbit-store .ct-bar-track i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #4057f5, #00e6e1); transition: width .6s cubic-bezier(.2,.8,.3,1); }
+#cardbit-store .ct-bar.is-full .ct-bar-track i { background: linear-gradient(90deg, #00e6e1, #7cf3ff); box-shadow: 0 0 12px #00e6e199; }
+#cardbit-store .ct-free .cb-micro { margin: 0; }
+@media (prefers-reduced-motion: reduce) { #cardbit-store .ct-bar-track i { transition: none; } }

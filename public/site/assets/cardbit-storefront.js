@@ -303,7 +303,7 @@
       chases.map(({card,key}) => '<li>'+pullCardLink(card,key,pack,true)+'</li>').join('')+'</ul>' :
       '<p class="cb-chase-empty">'+(pack.remaining === 0 ? 'Sold Out' : 'Chases Unavailable')+'</p>';
     return link('packs/'+enc(pack.id),'<div class="cb-tile-head"><h3>'+esc(name)+'</h3>'+icon('arrow',16)+'</div>'+
-      '<span class="cb-tile-price">'+price+'</span>','cb-edition-name')+categoryTags(pack.id,true)+list;
+      '<span class="cb-tile-price">'+price+'</span>','cb-edition-name')+/* SITE */(site() ? '' : categoryTags(pack.id,true))+list;
   }
 
   function packTile(pack) {

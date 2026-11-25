@@ -124,7 +124,7 @@
     }
     function tiles(cards) {
       return '<div class="cb-card-grid cc-vault-grid">' + cards.map(c => {
-        const quote = get().mode==='shopper-test' && root.CardbitVaultMarket?.label(c);
+        const quote = get().mode==='shopper-test' && (root.CardbitStore?.site ? root.CardbitSite?.marketLabel?.(c) : root.CardbitVaultMarket?.label(c));
         const market = quote ? '<small class="cb-vault-market" title="'+esc(quote.date)+'">TCGplayer Market '+esc(quote.amount)+'</small>' : '';
         return cardTile(c,'vault/'+enc(c.id),metadata(c),market+ctx.vaultStatusIcon(c));
       }).join('') + '</div>';
@@ -156,7 +156,7 @@
         [['','All Cards'],['held','Held'],['shipping','Shipping Requested']];
       return page(nav('vault') + '<div class="cc-intro"><div>' + start('My Vault',detail) + '</div>' +
         (held().length ? action('ship-together','Select Cards to Ship','cb-secondary') : '') + '</div>' +
-        (demo && !opening && scope!=='shipping' ? '<cardbit-vault-portfolio data-source="shopper"></cardbit-vault-portfolio>' : '') +
+        (demo && !opening && scope!=='shipping' ? '<cardbit-vault-portfolio data-source="'+(root.CardbitStore?.site ? 'wallet' : 'shopper')+'"></cardbit-vault-portfolio>' : '') +
         (opening ? '<div class="cc-filter-note">' + esc(plural(opening.cards.length,'card')) + ' from This Opening ' +
           link('vault','View All Cards','cb-textlink') + '</div>' : '<nav class="cc-filters" aria-label="Vault Status">' +
           tabs.map(([key,label]) => link('vault' + (key ? '/' + key : ''),esc(label),'cc-filter',key === scope ? 'aria-current="page"' : '')).join('') + '</nav>') +
@@ -164,6 +164,7 @@
         esc(vaultSearch) + '"></label><div data-vault-results data-scope="' + esc(scope) + '" data-opening="' + esc(openingId) + '">' +
         vaultCards(scope,openingId) + '</div>');
     }
+    /* SITE */ root.CardbitSiteRefreshVault = () => updateVault();
     function updateVault() {
       const box = ctx.root().querySelector('[data-vault-results]');
       if (box) box.innerHTML = vaultCards(box.dataset.scope,box.dataset.opening);

@@ -1,14 +1,32 @@
     /* SITE: Ship Together on the standalone site. Real US delivery address, fee in Cardbits
-       (600, free for more than 30 cards), excluded states blocked. The server re-checks all of it. */
+       (600, free at 30 cards or 10,000 Cardbits of card value), excluded states blocked. The server re-checks all of it. */
     const siteShip = () => root.CardbitStore?.site === true;
-    const SHIP_FEE_BITS = 600, FREE_OVER = 30;
+    const SHIP_FEE_BITS = 600, FREE_CARDS = 30, FREE_VALUE = 10000;
     const EXCLUDED = ['AL','HI','ID','MN','NV','NY','UT','WA'];
     const STATES = [['AK','Alaska'],['AL','Alabama'],['AR','Arkansas'],['AZ','Arizona'],['CA','California'],['CO','Colorado'],['CT','Connecticut'],['DC','District of Columbia'],['DE','Delaware'],['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['IA','Iowa'],['ID','Idaho'],['IL','Illinois'],['IN','Indiana'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],['MA','Massachusetts'],['MD','Maryland'],['ME','Maine'],['MI','Michigan'],['MN','Minnesota'],['MO','Missouri'],['MS','Mississippi'],['MT','Montana'],['NC','North Carolina'],['ND','North Dakota'],['NE','Nebraska'],['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NV','Nevada'],['NY','New York'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VA','Virginia'],['VT','Vermont'],['WA','Washington'],['WI','Wisconsin'],['WV','West Virginia'],['WY','Wyoming']];
     const ADDRESS_FIELDS = [['name','Full Name','name',80,true],['street1','Street Address','address-line1',120,true],['street2','Apt, Suite or Unit (Optional)','address-line2',120,false],['city','City','address-level2',60,true],['zip','ZIP Code','postal-code',10,true],['phone','Phone (Optional)','tel',20,false]];
     const addressKey = 'cardbit:ship-address:v1';
     let address = (() => { try { return JSON.parse(sessionStorage.getItem(addressKey)) || {}; } catch { return {}; } })();
     const saveAddress = () => { try { sessionStorage.setItem(addressKey, JSON.stringify(address)); } catch {} };
-    const fee = n => n > FREE_OVER ? 0 : SHIP_FEE_BITS;
+    // Card value for the free-shipping bar: retail value in Cardbits, else the buyback offer.
+    const valueOf = c => Math.max(0, Number(c?.retailBits ?? c?.buybackBits ?? 0) || 0);
+    const valueOfIds = ids => (get().binder || []).filter(c => ids.includes(c.id)).reduce((sum, c) => sum + valueOf(c), 0);
+    const freeShip = (n, v) => n >= FREE_CARDS || v >= FREE_VALUE;
+    const fee = (n, v) => freeShip(n, v) ? 0 : SHIP_FEE_BITS;
+    let barWas = {cards:0, value:0};
+    function freeBars(n, v) {
+      const free = n > 0 && freeShip(n, v);
+      const bar = (key, label, now, goal, text) => {
+        const to = Math.min(100, now / goal * 100), from = barWas[key]; barWas[key] = to;
+        return '<div class="ct-bar'+(now >= goal ? ' is-full' : '')+'"><div class="ct-bar-top"><span>'+label+'</span><span>'+text+'</span></div>'+
+          '<div class="ct-bar-track" role="progressbar" aria-label="'+label+'" aria-valuemin="0" aria-valuemax="'+goal+'" aria-valuenow="'+Math.min(now, goal)+'"><i style="width:'+from.toFixed(1)+'%" data-to="'+to.toFixed(1)+'%"></i></div></div>';
+      };
+      requestAnimationFrame(() => ctx.root().querySelectorAll('.ct-bar-track i[data-to]').forEach(i => { i.style.width = i.dataset.to; i.removeAttribute('data-to'); }));
+      return '<div class="ct-free'+(free ? ' is-free' : '')+'"><p class="ct-free-head">'+(free ? icon('check',16)+'Free Shipping Unlocked' : 'Free Shipping at '+FREE_CARDS+'+ Cards or '+FREE_VALUE.toLocaleString('en-US')+' Cardbits in Card Value')+'</p>'+
+        bar('cards', 'Cards', n, FREE_CARDS, Math.min(n, FREE_CARDS)+' of '+FREE_CARDS)+
+        bar('value', 'Card Value', v, FREE_VALUE, (v >= FREE_VALUE ? FREE_VALUE : v).toLocaleString('en-US')+' of '+FREE_VALUE.toLocaleString('en-US'))+
+        (free ? '' : '<p class="cb-micro">Fill Either Bar to Ship Free.</p>')+'</div>';
+    }
     const bits = n => Number(n).toLocaleString('en-US') + ' Cardbits';
     function addressProblems() {
       const a = address, out = [];
@@ -28,11 +46,11 @@
         '<p class="cb-micro">U.S. Addresses Only. Not Available in Alabama, Hawaii, Idaho, Minnesota, Nevada, New York, Utah or Washington.</p></fieldset>';
     }
     function siteSummary() {
-      const n = selected.size, cost = fee(n), balance = get().account?.bits ?? 0;
+      const n = selected.size, v = valueOfIds([...selected]), cost = fee(n, v), balance = get().account?.bits ?? 0;
       const line = !n ? '—' : cost ? bits(cost) : 'Free Shipping';
       const short = n && cost > balance;
       return '<p class="ct-price"><span aria-live="polite">'+n+' Selected</span><strong>'+line+'</strong></p>'+
-        (n && n <= FREE_OVER ? '<p class="cb-micro">Ship More Than '+FREE_OVER+' Cards Together for Free.</p>' : '')+
+        freeBars(n, v)+
         (short ? '<p class="cb-micro cb-error">You Need '+bits(cost - balance)+' More.</p>'+link('cardbits','Buy Cardbits','cb-secondary') : '')+
         btn('parcel-review','Review Shipment','cb-primary',n && !short ? '' : 'disabled');
     }
@@ -41,7 +59,7 @@
         const o=(get().openings||[]).find(o=>o.id===c.openingId),origin=o?(packTitle({id:o.packId})+' Opening'):'Card Shop';
         return '<label class="ct-copy"><input type="checkbox" data-parcel-copy value="'+esc(c.id)+'" '+(selected.has(c.id)?'checked':'')+'>'+art(c)+'<span><strong>'+esc(c.name)+'</strong><small>'+esc([c.number,c.printing].filter(Boolean).join(' · '))+'</small><small>'+esc(origin)+'</small></span></label>';
       }).join('')+'</fieldset><aside class="ct-quote"><h2>Plan a Shipment</h2>'+addressForm()+'<div data-parcel-summary>'+siteSummary()+'</div>'+
-        '<p class="cb-sub">'+bits(SHIP_FEE_BITS)+' per Shipment, Free for More Than '+FREE_OVER+' Cards. Processed Within 48 Hours.</p></aside></div>'+parcelList()+'</div>';
+        '<p class="cb-sub">'+bits(SHIP_FEE_BITS)+' per Shipment, Free at '+FREE_CARDS+'+ Cards or '+FREE_VALUE.toLocaleString('en-US')+' Cardbits in Card Value. Processed Within 48 Hours.</p></aside></div>'+parcelList()+'</div>';
     }
     function siteReview() {
       if(!selected.size)return;
@@ -53,7 +71,7 @@
         ctx.root().querySelector('[data-parcel-field]:invalid, [data-parcel-field="'+(problems[0].includes('state')||problems[0].includes('Ship to')?'state':'name')+'"]')?.focus();
         return;
       }
-      const ids=[...selected].sort(), a={...address}, cost=fee(ids.length), balance=get().account?.bits ?? 0;
+      const ids=[...selected].sort(), a={...address}, cost=fee(ids.length, valueOfIds(ids)), balance=get().account?.bits ?? 0;
       review={copyIds:ids,address:a,key:JSON.stringify([ids,a.name,a.street1,a.street2,a.city,a.state,a.zip])};
       const cards=get().binder.filter(c=>ids.includes(c.id));
       ctx.modal('<h2>Review Your Shipment</h2><p>'+ids.length+' '+(ids.length===1?'Card':'Cards')+' in One Parcel.</p>'+

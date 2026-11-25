@@ -21,7 +21,31 @@
   };
   const here = () => location.pathname + location.search;
 
+  // Vault "TCGplayer Market" labels from /api/portfolio. Shown only when the server says market data is
+  // approved; the Vault Portfolio panel (cardbit-portfolio.js) reads the same endpoint itself.
+  let market = null, marketLoad = null;
+  const norm = v => String(v ?? '').trim().toLowerCase();
+  const marketKey = c => [c.name, c.number, c.finish ?? c.printing, c.condition, c.language].map(norm).join('|');
+  const money = cents => '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function loadMarket() {
+    if (marketLoad) return marketLoad;
+    marketLoad = fetch(apiBase + '/portfolio', { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        market = new Map();
+        if (data && data.marketApproved) for (const h of data.holdings || []) if (Number.isFinite(h.market) && h.market > 0) market.set(marketKey(h), h);
+        if (market.size) window.CardbitSiteRefreshVault?.();
+      })
+      .catch(() => { market = new Map(); });
+    return marketLoad;
+  }
+
   window.CardbitSite = Object.freeze({
+    marketLabel: card => {
+      if (!market) { loadMarket(); return null; }
+      const h = market.get(marketKey(card));
+      return h ? { amount: money(h.market), date: h.marketDate ? 'TCGplayer Market as of ' + String(h.marketDate).slice(0, 10) : '' } : null;
+    },
     api: path => apiBase + '/' + String(path).replace(/^\/+/, ''),
     signInURL: (returnTo = here()) => (root?.dataset.signIn || '/sign-in') + '?return_to=' + encodeURIComponent(sameOrigin(returnTo)),
     topupURL: amount => (root?.dataset.topupCheckout || '/checkout/cardbits') + '?amount=' + encodeURIComponent(amount) + '&return_to=' + encodeURIComponent(here()),

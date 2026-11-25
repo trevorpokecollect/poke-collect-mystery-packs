@@ -45,6 +45,7 @@ const STYLES = [
   "cardbit-topups.css",
   "cardbit-polish.css",
   "cardbit-flair.css",
+  "cardbit-portfolio.css",
 ];
 const SCRIPTS = [
   "cardbit-collector-rules.js",
@@ -61,6 +62,8 @@ const SCRIPTS = [
   "cardbit-flair.js",
   "cardbit-how-it-works.js",
   "cardbit-storefront.js",
+  "cardbit-market-chart.js",
+  "PORTFOLIO",
 ];
 
 function assetMap(): string {
@@ -104,7 +107,9 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
   const scripts = SCRIPTS.map((name) =>
     name === "SITE_STORE"
       ? `<script src="/site/js/cardbit-site-store.js?v=${SITE_STORE_V}" defer></script>`
-      : `<script src="${assetUrl(name)}" defer></script>`,
+      : name === "PORTFOLIO"
+        ? `<script src="${assetUrl("cardbit-portfolio.js")}" data-portfolio-endpoint="/api/portfolio" defer></script>`
+        : `<script src="${assetUrl(name)}" defer></script>`,
   ).join("\n    ");
 
   return `<!doctype html>

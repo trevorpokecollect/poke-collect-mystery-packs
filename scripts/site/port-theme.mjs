@@ -70,6 +70,10 @@ const PATCHES = {
     ["      if(el.hasAttribute('data-parcel-copy')){", "      /* SITE */ if(el.hasAttribute('data-parcel-field')){address[el.dataset.parcelField]=el.value;saveAddress();if(ctx.root().querySelector('[data-parcel-summary] [role=alert]'))updateSummary();return true;}\n      if(el.hasAttribute('data-parcel-copy')){"],
   ],
   'cardbit-collector-pages.js': [
+    // Vault market data on the site: per-card labels and the Vault Portfolio panel read /api/portfolio.
+    ["const quote = get().mode==='shopper-test' && root.CardbitVaultMarket?.label(c);", "const quote = get().mode==='shopper-test' && (root.CardbitStore?.site ? root.CardbitSite?.marketLabel?.(c) : root.CardbitVaultMarket?.label(c));"],
+    ['<cardbit-vault-portfolio data-source="shopper"></cardbit-vault-portfolio>', '<cardbit-vault-portfolio data-source="\'+(root.CardbitStore?.site ? \'wallet\' : \'shopper\')+\'"></cardbit-vault-portfolio>'],
+    ["    function updateVault() {\n", "    /* SITE */ root.CardbitSiteRefreshVault = () => updateVault();\n    function updateVault() {\n"],
     // Shipment detail: show the site's destination text, Cardbits fee and carrier.
     ["['Destination',dest?.label],\n            ['Postage','Calculated at Shipping Checkout']",
      "['Destination',dest?.label || (typeof p.destination==='string' ? p.destination : null)],\n            /* SITE */ ['Shipping',root.CardbitStore?.site ? (p.feeBits ? Number(p.feeBits).toLocaleString('en-US')+' Cardbits' : 'Free') : 'Calculated at Shipping Checkout']"],
@@ -92,6 +96,8 @@ const PATCHES = {
     ['<a href="/pages/official-rules">Official Rules</a>', '<a href="/official-rules">Official Rules</a>'],
     // A single-card ship request goes to Ship Together, which collects the delivery address.
     ["    /* SITE */ if (site() && action==='topup')", "    /* SITE */ if (site() && action==='ship') { navigate('ship-together/select/'+enc(id)); return; }\n    /* SITE */ if (site() && action==='topup')"],
+    // No category tags (Pokemon, Modern, Vintage...) under the pack tiles (Trevor, Nov 24).
+    ["'cb-edition-name')+categoryTags(pack.id,true)+list;", "'cb-edition-name')+/* SITE */(site() ? '' : categoryTags(pack.id,true))+list;"],
     // Footer Policies is a plain link like the others (policyLink adds the blue cb-textlink style).
     ["+welcomeLink+policyLink('Policies')+", "+welcomeLink+/* SITE */(site() ? '<a href=\"'+esc(root.dataset.policyView || '/policies')+'\">Policies</a>' : policyLink('Policies'))+"],
     // Live Pulls card feed on the home page, without the text ticker (Trevor, Nov 24).
@@ -183,12 +189,27 @@ async function section(file, settings = {}) {
   return html.trim() + '\n';
 }
 
+// Site-only page wording. Rule (Trevor, Nov 24): any site change that affects How It Works or Policies
+// updates them in the same change. Each anchor must exist, so a theme rewrite fails loudly here.
+const PAGE_COPY = {
+  'how-it-works.html': [
+    ['<b>Free Shipping</b> on Vault shipments of more than 30 cards.', '<b>Free Shipping</b> on Vault shipments of 30 or more cards, or 10,000 Cardbits or more in card value.'],
+    ['Vault shipments of more than 30 cards ship free.', 'Vault shipments of 30 or more cards, or 10,000 Cardbits or more in card value, ship free.'],
+  ],
+  'policies.html': [
+    ['$6 or 600 Cardbits, free over 30 cards.', '$6 or 600 Cardbits, free at 30+ cards or 10,000 Cardbits of card value.'],
+    ['<div class="is-free"><b>Free</b><span>Over 30 cards</span></div>', '<div class="is-free"><b>Free</b><span>30+ cards or 10,000 Cardbits value</span></div>'],
+    ['shipments of more than 30 cards ship free.', 'shipments of 30 or more cards, or of cards worth 10,000 Cardbits or more in total, ship free.'],
+    ['<strong>Free shipping</strong> for any single shipment of more than 30 cards.', '<strong>Free shipping</strong> for any single shipment of 30 or more cards, or of cards worth 10,000 Cardbits or more in total.'],
+  ],
+};
+
 mkdirSync(outPartials, { recursive: true });
-const how = await section('cardbit-how-it-works.liquid');
+const how = patch('how-it-works.html', await section('cardbit-how-it-works.liquid'), PAGE_COPY['how-it-works.html']);
 if (!how.includes('<template id="cb-portable-how">')) throw new Error('How It Works template id changed');
 writeFileSync(join(outPartials, 'how-it-works.html'), how);
 
 const policySettings = JSON.parse(readFileSync(join(theme, 'templates/index.policies.json'), 'utf8')).sections.policies.settings;
-writeFileSync(join(outPartials, 'policies.html'), await section('cardbit-policies.liquid', policySettings));
+writeFileSync(join(outPartials, 'policies.html'), patch('policies.html', await section('cardbit-policies.liquid', policySettings), PAGE_COPY['policies.html']));
 
 console.log(`Copied ${copied} assets to public/site/assets; wrote ${readdirSync(outPartials).length} partials.`);
