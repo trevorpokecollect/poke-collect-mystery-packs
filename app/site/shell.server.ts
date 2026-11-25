@@ -21,6 +21,7 @@ import sitePlayCssSource from "../../public/site/css/cardbit-site-play.css?raw";
 import siteChatSource from "../../public/site/js/cardbit-site-chat.js?raw";
 import siteChatCssSource from "../../public/site/css/cardbit-site-chat.css?raw";
 import sitePulseSource from "../../public/site/js/cardbit-site-pulse.js?raw";
+import siteAdsSource from "../../public/site/js/cardbit-site-ads.js?raw";
 const chatOn = () => process.env.SITE_CHAT === "on"; // same flag as app/site/play/chat.server.ts
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
@@ -38,8 +39,28 @@ const SITE_PLAY_CSS_V = version(sitePlayCssSource);
 const SITE_CHAT_V = version(siteChatSource);
 const SITE_CHAT_CSS_V = version(siteChatCssSource);
 const SITE_PULSE_V = version(sitePulseSource);
-/** First-party analytics beacon (Card Broker Analytics tab). Every customer page includes it. */
-export const pulseTag = () => `<script src="/site/js/cardbit-site-pulse.js?v=${SITE_PULSE_V}" defer></script>`;
+const SITE_ADS_V = version(siteAdsSource);
+
+/** Ad pixel IDs from Railway variables (Trevor 2026-11-25: Meta, TikTok, Google Ads). Malformed values are ignored. */
+export function adPixels(env: NodeJS.ProcessEnv = process.env) {
+  const pick = (v: string | undefined, re: RegExp) => (v && re.test(v.trim()) ? v.trim() : "");
+  return {
+    meta: pick(env.CARDBIT_SITE_META_PIXEL_ID, /^\d{6,20}$/),
+    tiktok: pick(env.CARDBIT_SITE_TIKTOK_PIXEL_ID, /^[A-Z0-9]{10,30}$/i),
+    gads: pick(env.CARDBIT_SITE_GOOGLE_ADS_ID, /^AW-\d{6,15}$/),
+    gadsPurchase: pick(env.CARDBIT_SITE_GOOGLE_ADS_PURCHASE_LABEL, /^[A-Za-z0-9_-]{4,40}$/),
+  };
+}
+
+/** Consent banner + ad pixels (public/site/js/cardbit-site-ads.js). Left out entirely until a pixel ID is set. */
+export function adsTag(env: NodeJS.ProcessEnv = process.env) {
+  const p = adPixels(env);
+  if (!p.meta && !p.tiktok && !p.gads) return "";
+  return `<script src="/site/js/cardbit-site-ads.js?v=${SITE_ADS_V}" data-meta="${p.meta}" data-tiktok="${p.tiktok}" data-gads="${p.gads}" data-gads-purchase="${p.gadsPurchase}" defer></script>`;
+}
+
+/** First-party analytics beacon (Card Broker Analytics tab) plus the ad consent script. Every customer page includes it. */
+export const pulseTag = () => `<script src="/site/js/cardbit-site-pulse.js?v=${SITE_PULSE_V}" defer></script>${adsTag()}`;
 
 export const SITE_ENABLED = () => process.env.CARDBIT_SITE === "on";
 

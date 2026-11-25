@@ -19,7 +19,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (t.status === "CREDITED") {
     const bal = await balanceOf(db, customer.id);
     const total = t.baseBits + t.bonusBits;
-    return htmlResponse(simplePage("Payment", `<h1>Cardbits Added</h1><p class="sub">${total.toLocaleString("en-US")} Cardbits were added. Your balance is ${bal.toLocaleString("en-US")} Cardbits.</p>${back}`));
+    // Ad partners (only after the visitor accepted ad cookies) get the dollars charged, sent once per top-up.
+    const adEvent = `<meta name="cb-ad-event" content="${esc(JSON.stringify({ event: "purchase", id: t.id, value: t.cents / 100 }))}">`;
+    return htmlResponse(simplePage("Payment", `<h1>Cardbits Added</h1><p class="sub">${total.toLocaleString("en-US")} Cardbits were added. Your balance is ${bal.toLocaleString("en-US")} Cardbits.</p>${back}`, adEvent));
   }
   if (t.status !== "PENDING") return htmlResponse(simplePage("Payment", `<h1>Payment Update</h1><p class="sub">This payment was reversed. Contact hello@cardbit.com with questions.</p>${back}`));
   const ageMin = (Date.now() - t.createdAt.getTime()) / 60000;
