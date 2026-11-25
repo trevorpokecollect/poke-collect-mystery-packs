@@ -58,8 +58,9 @@ const cents = (n: unknown) =>
     ? Math.round(n * 100)
     : null;
 export async function site<T>(path: string, params: URLSearchParams) {
-  const key = process.env.CARD_BROKER_API_KEY,
-    base = process.env.CARD_BROKER_API_URL;
+  // CARDBROKER_* (no underscore) is accepted too; that's how the app-site variables were named.
+  const key = process.env.CARD_BROKER_API_KEY || process.env.CARDBROKER_API_KEY,
+    base = process.env.CARD_BROKER_API_URL || process.env.CARDBROKER_API_URL;
   if (!key || !base)
     throw Error("Configure the Cardbit catalog and inventory connection.");
   const url = new URL(base),
