@@ -8,8 +8,8 @@
 //      {intent:"restocks"} → staged restock + odds now/after + history per pack
 //      {intent:"restock-unstage", copyIds} | {intent:"restock-publish", packId, note?} (goes live now, new pool version)
 //      {intent:"pack-ev", packId, targetEvPct|null, evBandPct, minTopPer100|null, languages?, eras?,
-//        minValueBits?, maxValueBits?, typeCaps?, tierMix?, topTierMin?} (only sent fields change; EV/rules internal only)
-//      {intent:"auto-restock-run"} runs the hourly automatic buyback restock now
+//        minValueBits?, maxValueBits?, typeCaps?, tierMix?, topTierMin?, autoDrafts?} (only sent fields change; EV/rules internal only)
+//      {intent:"auto-restock-run"} runs the hourly automatic restock now (buybacks + listed Drafts for Auto-Fill packs)
 //      {intent:"remove", copyIds, reason} deletes unsold Draft/Active copies (→ REMOVED, pocket freed, logged)
 //      {intent:"slot", copyId, slot, pocket?} moves one copy to a chosen slot (10001+) and pocket
 //      {intent:"boxes"} cards and slots used per box (Card Broker box claiming)
@@ -84,7 +84,7 @@ export async function action({ request }: ActionFunctionArgs) {
       }
       case "pack-ev": {
         const p = await savePackEv(db, String(b.packId || ""), b);
-        return Response.json({ ok: true, pack: { id: p.id, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras } });
+        return Response.json({ ok: true, pack: { id: p.id, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, autoDrafts: p.autoDrafts } });
       }
       case "remove":
         return Response.json({ ok: true, ...(await removeCopies(db, actor, b.copyIds, b.reason)) });
