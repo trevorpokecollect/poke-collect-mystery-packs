@@ -13,3 +13,7 @@ startAutoRestockClock(db);
 // Nightly Cardbits balance check (read-only; emails staff on a mismatch). SITE_LEDGER_CHECK=off disables it.
 import { startLedgerCheckClock } from "./core/ledger-check.server";
 startLedgerCheckClock(db);
+
+// Klaviyo marketing sync (consent + flow events) every 5 minutes. Off unless KLAVIYO_PRIVATE_KEY is set; KLAVIYO_SYNC=off stops it.
+import { startKlaviyoClock } from "./marketing/klaviyo.server";
+startKlaviyoClock(db);

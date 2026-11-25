@@ -1327,6 +1327,25 @@ model SiteMarketing {
   updatedAt      DateTime  @updatedAt
 }
 
+// Klaviyo marketing events (cardbit.com only). Producers insert with a dedupeKey; klaviyo.server.ts sends
+// them when KLAVIYO_PRIVATE_KEY is set on app-site. Only customers with marketing consent get rows.
+model SiteKlaviyoEvent {
+  id         String    @id @default(cuid())
+  dedupeKey  String    @unique
+  customerId String
+  metric     String
+  properties Json
+  value      Float?
+  time       DateTime
+  status     String    @default("PENDING") // PENDING | SENT | FAILED (retried) | REJECTED | SKIPPED
+  attempts   Int       @default(0)
+  nextAt     DateTime  @default(now())
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime  @default(now())
+  @@index([status, nextAt])
+}
+
 model SiteLedger {
   id             String   @id @default(cuid())
   customerId     String
