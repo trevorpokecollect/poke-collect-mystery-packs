@@ -63,8 +63,12 @@ export function previousRange(r: Range, tz = TZ): Range {
 }
 
 /** Bucket keys for a chart: hours of one day, or every day of the range. */
-function buckets(r: Range): string[] {
-  if (r.hourly) return Array.from({ length: 24 }, (_, h) => `${r.from} ${String(h).padStart(2, "0")}`);
+function buckets(r: Range, now: Date, tz: string): string[] {
+  if (r.hourly) {
+    // Today stops at the current hour, like Shopify; past days show all 24.
+    const hours = r.from === localDay(now, tz) ? Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(now)) + 1 : 24;
+    return Array.from({ length: hours }, (_, h) => `${r.from} ${String(h).padStart(2, "0")}`);
+  }
   return Array.from({ length: r.days }, (_, i) => addDays(r.from, i));
 }
 
@@ -191,7 +195,7 @@ async function totalsFor(db: PrismaClient, start: Date, end: Date, ids: string[]
   };
 }
 
-async function seriesFor(db: PrismaClient, r: Range, ids: string[], tz: string) {
+async function seriesFor(db: PrismaClient, r: Range, ids: string[], tz: string, now = new Date()) {
   const b = (col: string) => bucketSql(Prisma.raw(col), r, tz);
   const ns = (col: string) => notStaff(Prisma.raw(col), ids);
   const [sales, orders, visits] = await Promise.all([
@@ -220,7 +224,7 @@ async function seriesFor(db: PrismaClient, r: Range, ids: string[], tz: string) 
   ]);
   const by = <T extends { k: string }>(rows: T[]) => new Map(rows.map((x) => [x.k, x]));
   const s = by(sales), o = by(orders), v = by(visits);
-  return buckets(r).map((k) => ({
+  return buckets(r, now, tz).map((k) => ({
     k,
     cents: num(s.get(k)?.cents),
     orders: num(o.get(k)?.n),
@@ -241,8 +245,8 @@ export async function overview(db: PrismaClient, input: { from?: unknown; to?: u
   const [current, previous, series, previousSeries, topPacks] = await Promise.all([
     totalsFor(db, r.start, r.end, ids),
     totalsFor(db, p.start, p.end, ids),
-    seriesFor(db, r, ids, tz),
-    seriesFor(db, p, ids, tz),
+    seriesFor(db, r, ids, tz, deps.now),
+    seriesFor(db, p, ids, tz, deps.now),
     db.$queryRaw<{ id: string; title: string | null; n: bigint; bits: bigint }[]>`
       SELECT o."packId" id, max(p.title) title, count(*) n, coalesce(sum(o."priceBits"), 0) bits
       FROM "SiteOpening" o LEFT JOIN "SitePack" p ON p.id = o."packId"
@@ -377,7 +381,7 @@ export async function traffic(db: PrismaClient, input: { from?: unknown; to?: un
   const [cur, prev, series, sources, referrers, campaigns, devices, browsers, oses, countries, regions, landing, pages] = await Promise.all([
     totals(r.start, r.end),
     totals(p.start, p.end),
-    seriesFor(db, r, ids, tz),
+    seriesFor(db, r, ids, tz, deps.now),
     breakdown("source", 12),
     breakdown(`coalesce("sourceName", "referrerHost")`, 15, `source <> 'direct'`),
     breakdown(`concat_ws(' / ', coalesce("utmSource", '—'), coalesce("utmMedium", '—'), coalesce("utmCampaign", '—'))`, 15, `"utmSource" IS NOT NULL OR "utmMedium" IS NOT NULL OR "utmCampaign" IS NOT NULL`),
