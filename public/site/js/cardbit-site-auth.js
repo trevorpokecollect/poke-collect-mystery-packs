@@ -5,7 +5,7 @@
  * full-page /sign-in and /checkout/cardbits screens, which remain as no-JavaScript fallbacks.
  *
  *   POST /sign-in             (Accept: application/json) intent=send|verify -> {step}|{signedIn}|{error}
- *   POST /checkout/cardbits   (Accept: application/json) amount,state,zip   -> {redirect}|{error}
+ *   POST /checkout/cardbits   (Accept: application/json) amount,state,zip,promo -> {redirect}|{error}
  *   GET  /auth/google?return_to=
  *
  * The storefront theme file is generated (scripts/site/port-theme.mjs), so this file hooks in
@@ -26,6 +26,7 @@
   const AGE_OK_KEY = 'cardbit:age-ok:';
   const AGE_MSG = 'Confirm You’re 18 or Older to Continue.';
   const BILLING_KEY = 'cardbit:billing:v1';
+  const PROMO_KEY = 'cardbit:promo:v1'; // {code, at} from a ?promo= link, kept 30 days
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
   const num = n => Number(n).toLocaleString('en-US');
@@ -207,6 +208,7 @@
       '<div class="cbx-total" data-cbx-total></div>' +
       '<div class="cbx-row"><div><label for="cbx-state">Billing State</label><select id="cbx-state" name="state" autocomplete="billing address-level1" required><option value="">Choose…</option>' + options + '</select></div>' +
       '<div><label for="cbx-zip">Billing ZIP</label><input id="cbx-zip" name="zip" inputmode="numeric" autocomplete="billing postal-code" pattern="[0-9]{5}" maxlength="5" required value="' + esc(billing.zip || '') + '"></div></div>' +
+      '<div><label for="cbx-promo">Promo Code <small>(Optional)</small></label><input id="cbx-promo" name="promo" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="32" value="' + esc(savedPromo()) + '"></div>' +
       errorLine + '<button type="submit" class="cb-primary cbx-wide">' + LOCK + '<span>Continue to Secure Checkout</span></button></form>' +
       '<p class="cbx-fine">$1 Buys 100 Cardbits. Pay by Card on Our Payment Partner’s Secure Page. Cardbits Purchases Are Final Sale. Not Available in AL, HI, ID, MN, NV, NY, UT or WA. <a href="/cardbits">Balance History</a></p>',
       'cbx-buy');
@@ -223,6 +225,7 @@
   async function checkout(button) {
     const f = dlg.querySelector('form');
     const state = f.state.value, zip = String(f.zip.value || '').trim();
+    const promo = String(f.promo?.value || '').trim().toUpperCase().replace(/\s+/g, '');
     if (!state) { setError('Choose Your Billing State.'); f.state.focus(); return; }
     if (!/^\d{5}$/.test(zip)) { setError('Enter a 5-Digit ZIP Code.'); f.zip.focus(); return; }
     local.set(BILLING_KEY, { state, zip });
@@ -230,14 +233,23 @@
     try { device = window.nSureSDK?.getDeviceId?.() || ''; } catch {}
     setError(''); setBusy(button, true, 'Opening Secure Checkout…');
     try {
-      const r = await post('/checkout/cardbits', { amount: buyState.amount, state, zip, device_id: device, return_to: here() });
+      const r = await post('/checkout/cardbits', { amount: buyState.amount, state, zip, promo, device_id: device, return_to: here() });
       location.assign(r.redirect);
     } catch (e) {
       setBusy(button, false);
       if (e.code === 'sign_in') { busy = false; signIn({ after: 'buy:' + buyState.amount, error: 'Sign In to Buy Cardbits.' }); return; }
+      if (e.code === 'promo') { local.set(PROMO_KEY, null); f.promo?.focus(); }
       setError(e.message);
     }
   }
+  function savedPromo() {
+    const p = local.get(PROMO_KEY);
+    return p && p.code && Date.now() - p.at < 30 * 864e5 ? String(p.code) : '';
+  }
+  try {
+    const fromLink = new URLSearchParams(location.search).get('promo');
+    if (fromLink && /^[A-Za-z0-9-]{2,32}$/.test(fromLink.trim())) local.set(PROMO_KEY, { code: fromLink.trim().toUpperCase(), at: Date.now() });
+  } catch {}
 
   // ---------- wiring ----------
   document.addEventListener('submit', e => {

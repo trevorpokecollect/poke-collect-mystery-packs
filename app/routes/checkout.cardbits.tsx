@@ -10,13 +10,14 @@ import { CoinflowError, coinflowConfigured, createCheckoutLink, topupPackage } f
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits } from "../site/play/limits.server";
 import { createStripeCheckout, siteStripe, siteStripeConfig, topupProvider } from "../site/payments/stripe-site.server";
 import { GuardRefused, assertRate, assertTopupAllowed, threeDSecureFor } from "../site/core/guard.server";
+import { PromoCodeError, normalizeCode, quotePromo, releasePendingUses } from "../site/promos/promo-codes.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const fmt = (n: number) => n.toLocaleString("en-US");
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 const allowedStates = [...US_STATES].filter((s) => !(EXCLUDED_STATES as readonly string[]).includes(s)).sort();
 
-function form(o: { amount: number; returnTo: string; state?: string; zip?: string; error?: string }) {
+function form(o: { amount: number; returnTo: string; state?: string; zip?: string; promo?: string; error?: string }) {
   const p = topupPackage(o.amount)!;
   const opts = allowedStates.map((s) => `<option${s === o.state ? " selected" : ""}>${s}</option>`).join("");
   const err = o.error ? `<p class="err" role="alert">${esc(o.error)}</p>` : "";
@@ -30,6 +31,7 @@ function form(o: { amount: number; returnTo: string; state?: string; zip?: strin
      <input type="hidden" name="return_to" value="${esc(o.returnTo)}"><input type="hidden" name="device_id" id="dev">
      <label for="state">Billing State</label><select id="state" name="state" required><option value="">Choose…</option>${opts}</select>
      <label for="zip">Billing ZIP Code</label><input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" maxlength="5" required value="${esc(o.zip || "")}">
+     <label for="promo">Promo Code (Optional)</label><input id="promo" name="promo" autocomplete="off" autocapitalize="characters" maxlength="32" value="${esc(o.promo || "")}">
      <button class="btn" type="submit">Continue To Payment</button></form>
      <p class="fine">Cardbits purchases are final sale. Not available in AL, HI, ID, MN, NV, NY, UT or WA. <a href="${esc(o.returnTo)}">Cancel</a></p>
      <script>document.getElementById("f").addEventListener("submit",function(){try{var d=window.nSureSDK&&window.nSureSDK.getDeviceId();if(d)document.getElementById("dev").value=d}catch(e){}});</script>`,
@@ -87,7 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const returnTo = safeReturn(url.searchParams.get("return_to") || "/");
   const g = await guard(request, url.searchParams.get("amount"), returnTo);
   if (g.res) return g.res;
-  return htmlResponse(form({ amount: g.amount, returnTo }));
+  return htmlResponse(form({ amount: g.amount, returnTo, promo: normalizeCode(url.searchParams.get("promo")).slice(0, 32) }));
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -100,8 +102,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const state = String(fd.get("state") || "").trim().toUpperCase();
   const zip = String(fd.get("zip") || "").trim();
   const deviceId = String(fd.get("device_id") || "").slice(0, 200) || null;
-  const again = (error: string, status = 400) =>
-    asJson ? json({ error }, status) : htmlResponse(form({ amount: g.amount, returnTo, state, zip, error }), status);
+  const promoRaw = String(fd.get("promo") || "").slice(0, 64);
+  const again = (error: string, status = 400, code?: string) =>
+    asJson ? json({ error, ...(code ? { code } : {}) }, status) : htmlResponse(form({ amount: g.amount, returnTo, state, zip, promo: promoRaw, error }), status);
   const go = (location: string) => (asJson ? json({ redirect: location }) : new Response(null, { status: 303, headers: { Location: location } }));
   if (!/^\d{5}$/.test(zip)) return again("Enter a 5-digit ZIP code.");
   try {
@@ -119,7 +122,15 @@ export async function action({ request }: ActionFunctionArgs) {
     throw e;
   }
   if (!ip) return again("We couldn't confirm your connection. Please try again.");
-  const p = topupPackage(g.amount)!;
+  const pkg = topupPackage(g.amount)!;
+  // A promo code adds bonus Cardbits (checked here for a quick answer, and again under the lock).
+  try {
+    await quotePromo(db, { code: promoRaw, customerId: g.customer.id, cents: pkg.cents, baseBits: pkg.baseBits });
+  } catch (e) {
+    if (e instanceof PromoCodeError) return again(e.message, 400, "promo");
+    throw e;
+  }
+  let p = { ...pkg };
   const provider = topupProvider();
   // Recheck the Top-Up Limit under a per-customer lock so two tabs can't both slip under it.
   let topup;
@@ -129,13 +140,22 @@ export async function action({ request }: ActionFunctionArgs) {
       await assertNotPaused(tx, g.customer.id);
       await assertWithinLimits(tx, g.customer.id, "topup", p.cents);
       await assertTopupAllowed(tx, g.customer, p.cents);
+      const promo = await quotePromo(tx, { code: promoRaw, customerId: g.customer.id, cents: pkg.cents, baseBits: pkg.baseBits });
+      if (promo) {
+        // Lock the code too, so its total-use cap can't be passed by two customers at once.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`site-promo:${promo.code}`}, 0))::text`;
+        await quotePromo(tx, { code: promoRaw, customerId: g.customer.id, cents: pkg.cents, baseBits: pkg.baseBits });
+        await releasePendingUses(tx, promo.code, g.customer.id);
+        p = { ...pkg, bonusBits: pkg.bonusBits + promo.bonusBits };
+      }
       return tx.siteTopup.create({
-        data: { customerId: g.customer.id, ...p, provider, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion, deviceId, userAgent: (request.headers.get("user-agent") || "").slice(0, 300) || null },
+        data: { customerId: g.customer.id, ...p, promoCode: promo?.code ?? null, promoBits: promo?.bonusBits ?? 0, provider, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion, deviceId, userAgent: (request.headers.get("user-agent") || "").slice(0, 300) || null },
       });
     });
   } catch (e) {
     if (e instanceof PlayPaused || e instanceof LimitReached) return again(e.message, 403);
     if (e instanceof GuardRefused) return again(e.message, e.status);
+    if (e instanceof PromoCodeError) return again(e.message, 400, "promo");
     throw e;
   }
   const callbackUrl = `${siteOrigin()}/checkout/cardbits/return?topup=${encodeURIComponent(topup.id)}&return_to=${encodeURIComponent(returnTo)}`;

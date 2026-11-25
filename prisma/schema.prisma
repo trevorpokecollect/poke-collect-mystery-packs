@@ -1416,6 +1416,8 @@ model SiteTopup {
   ipRegion     String?
   deviceId     String? // Coinflow/nSure device ID at checkout (chargeback evidence)
   userAgent    String?
+  promoCode    String? // SitePromoCode.code used at checkout; its bonus is already inside bonusBits
+  promoBits    Int      @default(0) // the part of bonusBits that came from the promo code
   riskLevel    String? // normal | elevated | highest, set when credited (risk.server.ts)
   riskReasons  Json?
   clawedBits   Int      @default(0) // Cardbits taken back on refund/chargeback
@@ -1689,4 +1691,23 @@ model SiteRestock {
   updatedAt DateTime  @updatedAt
   @@unique([packId, version])
   @@index([packId, status])
+}
+
+// Promo codes (Trevor 2026-11-25): entered at Cardbits checkout, add bonus Cardbits to that top-up.
+// One use per customer; optional total cap, dates, minimum top-up and first-top-up-only.
+model SitePromoCode {
+  code           String    @id // upper case, A-Z 0-9 and dashes
+  kind           String // PERCENT (value = % of the paid Cardbits) | FLAT (value = Cardbits)
+  value          Int
+  maxBonusBits   Int? // cap on a PERCENT bonus
+  maxUses        Int? // total credited uses allowed
+  minCents       Int? // smallest top-up it applies to
+  firstTopupOnly Boolean   @default(false)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  active         Boolean   @default(true)
+  note           String?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
