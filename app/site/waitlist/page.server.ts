@@ -21,29 +21,27 @@ const PACKS = [
   { id: "wildcard", name: "Wildcard", cards: "1 Card", tags: ["Modern", "Vintage", "English", "Japanese"], line: "Anything Can Happen. That's the Point." },
 ];
 
-// Real hits only (Trevor, Nov 25: no regular commons). Each one fits the rules of the packs it is shown with:
+// Card scans live in public/site/waitlist/cards/ (480px WebP, official scans). Trevor, Nov 25: only high-end hits
+// (special illustration/art rares, alt arts, vintage holos; never regular ex or commons), lots of variety, and no
+// card or Pokemon shown twice anywhere on the page. Every pull fits the rules of the pack it is shown with:
 // Mystery = modern English; Booster = modern English/Japanese; Japanese = modern Japanese;
 // Gold and Wildcard = modern + vintage, English/Japanese.
-const HITS = {
-  pikachuJp: "cardbit-latch-pikachu-173-jp.webp", // Japanese art rare (modern JP)
-  clefairy: "cardbit-latch-clefairy-184.webp", // Lillie's Clefairy ex special illustration rare (modern EN)
-  slowking: "cardbit-latch-slowking-014.webp", // 1st Edition holo (vintage EN)
-  lucario: "cardbit-pilot-50938395558050.webp", // Lucario ex (modern EN)
-  bellossom: "cardbit-chase-bellossom.jpg", // 1st Edition holo (vintage EN)
-  jumpluff: "cardbit-chase-jumpluff.jpg", // 1st Edition holo (vintage EN)
-  pichu: "cardbit-pichu.webp", // 1st Edition holo (vintage EN)
-  medicham: "cardbit-latch-pilot-50938395459746.webp", // Medicham ex (modern EN)
-} as const;
-const CARDS = [HITS.pikachuJp, HITS.clefairy, HITS.slowking, HITS.lucario, HITS.bellossom, HITS.jumpluff, HITS.pichu, HITS.medicham];
-// Hero rip: three pulls per pack, in PACKS order, all allowed in that pack.
+const cardUrl = (slug: string) => `/site/waitlist/cards/${slug}.webp?v=1`;
+// Hero rip: three pulls per pack, in PACKS order.
 const RIPS: Record<string, string[]> = {
-  mystery: [HITS.clefairy, HITS.lucario, HITS.medicham],
-  booster: [HITS.pikachuJp, HITS.clefairy, HITS.lucario],
-  gold: [HITS.slowking, HITS.clefairy, HITS.bellossom],
-  japanese: [HITS.pikachuJp, HITS.pikachuJp, HITS.pikachuJp],
-  wildcard: [HITS.jumpluff, HITS.pikachuJp, HITS.pichu],
+  mystery: ["charizard-ex-sir-obf", "umbreon-ex-sir-pre", "pikachu-ex-sir-ssp"],
+  booster: ["mew-ex-sar-sv2a", "rayquaza-vmax-alt-evs", "sylveon-ex-sir-pre"],
+  gold: ["lugia-holo-neo-genesis", "giratina-v-alt-lor", "blastoise-holo-base"],
+  japanese: ["eevee-ex-sar-sv8a", "iono-sar-sv4a", "snorlax-ar-sv2a"],
+  wildcard: ["gengar-holo-fossil", "zapdos-ex-sar-sv2a", "greninja-ex-sir-twm"],
 };
-const REEL: [string, number][] = [["sparks", 25], ["card", 3], ["xp", 25], ["sparks", 50], ["xp", 10], ["card", 2], ["sparks", 10], ["xp", 50], ["card", 0], ["sparks", 25], ["xp", 25], ["card", 6], ["sparks", 100], ["xp", 10], ["card", 1], ["sparks", 25], ["xp", 50], ["card", 4], ["sparks", 50], ["xp", 25], ["card", 5], ["sparks", 10], ["xp", 10], ["card", 7], ["sparks", 25], ["xp", 50], ["card", 2], ["sparks", 50], ["xp", 25], ["card", 0], ["sparks", 10], ["xp", 10]];
+const HOW_FLIP = "espeon-ex-sir-pre";
+const HOW_CHOOSE = "gardevoir-ex-sir-svi";
+const VAULT = ["mewtwo-holo-base", "leafeon-vmax-alt-evs", "latias-ex-sir-ssp", "charmander-ir-151", "venusaur-holo-base", "psyduck-ar-sv2a", "dragapult-ex-sir-pre", "typhlosion-holo-neo-genesis", "glaceon-vmax-alt-evs"];
+const FINAL = ["roaring-moon-ex-sir-par", "shining-gyarados-neo-revelation", "erikas-invitation-sar-sv2a", "blaziken-vmax-alt-cre", "ho-oh-holo-neo-revelation"];
+const REEL_CARDS = ["terapagos-ex-sir-scr", "squirtle-ir-151", "bulbasaur-ir-151", "alakazam-holo-base", "magikarp-ir-pal", "raichu-ir-pal", "lillies-clefairy-ex-sir-jtg", "slowking-holo-1st-neo-revelation"];
+// Daily Spin strip: each card tile appears once (REEL_CARDS index), the rest are Sparks and XP.
+const REEL: [string, number][] = [["sparks", 25], ["card", 0], ["xp", 25], ["sparks", 50], ["xp", 10], ["card", 1], ["sparks", 10], ["xp", 50], ["sparks", 25], ["card", 2], ["xp", 25], ["sparks", 100], ["xp", 10], ["card", 3], ["sparks", 25], ["xp", 50], ["sparks", 50], ["card", 4], ["xp", 25], ["sparks", 10], ["xp", 10], ["card", 5], ["sparks", 25], ["xp", 50], ["sparks", 50], ["card", 6], ["xp", 25], ["sparks", 10], ["xp", 10], ["card", 7], ["sparks", 25], ["xp", 50]];
 const BACK: Record<string, string> = { japanese: "cardbit-card-back-ja-modern.webp" };
 
 const FRIENDS = [
@@ -57,7 +55,6 @@ const friend = (id: string) => {
 };
 
 const pack = (id: string) => assetUrl(`cardbit-latch-pack-${id}.webp`);
-const card = (i: number) => assetUrl(CARDS[i % CARDS.length]);
 
 function form(id: string, compact = false) {
   return `<form class="wl-form${compact ? " wl-form--compact" : ""}" data-wl-form novalidate>
@@ -126,7 +123,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
     @font-face{font-family:'Cardbit Atkinson';src:url('${assetUrl("cardbit-type-atkinson.woff")}') format('woff');font-weight:200 800;font-display:swap}
   </style>
   <link rel="stylesheet" href="/site/waitlist/waitlist.css?v=${CSS_V}">
-  <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), rips: PACKS.map((p) => RIPS[p.id].map((c) => assetUrl(c))), backs: PACKS.map((p) => assetUrl(BACK[p.id] || "cardbit-card-back-en.webp")) }).replace(/</g, "\\u003c")};</script>
+  <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), rips: PACKS.map((p) => RIPS[p.id].map(cardUrl)), backs: PACKS.map((p) => assetUrl(BACK[p.id] || "cardbit-card-back-en.webp")) }).replace(/</g, "\\u003c")};</script>
   <script src="/site/waitlist/waitlist.js?v=${JS_V}" defer></script>
   ${pulseTag()}
 </head>
@@ -166,7 +163,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
         <img class="wl-side wl-side--r" src="${pack("japanese")}" alt="" width="842" height="1520">
         <div class="wl-rip" data-wl-rip>
           <div class="wl-rip__cards">
-            ${[0, 1, 2].map((i) => `<div class="wl-rip__card" style="--i:${i}"><div class="wl-flip"><img class="wl-flip__back" data-wl-back src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" data-wl-front src="${assetUrl(RIPS.mystery[i])}" alt=""></div></div>`).join("")}
+            ${[0, 1, 2].map((i) => `<div class="wl-rip__card" style="--i:${i}"><div class="wl-flip"><img class="wl-flip__back" data-wl-back src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" data-wl-front src="${cardUrl(RIPS.mystery[i])}" alt=""></div></div>`).join("")}
           </div>
           <div class="wl-rip__pack" data-wl-pack>
             <div class="wl-rip__body" style="--art:url('${pack("mystery")}')"></div>
@@ -199,15 +196,15 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
             ${PACKS.map((p, i) => `<img src="${pack(p.id)}" alt="" style="--i:${i};--ai:${Math.abs(i - 2)}">`).join("")}
           </div>
           <div class="wl-scene wl-scene--rip">
-            <div class="wl-bigflip"><div class="wl-flip"><img class="wl-flip__back" src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" src="${card(1)}" alt=""></div></div>
+            <div class="wl-bigflip"><div class="wl-flip"><img class="wl-flip__back" src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" src="${cardUrl(HOW_FLIP)}" alt=""></div></div>
             <span class="wl-tierchip">Pulled!</span>
           </div>
           <div class="wl-scene wl-scene--vault">
-            <div class="wl-vault">${[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => `<img src="${card(i)}" alt="" style="--i:${i}">`).join("")}</div>
+            <div class="wl-vault">${VAULT.map((c, i) => `<img src="${cardUrl(c)}" alt="" style="--i:${i}" loading="lazy">`).join("")}</div>
             <div class="wl-vault__label"><b>My Vault</b><span>Real Cards, Held for You</span></div>
           </div>
           <div class="wl-scene wl-scene--choose">
-            <div class="wl-choose__card"><img src="${card(2)}" alt=""></div>
+            <div class="wl-choose__card"><img src="${cardUrl(HOW_CHOOSE)}" alt=""></div>
             <div class="wl-choice wl-choice--keep"><b>Keep</b><span>Stays in My Vault</span></div>
             <div class="wl-choice wl-choice--ship"><b>Ship Together</b><span>Bundle Cards in One Box</span></div>
             <div class="wl-choice wl-choice--sell"><b>Sell Back</b><span>Instant Cardbits</span></div>
@@ -238,7 +235,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
       <div class="wl-grid3">
         <article class="wl-card wl-feature" data-wl-reveal>
           <div class="wl-reel" aria-hidden="true" data-wl-reel><span class="wl-reel__mk wl-reel__mk--t"></span><div class="wl-reel__track" data-wl-reel-track>${REEL.map(([k, x]) =>
-            k === "card" ? `<div class="wl-tile is-card" data-k="card"><img src="${card(x)}" alt="" loading="lazy"></div>`
+            k === "card" ? `<div class="wl-tile is-card" data-k="card"><img src="${cardUrl(REEL_CARDS[x])}" alt="" loading="lazy"></div>`
             : k === "sparks" ? `<div class="wl-tile is-sparks" data-k="sparks"><img src="${assetUrl("cardbit-sparks.svg")}" alt=""><b>${x}</b><span>Sparks</span></div>`
             : `<div class="wl-tile is-xp" data-k="xp"><i>XP</i><b>+${x}</b><span>XP</span></div>`).join("")}</div><span class="wl-reel__mk wl-reel__mk--b"></span></div>
           <h3>Daily Spins</h3><p>A free spin every day for Sparks, XP or a real card. Level up to unlock better spins with bigger prizes.</p>
@@ -282,7 +279,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
     </section>
 
     <section class="wl-final" aria-labelledby="wl-final-h">
-      <div class="wl-final__cards" aria-hidden="true">${[2, 1, 0, 5, 6].map((c, i) => `<img src="${card(c)}" alt="" style="--i:${i}" loading="lazy">`).join("")}</div>
+      <div class="wl-final__cards" aria-hidden="true">${FINAL.map((c, i) => `<img src="${cardUrl(c)}" alt="" style="--i:${i}" loading="lazy">`).join("")}</div>
       <div class="wl-card wl-final__box" data-wl-reveal>
         <p class="wl-eyebrow">Launching Soon</p>
         <h2 id="wl-final-h" class="wl-h2">Become a Founding Collector</h2>

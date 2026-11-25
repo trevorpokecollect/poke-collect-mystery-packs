@@ -379,3 +379,6 @@ main, .wl-top, .wl-foot { position: relative; z-index: 1; }
 .wl-packcard:not(.is-active) figcaption { visibility: hidden; }
 @media (max-width: 960px) { .wl-rip[data-phase="flip"] .wl-rip__pack, .wl-rip[data-phase="rise"] .wl-rip__pack { transform: translateY(6%); } }
 [hidden] { display: none !important; }
+
+/* Card scans come in two sizes; keep every card the same shape. */
+img[src*="/waitlist/cards/"] { aspect-ratio: 63 / 88; object-fit: cover; }
