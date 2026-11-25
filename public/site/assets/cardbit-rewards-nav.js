@@ -36,6 +36,15 @@
       nav.insertBefore(a, nav.querySelector('.cb-binder-link'));
     }
   }
+  /* SITE */ window.CardbitRewardsNav = { update(next) {
+    if (!data || !next) return;
+    const up = Number.isFinite(next.level) && next.level > data.level;
+    data = { ...data, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v != null)) };
+    for (const a of document.querySelectorAll('#cardbit-store .cbr-nav')) {
+      a.innerHTML = badge() + '<span>Lv ' + data.level + '</span>'; a.setAttribute('aria-label', 'Rewards, Level ' + data.level);
+      if (up) { a.classList.remove('cbr-nav-up'); void a.offsetWidth; a.classList.add('cbr-nav-up'); }
+    }
+  } };
   fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null)

@@ -1,5 +1,5 @@
-    /* SITE: Live Pulls. Real revealed pulls from /api/recent show as "Just Pulled"; until there are any,
-       the feed cycles cards from the pack pools under "In the Packs" so the heading stays truthful. */
+    /* SITE: Live Pulls. Real revealed pulls from /api/recent; until there are any, the feed cycles cards
+       from the pack pools. Booster Edition commons never show (feedEligible), live or not. */
     function livePullLink(p){
       const pack=(state.packs||[]).find(x=>x.id===p.packId);
       const match=pack&&(pack.cards||[]).find(c=>cardName(c)===p.name&&String(c.number||'')===String(p.number||''));
@@ -19,17 +19,16 @@
     }
     if(site()){
       const title=root.querySelector('#cb-feed-title');
-      if(title)title.textContent='In the Packs';
+      if(title)title.textContent='Live Pulls';
       const readLive=async()=>{
         if(signal.aborted||document.hidden)return;
         try{
           const res=await fetch(window.CardbitSite.api('recent?limit=12'),{headers:{Accept:'application/json'},credentials:'same-origin',signal});
           if(!res.ok)return;
           const data=await res.json();
-          const pulls=(Array.isArray(data?.pulls)?data.pulls:[]).filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string');
+          const pulls=(Array.isArray(data?.pulls)?data.pulls:[]).filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string'&&feedEligible({id:p.packId},{tier:p.tier}));
           if(!pulls.length)return;
           live=pulls;
-          if(title)title.textContent='Just Pulled';
           toggle.hidden=true;previousMarkup=null;draw();
         }catch{}
       };

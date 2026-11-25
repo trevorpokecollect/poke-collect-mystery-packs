@@ -317,7 +317,7 @@
   function pullFeed() {
     if (!site() && (root.dataset.mode !== 'demo' || !(inBrowser() || isDemoShopper()))) return '';
     return '<section class="cb-pull-feed" aria-labelledby="cb-feed-title"><div class="cb-feed-heading">'+
-      '<h2 id="cb-feed-title">Just Pulled</h2>'+
+      '<h2 id="cb-feed-title">'+(/* SITE */ site() ? 'Live Pulls' : 'Just Pulled')+'</h2>'+
       '<button type="button" class="cb-feed-control" data-feed-toggle aria-label="Pause Just Pulled">'+icon('pause',15)+'</button></div>'+
       /* SITE */(site() ? '' : '<div class="cbf-ticker" data-pull-ticker hidden><span class="cbf-ticker-live" data-ticker-label>Live</span><div class="cbf-ticker-track" data-ticker-track aria-live="polite"></div></div>')+
       '<ul class="cb-feed-items" data-feed-items aria-live="off"></ul></section>';
@@ -440,7 +440,7 @@
 
     function syncControl() {
       toggle.innerHTML = icon(paused?'play':'pause',15);
-      toggle.setAttribute('aria-label',(paused?'Play':'Pause')+' Just Pulled');
+      toggle.setAttribute('aria-label',(paused?'Play':'Pause')+(/* SITE */ site() ? ' Live Pulls' : ' Just Pulled'));
       toggle.title = toggle.getAttribute('aria-label');
     }
 
@@ -464,8 +464,8 @@
       draw();
     }
 
-    /* SITE: Live Pulls. Real revealed pulls from /api/recent show as "Just Pulled"; until there are any,
-       the feed cycles cards from the pack pools under "In the Packs" so the heading stays truthful. */
+    /* SITE: Live Pulls. Real revealed pulls from /api/recent; until there are any, the feed cycles cards
+       from the pack pools. Booster Edition commons never show (feedEligible), live or not. */
     function livePullLink(p){
       const pack=(state.packs||[]).find(x=>x.id===p.packId);
       const match=pack&&(pack.cards||[]).find(c=>cardName(c)===p.name&&String(c.number||'')===String(p.number||''));
@@ -485,17 +485,16 @@
     }
     if(site()){
       const title=root.querySelector('#cb-feed-title');
-      if(title)title.textContent='In the Packs';
+      if(title)title.textContent='Live Pulls';
       const readLive=async()=>{
         if(signal.aborted||document.hidden)return;
         try{
           const res=await fetch(window.CardbitSite.api('recent?limit=12'),{headers:{Accept:'application/json'},credentials:'same-origin',signal});
           if(!res.ok)return;
           const data=await res.json();
-          const pulls=(Array.isArray(data?.pulls)?data.pulls:[]).filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string');
+          const pulls=(Array.isArray(data?.pulls)?data.pulls:[]).filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string'&&feedEligible({id:p.packId},{tier:p.tier}));
           if(!pulls.length)return;
           live=pulls;
-          if(title)title.textContent='Just Pulled';
           toggle.hidden=true;previousMarkup=null;draw();
         }catch{}
       };
@@ -911,7 +910,7 @@
       '<p class="cb-detail-desc" data-series-source role="status">Loading This Product’s Card Pool…</p>' +
       '<div class="cb-actions"><span data-series-buy></span><button class="cb-secondary" type="button" data-series-demo disabled>' + icon('play',15) +
       demoOpeningLabel + '</button>' + link('packs/' + enc(pack.id) + '/pool','View Card Pool','cb-secondary') + '</div>' +
-      '<p class="cb-micro">Demo openings use no Cardbits and add no cards to your vault.</p></div></div>' + seriesGallery() + pages.detailsForPack(pack,null) + '</div>';
+      '<p class="cb-micro">Demo openings use no Cardbits and add no cards to your vault.</p>' + (/* SITE */ site() && window.CardbitPlayerPanel ? window.CardbitPlayerPanel.html(pack) : '') + '</div></div>' + seriesGallery() + pages.detailsForPack(pack,null) + '</div>';
   }
 
   function pickSeriesSample(cards, size) {
@@ -1249,7 +1248,7 @@
 
     const path = 'packs/' + enc(pack.id) + (walkthrough ? '/walkthrough' : '');
     const intro = '<div class="cb-detail-copy"><h1>' + esc(edition.name) +
-      '</h1>' + categoryTags(pack.id) + tierOddsPanel(tierOddsContent(odds,path+'/pool')) + factsMarkup + '<div class="cb-actions">' + controls + link(path+'/pool','View Card Pool','cb-secondary') + '</div></div>';
+      '</h1>' + categoryTags(pack.id) + tierOddsPanel(tierOddsContent(odds,path+'/pool')) + factsMarkup + '<div class="cb-actions">' + controls + link(path+'/pool','View Card Pool','cb-secondary') + '</div>' + (/* SITE */ site() && window.CardbitPlayerPanel ? window.CardbitPlayerPanel.html(pack) : '') + '</div>';
 
     const remaining = available ? (pack.remainingCards ?? rows.reduce((sum, card) => sum + (Number(card.remaining) || 0), 0)) : 0;
     const poolNote = odds.message ? '<p class="cb-sub">' + esc(odds.message) + '</p>' : '';

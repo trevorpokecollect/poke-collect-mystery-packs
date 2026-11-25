@@ -86,3 +86,33 @@
 #cardbit-store .cb-foot-social:hover { background:#252c55; border-color:#5865f2; color:#fff; }
 #cardbit-store .cb-foot-social:focus-visible { outline:2px solid var(--cb-accent); outline-offset:2px; }
 #cardbit-store .cb-foot-end { align-items:center; }
+
+/* Rewards: saved highlight on the chosen icon, and the header level badge after a level-up. */
+#cardbit-store .cbr-saved, .cbr-saved { animation:cbr-saved 1.1s ease-out; }
+#cardbit-store [data-rw-icon-status].cbr-saved { color:#7df3ea; font-weight:800; }
+@keyframes cbr-saved { 0% { box-shadow:0 0 0 0 rgba(0,230,225,.9); transform:scale(1); } 25% { box-shadow:0 0 0 6px rgba(0,230,225,.55); transform:scale(1.08); } 100% { box-shadow:0 0 0 14px rgba(0,230,225,0); transform:scale(1); } }
+#cardbit-store .cbr-nav.cbr-nav-up { animation:cbr-nav-up 1.4s ease-out; border-color:#ffcf6b; }
+@keyframes cbr-nav-up { 0% { box-shadow:0 0 0 0 rgba(255,207,107,.9); } 40% { box-shadow:0 0 0 7px rgba(255,207,107,.45); transform:scale(1.06); } 100% { box-shadow:0 0 0 14px rgba(255,207,107,0); transform:none; } }
+@media (prefers-reduced-motion: reduce) { #cardbit-store .cbr-saved, .cbr-saved, #cardbit-store .cbr-nav.cbr-nav-up { animation:none; } }
+
+/* Pack pages: player card (level, XP, Cardbits, Sparks, what this pack earns). */
+#cardbit-store .cbpp { margin-top:18px; padding:16px 18px; border:1px solid #2d4a4c; border-radius:14px; background:linear-gradient(135deg,#132326,#171d2a); color:#f6faf9; }
+#cardbit-store .cbpp-head { display:flex; align-items:center; gap:12px; }
+#cardbit-store .cbpp-head > b { flex:1; font:800 17px/1.2 'Cardbit Outfit',system-ui,sans-serif; }
+#cardbit-store .cbpp-level { display:grid; place-items:center; width:54px; height:54px; flex:none; border-radius:50%; background:radial-gradient(circle at 30% 25%,#2b6e6a,#10292b); border:2px solid #00e6e1; box-shadow:0 0 14px rgba(0,230,225,.35); font:800 22px/1 'Cardbit Outfit',system-ui,sans-serif; color:#fff; }
+#cardbit-store .cbpp-level small { display:block; margin-bottom:-6px; font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:#9be9e2; }
+#cardbit-store .cbpp-who { flex:1; min-width:0; }
+#cardbit-store .cbpp-who b { display:block; font:800 17px/1.2 'Cardbit Outfit',system-ui,sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#cardbit-store .cbpp-who small { color:#9be9e2; font-size:13px; }
+#cardbit-store .cbpp-gain { padding:6px 10px; border-radius:999px; background:#0d3532; border:1px solid #1f6e68; color:#7df3ea; font:800 14px/1 'Cardbit Outfit',system-ui,sans-serif; white-space:nowrap; }
+#cardbit-store .cbpp-bar { position:relative; height:12px; margin-top:14px; border-radius:999px; background:#0b1214; border:1px solid #2b3d40; overflow:hidden; }
+#cardbit-store .cbpp-bar i { position:absolute; top:0; bottom:0; left:0; border-radius:inherit; background:linear-gradient(90deg,#00e6e1,#8ff7b6); box-shadow:0 0 12px rgba(0,230,225,.55); }
+#cardbit-store .cbpp-bar i.cbpp-bar-next { background:rgba(125,243,234,.35); box-shadow:none; border-radius:0 999px 999px 0; animation:cbpp-next 1.6s ease-in-out infinite; }
+#cardbit-store .cbpp-xp { margin:6px 0 0; color:#b6c4c5; font-size:13px; font-variant-numeric:tabular-nums; }
+#cardbit-store .cbpp-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; margin-top:12px; }
+#cardbit-store .cbpp-stats div { padding:10px 12px; border-radius:10px; background:rgba(11,18,20,.6); border:1px solid #243638; }
+#cardbit-store .cbpp-stats small { display:block; color:#9fb0b2; font-size:12px; }
+#cardbit-store .cbpp-stats b { display:block; margin-top:3px; font:800 18px/1.1 'Cardbit Outfit',system-ui,sans-serif; font-variant-numeric:tabular-nums; }
+#cardbit-store .cbpp-note { margin:10px 0 0; color:#d6e3e3; font-size:14px; }
+@keyframes cbpp-next { 50% { opacity:.35; } }
+@media (prefers-reduced-motion: reduce) { #cardbit-store .cbpp-bar i.cbpp-bar-next { animation:none; } }

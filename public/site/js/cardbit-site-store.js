@@ -14,6 +14,33 @@
 (() => {
   'use strict';
   const root = document.getElementById('cardbit-store');
+
+  // Card photos: if a TCGplayer photo fails, try TCGplayer's other image host, then a branded placeholder.
+  // Capture phase, because image error events don't bubble.
+  const photoPlaceholder = name => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0" stop-color="#14323a"/><stop offset="1" stop-color="#0b1418"/></linearGradient></defs>' +
+    '<rect width="250" height="350" rx="14" fill="url(#g)"/><rect x="8" y="8" width="234" height="334" rx="10" fill="none" stroke="#2dd4bf" stroke-opacity=".45" stroke-width="2"/>' +
+    '<circle cx="125" cy="140" r="34" fill="none" stroke="#2dd4bf" stroke-width="5"/><path d="M91 140h68" stroke="#2dd4bf" stroke-width="5"/><circle cx="125" cy="140" r="9" fill="#0b1418" stroke="#2dd4bf" stroke-width="5"/>' +
+    '<text x="125" y="215" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="17" fill="#e6fffb">Photo Coming Soon</text>' +
+    '<text x="125" y="242" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" fill="#9fb8bd">' +
+    String(name || '').slice(0, 30).replace(/[&<>"']/g, '') + '</text></svg>');
+  document.addEventListener('error', event => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || img.dataset.cbPhotoFallback === 'done') return;
+    const src = img.currentSrc || img.src || '';
+    const id = (src.match(/product-images\.tcgplayer\.com\/(?:fit-in\/\d+x\d+\/)?(\d+)\.jpg/) || [])[1];
+    if (id && !img.dataset.cbPhotoFallback) {
+      img.dataset.cbPhotoFallback = 'cdn';
+      img.removeAttribute('srcset');
+      img.src = 'https://tcgplayer-cdn.tcgplayer.com/product/' + id + '_in_1000x1000.jpg';
+      return;
+    }
+    if (!id && !/tcgplayer/.test(src) && !img.closest('[class*="card"],[class*="pull"],[class*="vault"],[class*="single"]')) return;
+    img.dataset.cbPhotoFallback = 'done';
+    img.removeAttribute('srcset');
+    img.src = photoPlaceholder(img.alt);
+  }, true);
   const apiBase = (root && root.dataset.apiBase) || '/api';
   const sameOrigin = path => {
     const url = new URL(path, location.origin);
@@ -51,6 +78,47 @@
     topupURL: amount => (root?.dataset.topupCheckout || '/checkout/cardbits') + '?amount=' + encodeURIComponent(amount) + '&return_to=' + encodeURIComponent(here()),
   });
 
+  // Player card on pack pages: level, XP bar, what this pack earns, Cardbits and Sparks.
+  // Mirrors app/lib/cardbit-levels.ts (XP_RULES, xpForLevel, RANKS, SPINNER_TIERS).
+  const xpForLevel = level => { const n = Math.min(Math.max(Math.floor(level), 1), 50) - 1; return 50 * n * n + 100 * n; };
+  const levelForXp = xp => { let l = 1; while (l < 50 && xp >= xpForLevel(l + 1)) l++; return l; };
+  const packXp = bits => Math.floor((Number(bits) || 0) * 0.1) + 25;
+  const ranks = [[50, 'Mythic'], [40, 'Legend'], [30, 'Vaultkeeper'], [20, 'Archivist'], [10, 'Curator'], [5, 'Collector'], [1, 'Rookie']];
+  const spins = [[5, 'Bronze Spin'], [10, 'Silver Spin'], [20, 'Gold Spin'], [30, 'Cobalt Spin'], [40, 'Holo Spin']];
+  const ppNum = n => Number(n || 0).toLocaleString('en-US');
+  const escText = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  window.CardbitPlayerPanel = Object.freeze({
+    html(pack) {
+      const gain = packXp(pack?.priceBits);
+      const acct = lastAccount;
+      if (!acct) {
+        return '<section class="cbpp" aria-label="Your Player Card"><div class="cbpp-head"><b>Earn XP With Every Pack</b>' +
+          '<span class="cbpp-gain">+' + ppNum(gain) + ' XP</span></div><p class="cbpp-note">Sign In to Level Up, Unlock Daily Spins and Collect Sparks.</p></section>';
+      }
+      const lv = acct.level;
+      const bits = '<div><small>Cardbits</small><b>' + ppNum(acct.bits) + '</b></div>';
+      const sparks = acct.sparks != null ? '<div><small>Sparks</small><b>' + ppNum(acct.sparks) + '</b></div>' : '';
+      if (!lv) return '<section class="cbpp" aria-label="Your Player Card"><div class="cbpp-stats">' + bits + sparks + '</div></section>';
+      const rank = (ranks.find(([min]) => lv.level >= min) || [1, 'Rookie'])[1];
+      const pct = lv.nextLevelXp ? Math.min(100, Math.round(lv.levelXp / lv.nextLevelXp * 1000) / 10) : 100;
+      const after = levelForXp(lv.xp + gain);
+      const unlock = spins.find(([min]) => min > lv.level);
+      let note;
+      if (lv.nextLevelXp == null) note = 'Max Level Reached.';
+      else if (after > lv.level) note = 'Opening This Pack Takes You to Level ' + after + '.';
+      else note = ppNum(lv.toNext) + ' XP to Level ' + (lv.level + 1) + '.';
+      if (unlock) note += ' Reach Level ' + unlock[0] + ' to Unlock the ' + unlock[1] + '.';
+      return '<section class="cbpp" aria-label="Your Player Card"><div class="cbpp-head"><span class="cbpp-level"><small>Level</small>' + lv.level + '</span>' +
+        '<div class="cbpp-who"><b>' + escText(acct.name) + '</b><small>' + rank + '</small></div></div>' +
+        '<div class="cbpp-bar" role="progressbar" aria-label="Level progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(pct) + '">' +
+        '<i style="width:' + pct + '%"></i><i class="cbpp-bar-next" style="left:' + pct + '%;width:' +
+        (lv.nextLevelXp ? Math.max(0, Math.min(100 - pct, gain / lv.nextLevelXp * 100)) : 0) + '%"></i></div>' +
+        '<p class="cbpp-xp">' + ppNum(lv.levelXp) + (lv.nextLevelXp ? ' / ' + ppNum(lv.nextLevelXp) + ' XP · Lighter Bar Shows This Pack' : ' XP') + '</p>' +
+        '<div class="cbpp-stats">' + bits + sparks + '<div><small>This Pack Earns</small><b>+' + ppNum(gain) + ' XP</b></div></div>' +
+        '<p class="cbpp-note">' + note + '</p></section>';
+    },
+  });
+
   const codeError = (code, message) => Object.assign(new Error(message), { code });
   // Never show internal environment words to collectors.
   const publicText = text => /\b(?:demo|test|fixture|sandbox|preview|simulated|staging)\b/i.test(text) ? '' : text;
@@ -58,6 +126,8 @@
   function shape(state) {
     if (!state || typeof state !== 'object') throw codeError('CONNECTION', 'Cardbit could not load your account. Try again.');
     lastAccount = state.account || null;
+    // Header level badge (cardbit-rewards-nav.js) follows level-ups without a reload.
+    if (state.account?.level?.level) window.CardbitRewardsNav?.update({ level: state.account.level.level });
     // For the Sign In / Buy Cardbits dialogs (cardbit-site-auth.js).
     window.CardbitSiteSession = Object.freeze({ signedIn: !!state.account, id: state.account ? String(state.account.id) : undefined, bits: state.account ? Number(state.account.bits) : undefined });
     // Initials for the header Rewards badge (cardbit-rewards-nav.js).

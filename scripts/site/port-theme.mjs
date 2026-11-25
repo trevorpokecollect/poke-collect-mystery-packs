@@ -84,6 +84,12 @@ const PATCHES = {
     ["esc([p.tracking.company,'Tracking Number '+p.tracking.number]", "esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number]"],
   ],
   'cardbit-storefront.js': [
+    // Site: the home feed is called Live Pulls.
+    ["'<h2 id=\"cb-feed-title\">Just Pulled</h2>'+", "'<h2 id=\"cb-feed-title\">'+(/* SITE */ site() ? 'Live Pulls' : 'Just Pulled')+'</h2>'+"],
+    ["toggle.setAttribute('aria-label',(paused?'Play':'Pause')+' Just Pulled');", "toggle.setAttribute('aria-label',(paused?'Play':'Pause')+(/* SITE */ site() ? ' Live Pulls' : ' Just Pulled'));"],
+    // Site: player card (level, XP, Cardbits, Sparks) on pack pages.
+    ["'<p class=\"cb-micro\">Demo openings use no Cardbits and add no cards to your vault.</p></div></div>' + seriesGallery()", "'<p class=\"cb-micro\">Demo openings use no Cardbits and add no cards to your vault.</p>' + (/* SITE */ site() && window.CardbitPlayerPanel ? window.CardbitPlayerPanel.html(pack) : '') + '</div></div>' + seriesGallery()"],
+    ["link(path+'/pool','View Card Pool','cb-secondary') + '</div></div>';", "link(path+'/pool','View Card Pool','cb-secondary') + '</div>' + (/* SITE */ site() && window.CardbitPlayerPanel ? window.CardbitPlayerPanel.html(pack) : '') + '</div>';"],
     // Site: XP and Sparks on the pack reveal.
     ["onFinish:()=>navigate(sample?'packs/'+enc(p.id):'vault/opening/'+enc(o.id)),", "onFinish:()=>navigate(sample?'packs/'+enc(p.id):'vault/opening/'+enc(o.id)),/* SITE */ onSpread:sample||!site()?null:()=>window.CardbitRevealRewards?.node(o),"],
     // Site: community Discord in the footer.
@@ -158,6 +164,12 @@ const PATCHES = {
     [SHIP_HOME_FROM, SHIP_HOME],
   ],
   'cardbit-rewards.js': [
+    // Site: streak copy says what the boost is (card prizes N% more likely, relative), not "Card Odds".
+    ["    $('[data-rw-bonus]').textContent = '+' + Math.round(days * sb.perDay * 100) + '% Card Odds';", "    $('[data-rw-bonus]').textContent = /* SITE */ days ? 'Card Prizes ' + Math.round(days * sb.perDay * 100) + '% More Likely' : 'No Streak Boost Yet';"],
+    ["      : 'Check In Every Day. Each Day in a Row Boosts Your Card Odds, Up to ' + sb.maxDays + ' Days.';", "      : /* SITE */ 'Check In Every Day. Each Day in a Row Makes Card Prizes on Your Daily Spins ' + Math.round(sb.perDay * 100) + '% More Likely, Up to ' + sb.maxDays + ' Days.';"],
+    // Site: a clear saved highlight on the chosen icon, and the header badge follows the new icon/level.
+    ["    try { render(await call({ action: 'avatar', ...body })); note.textContent = 'Saved.'; }", "    try { const saved = await call({ action: 'avatar', ...body }); render(saved); note.textContent = 'Icon Saved'; /* SITE */ savedFlash(note); window.CardbitRewardsNav?.update({ level: saved.level, avatar: saved.avatar }); }"],
+    ["  async function save(body) {\n", "  /* SITE */ function savedFlash(note) {\n    const picked = root.querySelector('[data-rw-icons] [aria-pressed=\"true\"], [data-rw-colors] [aria-pressed=\"true\"]');\n    for (const n of [picked, note, root.querySelector('.cbr-hero-avatar, [data-rw-avatar]')]) { if (!n) continue; n.classList.remove('cbr-saved'); void n.offsetWidth; n.classList.add('cbr-saved'); }\n  }\n  async function save(body) {\n"],
     // Cardbit Club icons: locked label says Club, not a level.
     ["b.append(img(iconUrls[i.id], 64, 64), el('span', null, i.name), el('small', null, i.unlocked ? '' : 'Level ' + i.minLevel));\n      b.setAttribute('aria-label', i.unlocked ? i.name : i.name + ', Unlocks at Level ' + i.minLevel);",
      "b.append(img(iconUrls[i.id], 64, 64), el('span', null, i.name), el('small', null, i.unlocked ? '' : /* SITE */ i.club ? 'Club' : 'Level ' + i.minLevel));\n      b.setAttribute('aria-label', i.unlocked ? i.name : i.name + (/* SITE */ i.club ? ', For Cardbit Club Members' : ', Unlocks at Level ' + i.minLevel));"],
@@ -167,6 +179,8 @@ const PATCHES = {
      "    /* SITE */ if (!res.ok && data.code === 'AGE_REQUIRED' && body && body.action !== 'confirm-age' && await siteConfirmAge()) return call(body);\n    if (!res.ok) throw Object.assign(new Error(data.error || 'Something Went Wrong.'), { status: res.status });"],
   ],
   'cardbit-rewards-nav.js': [
+    // Site: the badge follows level-ups and icon changes without a reload.
+    ["  fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' })\n", "  /* SITE */ window.CardbitRewardsNav = { update(next) {\n    if (!data || !next) return;\n    const up = Number.isFinite(next.level) && next.level > data.level;\n    data = { ...data, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v != null)) };\n    for (const a of document.querySelectorAll('#cardbit-store .cbr-nav')) {\n      a.innerHTML = badge() + '<span>Lv ' + data.level + '</span>'; a.setAttribute('aria-label', 'Rewards, Level ' + data.level);\n      if (up) { a.classList.remove('cbr-nav-up'); void a.offsetWidth; a.classList.add('cbr-nav-up'); }\n    }\n  } };\n  fetch(endpoint, { credentials: 'same-origin', cache: 'no-store' })\n"],
     // Site: site API and /rewards path; only for signed-in customers.
     ["const endpoint = new URL(root + 'apps/packs/api/rewards', location.origin).pathname;", "const endpoint = store.dataset.mode === 'site' ? '/api/rewards' : new URL(root + 'apps/packs/api/rewards', location.origin).pathname;"],
     ["  function href() {\n", "  function href() {\n    /* SITE */ if (store.dataset.mode === 'site') return '/rewards';\n"],

@@ -141,13 +141,13 @@
     const sb = data.streakBonus || START.streakBonus, days = Math.min(data.streak || 0, sb.maxDays);
     $('[data-rw-streak-count]').textContent = String(data.streak || 0);
     $('[data-rw-flames]').replaceChildren(...Array.from({ length: sb.maxDays }, (_, i) => { const li = el('li'); if (i < days) li.className = 'is-lit'; return li; }));
-    $('[data-rw-bonus]').textContent = '+' + Math.round(days * sb.perDay * 100) + '% Card Odds';
+    $('[data-rw-bonus]').textContent = /* SITE */ days ? 'Card Prizes ' + Math.round(days * sb.perDay * 100) + '% More Likely' : 'No Streak Boost Yet';
     const btn = $('[data-rw-checkin]');
     btn.disabled = data.checkedInToday;
     btn.textContent = data.checkedInToday ? 'Checked In Today' : 'Check In · +' + data.rules.dailyCheckIn + ' XP';
     $('[data-rw-streak-note]').textContent = data.checkedInToday
       ? 'Come Back Tomorrow to Keep Your Streak Going.'
-      : 'Check In Every Day. Each Day in a Row Boosts Your Card Odds, Up to ' + sb.maxDays + ' Days.';
+      : /* SITE */ 'Check In Every Day. Each Day in a Row Makes Card Prizes on Your Daily Spins ' + Math.round(sb.perDay * 100) + '% More Likely, Up to ' + sb.maxDays + ' Days.';
 
     // Daily Spins grid
     $('[data-rw-spins]').replaceChildren(...spins.map((t) => {
@@ -190,10 +190,14 @@
     ].map(([a, b]) => { const li = el('li'); li.append(el('b', null, a), ' ' + b); return li; }));
   }
 
+  /* SITE */ function savedFlash(note) {
+    const picked = root.querySelector('[data-rw-icons] [aria-pressed="true"], [data-rw-colors] [aria-pressed="true"]');
+    for (const n of [picked, note, root.querySelector('.cbr-hero-avatar, [data-rw-avatar]')]) { if (!n) continue; n.classList.remove('cbr-saved'); void n.offsetWidth; n.classList.add('cbr-saved'); }
+  }
   async function save(body) {
     if (busy) return; busy = true;
     const note = $('[data-rw-icon-status]'); note.textContent = 'Saving…';
-    try { render(await call({ action: 'avatar', ...body })); note.textContent = 'Saved.'; }
+    try { const saved = await call({ action: 'avatar', ...body }); render(saved); note.textContent = 'Icon Saved'; /* SITE */ savedFlash(note); window.CardbitRewardsNav?.update({ level: saved.level, avatar: saved.avatar }); }
     catch (e) { note.textContent = friendly(e, "We Couldn't Save Your Icon. Please Try Again."); }
     finally { busy = false; }
   }

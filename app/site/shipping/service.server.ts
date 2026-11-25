@@ -2,7 +2,7 @@
 // (staff) -> tracking webhooks -> delivered. Shopify is not involved.
 
 import type { PrismaClient, SiteShipment } from "@prisma/client";
-import { assertAllowedRegion, US_STATES, type GeoLookup } from "../region.server";
+import { assertAllowedRegion, US_STATES, zipStateMismatch, type GeoLookup } from "../region.server";
 import {
   cardsUntilFree,
   parcelFor,
@@ -137,6 +137,8 @@ export type CreateShipmentInput = {
   /** Billing address on file. Cardbits-paid fees have none; the delivery address stands in. */
   billing?: { country: string; state: string } | null;
   ip: string | null;
+  /** Staff test account: skip the IP check only. */
+  staffTest?: boolean;
   method: FeeMethod;
   /** Server-verified USD capture reference when method = USD. */
   paymentRef?: string | null;
@@ -167,7 +169,9 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
       shipping: { country: input.address.country, state: input.address.state },
       ip: input.ip,
     },
-    deps.geo,
+    // Staff test accounts (SITE_STAFF_EMAILS) skip only the connection check, so the team can test from
+    // the Madison, AL office. The delivery address must still be a real address outside the excluded states.
+    input.staffTest ? null : deps.geo,
   );
 
   // Carrier address validation. Without a provider (local dev) we keep the typed address unvalidated.
@@ -184,6 +188,8 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
     address = { ...check.address, email: input.address.email, phone: input.address.phone };
     validated = true;
     // The carrier may correct the state; recheck the normalized one.
+    const typed = String(input.address.state || "").trim().toUpperCase(), carrier = String(address.state || "").trim().toUpperCase();
+    if (typed && carrier && typed !== carrier) throw zipStateMismatch(typed, carrier);
     await assertAllowedRegion(
       { action: "shipping", billing: input.billing ?? { country: address.country, state: address.state }, shipping: { country: address.country, state: address.state } },
       null,

@@ -112,4 +112,22 @@ describe("link previews and reveal rewards", () => {
     expect(media).toContain("if (root.CardbitStore?.site) return backs['ja-modern'];");
     expect(store).toContain("https://discord.gg/F9Z6jbgj4Y");
   });
+  it("round 5: Live Pulls title, streak copy, icon-save flash, live level badge, player card, photo fallback, launcher image", () => {
+    const store = readFileSync(new URL("../../public/site/assets/cardbit-storefront.js", import.meta.url), "utf8");
+    expect(store).toContain("site() ? 'Live Pulls' : 'Just Pulled'");
+    expect(store.match(/window\.CardbitPlayerPanel\.html\(pack\)/g)).toHaveLength(2);
+    const rewards = readFileSync(new URL("../../public/site/assets/cardbit-rewards.js", import.meta.url), "utf8");
+    expect(rewards).toContain("Each Day in a Row Makes Card Prizes on Your Daily Spins");
+    expect(rewards).toContain("savedFlash(");
+    expect(readFileSync(new URL("../../public/site/assets/cardbit-rewards-nav.js", import.meta.url), "utf8")).toContain("window.CardbitRewardsNav");
+    const pulls = readFileSync(new URL("../../scripts/site/patches/live-pulls.js", import.meta.url), "utf8");
+    expect(pulls).toContain("feedEligible({id:p.packId},{tier:p.tier})");
+    const site = readFileSync(new URL("../../public/site/js/cardbit-site-store.js", import.meta.url), "utf8");
+    expect(site).toContain("tcgplayer-cdn.tcgplayer.com/product/");
+    expect(site).toContain("Photo Coming Soon");
+    expect(site).toContain("window.CardbitPlayerPanel");
+    const play = readFileSync(new URL("../../public/site/js/cardbit-site-play.js", import.meta.url), "utf8");
+    expect(play).toContain("asset('spin-gold.svg')");
+    expect(play).not.toContain("'cardbit-brand-emblem.png'");
+  });
 });

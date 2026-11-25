@@ -8,6 +8,7 @@ import { clientIp } from "../site/core/auth.server";
 import { RegionBlocked } from "../site/region.server";
 import { CopyLockError, FeePaymentError, ShippingError, createShipment, parseAddress } from "../site/shipping/service.server";
 import { siteShippingDeps } from "../site/shipping/wire.server";
+import { staffEmails } from "../site/shipping/staff.server";
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 
@@ -27,6 +28,7 @@ async function ship(request: Request, customer: { id: string; email: string; fro
       address: parseAddress(input.address),
       billing: null,
       ip: clientIp(request),
+      staffTest: staffEmails().has(customer.email.trim().toLowerCase()),
       method: "CARDBITS",
       idempotencyKey: requestId,
     });

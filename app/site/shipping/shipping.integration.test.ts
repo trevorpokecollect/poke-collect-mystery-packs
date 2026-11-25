@@ -27,9 +27,10 @@ class FakeShippo implements ShippingProvider {
   validCalls = 0;
   tracking: Record<string, Tracking> = {};
   invalid = false;
+  carrierState: string | null = null;
   async validateAddress(a: Address) {
     this.validCalls++;
-    return { valid: !this.invalid, address: { ...a, street1: a.street1.toUpperCase() }, residential: true, messages: this.invalid ? ["Address not found"] : [] };
+    return { valid: !this.invalid, address: { ...a, street1: a.street1.toUpperCase(), ...(this.carrierState ? { state: this.carrierState } : {}) }, residential: true, messages: this.invalid ? ["Address not found"] : [] };
   }
   async rates(): Promise<Rate[]> {
     return [
@@ -295,6 +296,17 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     expect(new URL(to, "https://x").searchParams.get("msg")).toContain("Label bought: USPS 9400");
     const view = await loadDesk(deps, new URL(`https://site.test/staff/shipping?id=${shipment.id}`));
     expect(view.selected?.status).toBe("LABEL_PURCHASED");
+  });
+
+  it("says when the ZIP code belongs to another state, and lets staff test from an excluded-state connection", async () => {
+    shippo.carrierState = "AL"; // e.g. state changed to FL but ZIP 35758 left in place
+    await expect(createShipment(deps, base({ address: { ...toAddr, state: "FL", zip: "35758" } }))).rejects.toThrow("That ZIP code is in AL, not FL.");
+    expect(await statusOf("c1")).toBe("VAULTED");
+    shippo.carrierState = null;
+    const geoDeps = { ...deps, geo: async () => ({ country: "US", region: "AL" }) };
+    await expect(createShipment(geoDeps, base({ ip: "8.8.8.8" }))).rejects.toThrow(/internet connection looks like it's in AL/);
+    const { shipment } = await createShipment(geoDeps, base({ ip: "8.8.8.8", staffTest: true, idempotencyKey: "staff-1" }));
+    expect(shipment.status).not.toBe("FAILED");
   });
 
   it("desk system check: ship-from + rates, test email; billing defaults to the delivery address", async () => {

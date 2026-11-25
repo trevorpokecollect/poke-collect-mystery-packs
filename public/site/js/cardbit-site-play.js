@@ -111,7 +111,7 @@
       root = document.createElement('div');
       root.className = 'cb-launch';
       root.innerHTML = '<button type="button" class="cb-launch-btn" aria-expanded="false" aria-controls="cb-launch-panel">' +
-        '<img alt="" width="34" height="34" src="' + esc(asset('cardbit-brand-emblem.png')) + '"><span class="cb-launch-sr">Daily Rewards</span><b class="cb-launch-badge" hidden></b></button>' +
+        '<img alt="" width="40" height="40" src="' + esc(asset('spin-gold.svg') || asset('brand-emblem.png')) + '"><span class="cb-launch-label">Daily Rewards</span><b class="cb-launch-badge" hidden></b></button>' +
         '<section class="cb-launch-panel" id="cb-launch-panel" role="dialog" aria-labelledby="cb-launch-title" hidden></section>';
       document.body.append(root);
       root.querySelector('.cb-launch-btn').addEventListener('click', () => toggle());

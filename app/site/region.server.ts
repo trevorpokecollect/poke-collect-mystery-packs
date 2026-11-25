@@ -36,6 +36,11 @@ export type RegionInput = {
   ip?: string | null;
 };
 
+/** The carrier placed the ZIP code in a different state from the one typed. */
+export function zipStateMismatch(typed: string, carrier: string) {
+  return new RegionBlocked("UNKNOWN_STATE", "shipping", `That ZIP code is in ${carrier}, not ${typed}. Check the state and ZIP code.`);
+}
+
 export type RegionResult = { ipChecked: boolean; ipRegion: string | null };
 
 const norm = (v?: string | null) => (v ?? "").trim().toUpperCase();
@@ -81,7 +86,11 @@ export async function assertAllowedRegion(input: RegionInput, geo?: GeoLookup | 
   if (norm(found.country) !== "US") throw new RegionBlocked("IP_NOT_US", "ip", customerMessage);
   const region = norm(found.region);
   if ((EXCLUDED_STATES as readonly string[]).includes(region))
-    throw new RegionBlocked("IP_EXCLUDED_STATE", "ip", customerMessage);
+    throw new RegionBlocked(
+      "IP_EXCLUDED_STATE",
+      "ip",
+      `Your internet connection looks like it's in ${region}, where Cardbit isn't available yet. We can only sell and ship to customers outside AL, HI, ID, MN, NV, NY, UT and WA.`,
+    );
   return { ipChecked: true, ipRegion: region || null };
 }
 
