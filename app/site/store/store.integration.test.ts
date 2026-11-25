@@ -271,20 +271,20 @@ describe.skipIf(!url)("site store", () => {
     process.env.CARDBIT_SPARKS = "on";
     try {
       const paid = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
-      expect(paid.rewards).toEqual({ xp: 125, sparks: 40 }); // 25 per pack + 10 per 100 Cardbits; 5% of the 800 gap
+      expect(paid.rewards).toEqual({ xp: 20, sparks: 40 }); // 2 XP per 100 Cardbits; 5% of the 800 gap
       // A staff demo pack: no charge, earns on reveal, once.
       await db.siteCopy.updateMany({ where: { status: "POOLED" }, data: { demo: true } });
       await giveDemoPacks(db, "staff:test", customer.email, "cobalt", 1);
       const sealed = await db.siteOpening.findFirstOrThrow({ where: { demo: true, sealed: true } });
       const r1 = await storeAction(db, customer, { action: "reveal", requestId: randomUUID(), id: sealed.id });
       const r2 = await storeAction(db, customer, { action: "reveal", requestId: randomUUID(), id: sealed.id });
-      expect(r1.rewards).toEqual({ xp: 125, sparks: 40 });
-      expect(r2.rewards).toEqual({ xp: 125, sparks: 40 });
+      expect(r1.rewards).toEqual({ xp: 20, sparks: 40 });
+      expect(r2.rewards).toEqual({ xp: 20, sparks: 40 });
       const state = await storeState(db, customer);
-      expect(state.account).toMatchObject({ sparks: 80, level: { xp: 250, level: 2 } });
+      expect(state.account).toMatchObject({ sparks: 80, level: { xp: 40, level: 2 } });
       await wipeDemo(db, "staff:test");
       const after = await storeState(db, customer);
-      expect(after.account).toMatchObject({ sparks: 40, level: { xp: 125 } });
+      expect(after.account).toMatchObject({ sparks: 40, level: { xp: 20 } });
     } finally {
       for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
       for (const t of [db.cardbitSparkTxn, db.cardbitSparkWallet, db.cardbitXpEvent, db.cardbitProfile] as unknown as { deleteMany: (a: unknown) => Promise<unknown> }[])

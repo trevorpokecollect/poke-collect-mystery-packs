@@ -80,9 +80,9 @@
 
   // Player card on pack pages: level, XP bar, what this pack earns, Cardbits and Sparks.
   // Mirrors app/lib/cardbit-levels.ts (XP_RULES, xpForLevel, RANKS, SPINNER_TIERS).
-  const xpForLevel = level => { const n = Math.min(Math.max(Math.floor(level), 1), 50) - 1; return 50 * n * n + 100 * n; };
+  const xpForLevel = level => { const n = Math.min(Math.max(Math.floor(level), 1), 50) - 1; return n * n * n + 9 * n * n + 10 * n; };
   const levelForXp = xp => { let l = 1; while (l < 50 && xp >= xpForLevel(l + 1)) l++; return l; };
-  const packXp = bits => Math.floor((Number(bits) || 0) * 0.1) + 25;
+  const packXp = bits => Math.round((Number(bits) || 0) * 0.02);
   const ranks = [[50, 'Mythic'], [40, 'Legend'], [30, 'Vaultkeeper'], [20, 'Archivist'], [10, 'Curator'], [5, 'Collector'], [1, 'Rookie']];
   const spins = [[5, 'Bronze Spin'], [10, 'Silver Spin'], [20, 'Gold Spin'], [30, 'Cobalt Spin'], [40, 'Holo Spin']];
   const ppNum = n => Number(n || 0).toLocaleString('en-US');

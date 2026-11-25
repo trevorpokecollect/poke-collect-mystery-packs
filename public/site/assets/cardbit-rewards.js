@@ -18,7 +18,7 @@
 
   const TIERS = [['basic', 'Basic Spin', 1], ['bronze', 'Bronze Spin', 5], ['silver', 'Silver Spin', 10],
     ['gold', 'Gold Spin', 20], ['cobalt', 'Cobalt Spin', 30], ['holo', 'Holo Spin', 40]];
-  const BASE_ODDS = { basic: [25, 50, 2], bronze: [35, 75, 3], silver: [50, 100, 4], gold: [75, 150, 8], cobalt: [100, 250, 15], holo: [150, 400, 22] };
+  const BASE_ODDS = { basic: [5, 50, 2], bronze: [7, 75, 3], silver: [10, 100, 4], gold: [15, 150, 8], cobalt: [20, 250, 15], holo: [30, 400, 22] };
   const ICONS = [['latch', 'Latch', 1], ['blazebit', 'Blazebit', 1], ['driplink', 'Driplink', 1], ['mossbit', 'Mossbit', 1],
     ['zappix', 'Zappix', 5], ['cryobyte', 'Cryobyte', 5], ['glitchog', 'Glitchog', 10], ['phantab', 'Phantab', 10],
     ['nimbyte', 'Nimbyte', 15], ['wyrmware', 'Wyrmware', 15], ['latch-gold', 'Latch Gold', 20], ['latch-holo', 'Latch Holo', 30]];
@@ -26,16 +26,16 @@
     ['berry', '#C2417A', '#FAF8F3'], ['sky', '#5FC3F2', '#17213B'], ['violet', '#7A52E0', '#FAF8F3'], ['ember', '#E8553B', '#FAF8F3']];
   /** A brand-new account's view, used until the app returns this customer's own rewards. */
   const START = {
-    level: 1, xp: 0, levelXp: 0, nextLevelXp: 100, toNext: 100, rank: 'Rookie', monthXp: 0, checkedInToday: false, streak: 0,
+    level: 1, xp: 0, levelXp: 0, nextLevelXp: 20, toNext: 20, rank: 'Rookie', monthXp: 0, checkedInToday: false, streak: 0,
     avatar: { iconId: null, color: 'cobalt' },
     colors: COLORS.map(([id, bg, fg]) => ({ id, bg, fg })),
     icons: ICONS.map(([id, name, minLevel]) => ({ id, name, minLevel, unlocked: minLevel <= 1 })),
-    rules: { perCardbitsSpent: 0.1, perPackOpened: 25, dailyCheckIn: 50 },
+    rules: { perCardbitsSpent: 0.02, perPackOpened: 0, dailyCheckIn: 5 },
     streakBonus: { perDay: 0.1, maxDays: 7 },
     spins: TIERS.map(([id, name, minLevel]) => {
       const [xp, sp] = BASE_ODDS[id];
       return { id, name, minLevel, unlocked: minLevel <= 1, result: null, cards: [],
-        odds: [{ kind: 'xp', amount: xp, percent: 55 }, { kind: 'xp', amount: sp, percent: 30 }, { kind: 'xp', amount: Math.round(sp * 1.5), percent: 15 }] };
+        odds: [{ kind: 'xp', amount: xp, percent: 55 }, { kind: 'sparks', amount: Math.round(sp / 2), percent: 30 }, { kind: 'sparks', amount: sp, percent: 15 }] };
     }),
   };
   const friendly = (e, fallback) => (e && e.status === 403 && e.message ? e.message : fallback);
@@ -184,10 +184,10 @@
     const r = data.rules;
     $('[data-rw-earn]').replaceChildren(...[
       [Math.round(r.perCardbitsSpent * 100) + ' XP', 'For Every 100 Cardbits Spent on Packs'],
-      [r.perPackOpened + ' XP', 'For Every Pack You Open'],
-      [r.dailyCheckIn + ' XP', 'For Your Daily Check-In'],
+      r.perPackOpened ? [r.perPackOpened + ' XP', 'For Every Pack You Open'] : null,
+      r.dailyCheckIn ? [r.dailyCheckIn + ' XP', 'For Your Daily Check-In'] : null,
       ['Free', 'A Daily Spin for Every Spin Tier You Unlock'],
-    ].map(([a, b]) => { const li = el('li'); li.append(el('b', null, a), ' ' + b); return li; }));
+    ].filter(Boolean).map(([a, b]) => { const li = el('li'); li.append(el('b', null, a), ' ' + b); return li; }));
   }
 
   /* SITE */ function savedFlash(note) {

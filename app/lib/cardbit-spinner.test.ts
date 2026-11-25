@@ -25,7 +25,7 @@ describe("Daily Spinner rules", () => {
       counts.set(k, (counts.get(k) ?? 0) + 1);
     }
     expect(counts.get("card")).toBe(20);
-    expect(counts.get("xp25")).toBe(530);
+    expect(counts.get("xp5")).toBe(530);
   });
   it("rejects tables without a fallback slice or with bad amounts", () => {
     expect(validTable({ basic: [{ kind: "card", weight: 1 }] })).toBe(false);

@@ -19,7 +19,7 @@ export const siteLeaderboardOn = (env: NodeJS.ProcessEnv = process.env) => featu
 /**
  * XP and Sparks for one paid, non-demo site opening. Call inside the opening's transaction.
  * Idempotent on the opening id: a retried transaction or replayed request never awards twice.
- * XP: 25 per pack plus spend XP (same rules as Shopify). Sparks: 5% of the gap when the drawn
+ * XP: 2 per 100 Cardbits paid (app/lib/cardbit-levels.ts). Sparks: 5% of the gap when the drawn
  * cards' buyback value is below the Cardbits paid.
  */
 export async function siteRewardsForOpening(
