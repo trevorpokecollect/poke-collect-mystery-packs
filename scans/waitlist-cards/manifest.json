@@ -1,0 +1,382 @@
+[
+  {
+    "file": "charizard-ex-sir-obf.png",
+    "name": "Charizard ex",
+    "set": "Obsidian Flames",
+    "number": "223/197",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv3/223_hires.png"
+  },
+  {
+    "file": "charizard-ex-sir-151.png",
+    "name": "Charizard ex",
+    "set": "151",
+    "number": "199/165",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv3pt5/199_hires.png"
+  },
+  {
+    "file": "umbreon-ex-sir-pre.png",
+    "name": "Umbreon ex",
+    "set": "Prismatic Evolutions",
+    "number": "161/131",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv8pt5/161_hires.png"
+  },
+  {
+    "file": "sylveon-ex-sir-pre.png",
+    "name": "Sylveon ex",
+    "set": "Prismatic Evolutions",
+    "number": "156/131",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv8pt5/156_hires.png"
+  },
+  {
+    "file": "espeon-ex-sir-pre.png",
+    "name": "Espeon ex",
+    "set": "Prismatic Evolutions",
+    "number": "155/131",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv8pt5/155_hires.png"
+  },
+  {
+    "file": "pikachu-ex-sir-ssp.png",
+    "name": "Pikachu ex",
+    "set": "Surging Sparks",
+    "number": "238/191",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv8/238_hires.png"
+  },
+  {
+    "file": "mew-ex-sir-paf.png",
+    "name": "Mew ex",
+    "set": "Paldean Fates",
+    "number": "232/91",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv4pt5/232_hires.png"
+  },
+  {
+    "file": "gardevoir-ex-sir-svi.png",
+    "name": "Gardevoir ex",
+    "set": "Scarlet & Violet",
+    "number": "245/198",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv1/245_hires.png"
+  },
+  {
+    "file": "iono-sir-pal.png",
+    "name": "Iono",
+    "set": "Paldea Evolved",
+    "number": "269/193",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv2/269_hires.png"
+  },
+  {
+    "file": "greninja-ex-sir-twm.png",
+    "name": "Greninja ex",
+    "set": "Twilight Masquerade",
+    "number": "214/167",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv6/214_hires.png"
+  },
+  {
+    "file": "roaring-moon-ex-sir-par.png",
+    "name": "Roaring Moon ex",
+    "set": "Paradox Rift",
+    "number": "251/182",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Special Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv4/251_hires.png"
+  },
+  {
+    "file": "giratina-v-alt-lor.png",
+    "name": "Giratina V",
+    "set": "Lost Origin",
+    "number": "186/196",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Rare Ultra (Alternate Art)",
+    "source_url": "https://images.pokemontcg.io/swsh11/186_hires.png"
+  },
+  {
+    "file": "lugia-v-alt-sit.png",
+    "name": "Lugia V",
+    "set": "Silver Tempest",
+    "number": "186/195",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Rare Ultra (Alternate Art)",
+    "source_url": "https://images.pokemontcg.io/swsh12/186_hires.png"
+  },
+  {
+    "file": "rayquaza-vmax-alt-evs.png",
+    "name": "Rayquaza VMAX",
+    "set": "Evolving Skies",
+    "number": "218/203",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Rare Rainbow (Alternate Art)",
+    "source_url": "https://images.pokemontcg.io/swsh7/218_hires.png"
+  },
+  {
+    "file": "umbreon-vmax-alt-evs.png",
+    "name": "Umbreon VMAX",
+    "set": "Evolving Skies",
+    "number": "215/203",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Rare Rainbow (Alternate Art)",
+    "source_url": "https://images.pokemontcg.io/swsh7/215_hires.png"
+  },
+  {
+    "file": "charmander-ir-151.png",
+    "name": "Charmander",
+    "set": "151",
+    "number": "168/165",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv3pt5/168_hires.png"
+  },
+  {
+    "file": "squirtle-ir-151.png",
+    "name": "Squirtle",
+    "set": "151",
+    "number": "170/165",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv3pt5/170_hires.png"
+  },
+  {
+    "file": "bulbasaur-ir-151.png",
+    "name": "Bulbasaur",
+    "set": "151",
+    "number": "166/165",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv3pt5/166_hires.png"
+  },
+  {
+    "file": "magikarp-ir-pal.png",
+    "name": "Magikarp",
+    "set": "Paldea Evolved",
+    "number": "203/193",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv2/203_hires.png"
+  },
+  {
+    "file": "raichu-ir-pal.png",
+    "name": "Raichu",
+    "set": "Paldea Evolved",
+    "number": "211/193",
+    "language": "EN",
+    "era": "modern",
+    "rarity": "Illustration Rare",
+    "source_url": "https://images.pokemontcg.io/sv2/211_hires.png"
+  },
+  {
+    "file": "charizard-ex-sar-sv4a.png",
+    "name": "Charizard ex (リザードンex)",
+    "set": "Shiny Treasure ex (sv4a)",
+    "number": "349/190",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Special Art Rare (SAR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV4a/349/high.png"
+  },
+  {
+    "file": "mew-ex-sar-sv2a.png",
+    "name": "Mew ex (ミュウex)",
+    "set": "Pokémon Card 151 (sv2a)",
+    "number": "205/165",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Special Art Rare (SAR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV2a/205/high.png"
+  },
+  {
+    "file": "erikas-invitation-sar-sv2a.png",
+    "name": "Erika's Invitation (エリカの招待)",
+    "set": "Pokémon Card 151 (sv2a)",
+    "number": "206/165",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Special Art Rare (SAR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV2a/206/high.png"
+  },
+  {
+    "file": "eevee-ex-sar-sv8a.png",
+    "name": "Eevee ex (イーブイex)",
+    "set": "Terastal Festival ex (sv8a)",
+    "number": "223/187",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Special Art Rare (SAR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV8a/223/high.png"
+  },
+  {
+    "file": "iono-sar-sv4a.png",
+    "name": "Iono (ナンジャモ)",
+    "set": "Shiny Treasure ex (sv4a)",
+    "number": "350/190",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Special Art Rare (SAR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV4a/350/high.png"
+  },
+  {
+    "file": "blastoise-ex-sar-sv2a.png",
+    "name": "Blastoise ex (カメックスex)",
+    "set": "Pokémon Card 151 (sv2a)",
+    "number": "202/165",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Special Art Rare (SAR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV2a/202/high.png"
+  },
+  {
+    "file": "psyduck-ar-sv2a.png",
+    "name": "Psyduck (コダック)",
+    "set": "Pokémon Card 151 (sv2a)",
+    "number": "175/165",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Art Rare (AR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV2a/175/high.png"
+  },
+  {
+    "file": "snorlax-ar-sv2a.png",
+    "name": "Snorlax (カビゴン)",
+    "set": "Pokémon Card 151 (sv2a)",
+    "number": "181/165",
+    "language": "JP",
+    "era": "modern",
+    "rarity": "Art Rare (AR)",
+    "source_url": "https://assets.tcgdex.net/ja/SV/SV2a/181/high.png"
+  },
+  {
+    "file": "charizard-holo-base.png",
+    "name": "Charizard",
+    "set": "Base Set",
+    "number": "4/102",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/base1/4_hires.png"
+  },
+  {
+    "file": "blastoise-holo-base.png",
+    "name": "Blastoise",
+    "set": "Base Set",
+    "number": "2/102",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/base1/2_hires.png"
+  },
+  {
+    "file": "venusaur-holo-base.png",
+    "name": "Venusaur",
+    "set": "Base Set",
+    "number": "15/102",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/base1/15_hires.png"
+  },
+  {
+    "file": "mewtwo-holo-base.png",
+    "name": "Mewtwo",
+    "set": "Base Set",
+    "number": "10/102",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/base1/10_hires.png"
+  },
+  {
+    "file": "lugia-holo-neo-genesis.png",
+    "name": "Lugia",
+    "set": "Neo Genesis",
+    "number": "9/111",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/neo1/9_hires.png"
+  },
+  {
+    "file": "dark-charizard-holo-team-rocket.png",
+    "name": "Dark Charizard",
+    "set": "Team Rocket",
+    "number": "4/82",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/base5/4_hires.png"
+  },
+  {
+    "file": "gengar-holo-fossil.png",
+    "name": "Gengar",
+    "set": "Fossil",
+    "number": "5/62",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/base3/5_hires.png"
+  },
+  {
+    "file": "shining-gyarados-neo-revelation.png",
+    "name": "Shining Gyarados",
+    "set": "Neo Revelation",
+    "number": "65/64",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Shining",
+    "source_url": "https://images.pokemontcg.io/neo3/65_hires.png"
+  },
+  {
+    "file": "typhlosion-holo-neo-genesis.png",
+    "name": "Typhlosion",
+    "set": "Neo Genesis",
+    "number": "17/111",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/neo1/17_hires.png"
+  },
+  {
+    "file": "espeon-holo-neo-discovery.png",
+    "name": "Espeon",
+    "set": "Neo Discovery",
+    "number": "1/75",
+    "language": "EN",
+    "era": "vintage",
+    "rarity": "Rare Holo",
+    "source_url": "https://images.pokemontcg.io/neo2/1_hires.png"
+  }
+]
