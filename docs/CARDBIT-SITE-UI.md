@@ -52,3 +52,12 @@ Server errors `address_invalid` (fields[]), `region_blocked`, `unavailable`, `in
 
 Rewards and leaderboard pages, daily giveaway entry window (Whatnot + email entry), Welcome Rewards,
 Vault Portfolio chart. Each needs a site API from the lead thread first.
+
+## iPhone app sign-in (branch `cardbit-site-app-auth`)
+
+The app opens `/app-handoff?challenge=<base64url sha256(verifier)>` in ASWebAuthenticationSession.
+Signed out, it goes through the normal `/sign-in` (any method, 18+ included) and returns there. Signed in,
+it redirects to `cardbit://signed-in?code=<one-time code>` (2 minutes, single use, bound to the challenge).
+The app then calls `POST /api/app/session {code, verifier}` → `{token, expiresAt, state}` plus the `cb_site`
+cookie; the token is an ordinary `SiteSession` (90 days). Table `SiteAppHandoff`, migration
+`20261125090000_site_app_handoff`. No change to existing sign-in code. App repo: private `trevorpokecollect/cardbit-ios`.
