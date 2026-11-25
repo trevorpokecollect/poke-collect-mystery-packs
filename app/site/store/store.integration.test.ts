@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { balanceOf, postLedger } from "../core/ledger.server";
 import { priceKey, receiveSiteIntake } from "../core/stock.server";
+import { sitePortfolio } from "./portfolio.server";
 import { DEFAULT_TIERS, drawCopies, recentPulls, singleKey, storeAction, storeState, StoreError, tierFor, tierRules } from "./store.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -22,6 +23,7 @@ const wipe = async () => {
   await db.siteIntakeReceipt.deleteMany();
   await db.siteLedger.deleteMany();
   await db.siteWallet.deleteMany();
+  await db.cardbitVaultMark.deleteMany({ where: { shop: "cardbit-site" } });
   await db.siteCustomer.deleteMany({ where: { email: { endsWith: "@store.test" } } });
 };
 
@@ -141,5 +143,25 @@ describe.skipIf(!url)("site store", () => {
     await db.siteOpening.updateMany({ data: { demo: true } });
     expect(await recentPulls(db)).toHaveLength(0); // demo never shows
     expect(r).toBeTruthy();
+  });
+
+  it("portfolio: held copies grouped by identity key, buyback bits, market only when approved", async () => {
+    await receiveSiteIntake(db, { ...card("st:8", 2, "Gengar"), priceBits: 900, buybackBits: 700 });
+    await db.siteCopy.updateMany({ data: { status: "VAULTED", ownerId: customer.id, tcgplayerId: 4242, language: "English", finish: "Holofoil", condition: "Near Mint" } });
+    const key = "4242|en|holofoil|near mint";
+    const market = async () => ({ [key]: [["2026-11-24", 1234]] as [string, number][] });
+    delete process.env.CARDBIT_TCGPLAYER_MARKET_APPROVED;
+    let p = await sitePortfolio(db, customer.id, market);
+    expect(p).toMatchObject({ count: 2, bits: 1400, market: null, marketApproved: false, marketHistory: null });
+    expect(p.holdings).toEqual([expect.objectContaining({ key, name: "Gengar", qty: 2, bits: 700, market: null })]);
+    process.env.CARDBIT_TCGPLAYER_MARKET_APPROVED = "true";
+    try {
+      p = await sitePortfolio(db, customer.id, market);
+    } finally {
+      delete process.env.CARDBIT_TCGPLAYER_MARKET_APPROVED;
+    }
+    expect(p).toMatchObject({ market: 2468, marketApproved: true });
+    expect(p.holdings[0]).toMatchObject({ market: 1234, marketDate: "2026-11-24" });
+    expect(p.history).toHaveLength(1);
   });
 });
