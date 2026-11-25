@@ -1271,6 +1271,7 @@ model SiteCustomer {
   email     String   @unique // lowercased
   googleSub String?  @unique
   name      String?
+  signupMethod String? // email | google | apple | discord | demo (set once, at account creation)
   frozenAt  DateTime?
   closedAt  DateTime?
   createdAt DateTime @default(now())

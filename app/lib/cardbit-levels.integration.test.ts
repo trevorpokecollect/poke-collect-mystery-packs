@@ -50,9 +50,9 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
     await recordFunding(db, shop, { id: "lv-fund-" + randomUUID(), customerId: qa, amount: 3000 });
     const buy = { action: "pack" as const, id: s.id, requestId: randomUUID(), amount: 1000, version: live.commitHash! };
     await Promise.all([walletAction(db, shop, qa, buy), walletAction(db, shop, qa, buy)]);
-    expect((await rewardsView(db, shop, qa)).xp).toBe(125);
+    expect((await rewardsView(db, shop, qa)).xp).toBe(20);
     await walletAction(db, shop, qa, { ...buy, requestId: randomUUID() });
-    expect((await rewardsView(db, shop, qa)).xp).toBe(250);
+    expect((await rewardsView(db, shop, qa)).xp).toBe(40);
     expect((await rewardsView(db, shop, other)).xp).toBe(0);
     // No active buyback offer for the pulled card, so each 1,000 Cardbit opening earns 50 Sparks, once.
     expect((await sparksView(db, shop, qa)).balance).toBe(100);
@@ -68,7 +68,7 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
     const key = "pack:" + qa + "/" + buy.requestId;
     await Promise.all([1, 2].map(() => db.$transaction((tx) => reverseXp(tx, shop, key, "refund"))));
     await db.$transaction((tx) => reverseXp(tx, shop, key, "refund"));
-    expect((await rewardsView(db, shop, qa)).xp).toBe(250); // three openings (375) minus one reversal
+    expect((await rewardsView(db, shop, qa)).xp).toBe(40); // three openings (60) minus one reversal
   });
 
   it("checks in once per Central day and tracks the streak", async () => {
@@ -78,7 +78,7 @@ describe.skipIf(!url)("Cardbit levels integration", () => {
     expect((await dailyCheckIn(db, shop, other, new Date("2026-11-25T05:00:00Z"))).already).toBe(true);
     expect((await dailyCheckIn(db, shop, other, new Date("2026-11-25T18:00:00Z"))).streak).toBe(2);
     expect((await dailyCheckIn(db, shop, other, new Date("2026-11-27T18:00:00Z"))).streak).toBe(1);
-    expect((await rewardsView(db, shop, other, new Date("2026-11-27T18:00:00Z"))).xp).toBe(150);
+    expect((await rewardsView(db, shop, other, new Date("2026-11-27T18:00:00Z"))).xp).toBe(15);
   });
 
   it("only lets a customer pick unlocked icons and listed colors", async () => {

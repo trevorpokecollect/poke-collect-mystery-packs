@@ -23,7 +23,7 @@ async function lockKey(tx: Tx, key: string) {
 async function customerFor(db: PrismaClient, email: string) {
   const e = normalizeEmail(email || "");
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new DemoError("Enter the customer's email.");
-  return upsertCustomer(db, { email: e });
+  return upsertCustomer(db, { email: e, method: "demo" });
 }
 
 /** Mark (or unmark) copies as demo stock. */

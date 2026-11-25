@@ -81,11 +81,17 @@
 @media (prefers-reduced-motion: reduce) { .cbpr-bar i { transition:none; } .cbpr-level-up, .cbpr-rewards.is-fresh .cbpr-sparks { animation:none; } }
 @media (max-width: 560px) { .cbpr-row { grid-template-columns:1fr; } .cbpr-rewards { padding:14px; } }
 
-/* Footer: community Discord. */
+/* Footer: community Discord + Facebook, Instagram, Whatnot. */
+#cardbit-store .cb-foot-socials { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; }
 #cardbit-store .cb-foot-social { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border:1px solid #3b4470; border-radius:999px; background:#1a1f3a; color:#c9cffd; font:800 13px/1 'Cardbit Outfit',var(--cb-sans); text-decoration:none; }
 #cardbit-store .cb-foot-social:hover { background:#252c55; border-color:#5865f2; color:#fff; }
 #cardbit-store .cb-foot-social:focus-visible { outline:2px solid var(--cb-accent); outline-offset:2px; }
 #cardbit-store .cb-foot-end { align-items:center; }
+#cardbit-store .cb-foot-facebook:hover { border-color:#1877f2; }
+#cardbit-store .cb-foot-instagram:hover { border-color:#e1306c; }
+#cardbit-store .cb-foot-whatnot:hover { border-color:#FFB65C; }
+#cardbit-store .cb-foot-badge { margin-left:2px; padding:3px 7px; border-radius:999px; background:#FFB65C; color:#17213B; font:800 11px/1 'Cardbit Outfit',var(--cb-sans); white-space:nowrap; }
+@media (max-width: 560px) { #cardbit-store .cb-foot-socials { justify-content:flex-start; width:100%; } }
 
 /* Rewards: saved highlight on the chosen icon, and the header level badge after a level-up. */
 #cardbit-store .cbr-saved, .cbr-saved { animation:cbr-saved 1.1s ease-out; }

@@ -113,12 +113,12 @@ export async function verifyEmailCode(db: PrismaClient, rawEmail: string, rawCod
   }
   const used = await db.siteEmailCode.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: new Date() } });
   if (!used.count) throw new SignInError("That code was already used. Request a new one.");
-  return upsertCustomer(db, { email });
+  return upsertCustomer(db, { email, method: "email" });
 }
 
 export async function upsertCustomer(
   db: PrismaClient,
-  p: { email: string; googleSub?: string; name?: string | null },
+  p: { email: string; googleSub?: string; name?: string | null; method?: string },
 ): Promise<SiteCustomer> {
   const email = normalizeEmail(p.email);
   const existing = await db.siteCustomer.findUnique({ where: { email } });
@@ -134,7 +134,7 @@ export async function upsertCustomer(
     return existing;
   }
   try {
-    return await db.siteCustomer.create({ data: { email, googleSub: p.googleSub ?? null, name: p.name ?? null } });
+    return await db.siteCustomer.create({ data: { email, googleSub: p.googleSub ?? null, name: p.name ?? null, signupMethod: p.method ?? null } });
   } catch (e) {
     if ((e as { code?: string }).code === "P2002") return db.siteCustomer.findUniqueOrThrow({ where: { email } });
     throw e;
@@ -201,6 +201,6 @@ export async function googleFinish(db: PrismaClient, request: Request, fetcher: 
   const info = (await infoRes.json()) as { sub?: string; email?: string; email_verified?: boolean; name?: string };
   if (!info.sub || !info.email || info.email_verified !== true)
     throw new SignInError("Your Google account needs a verified email.");
-  const customer = await upsertCustomer(db, { email: info.email, googleSub: info.sub, name: info.name ?? null });
+  const customer = await upsertCustomer(db, { email: info.email, googleSub: info.sub, name: info.name ?? null, method: "google" });
   return { customer, returnTo: safeReturn(saved.returnTo), age: saved.age === true, clearState: clearCookie(GOOGLE_STATE) };
 }

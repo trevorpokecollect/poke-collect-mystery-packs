@@ -27,7 +27,7 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const { email } = await appleExchange(code, bundleId);
     const name = [body?.fullName?.givenName, body?.fullName?.familyName].filter((x) => typeof x === "string" && x).join(" ").slice(0, 80) || null;
-    const customer = await upsertCustomer(db, { email, name });
+    const customer = await upsertCustomer(db, { email, name, method: "apple" });
     if (customer.closedAt) return json({ error: "This account is closed.", code: "closed" }, 403);
     await recordSignupAge(db, customer.id, body?.age === true);
     const { token, expiresAt } = await createSessionToken(db, customer.id, request, "app:");

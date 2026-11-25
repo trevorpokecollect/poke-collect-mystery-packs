@@ -17,20 +17,26 @@ import {
 describe("Cardbit levels", () => {
   it("uses a rising curve starting at zero", () => {
     expect(xpForLevel(1)).toBe(0);
-    expect(xpForLevel(2)).toBe(150);
-    expect(xpForLevel(10)).toBe(4950);
+    expect(xpForLevel(2)).toBe(20);
+    expect(xpForLevel(5)).toBe(248);
+    expect(xpForLevel(10)).toBe(1548);
+    expect(xpForLevel(20)).toBe(10298);
+    expect(xpForLevel(40)).toBe(73398);
+    expect(xpForLevel(50)).toBe(139748);
     for (let l = 2; l <= MAX_LEVEL; l++) expect(xpForLevel(l)).toBeGreaterThan(xpForLevel(l - 1));
-    expect(levelForXp(149)).toBe(1);
-    expect(levelForXp(150)).toBe(2);
+    expect(levelForXp(19)).toBe(1);
+    expect(levelForXp(20)).toBe(2);
     expect(levelForXp(10_000_000)).toBe(MAX_LEVEL);
-    expect(levelProgress(200)).toMatchObject({ level: 2, levelXp: 50, nextLevelXp: 250, toNext: 200 });
+    expect(levelProgress(30)).toMatchObject({ level: 2, levelXp: 10, nextLevelXp: 44, toNext: 34 });
     expect(levelProgress(10_000_000).nextLevelXp).toBeNull();
   });
 
-  it("gives 10 XP per $1 spent plus 25 per pack", () => {
-    expect(packXp(1000)).toBe(125); // $10 Mystery
-    expect(packXp(1299)).toBe(154); // $12.99 Booster
-    expect(packXp(0)).toBe(25);
+  it("gives 2 XP per $1 spent with no flat amount per pack", () => {
+    expect(packXp(499)).toBe(10); // $4.99 Wildcard
+    expect(packXp(1000)).toBe(20); // $10 Mystery
+    expect(packXp(1299)).toBe(26); // $12.99 Booster
+    expect(packXp(3899)).toBe(78); // $38.99 Gold
+    expect(packXp(0)).toBe(0);
     expect(packXp(-5)).toBe(0);
     expect(packXp(1.5)).toBe(0);
   });

@@ -5,7 +5,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { clientIp, currentCustomer, safeReturn, siteOrigin } from "../site/core/auth.server";
 import { esc, htmlResponse, simplePage } from "../site/core/simple-page";
-import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, defaultGeoLookup } from "../site/region.server";
+import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, geoLookupFor } from "../site/region.server";
 import { CoinflowError, coinflowConfigured, createCheckoutLink, topupPackage } from "../site/payments/coinflow.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits } from "../site/play/limits.server";
 import { createStripeCheckout, siteStripe, siteStripeConfig, topupProvider } from "../site/payments/stripe-site.server";
@@ -99,7 +99,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const ip = clientIp(request);
   let region;
   try {
-    region = await assertAllowedRegion({ action: "topup", billing: { country: "US", state }, ip }, defaultGeoLookup());
+    region = await assertAllowedRegion({ action: "topup", billing: { country: "US", state }, ip }, geoLookupFor(g.customer.email));
   } catch (e) {
     if (e instanceof RegionBlocked) return again(e.message, 403);
     throw e;

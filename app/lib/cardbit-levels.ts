@@ -3,19 +3,22 @@
  * XP never has cash value and never converts to Cardbits.
  */
 
-/** XP earned per action. 10 XP per US$1 of Cardbits spent (100 Cardbits = $1). */
+/**
+ * XP earned per action. 2 XP per US$1 of Cardbits spent on a paid pack (100 Cardbits = $1), no flat
+ * amount per pack, so recycled buyback Cardbits can't farm levels cheaply. Check-ins stay small.
+ */
 export const XP_RULES = {
-  perCardbitsSpent: 10 / 100,
-  perPackOpened: 25,
-  dailyCheckIn: 50,
+  perCardbitsSpent: 2 / 100,
+  perPackOpened: 0,
+  dailyCheckIn: 5,
 } as const;
 
 export const MAX_LEVEL = 50;
 
-/** Total XP needed to reach a level. Level 1 starts at 0. */
+/** Total XP needed to reach a level: n³ + 9n² + 10n with n = level - 1. Level 1 starts at 0, Level 2 is 20, Level 50 is 139,748. */
 export function xpForLevel(level: number) {
   const n = Math.min(Math.max(Math.floor(level), 1), MAX_LEVEL) - 1;
-  return 50 * n * n + 100 * n;
+  return n * n * n + 9 * n * n + 10 * n;
 }
 
 export function levelForXp(xp: number) {
@@ -41,7 +44,7 @@ export function levelProgress(xp: number) {
 /** XP for one paid pack opening, from the Cardbits actually spent. */
 export function packXp(cardbitsSpent: number, packs = 1) {
   if (!Number.isSafeInteger(cardbitsSpent) || cardbitsSpent < 0) return 0;
-  return Math.floor(cardbitsSpent * XP_RULES.perCardbitsSpent) + XP_RULES.perPackOpened * packs;
+  return Math.round(cardbitsSpent * XP_RULES.perCardbitsSpent) + XP_RULES.perPackOpened * packs;
 }
 
 export type SpinnerTier = { id: string; name: string; minLevel: number };

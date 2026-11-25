@@ -172,7 +172,7 @@ describe("more sign-in options", () => {
     await expect(oauthFinish(db, "discord", req, new URLSearchParams("state=abc&code=x"), fetcher(false), env)).rejects.toThrow(/verified email/);
     const r = await oauthFinish(db, "discord", req, new URLSearchParams("state=abc&code=x"), fetcher(true), env);
     expect(r).toMatchObject({ returnTo: "/vault", age: true });
-    expect(created).toEqual([{ email: "ash@example.com", googleSub: null, name: "Ash" }]);
+    expect(created).toEqual([{ email: "ash@example.com", googleSub: null, name: "Ash", signupMethod: "discord" }]);
   });
 
   it("puts a one-tap link in the code email with the code only in the #fragment", async () => {

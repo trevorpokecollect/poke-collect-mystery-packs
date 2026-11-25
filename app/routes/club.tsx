@@ -5,7 +5,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { clientIp, currentCustomer, siteOrigin } from "../site/core/auth.server";
 import { esc, htmlResponse, simplePage } from "../site/core/simple-page";
-import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, defaultGeoLookup } from "../site/region.server";
+import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, geoLookupFor } from "../site/region.server";
 import { CoinflowError } from "../site/payments/coinflow.server";
 import { cancelAtCoinflow, createSubscriptionLink, subscriptionsReady } from "../site/payments/coinflow-subscriptions.server";
 import { PlayPaused, assertNotPaused, fmtDate } from "../site/play/limits.server";
@@ -107,7 +107,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const state = String(fd.get("state") || "").trim().toUpperCase();
       const zip = String(fd.get("zip") || "").trim();
       if (!/^[0-9]{5}$/.test(zip)) return fail("Enter a 5-digit billing ZIP code.");
-      await assertAllowedRegion({ action: "topup", billing: { country: "US", state }, ip }, defaultGeoLookup());
+      await assertAllowedRegion({ action: "topup", billing: { country: "US", state }, ip }, geoLookupFor(customer.email));
       const link = await createSubscriptionLink({ customerId: customer.id, email: customer.email, tier: tier.id as TierId, ip, callbackUrl: `${siteOrigin()}${PATH}?joined=1` });
       return new Response(null, { status: 303, headers: { Location: link } });
     }

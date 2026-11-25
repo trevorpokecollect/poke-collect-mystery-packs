@@ -2,12 +2,22 @@ import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { classifySource, cleanPath, parseUserAgent, recordPulse } from "./track.server";
-import { live, overview, parseRange, traffic, zonedMidnight } from "./report.server";
+import { customers, funnel, live, overview, parseRange, sales, traffic, zonedMidnight } from "./report.server";
+import { geoLookupFor } from "../region.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
+
+describe("staff IP check", () => {
+  it("skips only the connection lookup for staff test accounts", () => {
+    const env = { CARDBIT_SITE_IPINFO_TOKEN: "t", SITE_STAFF_EMAILS: "trevor@cardbit.com" } as NodeJS.ProcessEnv;
+    expect(geoLookupFor("Trevor@Cardbit.com", env)).toBeNull();
+    expect(geoLookupFor("someone@example.com", env)).toBeTypeOf("function");
+    expect(geoLookupFor("someone@example.com", {} as NodeJS.ProcessEnv)).toBeNull();
+  });
+});
 
 describe("classification", () => {
   it("names channels from UTM tags, referrers and ad click ids", () => {
@@ -55,6 +65,8 @@ describe.skipIf(!url)("analytics", () => {
     await db.siteLedger.deleteMany();
     await db.siteSession.deleteMany({ where: { id: { startsWith: "an-" } } });
     await db.siteCustomer.deleteMany({ where: { email: { endsWith: "-an@example.com" } } });
+    // Accounts other test files left behind are moved out of the report window.
+    await db.siteCustomer.updateMany({ data: { createdAt: new Date("2020-01-01T00:00:00Z") } });
     staffId = (await db.siteCustomer.create({ data: { email: "staff-an@example.com" } })).id;
     buyerId = (await db.siteCustomer.create({ data: { email: "buyer-an@example.com" } })).id;
   });
@@ -137,5 +149,27 @@ describe.skipIf(!url)("analytics", () => {
     expect(t.sources.map((s) => s.key).sort()).toEqual(["direct", "social"]);
     expect(t.referrers[0]).toMatchObject({ key: "Instagram", converted: 1 });
     expect(t.pages[0]).toEqual({ key: "/packs", views: 2, visits: 1 });
+
+    const f = await funnel(db, {}, { env, now });
+    expect(f.sessions.map((x) => x.n)).toEqual([2, 1, 1, 1]);
+    expect(f.accounts[0].n).toBe(1); // the buyer (staff left out)
+    expect(f.accounts.map((x) => x.n)).toEqual([1, 1, 1, 1]);
+    expect(f.abandoned).toHaveLength(1);
+    expect(f.abandoned[0]).toMatchObject({ cents: 10000, email: "buyer-an@example.com" });
+
+    const s = await sales(db, {}, { env, now });
+    expect(s.tiers).toEqual([{ cents: 5000, n: 1, paidBits: 5000, bonusBits: 0 }]);
+    expect(s.states).toEqual([{ state: "TX", n: 1, cents: 5000, refundCents: 0, netCents: 5000 }]);
+    expect(s.products[0]).toMatchObject({ kind: "pack", n: 1, bits: 1234 });
+    expect(s.days.reduce((a, d) => a + d.topupCents, 0)).toBe(5000);
+    expect(s.days.reduce((a, d) => a + d.buybackBits, 0)).toBe(800);
+    expect(s.days).toHaveLength(30);
+
+    const c = await customers(db, {}, { env, now });
+    expect(c.buyers).toMatchObject({ fresh: 1, returning: 0, freshCents: 5000 });
+    expect(c.top[0]).toMatchObject({ email: "buyer-an@example.com", cents: 5000, bits: 1234, orders: 1 });
+    expect(c.methods).toEqual([{ key: "unknown", n: 1 }]);
+    expect(c.cohorts.at(-1)).toMatchObject({ size: 1 });
+    expect(c.cohorts.at(-1)!.weeks[0]).toBe(1);
   });
 });
