@@ -272,3 +272,39 @@ export async function waitlistStats(db: PrismaClient) {
   ]);
   return { total, withPhone, claimed };
 }
+
+/** Card Broker Waitlist tab: live totals plus a newest-first signup list (search by email or phone). */
+export async function waitlistList(db: PrismaClient, o: { q?: string; phone?: "yes" | "no"; offset?: number; limit?: number } = {}) {
+  const limit = Math.min(Math.max(o.limit || 50, 1), 200);
+  const offset = Math.max(o.offset || 0, 0);
+  const now = Date.now();
+  const q = (o.q || "").trim().toLowerCase();
+  const digits = q.replace(/\D/g, "");
+  const where: Prisma.SiteWaitlistWhereInput = {
+    ...(o.phone === "yes" ? { phone: { not: null } } : o.phone === "no" ? { phone: null } : {}),
+    ...(q ? { OR: [{ email: { contains: q } }, ...(digits.length >= 4 ? [{ phone: { contains: digits } }] : [])] } : {}),
+  };
+  const [stats, last24h, lastHour, matched, rows] = await Promise.all([
+    waitlistStats(db),
+    db.siteWaitlist.count({ where: { createdAt: { gte: new Date(now - 24 * 3600_000) } } }),
+    db.siteWaitlist.count({ where: { createdAt: { gte: new Date(now - 3600_000) } } }),
+    db.siteWaitlist.count({ where }),
+    db.siteWaitlist.findMany({ where, orderBy: { createdAt: "desc" }, skip: offset, take: limit }),
+  ]);
+  return {
+    stats: { ...stats, emailOnly: stats.total - stats.withPhone, last24h, lastHour, emailSynced: await db.siteWaitlist.count({ where: { syncedAt: { not: null } } }) },
+    matched,
+    signups: rows.map((r) => {
+      const src = r.source && typeof r.source === "object" ? (r.source as Record<string, string>) : {};
+      return {
+        email: r.email,
+        phone: r.phone,
+        textConsent: !!r.smsConsentAt,
+        claimed: !!r.customerId,
+        source: src.utm_source || src.ref || src.referrer || null,
+        createdAt: r.createdAt.toISOString(),
+      };
+    }),
+    next: offset + rows.length < matched ? offset + rows.length : null,
+  };
+}

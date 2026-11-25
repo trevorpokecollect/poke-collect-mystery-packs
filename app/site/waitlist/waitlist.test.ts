@@ -108,3 +108,11 @@ describe("links page (Instagram bio)", () => {
     }
   });
 });
+
+describe("Card Broker waitlist endpoint", () => {
+  it("refuses requests without the pairing secret", async () => {
+    const { action } = await import("../../routes/internal.site-waitlist");
+    const res = await action({ request: new Request("https://cardbit.com/internal/site-waitlist", { method: "POST", body: '{"op":"list"}' }) } as never);
+    expect(res.status).toBe(403);
+  });
+});

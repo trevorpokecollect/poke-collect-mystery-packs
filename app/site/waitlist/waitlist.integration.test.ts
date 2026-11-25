@@ -5,7 +5,7 @@ import { balanceOf } from "../core/ledger.server";
 import { handleCoinflowEvent, topupPackage } from "../payments/coinflow.server";
 import { confirmSms, joinEmail, requestSms } from "../promos/promos.server";
 import { upsertCustomer } from "../core/auth.server";
-import { FOUNDING_TAG, foundingView, joinWaitlist, WaitlistError } from "./waitlist.server";
+import { FOUNDING_TAG, foundingView, joinWaitlist, waitlistList, WaitlistError } from "./waitlist.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -149,5 +149,17 @@ describe.skipIf(!url)("Founding Collector bonus", () => {
     expect(await balanceOf(db, c.id)).toBe(0);
     expect(await handleCoinflowEvent({ db }, ev)).toBe("replay");
     expect(await balanceOf(db, c.id)).toBe(0);
+  });
+
+  it("lists signups with totals for the Card Broker Waitlist tab", async () => {
+    await joinWaitlist(db, { email: "one@wl.test", ...consent, source: { utm_source: "klaviyo" } } as never);
+    await joinWaitlist(db, { email: "two@wl.test", phone: "2565550142", smsConsent: true, ...consent } as never);
+    const all = await waitlistList(db);
+    expect(all.stats).toMatchObject({ total: 2, withPhone: 1, emailOnly: 1, claimed: 0, lastHour: 2, last24h: 2 });
+    expect(all.signups[0]).toMatchObject({ email: "two@wl.test", textConsent: true });
+    expect(all.signups[1]).toMatchObject({ email: "one@wl.test", source: "klaviyo", textConsent: false });
+    expect((await waitlistList(db, { phone: "yes" })).signups.map((r) => r.email)).toEqual(["two@wl.test"]);
+    expect((await waitlistList(db, { q: "ONE@" })).matched).toBe(1);
+    expect((await waitlistList(db, { q: "0142" })).matched).toBe(1);
   });
 });
