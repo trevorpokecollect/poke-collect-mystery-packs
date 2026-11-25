@@ -174,4 +174,25 @@ describe.skipIf(!url)("site store", () => {
     await expect(storeAction(db, customer, { action: "buy", requestId: randomUUID(), id: "s_x" })).rejects.toMatchObject({ code: "AGE_REQUIRED" });
     expect(await balanceOf(db, customer.id)).toBe(5000);
   });
+
+  it("awards Sparks once per paid opening when site Sparks are on", async () => {
+    await receiveSiteIntake(db, { ...card("st:9", 1, "Ditto"), priceBits: 300, buybackBits: 200 });
+    await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
+    await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 1000, cardsPerPack: 1 } });
+    const env = { CARDBIT_SITE: process.env.CARDBIT_SITE, CARDBIT_SPARKS: process.env.CARDBIT_SPARKS };
+    process.env.CARDBIT_SITE = "on";
+    process.env.CARDBIT_SPARKS = "on";
+    try {
+      const requestId = randomUUID();
+      const r = await storeAction(db, customer, { action: "open", requestId, id: "cobalt" });
+      await storeAction(db, customer, { action: "open", requestId, id: "cobalt" });
+      const txns = await db.cardbitSparkTxn.findMany({ where: { shop: "cardbit-site", customerId: customer.id } });
+      expect(txns).toHaveLength(1);
+      expect(txns[0]).toMatchObject({ eventKey: `spark:site-open:${r.openingId}`, delta: 40 });
+    } finally {
+      for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      await db.cardbitSparkTxn.deleteMany({ where: { shop: "cardbit-site" } });
+      await db.cardbitSparkWallet.deleteMany({ where: { shop: "cardbit-site" } });
+    }
+  });
 });

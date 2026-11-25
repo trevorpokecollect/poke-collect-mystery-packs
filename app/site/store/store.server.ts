@@ -6,6 +6,7 @@ import type { Prisma, PrismaClient, SiteCopy, SiteCustomer } from "@prisma/clien
 import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.server";
 import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
+import { siteRewardsForOpening } from "../rewards/rewards.server";
 
 /** Shop key for site rows in shared Cardbit* tables (age, rewards, vault marks). */
 export const SITE_SHOP_KEY = "cardbit-site";
@@ -277,6 +278,9 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
           if (n.count !== 1) throw new StoreError("retry", "Packs are busy. Try again.");
           await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: "POOLED", toStatus: "VAULTED", actor: `customer:${customer.id}`, reason: `pack opening ${opening.id}` } });
         }
+        // XP + Sparks for a paid pack, in this transaction, keyed by opening id (demo openings never come through here).
+        const pulledBuyback = drawn.reduce((sum, c) => sum + (prices.get(pk(c))?.buybackBits ?? 0), 0);
+        await siteRewardsForOpening(tx, customer.id, opening.id, pack.priceBits, pulledBuyback);
         result = { openingId: opening.id, sealed: opening.sealed };
       } else if (a.action === "reveal") {
         const o = await tx.siteOpening.findFirst({ where: { id: a.id || "", customerId: customer.id } });
