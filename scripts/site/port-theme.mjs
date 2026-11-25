@@ -84,6 +84,13 @@ const PATCHES = {
     ["esc([p.tracking.company,'Tracking Number '+p.tracking.number]", "esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number]"],
   ],
   'cardbit-storefront.js': [
+    // Site: XP and Sparks on the pack reveal.
+    ["onFinish:()=>navigate(sample?'packs/'+enc(p.id):'vault/opening/'+enc(o.id)),", "onFinish:()=>navigate(sample?'packs/'+enc(p.id):'vault/opening/'+enc(o.id)),/* SITE */ onSpread:sample||!site()?null:()=>window.CardbitRevealRewards?.node(o),"],
+    // Site: community Discord in the footer.
+    ["<div class=\"cb-foot-end\"><span>Cardbit, LLC · Madison, Alabama</span></div>", "<div class=\"cb-foot-end\"><span>Cardbit, LLC · Madison, Alabama</span>'+/* SITE */(site() ? '<a class=\"cb-foot-social\" href=\"https://discord.gg/F9Z6jbgj4Y\" target=\"_blank\" rel=\"noopener\" aria-label=\"Join Our Discord (opens in a new tab)\"><svg aria-hidden=\"true\" focusable=\"false\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.7 19.7 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4a12.8 12.8 0 0 1-2 1l1.3 2.1a19.6 19.6 0 0 0 6-3c.5-5.2-.9-9.7-3.6-13.7ZM8 15.4c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.6 8 10.6s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z\"/></svg><span>Join Our Discord</span></a>' : '')+'</div>"],
+    // Site: Sparks balance next to the Cardbits wallet.
+    ["'</nav><nav aria-label=\"Account\" class=\"cb-account\">'+wallet+accountLink()", "'</nav><nav aria-label=\"Account\" class=\"cb-account\">'+wallet+/* SITE */ sparksPill()+accountLink()"],
+    ["  function header(route){\n", "  /* SITE */ function sparksPill(){const raw=site()?account()?.sparks:null;if(raw==null)return '';const n=window.CardbitRevealRewards?.shownSparks?.(raw)??raw;const v=number(n);return '<a class=\"cb-sparks-link\" href=\"/rewards\" aria-label=\"Sparks, Balance '+v+'\"><img alt=\"\" width=\"20\" height=\"20\" src=\"'+esc(asset('sparks.svg'))+'\"><span data-sparks-balance>'+v+'</span></a>';}\n  function header(route){\n"],
     // Site Welcome Rewards render in the app at /welcome (no on-device sample wallet).
     ["    if (route === 'welcome' && window.CardbitWelcome) return window.CardbitWelcome.entry;", "    if (route === 'welcome' && window.CardbitWelcome && !site()) return window.CardbitWelcome.entry;"],
     ["    if (base === 'welcome' && window.CardbitWelcome && !window.CardbitWelcome.isSample) {", "    if (base === 'welcome' && window.CardbitWelcome && !window.CardbitWelcome.isSample && !site()) {"],
@@ -126,6 +133,14 @@ const PATCHES = {
     ["    function draw() {\n      const markup = visible.map(", "    function draw() {\n      /* SITE */ if (live) return drawLive();\n      const markup = visible.map("],
     ["        toggle.hidden = printings.size <= 5;", "        toggle.hidden = live ? true : printings.size <= 5;"],
     ["    toggle.addEventListener('click',()=>{paused=!paused;syncControl();},{signal});\n", LIVE_PULLS + "    toggle.addEventListener('click',()=>{paused=!paused;syncControl();},{signal});\n"],
+  ],
+  'cardbit-opening.js': [
+    // Site: XP and Sparks earned by this pack, above the pulls (public/site/js/cardbit-site-store.js renders them).
+    ["      player.append(list);\n", "      /* SITE */ if(typeof options.onSpread==='function'){const extra=options.onSpread();if(extra)player.append(extra);}\n      player.append(list);\n"],
+  ],
+  'cardbit-card-media.js': [
+    // Site: Japanese copies carry no release date, so a Japanese card the set lists don't place gets the modern back.
+    ["    if (set.some(key => newSets.has(key))) return backs['ja-modern'];\n    return null;\n", "    if (set.some(key => newSets.has(key))) return backs['ja-modern'];\n    /* SITE */ if (root.CardbitStore?.site) return backs['ja-modern'];\n    return null;\n"],
   ],
   'cardbit-hero-scenes.js': [
     // Conveyor: whole number of evenly spaced packs, so the wrap never stacks two packs (Trevor, Nov 24).
@@ -194,8 +209,9 @@ const PAGE_LINKS = [
 ];
 
 // 1. Assets
-rmSync(outAssets, { recursive: true, force: true });
+// Theme files are replaced; site-only subfolders (email/) are kept.
 mkdirSync(outAssets, { recursive: true });
+for (const name of readdirSync(outAssets, { withFileTypes: true })) if (name.isFile()) rmSync(join(outAssets, name.name));
 let copied = 0;
 for (const name of readdirSync(join(theme, 'assets'))) {
   if (!name.startsWith('cardbit-') || SKIP.has(name)) continue;
@@ -212,7 +228,7 @@ for (const name of readdirSync(join(here, 'overrides'))) {
 }
 // Manifest: file -> short content hash, used for cache-busting URLs and window.cardbitAssets.
 const manifest = {};
-for (const name of readdirSync(outAssets).sort()) {
+for (const name of readdirSync(outAssets, { withFileTypes: true }).filter((d) => d.isFile()).map((d) => d.name).sort()) {
   manifest[name] = createHash('sha256').update(readFileSync(join(outAssets, name))).digest('hex').slice(0, 10);
 }
 mkdirSync(join(repo, 'app/site'), { recursive: true });

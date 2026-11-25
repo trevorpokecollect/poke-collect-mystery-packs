@@ -4,8 +4,8 @@
 import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { SITE_REWARDS_SHOP, featureOn } from "../../lib/cardbit-flags.server";
-import { awardPackXp, levelsEnabled } from "../../lib/cardbit-levels.server";
-import { defaultColor } from "../../lib/cardbit-levels";
+import { awardPackXp, levelsEnabled, reverseXp } from "../../lib/cardbit-levels.server";
+import { defaultColor, levelProgress } from "../../lib/cardbit-levels";
 import { sparksForOpening } from "../../lib/cardbit-sparks";
 import { WEEKLY_PRIZES, weekWindow } from "../../lib/cardbit-leaderboard.server";
 
@@ -29,9 +29,9 @@ export async function siteRewardsForOpening(
   paidBits: number,
   pulledBuybackBits: number,
 ) {
-  if (!Number.isSafeInteger(paidBits) || paidBits <= 0) return { xp: null, sparks: 0 };
+  if (!Number.isSafeInteger(paidBits) || paidBits <= 0) return { xp: 0, sparks: 0 };
   const key = "site-open:" + openingId;
-  const xp = await awardPackXp(tx, SITE_SHOP, customerId, key, paidBits);
+  const xp = (await awardPackXp(tx, SITE_SHOP, customerId, key, paidBits))?.xp ?? 0;
   let sparks = 0;
   if (siteSparksOn()) {
     const eventKey = "spark:" + key;
@@ -54,6 +54,52 @@ export async function siteRewardsForOpening(
     }
   }
   return { xp, sparks };
+}
+
+export type OpeningRewards = { xp: number; sparks: number };
+const xpKey = (openingId: string) => "pack:site-open:" + openingId;
+const sparkKey = (openingId: string) => "spark:site-open:" + openingId;
+
+/** XP and Sparks already earned by each opening (read-only; replays never award again). */
+export async function openingRewards(db: PrismaClient | Tx, customerId: string, openingIds: string[]) {
+  const out = new Map<string, OpeningRewards>();
+  if (!openingIds.length) return out;
+  const [xp, sparks] = await Promise.all([
+    db.cardbitXpEvent.findMany({ where: { shop: SITE_SHOP, customerId, eventKey: { in: openingIds.map(xpKey) } }, select: { eventKey: true, xp: true } }),
+    db.cardbitSparkTxn.findMany({ where: { shop: SITE_SHOP, customerId, eventKey: { in: openingIds.map(sparkKey) } }, select: { eventKey: true, delta: true } }),
+  ]);
+  for (const id of openingIds) {
+    const x = xp.find((e) => e.eventKey === xpKey(id))?.xp ?? 0;
+    const s = sparks.find((e) => e.eventKey === sparkKey(id))?.delta ?? 0;
+    if (x || s) out.set(id, { xp: x, sparks: s });
+  }
+  return out;
+}
+
+/** Level progress and Sparks balance for the header and the reveal. Null parts are switched off. */
+export async function siteProgress(db: PrismaClient | Tx, customerId: string) {
+  const levels = siteLevelsOn(), sparksOn = siteSparksOn();
+  const [profile, wallet] = await Promise.all([
+    levels ? db.cardbitProfile.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId } }, select: { xp: true } }) : null,
+    sparksOn ? db.cardbitSparkWallet.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId } }, select: { balance: true } }) : null,
+  ]);
+  return { level: levels ? levelProgress(profile?.xp ?? 0) : null, sparks: sparksOn ? wallet?.balance ?? 0 : null };
+}
+
+/** Wipe Demo: take back the XP and Sparks that demo openings earned, once each. */
+export async function reverseOpeningRewards(tx: Tx, openingIds: string[], reason: string) {
+  for (const id of openingIds) {
+    await reverseXp(tx, SITE_SHOP, xpKey(id), reason);
+    const award = await tx.cardbitSparkTxn.findUnique({ where: { shop_eventKey: { shop: SITE_SHOP, eventKey: sparkKey(id) } } });
+    if (!award || award.delta <= 0) continue;
+    const eventKey = "reverse:" + sparkKey(id);
+    if (await tx.cardbitSparkTxn.findUnique({ where: { shop_eventKey: { shop: SITE_SHOP, eventKey } } })) continue;
+    await tx.$queryRaw`SELECT "customerId" FROM "CardbitSparkWallet" WHERE shop=${SITE_SHOP} AND "customerId"=${award.customerId} FOR UPDATE`;
+    const wallet = await tx.cardbitSparkWallet.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId: award.customerId } } });
+    const take = Math.min(award.delta, Math.max(0, wallet?.balance ?? 0));
+    await tx.cardbitSparkTxn.create({ data: { shop: SITE_SHOP, customerId: award.customerId, eventKey, kind: "reversal", delta: -take, source: id, note: reason } });
+    if (take) await tx.cardbitSparkWallet.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: award.customerId } }, data: { balance: { decrement: take } } });
+  }
 }
 
 const alias = (customerId: string) =>

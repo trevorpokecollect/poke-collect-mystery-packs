@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { balanceOf, postLedger } from "../core/ledger.server";
 import { priceKey, receiveSiteIntake } from "../core/stock.server";
 import { sitePortfolio } from "./portfolio.server";
+import { giveDemoPacks, wipeDemo } from "../core/demo.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { DEFAULT_TIERS, drawCopies, recentPulls, singleKey, storeAction, storeState, StoreError, tierFor, tierRules } from "./store.server";
 
@@ -190,10 +191,46 @@ describe.skipIf(!url)("site store", () => {
       const txns = await db.cardbitSparkTxn.findMany({ where: { shop: "cardbit-site", customerId: customer.id } });
       expect(txns).toHaveLength(1);
       expect(txns[0]).toMatchObject({ eventKey: `spark:site-open:${r.openingId}`, delta: 40 });
+      expect(r.rewards).toMatchObject({ sparks: 40 });
+      const state = await storeState(db, customer);
+      expect(state.account).toMatchObject({ sparks: 40 });
+      expect(state.openings.find((o) => o.id === r.openingId)?.rewards).toMatchObject({ sparks: 40 });
     } finally {
       for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
       await db.cardbitSparkTxn.deleteMany({ where: { shop: "cardbit-site" } });
       await db.cardbitSparkWallet.deleteMany({ where: { shop: "cardbit-site" } });
+    }
+  });
+
+  it("returns XP on the reveal; demo packs earn at list price on reveal and Wipe Demo takes it back", async () => {
+    await receiveSiteIntake(db, { ...card("st:10", 1, "Eevee"), priceBits: 300, buybackBits: 200 });
+    await receiveSiteIntake(db, { ...card("st:11", 2, "Snorlax"), priceBits: 300, buybackBits: 200 });
+    await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
+    await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 1000, cardsPerPack: 1 } });
+    const env = { CARDBIT_SITE: process.env.CARDBIT_SITE, CARDBIT_LEVELS: process.env.CARDBIT_LEVELS, CARDBIT_SPARKS: process.env.CARDBIT_SPARKS };
+    process.env.CARDBIT_SITE = "on";
+    process.env.CARDBIT_LEVELS = "on";
+    process.env.CARDBIT_SPARKS = "on";
+    try {
+      const paid = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+      expect(paid.rewards).toEqual({ xp: 125, sparks: 40 }); // 25 per pack + 10 per 100 Cardbits; 5% of the 800 gap
+      // A staff demo pack: no charge, earns on reveal, once.
+      await db.siteCopy.updateMany({ where: { status: "POOLED" }, data: { demo: true } });
+      await giveDemoPacks(db, "staff:test", customer.email, "cobalt", 1);
+      const sealed = await db.siteOpening.findFirstOrThrow({ where: { demo: true, sealed: true } });
+      const r1 = await storeAction(db, customer, { action: "reveal", requestId: randomUUID(), id: sealed.id });
+      const r2 = await storeAction(db, customer, { action: "reveal", requestId: randomUUID(), id: sealed.id });
+      expect(r1.rewards).toEqual({ xp: 125, sparks: 40 });
+      expect(r2.rewards).toEqual({ xp: 125, sparks: 40 });
+      const state = await storeState(db, customer);
+      expect(state.account).toMatchObject({ sparks: 80, level: { xp: 250, level: 2 } });
+      await wipeDemo(db, "staff:test");
+      const after = await storeState(db, customer);
+      expect(after.account).toMatchObject({ sparks: 40, level: { xp: 125 } });
+    } finally {
+      for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      for (const t of [db.cardbitSparkTxn, db.cardbitSparkWallet, db.cardbitXpEvent, db.cardbitProfile] as unknown as { deleteMany: (a: unknown) => Promise<unknown> }[])
+        await t.deleteMany({ where: { shop: "cardbit-site" } });
     }
   });
 });

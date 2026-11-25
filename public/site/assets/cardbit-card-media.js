@@ -40,6 +40,7 @@
     const set = [card.setCode, card.set, card.setName].map(normalized);
     if (set.some(key => oldSets.has(key))) return backs['ja-old'];
     if (set.some(key => newSets.has(key))) return backs['ja-modern'];
+    /* SITE */ if (root.CardbitStore?.site) return backs['ja-modern'];
     return null;
   }
 

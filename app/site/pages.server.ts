@@ -2,7 +2,7 @@
  * Cardbit standalone site: standalone (non-storefront) pages, ported from the theme.
  */
 import policies from "./partials/policies.html?raw";
-import { STYLES, SITE_CSS_V, assetUrl } from "./shell.server";
+import { STYLES, SITE_CSS_V, assetUrl, shareMeta } from "./shell.server";
 import rewardsIn from "./partials/rewards-in.html?raw";
 import rewardsOut from "./partials/rewards-out.html?raw";
 import leaderboardIn from "./partials/leaderboard-in.html?raw";
@@ -22,7 +22,7 @@ function page(title: string, description: string, body: string, styles: string[]
     <meta name="theme-color" content="#0b0f17">
     <meta name="referrer" content="same-origin">
     <title>${title} · cardbit</title>
-    <meta name="description" content="${description}">
+    ${shareMeta({ title: `${title} · cardbit`, description })}
     <link rel="icon" type="image/png" href="${assetUrl("cardbit-brand-emblem.png")}">
     ${styles.map((name) => `<link rel="stylesheet" href="${assetUrl(name)}">`).join("\n    ")}
     ${styles.includes("cardbit-storefront.css") ? `<link rel="stylesheet" href="/site/css/cardbit-site.css?v=${SITE_CSS_V}">` : ""}
@@ -59,15 +59,17 @@ export function siteHeader(current = ""): string {
     `<a class="cb-brand" href="/" aria-label="Cardbit Home"><span class="cb-lockup"><img class="cb-logo-exact" alt="" src="${assetUrl("cardbit-brand-lockup.webp")}"></span></a>` +
     `<nav aria-label="Shop" class="cb-nav">${navLink("packs", "Packs", current)}${navLink("chase", "Chase", current)}${navLink("shop", "Card Shop", current)}${navLink("help", "How It Works", current)}</nav>` +
     `<nav aria-label="Account" class="cb-account"><a class="cb-wallet-link" href="/cardbits" aria-label="Buy Cardbits"><span class="cb-buy-label">Buy Cardbits</span><span class="cb-balance"><img alt="" width="19" height="19" style="object-fit:contain" src="${assetUrl("cardbit-bits-card-emblem.png")}"><span data-wallet-balance>0</span></span></a>` +
+    `<a class="cb-sparks-link" href="/rewards" aria-label="Sparks" hidden><img alt="" width="20" height="20" src="${assetUrl("cardbit-sparks.svg")}"><span data-sparks-balance>0</span></a>` +
     `<a class="cb-binder-link" aria-label="My Account" href="/account">${userIcon}<span>My Account</span></a></nav></div></header>`;
 }
+const DISCORD_LINK = '<a class="cb-foot-social" href="https://discord.gg/F9Z6jbgj4Y" target="_blank" rel="noopener" aria-label="Join Our Discord (opens in a new tab)"><svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.7 19.7 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4a12.8 12.8 0 0 1-2 1l1.3 2.1a19.6 19.6 0 0 0 6-3c.5-5.2-.9-9.7-3.6-13.7ZM8 15.4c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.6 8 10.6s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg><span>Join Our Discord</span></a>';
 export function siteFooter(): string {
   return `<footer class="cb-footer"><div class="cb-wrap"><div class="cb-foot-main"><div><img alt="cardbit" width="135" height="27" src="${assetUrl("cardbit-brand-lockup.webp")}"><p>Hosted by Poke-Collect</p></div>` +
     `<nav aria-label="Footer"><a href="/packs">Browse Packs</a><a href="/chase">Chase</a><a href="/ship-together">Ship Together</a><a href="/shop">Card Shop</a><a href="/help">How It Works</a><a href="/rewards">Rewards</a><a href="/policies">Policies</a><a href="mailto:Support@cardbit.com">Contact Us</a></nav></div>` +
-    `<div class="cb-foot-end"><span>Cardbit, LLC · Madison, Alabama</span></div></div></footer>`;
+    `<div class="cb-foot-end"><span>Cardbit, LLC · Madison, Alabama</span>${DISCORD_LINK}</div></div></footer>`;
 }
 // Fills the header wallet from the signed-in account (0 when signed out).
-const walletScript = `<script>fetch("/api/store/state",{credentials:"same-origin",headers:{Accept:"application/json"}}).then(r=>r.ok?r.json():null).then(s=>{const b=s&&s.account?Number(s.account.bits):0;for(const el of document.querySelectorAll("[data-wallet-balance]"))el.textContent=b.toLocaleString("en-US");const a=document.querySelector(".cb-wallet-link");if(a)a.setAttribute("aria-label","Buy Cardbits, Balance "+b.toLocaleString("en-US")+" Cardbits")}).catch(()=>{})</script>`;
+const walletScript = `<script>fetch("/api/store/state",{credentials:"same-origin",headers:{Accept:"application/json"}}).then(r=>r.ok?r.json():null).then(s=>{const b=s&&s.account?Number(s.account.bits):0;for(const el of document.querySelectorAll("[data-wallet-balance]"))el.textContent=b.toLocaleString("en-US");const sp=s&&s.account?s.account.sparks:null,pill=document.querySelector(".cb-sparks-link");if(pill&&sp!=null){const v=Number(sp).toLocaleString("en-US");pill.querySelector("[data-sparks-balance]").textContent=v;pill.setAttribute("aria-label","Sparks, Balance "+v);pill.hidden=false}const a=document.querySelector(".cb-wallet-link");if(a)a.setAttribute("aria-label","Buy Cardbits, Balance "+b.toLocaleString("en-US")+" Cardbits")}).catch(()=>{})</script>`;
 /** Swap a theme section's minimal header/footer for the full site header/footer. */
 function withChrome(html: string): string {
   return html

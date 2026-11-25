@@ -213,6 +213,7 @@
     const ordered=(root.dataset.order||'cobalt,prism,gold,ember,amethyst').split(',').map(poolKey);
     return [...(state.packs||[])].sort((a,b)=>(ordered.includes(a.id)?ordered.indexOf(a.id):99)-(ordered.includes(b.id)?ordered.indexOf(b.id):99));
   }
+  /* SITE */ function sparksPill(){const raw=site()?account()?.sparks:null;if(raw==null)return '';const n=window.CardbitRevealRewards?.shownSparks?.(raw)??raw;const v=number(n);return '<a class="cb-sparks-link" href="/rewards" aria-label="Sparks, Balance '+v+'"><img alt="" width="20" height="20" src="'+esc(asset('sparks.svg'))+'"><span data-sparks-balance>'+v+'</span></a>';}
   function header(route){
     const nav=(to,label)=>link(to,'<span class="cb-nav-icon cb-nav-'+to+'" aria-hidden="true"></span><span>'+label+'</span>','cb-navlink',route===to||route.startsWith(to+'/')?'aria-current="page"':'');
     const walletBalance=account()?.bits ?? walletBalanceLive ?? (/* SITE */ site() && state && !account() ? 0 : root.hasAttribute('data-member-signed-in') || isDemoShopper() ? null : 0);
@@ -220,7 +221,7 @@
     const wallet=link('cardbits','<span class="cb-buy-label">Buy Cardbits</span><span class="cb-balance">'+icon('bits',19)+'<span data-wallet-balance>'+shownBalance+'</span></span>',
       'cb-wallet-link','aria-label="Buy Cardbits'+(walletBalance == null ? '' : ', Balance '+shownBalance+' Cardbits')+'"');
     const skipHref=new URL(location.href);skipHref.hash='cb-stage';
-    return '<a href="'+esc(skipHref.href)+'" data-cb-skip class="cb-skip">Skip to Content</a><header class="cb-header"><div class="cb-wrap cb-head">'+link('',window.CardbitBrand?.lockup(asset,esc) || '<span class="cb-lockup"><img class="cb-logo-exact" alt="" src="'+esc(asset('brand-lockup.webp'))+'"></span>','cb-brand','aria-label="Cardbit Home"')+'<nav aria-label="Shop" class="cb-nav">'+nav('packs','Packs')+nav('chase','Chase')+nav('shop','Card Shop')+nav('help','How It Works')+'</nav><nav aria-label="Account" class="cb-account">'+wallet+accountLink()+'</nav></div></header>';
+    return '<a href="'+esc(skipHref.href)+'" data-cb-skip class="cb-skip">Skip to Content</a><header class="cb-header"><div class="cb-wrap cb-head">'+link('',window.CardbitBrand?.lockup(asset,esc) || '<span class="cb-lockup"><img class="cb-logo-exact" alt="" src="'+esc(asset('brand-lockup.webp'))+'"></span>','cb-brand','aria-label="Cardbit Home"')+'<nav aria-label="Shop" class="cb-nav">'+nav('packs','Packs')+nav('chase','Chase')+nav('shop','Card Shop')+nav('help','How It Works')+'</nav><nav aria-label="Account" class="cb-account">'+wallet+/* SITE */ sparksPill()+accountLink()+'</nav></div></header>';
   }
   function policyLink(label, newTab=false){
     const target=root.dataset.policyView;
@@ -229,7 +230,7 @@
   }
   function footer(){
     const welcomeLink = window.CardbitWelcome ? link('welcome','Welcome Rewards') : '';
-    return '<footer class="cb-footer"><div class="cb-wrap"><div class="cb-foot-main"><div><img alt="cardbit" width="135" height="27" src="'+esc(asset('brand-lockup.webp'))+'"><p>Hosted by Poke-Collect</p></div><nav aria-label="Footer">'+link('packs','Browse Packs')+link('chase','Chase')+link('ship-together','Ship Together')+link('shop','Card Shop')+link('help','How It Works')+welcomeLink+/* SITE */(site() ? '<a href="'+esc(root.dataset.policyView || '/policies')+'">Policies</a>' : policyLink('Policies'))+'<a href="mailto:Support@cardbit.com">Contact Us</a></nav></div><div class="cb-foot-end"><span>Cardbit, LLC · Madison, Alabama</span></div></div></footer>';
+    return '<footer class="cb-footer"><div class="cb-wrap"><div class="cb-foot-main"><div><img alt="cardbit" width="135" height="27" src="'+esc(asset('brand-lockup.webp'))+'"><p>Hosted by Poke-Collect</p></div><nav aria-label="Footer">'+link('packs','Browse Packs')+link('chase','Chase')+link('ship-together','Ship Together')+link('shop','Card Shop')+link('help','How It Works')+welcomeLink+/* SITE */(site() ? '<a href="'+esc(root.dataset.policyView || '/policies')+'">Policies</a>' : policyLink('Policies'))+'<a href="mailto:Support@cardbit.com">Contact Us</a></nav></div><div class="cb-foot-end"><span>Cardbit, LLC · Madison, Alabama</span>'+/* SITE */(site() ? '<a class="cb-foot-social" href="https://discord.gg/F9Z6jbgj4Y" target="_blank" rel="noopener" aria-label="Join Our Discord (opens in a new tab)"><svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.7 19.7 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4a12.8 12.8 0 0 1-2 1l1.3 2.1a19.6 19.6 0 0 0 6-3c.5-5.2-.9-9.7-3.6-13.7ZM8 15.4c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.6 8 10.6s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg><span>Join Our Discord</span></a>' : '')+'</div></div></footer>';
   }
   function displayTitle(value) {
     const minor = /^(?:a|an|the|and|as|at|but|by|for|from|in|into|nor|of|on|or|per|to|via|with|without)$/i;
@@ -1587,7 +1588,7 @@
       try{
         if(!window.CardbitOpening?.mount||!cards.length)throw Error('Opening Player Unavailable');
         const active=window.CardbitOpening.mount(theater,{edition,cards,demo:false,sample,asset,onShare:()=>collectors.share(edition.name,cards,edition.image),finishLabel:sample?'Back to Pack':'View These '+cards.length+' in My Vault',
-          onFinish:()=>navigate(sample?'packs/'+enc(p.id):'vault/opening/'+enc(o.id)),onInspect:sample?sampleInspect:c=>navigate('binder/'+enc(c.copyId||c.id))});
+          onFinish:()=>navigate(sample?'packs/'+enc(p.id):'vault/opening/'+enc(o.id)),/* SITE */ onSpread:sample||!site()?null:()=>window.CardbitRevealRewards?.node(o),onInspect:sample?sampleInspect:c=>navigate('binder/'+enc(c.copyId||c.id))});
         destroyOpening=()=>active?.destroy?.();
       }catch{theater.innerHTML=sample?demoSpread(p,cards):resultPage(o);}
     }

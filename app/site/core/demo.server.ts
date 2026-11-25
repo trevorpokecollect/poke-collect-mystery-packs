@@ -7,6 +7,7 @@ import type { Prisma, PrismaClient, SiteCopy } from "@prisma/client";
 import { normalizeEmail, upsertCustomer } from "./auth.server";
 import { applyLedger, balanceOf, postLedger } from "./ledger.server";
 import { priceKey } from "./stock.server";
+import { reverseOpeningRewards } from "../rewards/rewards.server";
 
 type Tx = Prisma.TransactionClient;
 export class DemoError extends Error {}
@@ -188,7 +189,10 @@ export async function wipeDemo(db: PrismaClient, actor: string) {
         await tx.siteCopyEvent.deleteMany({ where: { copyId: { in: copyIds } } });
         await tx.siteCopy.deleteMany({ where: { id: { in: copyIds } } });
       }
-      if (openingIds.length) await tx.siteOpening.deleteMany({ where: { id: { in: openingIds } } });
+      if (openingIds.length) {
+        await reverseOpeningRewards(tx, openingIds, "demo wipe");
+        await tx.siteOpening.deleteMany({ where: { id: { in: openingIds } } });
+      }
       // Prices are keyed by printing + condition; drop only the ones no remaining copy uses.
       const keys = [...new Set(copies.map((c) => priceKey(c.printingKey, c.condition)))];
       const printings = [...new Set(copies.map((c) => c.printingKey))];
