@@ -1,0 +1,41 @@
+/* Cardbit standalone site: live chat (site-only). */
+.cb-chat,.cb-chat *{box-sizing:border-box}
+.cb-chat{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));z-index:900;font-family:"Atkinson Hyperlegible Next",system-ui,sans-serif}
+body:has(dialog[open]) .cb-chat{display:none}
+.cb-chat-btn{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;border:2px solid #4057F5;background:#17213B;color:#FAF8F3;box-shadow:0 10px 30px #0008;cursor:pointer;padding:0}
+.cb-chat-btn:focus-visible,.cb-chat-panel :focus-visible{outline:3px solid #FFB65C;outline-offset:2px}
+.cb-chat-panel{position:absolute;left:0;bottom:70px;width:min(360px,calc(100vw - 32px));height:min(70vh,560px);display:flex;flex-direction:column;padding:14px;border-radius:16px;background:#151b28;border:1px solid #48546c;color:#FAF8F3;box-shadow:0 25px 80px #020307b8}
+.cb-chat-panel[hidden]{display:none}
+.cb-chat-panel header{display:flex;justify-content:space-between;align-items:center}
+.cb-chat-panel h2{margin:0;font:800 1.25rem "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-x{border:0;background:none;color:#c7cbd6;font-size:1.6rem;line-height:1;cursor:pointer;padding:0 4px}
+.cb-chat-tabs{display:flex;gap:6px;margin:10px 0 8px}
+.cb-chat-tabs button{flex:1;padding:7px;border-radius:9px;border:1px solid #48546c;background:transparent;color:#c7cbd6;font:800 .9rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer}
+.cb-chat-tabs button[aria-selected="true"]{background:#4057F5;border-color:#4057F5;color:#fff}
+.cb-chat-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.cb-chat-list{flex:1;min-height:0;overflow:auto;list-style:none;margin:0;padding:0 2px}
+.cb-chat-list li{display:flex;gap:9px;padding:7px 0;border-bottom:1px solid #222b3e}
+.cb-chat-list li>div{min-width:0;flex:1}
+.cb-chat-av{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;object-fit:cover;font:800 .7rem "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-who{display:flex;align-items:center;gap:6px;margin:0;font-size:.82rem}
+.cb-chat-who b{font-family:"Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-who time{margin-left:auto;color:#8d96ab;font-size:.75rem}
+.cb-chat-badge{padding:1px 7px;border-radius:999px;font-size:.68rem;font-weight:800;background:#2a3550;color:#c7cbd6}
+.cb-chat-badge-staff{background:#FFB65C;color:#17213B}
+.cb-chat-badge-plus{background:#2b3a8f;color:#dfe4ff}
+.cb-chat-badge-pro{background:#4057F5;color:#fff}
+.cb-chat-badge-ultimate{background:linear-gradient(90deg,#B98CFF,#FFB65C);color:#17213B}
+.cb-chat-text{margin:2px 0 0;overflow-wrap:anywhere;font-size:.92rem;line-height:1.35}
+.cb-chat-mod{display:flex;gap:8px;margin-top:3px}
+.cb-chat-mod button{border:0;background:none;color:#ff9b9b;font-size:.75rem;cursor:pointer;padding:0;text-decoration:underline}
+.cb-chat-empty{justify-content:center;color:#8d96ab}
+.cb-chat-form{display:flex;gap:6px;margin-top:8px}
+.cb-chat-form input{flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid #48546c;background:#0f1420;color:#FAF8F3;font:inherit}
+.cb-chat-form button,.cb-chat-cta{padding:10px 14px;border:0;border-radius:10px;background:#4057F5;color:#fff;font:800 .95rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer;text-decoration:none;text-align:center}
+.cb-chat-cta{display:block;margin-top:8px}
+.cb-chat-form button:disabled{opacity:.6;cursor:wait}
+.cb-chat-note{color:#c7cbd6}
+.cb-chat-err{margin:6px 0 0;color:#ffb3b3;font-size:.85rem}
+.cb-chat-fine{margin:8px 0 0;color:#8d96ab;font-size:.75rem}
+.cb-chat-fine a{color:#FFB65C}
+.cb-chat-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}

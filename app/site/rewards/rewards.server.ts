@@ -56,7 +56,7 @@ export async function siteRewardsForOpening(
   return { xp, sparks };
 }
 
-const alias = (customerId: string) =>
+export const alias = (customerId: string) =>
   "Collector " + createHash("sha256").update(customerId).digest("hex").slice(0, 4).toUpperCase();
 
 /**

@@ -18,6 +18,9 @@ import siteAuthSource from "../../public/site/js/cardbit-site-auth.js?raw";
 import siteAuthCssSource from "../../public/site/css/cardbit-site-auth.css?raw";
 import sitePlaySource from "../../public/site/js/cardbit-site-play.js?raw";
 import sitePlayCssSource from "../../public/site/css/cardbit-site-play.css?raw";
+import siteChatSource from "../../public/site/js/cardbit-site-chat.js?raw";
+import siteChatCssSource from "../../public/site/css/cardbit-site-chat.css?raw";
+const chatOn = () => process.env.SITE_CHAT === "on"; // same flag as app/site/play/chat.server.ts
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
 import { CLUB_ICON_URLS } from "./play/club-icons";
@@ -31,6 +34,8 @@ const SITE_AUTH_V = version(siteAuthSource);
 const SITE_AUTH_CSS_V = version(siteAuthCssSource);
 const SITE_PLAY_V = version(sitePlaySource);
 const SITE_PLAY_CSS_V = version(sitePlayCssSource);
+const SITE_CHAT_V = version(siteChatSource);
+const SITE_CHAT_CSS_V = version(siteChatCssSource);
 
 export const SITE_ENABLED = () => process.env.CARDBIT_SITE === "on";
 
@@ -130,6 +135,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     `<link rel="stylesheet" href="/site/css/cardbit-site.css?v=${SITE_CSS_V}">`,
     `<link rel="stylesheet" href="/site/css/cardbit-site-auth.css?v=${SITE_AUTH_CSS_V}">`,
     `<link rel="stylesheet" href="/site/css/cardbit-site-play.css?v=${SITE_PLAY_CSS_V}">`,
+    ...(chatOn() ? [`<link rel="stylesheet" href="/site/css/cardbit-site-chat.css?v=${SITE_CHAT_CSS_V}">`] : []),
   ].join("\n    ");
   const scripts = SCRIPTS.map((name) =>
     name === "SITE_STORE"
@@ -140,7 +146,8 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
         ? `<script src="${assetUrl("cardbit-portfolio.js")}" data-portfolio-endpoint="/api/portfolio" defer></script>`
         : `<script src="${assetUrl(name)}" defer></script>`,
   ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>` +
-    `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>`;
+    `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>` +
+    (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "");
 
   return `<!doctype html>
 <html lang="en">

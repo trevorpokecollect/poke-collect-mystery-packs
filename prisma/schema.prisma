@@ -1569,4 +1569,31 @@ model SiteSubscriptionPayment {
   @@index([customerId, createdAt])
 }
 
+// Site live chat. "main" is for every signed-in 18+ account; "club" is for Cardbit Club members.
+// Author badges and avatar are snapshotted when the message is sent so reads stay one query.
+model SiteChatMessage {
+  id         String    @id @default(cuid())
+  room       String // main | club
+  customerId String
+  name       String
+  iconId     String?
+  iconColor  String?
+  badge      String? // staff | plus | pro | ultimate
+  body       String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+  deletedBy  String?
+  @@index([room, createdAt])
+  @@index([customerId, createdAt])
+}
+
+model SiteChatMute {
+  customerId String   @id
+  until      DateTime
+  reason     String?
+  byEmail    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 // ---- end Cardbit standalone site: core ------------------------------------------------------
