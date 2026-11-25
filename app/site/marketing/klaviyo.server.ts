@@ -104,13 +104,14 @@ export async function syncConsent(deps: KlaviyoDeps, cfg: Config, limit = 100) {
     done.push(m.customerId);
     if (!c || c.signupMethod === "demo") continue;
     const base = { email: c.email };
+    // No consented_at: Klaviyo rejects it unless historical_import is true, and live signups use "now" anyway.
     if (emailOn(m) && !c.closedAt)
-      subEmail.push({ type: "profile", attributes: { ...base, subscriptions: { email: { marketing: { consent: "SUBSCRIBED", consented_at: m.emailOptInAt!.toISOString() } } } } });
+      subEmail.push({ type: "profile", attributes: { ...base, subscriptions: { email: { marketing: { consent: "SUBSCRIBED" } } } } });
     else if (m.emailOptOutAt || c.closedAt) unsubEmail.push({ type: "profile", attributes: { ...base, subscriptions: { email: { marketing: { consent: "UNSUBSCRIBED" } } } } });
     if (cfg.smsListId && m.smsPhone) {
       const phone = { ...base, phone_number: m.smsPhone };
       if (smsOn(m) && !c.closedAt)
-        subSms.push({ type: "profile", attributes: { ...phone, subscriptions: { sms: { marketing: { consent: "SUBSCRIBED", consented_at: m.smsConfirmedAt!.toISOString() } } } } });
+        subSms.push({ type: "profile", attributes: { ...phone, subscriptions: { sms: { marketing: { consent: "SUBSCRIBED" } } } } });
       else if (m.smsOptOutAt || c.closedAt) unsubSms.push({ type: "profile", attributes: { ...phone, subscriptions: { sms: { marketing: { consent: "UNSUBSCRIBED" } } } } });
     }
   }
@@ -162,7 +163,7 @@ export async function syncWaitlist(deps: KlaviyoDeps, cfg: Config, limit = 100) 
     },
   });
   await call(deps, cfg, "POST", "/profile-subscription-bulk-create-jobs", sub(cfg.waitlistListId, rows.map((r) => ({
-    type: "profile", attributes: { email: r.email, subscriptions: { email: { marketing: { consent: "SUBSCRIBED", consented_at: r.emailConsentAt.toISOString() } } } },
+    type: "profile", attributes: { email: r.email, subscriptions: { email: { marketing: { consent: "SUBSCRIBED" } } } },
   }))));
   const newest = rows.reduce((a, r) => (r.updatedAt > a ? r.updatedAt : a), rows[0].updatedAt);
   await deps.db.siteWaitlist.updateMany({ where: { id: { in: rows.map((r) => r.id) }, syncedAt: null, updatedAt: { lte: newest } }, data: { syncedAt: now } });
@@ -187,7 +188,7 @@ async function syncWaitlistTexts(deps: KlaviyoDeps, cfg: Config, limit: number) 
       type: "profile-subscription-bulk-create-job",
       attributes: {
         custom_source: "cardbit.com waitlist", historical_import: false,
-        profiles: { data: rows.map((r) => ({ type: "profile", attributes: { email: r.email, phone_number: r.phone, subscriptions: { sms: { marketing: { consent: "SUBSCRIBED", consented_at: r.smsConsentAt!.toISOString() } } } } })) },
+        profiles: { data: rows.map((r) => ({ type: "profile", attributes: { email: r.email, phone_number: r.phone, subscriptions: { sms: { marketing: { consent: "SUBSCRIBED" } } } } })) },
       },
       relationships: { list: { data: { type: "list", id: cfg.smsListId } } },
     },
