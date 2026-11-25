@@ -57,7 +57,7 @@ export type ShippingDeps = {
   notify?: ShipNotifier;
   /** Cardbit's return / ship-from address. */
   from: Address;
-  /** Preferred Shippo service level tokens, best first. */
+  /** Preferred service level tokens (Shippo style, EasyPost rates are mapped to them), best first. */
   services?: string[];
   now?: () => Date;
 };
@@ -372,7 +372,7 @@ export function pickRate(rates: Rate[], services: string[] = DEFAULT_SERVICES): 
 }
 
 export async function ratesForShipment(deps: ShippingDeps, shipmentId: string) {
-  if (!deps.provider) throw new ShippingError("Connect Shippo first.", "PROVIDER_MISSING");
+  if (!deps.provider) throw new ShippingError("Connect a label provider first.", "PROVIDER_MISSING");
   const s = await deps.db.siteShipment.findUnique({ where: { id: shipmentId } });
   if (!s) throw new ShippingError("Shipment not found.", "NOT_FOUND");
   const rates = await deps.provider.rates(deps.from, s.toAddress as unknown as Address, parcelFor(s.cardCount), s.id);
@@ -385,7 +385,7 @@ export async function ratesForShipment(deps: ShippingDeps, shipmentId: string) {
  */
 export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: string, rateId?: string) {
   const { db } = deps;
-  if (!deps.provider) throw new ShippingError("Connect Shippo first.", "PROVIDER_MISSING");
+  if (!deps.provider) throw new ShippingError("Connect a label provider first.", "PROVIDER_MISSING");
   const claim = await db.siteShipment.updateMany({
     where: { id: shipmentId, status: "PAID", shippoTransactionId: null },
     data: { status: "LABEL_PENDING" },
@@ -401,7 +401,7 @@ export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: st
     const rates = await deps.provider.rates(deps.from, s.toAddress as unknown as Address, parcelFor(s.cardCount), s.id);
     const rate = rateId ? rates.find((r) => r.rateId === rateId) ?? null : pickRate(rates, deps.services);
     if (!rate) throw new ShippingError("No matching carrier rate for this address.", "NO_RATE");
-    const label = await deps.provider.buyLabel(rate.rateId, s.id);
+    const label = await deps.provider.buyLabel(rate.rateId, s.id, rate.shipmentId);
     if (label.status !== "SUCCESS" || !label.trackingNumber)
       throw new ShippingError("The carrier didn't issue the label.", "LABEL_FAILED", label.messages);
     return await db.$transaction(async (tx) => {
@@ -412,7 +412,7 @@ export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: st
           fromStatus: "LABEL_PENDING",
           toStatus: "LABEL_PURCHASED",
           actor,
-          detail: { carrier: rate.carrier, service: rate.service, cents: rate.amountCents },
+          detail: { provider: deps.provider?.name ?? "Shippo", carrier: rate.carrier, service: rate.service, cents: rate.amountCents },
         },
       });
       return tx.siteShipment.update({
@@ -526,22 +526,34 @@ export function statusFromTracking(t: Tracking["status"]): ShipmentStatus | null
 
 /**
  * Shippo track_updated webhook. The URL carries a secret token (Shippo doesn't sign webhooks);
- * the body is only a hint: we re-read tracking from Shippo before changing anything.
+ * the body is only a hint: we re-read tracking from the provider before changing anything.
  */
 export async function handleTrackingWebhook(deps: ShippingDeps, body: unknown) {
   const b = (body && typeof body === "object" ? body : {}) as { event?: string; data?: Record<string, unknown> };
   if (b.event !== "track_updated" || !b.data) return { ok: true, ignored: "event" as const };
-  const number = String(b.data.tracking_number ?? "");
-  const carrier = String(b.data.carrier ?? "");
+  return refreshTracking(deps, String(b.data.tracking_number ?? ""), String(b.data.carrier ?? ""), "shippo");
+}
+
+/**
+ * EasyPost tracker.updated webhook (Event object, result = Tracker). Same rule as Shippo:
+ * the body only names the number; tracking is re-read from EasyPost before anything changes.
+ */
+export async function handleEasyPostWebhook(deps: ShippingDeps, body: unknown) {
+  const b = (body && typeof body === "object" ? body : {}) as { description?: string; result?: Record<string, unknown> };
+  if (b.description !== "tracker.updated" || !b.result) return { ok: true, ignored: "event" as const };
+  return refreshTracking(deps, String(b.result.tracking_code ?? ""), String(b.result.carrier ?? "").toLowerCase(), "easypost");
+}
+
+async function refreshTracking(deps: ShippingDeps, number: string, carrier: string, actor: string) {
   if (!number) return { ok: true, ignored: "no_number" as const };
   const s = await deps.db.siteShipment.findFirst({ where: { trackingNumber: number } });
   if (!s) return { ok: true, ignored: "unknown_number" as const };
-  if (!deps.provider) throw new ShippingError("Connect Shippo first.", "PROVIDER_MISSING");
+  if (!deps.provider) throw new ShippingError("Connect a label provider first.", "PROVIDER_MISSING");
   const t = await deps.provider.track(s.carrier || carrier, number);
   const to = statusFromTracking(t.status);
   if (!to) return { ok: true, ignored: "pre_transit" as const };
   const dedupe = `track:${number}:${t.status}:${t.at ?? ""}`.slice(0, 190);
-  const shipment = await applyStatus(deps, s.id, to, "shippo", t, dedupe);
+  const shipment = await applyStatus(deps, s.id, to, actor, t, dedupe);
   return { ok: true, status: shipment.status };
 }
 

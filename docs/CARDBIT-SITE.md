@@ -133,6 +133,20 @@ Env (site / app-site): `SHIPPO_API_TOKEN` (test key set), `SHIPPO_WEBHOOK_TOKEN`
 `CARDBIT_SITE_IPINFO_TOKEN` (optional; without it IP isn't checked, addresses still are),
 `CARDBIT_SITE_URL`.
 
+### Backup label provider: EasyPost
+
+`app/site/shipping/easypost.server.ts` implements the same `ShippingProvider` as Shippo. Rates come back
+with Shippo-style service tokens, so `pickRate` and `CARDBIT_SHIP_SERVICES` behave the same.
+- Switch: `CARDBIT_LABEL_PROVIDER=easypost` (anything else or unset = Shippo). No silent fallback: picking
+  EasyPost without `EASYPOST_API_KEY` turns Buy Label off rather than quietly using Shippo.
+- Keys: `EASYPOST_API_KEY` (`EZTK…` test key; `EZAK…` = live postage, needs Trevor's OK).
+- Tracking: `/site/webhooks/easypost?token=<EASYPOST_WEBHOOK_TOKEN>` (EasyPost `tracker.updated`), optional
+  `EASYPOST_WEBHOOK_SECRET` checks `X-Hmac-Signature`. Each webhook re-reads tracking from the provider that
+  sent it, so labels bought before a switch keep tracking. The desk shows which provider and mode is active,
+  and System Check runs against it.
+- DB columns keep the `shippo*` names; with EasyPost, `shippoShipmentId`/`shippoTransactionId` hold the
+  EasyPost shipment id and `shippoRateId` the EasyPost rate id. `label_purchased` events record the provider.
+
 ## Cardbits top-up (Coinflow card checkout)
 
 - `/checkout/cardbits?amount=1000|5000|10000|50000&return_to=` (sign-in required) asks for billing state + ZIP, runs the state block (billing + IP), records a PENDING `SiteTopup`, then redirects to Coinflow's hosted link (`POST {api}/checkout/link`, `webhookInfo.topupId`, `standaloneLinkConfig.callbackUrl` = `/checkout/cardbits/return`).

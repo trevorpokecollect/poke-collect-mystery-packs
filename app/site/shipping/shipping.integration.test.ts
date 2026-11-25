@@ -8,6 +8,7 @@ import {
   fixShipmentCard,
   cancelShipment,
   createShipment,
+  handleEasyPostWebhook,
   handleTrackingWebhook,
   markShipped,
   shippingQueue,
@@ -38,8 +39,10 @@ class FakeShippo implements ShippingProvider {
       { rateId: "r_ga", shipmentId: "s1", carrier: "USPS", service: "Ground Advantage", serviceToken: "usps_ground_advantage", amountCents: 495, currency: "USD", days: 4, attributes: [] },
     ];
   }
-  async buyLabel(rateId: string): Promise<Label> {
+  boughtOn: (string | undefined)[] = [];
+  async buyLabel(rateId: string, _meta: string, shipmentId?: string): Promise<Label> {
     this.labels++;
+    this.boughtOn.push(shipmentId);
     await new Promise((r) => setTimeout(r, 30));
     return { transactionId: `tx_${this.labels}`, status: "SUCCESS", trackingNumber: `9400${this.labels}`, trackingUrl: "https://track.test", labelUrl: "https://label.test", messages: [rateId] };
   }
@@ -245,6 +248,22 @@ describe.skipIf(!url)("site shipping (integration)", () => {
       "Your Cards Have Shipped",
       "Your Cards Were Delivered",
     ]);
+  });
+
+  it("EasyPost path: buys on the rate's shipment and follows tracker.updated webhooks", async () => {
+    const { shipment } = await createShipment(deps, base());
+    await buyLabel(deps, shipment.id, "staff:a");
+    expect(shippo.boughtOn).toEqual([expect.any(String)]);
+    const ev = await db.siteShipmentEvent.findFirstOrThrow({ where: { shipmentId: shipment.id, kind: "label_purchased" } });
+    expect(ev.detail).toMatchObject({ carrier: expect.any(String) });
+    const hook = { object: "Event", description: "tracker.updated", result: { object: "Tracker", tracking_code: "94001", carrier: "USPS", status: "delivered" } };
+    expect(await handleEasyPostWebhook(deps, { description: "batch.updated", result: {} })).toMatchObject({ ignored: "event" });
+    expect(await handleEasyPostWebhook(deps, hook)).toMatchObject({ ignored: "pre_transit" }); // re-read says not moving yet
+    shippo.tracking["94001"] = { carrier: "usps", trackingNumber: "94001", status: "DELIVERED", detail: "Mailbox", at: "2026-11-28T18:00:00Z", eta: null };
+    expect(await handleEasyPostWebhook(deps, hook)).toMatchObject({ status: "DELIVERED" });
+    const last = await db.siteShipmentEvent.findFirstOrThrow({ where: { shipmentId: shipment.id, kind: "status" }, orderBy: { createdAt: "desc" } });
+    expect(last.actor).toBe("easypost");
+    expect(await statusOf("c1")).toBe("SHIPPED");
   });
 
   it("Fix Card swap: replacement becomes the customer's locked copy, old copy goes back to stock unfiled", async () => {

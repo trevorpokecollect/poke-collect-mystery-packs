@@ -32,7 +32,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return new Response("Bad request", { status: 400 });
   }
   try {
-    const result = await handleTrackingWebhook(siteShippingDeps(), body);
+    const result = await handleTrackingWebhook(siteShippingDeps(process.env, "shippo"), body);
     return Response.json(result);
   } catch (err) {
     console.error("[site-shipping] webhook failed", err);
