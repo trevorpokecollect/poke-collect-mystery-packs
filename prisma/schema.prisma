@@ -1473,4 +1473,16 @@ model SiteRequest {
   createdAt   DateTime @default(now())
 }
 
+// iPhone app sign-in hand-off: the site's sign-in page (in Apple's sign-in sheet) mints a
+// one-time code bound to the app's PKCE challenge; the app trades code + verifier for a session.
+model SiteAppHandoff {
+  id         String    @id // sha256 of the one-time code
+  customerId String
+  challenge  String    // base64url(sha256(verifier)) from the app
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  usedAt     DateTime?
+  @@index([customerId])
+}
+
 // ---- end Cardbit standalone site: core ------------------------------------------------------

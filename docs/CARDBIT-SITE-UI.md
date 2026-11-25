@@ -71,3 +71,12 @@ Vault Portfolio chart. Each needs a site API from the lead thread first.
 - Official Rules, Rewards and Leaderboard use the full site header (nav, wallet, account) and footer (`siteHeader`/`siteFooter` in `app/site/pages.server.ts`). Rules contact is Support@cardbit.com.
 - Chase and Shop Singles load the first 15 images eagerly. Singles without a back photo no longer show "Back Unverified".
 - Signed-out wallet reads 0. `/open/*` and `/welcome` return 200.
+
+## iPhone app sign-in (branch `cardbit-site-app-auth`)
+
+The app opens `/app-handoff?challenge=<base64url sha256(verifier)>` in ASWebAuthenticationSession.
+Signed out, it goes through the normal `/sign-in` (any method, 18+ included) and returns there. Signed in,
+it redirects to `cardbit://signed-in?code=<one-time code>` (2 minutes, single use, bound to the challenge).
+The app then calls `POST /api/app/session {code, verifier}` → `{token, expiresAt, state}` plus the `cb_site`
+cookie; the token is an ordinary `SiteSession` (90 days). Table `SiteAppHandoff`, migration
+`20261125090000_site_app_handoff`. No change to existing sign-in code. App repo: private `trevorpokecollect/cardbit-ios`.
