@@ -5,7 +5,6 @@ import type { PrismaClient, SiteShipment } from "@prisma/client";
 import { assertAllowedRegion, US_STATES, zipStateMismatch, type GeoLookup } from "../region.server";
 import {
   cardsUntilFree,
-  parcelFor,
   processBy,
   shippingFee,
   type FeeMethod,
@@ -14,6 +13,7 @@ import {
 import type { Address, Rate, ShippingProvider, Tracking } from "./shippo.server";
 import { priceKey } from "../core/stock.server";
 import { CopyLockError, FeePaymentError, type CopyStore, type FeePayer } from "./types";
+import { PackageError, planParcel, type ParcelChoice } from "./packages.server";
 
 export type ShipmentStatus =
   | "DRAFT"
@@ -40,7 +40,8 @@ export class ShippingError extends Error {
       | "NO_RATE"
       | "LABEL_FAILED"
       | "PROVIDER_MISSING"
-      | "DUPLICATE_COPY",
+      | "DUPLICATE_COPY"
+      | "BAD_PACKAGE",
     public details: string[] = [],
   ) {
     super(message);
@@ -363,27 +364,46 @@ export async function fixShipmentCard(deps: ShippingDeps, shipmentId: string, in
 
 // ---------- label (staff) ----------
 
-export function pickRate(rates: Rate[], services: string[] = DEFAULT_SERVICES): Rate | null {
+/**
+ * The rate pre-selected on the desk: the cheapest USD rate (like Shopify), or, when a preference
+ * list is configured (CARDBIT_SHIP_SERVICES), the cheapest rate of the first listed service found.
+ */
+export function pickRate(rates: Rate[], services?: string[] | null): Rate | null {
+  const cheapest = (rs: Rate[]) => [...rs].sort((a, b) => a.amountCents - b.amountCents || (a.days ?? 99) - (b.days ?? 99))[0] ?? null;
+  if (!services?.length) return cheapest(rates);
   for (const token of services) {
-    const match = rates.filter((r) => r.serviceToken === token).sort((a, b) => a.amountCents - b.amountCents)[0];
+    const match = cheapest(rates.filter((r) => r.serviceToken === token));
     if (match) return match;
   }
   return null;
 }
 
-export async function ratesForShipment(deps: ShippingDeps, shipmentId: string) {
+async function plan(deps: ShippingDeps, cardCount: number, choice?: ParcelChoice) {
+  try {
+    return await planParcel(deps.db, cardCount, choice);
+  } catch (err) {
+    if (err instanceof PackageError) throw new ShippingError(err.message, "BAD_PACKAGE");
+    throw err;
+  }
+}
+
+/** Every carrier rate for the shipment's parcel, cheapest first, with the pre-selected one. */
+export async function ratesForShipment(deps: ShippingDeps, shipmentId: string, choice?: ParcelChoice) {
   if (!deps.provider) throw new ShippingError("Connect a label provider first.", "PROVIDER_MISSING");
   const s = await deps.db.siteShipment.findUnique({ where: { id: shipmentId } });
   if (!s) throw new ShippingError("Shipment not found.", "NOT_FOUND");
-  const rates = await deps.provider.rates(deps.from, s.toAddress as unknown as Address, parcelFor(s.cardCount), s.id);
-  return { rates, suggested: pickRate(rates, deps.services) };
+  const p = await plan(deps, s.cardCount, choice);
+  const rates = (await deps.provider.rates(deps.from, s.toAddress as unknown as Address, p.parcel, s.id)).sort(
+    (a, b) => a.amountCents - b.amountCents || (a.days ?? 99) - (b.days ?? 99),
+  );
+  return { rates, suggested: pickRate(rates, deps.services), plan: p };
 }
 
 /**
  * Buys the label once. PAID -> LABEL_PENDING is a conditional claim, so two staff clicks
  * cannot buy two labels. On provider failure the shipment goes back to PAID.
  */
-export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: string, rateId?: string) {
+export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: string, rateId?: string, choice?: ParcelChoice & { service?: string }) {
   const { db } = deps;
   if (!deps.provider) throw new ShippingError("Connect a label provider first.", "PROVIDER_MISSING");
   const claim = await db.siteShipment.updateMany({
@@ -398,9 +418,16 @@ export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: st
   }
   try {
     const s = await db.siteShipment.findUniqueOrThrow({ where: { id: shipmentId } });
-    const rates = await deps.provider.rates(deps.from, s.toAddress as unknown as Address, parcelFor(s.cardCount), s.id);
-    const rate = rateId ? rates.find((r) => r.rateId === rateId) ?? null : pickRate(rates, deps.services);
-    if (!rate) throw new ShippingError("No matching carrier rate for this address.", "NO_RATE");
+    const p = await plan(deps, s.cardCount, choice);
+    const rates = await deps.provider.rates(deps.from, s.toAddress as unknown as Address, p.parcel, s.id);
+    // Rates are re-quoted at purchase; match the staff pick by id, or by carrier+service when the
+    // provider issued new rate ids for the same quote.
+    const picked = rateId ? choice?.service : undefined;
+    const rate = rateId
+      ? rates.find((r) => r.rateId === rateId) ??
+        (picked ? rates.find((r) => r.serviceToken === picked) ?? null : null)
+      : pickRate(rates, deps.services);
+    if (!rate) throw new ShippingError("That rate expired. Refresh the rates and pick again.", "NO_RATE");
     const label = await deps.provider.buyLabel(rate.rateId, s.id, rate.shipmentId);
     if (label.status !== "SUCCESS" || !label.trackingNumber)
       throw new ShippingError("The carrier didn't issue the label.", "LABEL_FAILED", label.messages);
@@ -412,7 +439,7 @@ export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: st
           fromStatus: "LABEL_PENDING",
           toStatus: "LABEL_PURCHASED",
           actor,
-          detail: { provider: deps.provider?.name ?? "Shippo", carrier: rate.carrier, service: rate.service, cents: rate.amountCents },
+          detail: { provider: deps.provider?.name ?? "Shippo", carrier: rate.carrier, service: rate.service, cents: rate.amountCents, package: p.packageName, weightOz: p.weight.totalOz },
         },
       });
       return tx.siteShipment.update({
@@ -429,6 +456,9 @@ export async function buyLabel(deps: ShippingDeps, shipmentId: string, actor: st
           trackingUrl: label.trackingUrl,
           labelUrl: label.labelUrl,
           trackingStatus: "PRE_TRANSIT",
+          packageId: p.packageId,
+          weightOz: p.weight.totalOz,
+          parcel: p.parcel,
         },
         include: { items: true },
       });

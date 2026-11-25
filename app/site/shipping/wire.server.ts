@@ -5,7 +5,7 @@ import prisma from "../../db.server";
 import { defaultGeoLookup } from "../region.server";
 import { mailerFromEnv } from "../email/mailer.server";
 import { shipmentNotifier } from "../email/outbox.server";
-import { fromAddressFromEnv, DEFAULT_SERVICES, type ShippingDeps } from "./service.server";
+import { fromAddressFromEnv, type ShippingDeps } from "./service.server";
 import { easypostFromEnv } from "./easypost.server";
 import { shippoFromEnv, type ShippingProvider } from "./shippo.server";
 import type { CopyStore, FeePayer } from "./types";
@@ -50,6 +50,6 @@ export function siteShippingDeps(env: NodeJS.ProcessEnv = process.env, provider?
     geo: defaultGeoLookup(env),
     notify: shipmentNotifier({ db: prisma, mailer, env }),
     from: fromAddressFromEnv(env),
-    services: env.CARDBIT_SHIP_SERVICES ? env.CARDBIT_SHIP_SERVICES.split(",").map((s) => s.trim()) : DEFAULT_SERVICES,
+    services: env.CARDBIT_SHIP_SERVICES ? env.CARDBIT_SHIP_SERVICES.split(",").map((s) => s.trim()) : undefined,
   };
 }
