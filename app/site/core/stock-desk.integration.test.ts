@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { receiveSiteIntake } from "./stock.server";
-import { DeskError, listStock, movePool, setListing, setPrice } from "./stock-desk.server";
+import { DeskError, listStock, moveToSlot, movePool, removeCopies, setListing, setPrice } from "./stock-desk.server";
 import { publishRestock } from "./restock.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -56,5 +56,46 @@ describe.skipIf(!url)("stock desk", () => {
     expect(await movePool(db, "t", ids, "cobalt")).toMatchObject({ moved: 0, skipped: 2 }); // pools fill from Draft only
     expect((await listStock(db, { status: "FOR_SALE" })).total).toBe(2);
     expect(await setListing(db, "t", ids, false)).toEqual({ moved: 2, skipped: 0 });
+  });
+
+  it("deletes only unsold Draft/Active copies, frees the pocket, logs it, and hides them from All", async () => {
+    const r = await receiveSiteIntake(db, card("del:1", 4, "Bellsprout"));
+    const [a, b, c, d] = r.copies.map((x) => x.id);
+    await setListing(db, "t", [b], true);
+    await db.siteCopy.update({ where: { id: c }, data: { status: "VAULTED", ownerId: "cust" } });
+    await movePool(db, "t", [d], "cobalt"); // staged for a restock
+    const out = await removeCopies(db, "card-broker:emily", [a, b, c, d, "nope"], "Listed twice");
+    expect(out).toMatchObject({ removed: 2, missing: 1, skipped: 3 });
+    expect(Object.fromEntries(out.blocked.map((x) => [x.id, x.reason]))).toEqual({ [c]: "in a customer's vault", [d]: "staged for a restock (unstage it first)" });
+    const gone = await db.siteCopy.findUnique({ where: { id: a } });
+    expect(gone).toMatchObject({ status: "REMOVED", slot: null, pocket: null });
+    const ev = await db.siteCopyEvent.findFirst({ where: { copyId: b, toStatus: "REMOVED" } });
+    expect(ev).toMatchObject({ fromStatus: "FOR_SALE", actor: "card-broker:emily" });
+    expect(ev!.reason).toMatch(/^deleted: Listed twice \(was slot 1000\d pocket \d+\)$/);
+    const all = await listStock(db, {});
+    expect(all.copies.map((x) => x.id).sort()).toEqual([c, d].sort());
+    expect(all.totals).toMatchObject({ all: 2, REMOVED: 2 });
+    expect((await listStock(db, { status: "REMOVED" })).total).toBe(2);
+    expect((await removeCopies(db, "t", [a], "")).blocked[0].reason).toBe("already deleted");
+    await expect(removeCopies(db, "t", [], "x")).rejects.toThrow(DeskError);
+  });
+
+  it("moves a copy to a chosen slot and pocket, keeping one card per name per slot", async () => {
+    const [x] = (await receiveSiteIntake(db, card("mv:1", 1, "Pidgey"))).copies;
+    const [y] = (await receiveSiteIntake(db, { ...card("mv:2", 1, "Rattata"), number: "9/100", title: "Rattata - 9/100" })).copies;
+    const [z] = (await receiveSiteIntake(db, { ...card("mv:3", 1, "Pidgey"), number: "3/100", title: "Pidgey - 3/100" })).copies;
+    expect(x.slot).toBe(10001);
+    expect(z.slot).toBe(10002); // Pidgey can't share slot 10001
+    expect(await moveToSlot(db, "card-broker:momo", y.id, 10050, null)).toMatchObject({ slot: 10050, pocket: 1, moved: true });
+    expect(await moveToSlot(db, "t", x.id, 10050, 5)).toMatchObject({ slot: 10050, pocket: 5 });
+    await expect(moveToSlot(db, "t", z.id, 10050, null)).rejects.toThrow("already holds a Pidgey");
+    await expect(moveToSlot(db, "t", z.id, 10051, 0)).rejects.toThrow("Pocket must be 1");
+    await expect(moveToSlot(db, "t", z.id, 500, null)).rejects.toThrow("10001");
+    await moveToSlot(db, "t", z.id, 10060, 3);
+    await expect(moveToSlot(db, "t", y.id, 10060, 3)).rejects.toThrow("Pocket 3 in slot 10060 is taken");
+    const ev = await db.siteCopyEvent.findFirst({ where: { copyId: x.id, reason: { startsWith: "moved" } } });
+    expect(ev).toMatchObject({ actor: "t", reason: "moved from slot 10001 pocket 1 to slot 10050 pocket 5", fromStatus: "DRAFT", toStatus: "DRAFT" });
+    await db.siteCopy.update({ where: { id: z.id }, data: { status: "SHIP_LOCKED" } });
+    await expect(moveToSlot(db, "t", z.id, 10070, null)).rejects.toThrow("locked for a shipment");
   });
 });

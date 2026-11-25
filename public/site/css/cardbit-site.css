@@ -87,9 +87,12 @@
 #cardbit-store .cb-foot-social:hover { background:#252c55; border-color:#5865f2; color:#fff; }
 #cardbit-store .cb-foot-social:focus-visible { outline:2px solid var(--cb-accent); outline-offset:2px; }
 #cardbit-store .cb-foot-end { align-items:center; }
+/* Room under the footer so the floating Daily Rewards bubble and Daily Giveaway pill never cover the social buttons. */
+#cardbit-store .cb-footer { padding-bottom:104px; }
 #cardbit-store .cb-foot-facebook:hover { border-color:#1877f2; }
 #cardbit-store .cb-foot-instagram:hover { border-color:#e1306c; }
 #cardbit-store .cb-foot-whatnot:hover { border-color:#FFB65C; }
+#cardbit-store .cb-foot-logo { display:block; width:18px; height:18px; border-radius:5px; }
 #cardbit-store .cb-foot-badge { margin-left:2px; padding:3px 7px; border-radius:999px; background:#FFB65C; color:#17213B; font:800 11px/1 'Cardbit Outfit',var(--cb-sans); white-space:nowrap; }
 @media (max-width: 560px) { #cardbit-store .cb-foot-socials { justify-content:flex-start; width:100%; } }
 

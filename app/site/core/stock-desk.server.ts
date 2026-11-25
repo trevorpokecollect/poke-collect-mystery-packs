@@ -1,6 +1,6 @@
 // Stock desk operations shared by /staff/stock (site staff) and /internal/site-stock (Card Broker).
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { priceKey, shelfAddress } from "./stock.server";
+import { POCKETS_PER_SLOT, SITE_FIRST_SLOT, priceKey, shelfAddress } from "./stock.server";
 import { RestockError, stageRestock } from "./restock.server";
 
 export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
@@ -75,6 +75,98 @@ async function moveCopies(db: PrismaClient, actor: string, copyIds: string[], fr
   });
 }
 
+const SITE_LAST_SLOT = 99_999;
+const idList = (copyIds: unknown) =>
+  [...new Set((Array.isArray(copyIds) ? copyIds : []).filter((x): x is string => typeof x === "string" && x.length <= 60))].slice(0, 500);
+
+/** Why a copy can't be deleted from stock, or null when it can (Trevor, Nov 25: delete inventory from the Inventory tab). */
+function cantDelete(c: { status: string; ownerId: string | null; restockId: string | null; orderId: string | null; packId: string | null }) {
+  if (c.status === "REMOVED") return "already deleted";
+  if (c.restockId) return "staged for a restock (unstage it first)";
+  if (c.status === "POOLED" || c.packId) return "in a pack pool (stage it to leave the pool and publish first)";
+  if (c.status === "VAULTED" || c.ownerId) return "in a customer's vault";
+  if (c.status === "SHIP_LOCKED") return "locked for a shipment";
+  if (c.status === "SHIPPED") return "already shipped";
+  if (c.orderId) return "on an order";
+  if (c.status !== "DRAFT" && c.status !== "FOR_SALE") return "not in Drafts or Active";
+  return null;
+}
+
+/**
+ * Deletes unsold Draft/Active copies: they become REMOVED (kept for the record, hidden from All), leave their pocket so
+ * the slot can be reused, and each gets a SiteCopyEvent with who and why. Pooled, staged, vaulted, shipping and sold
+ * copies are never touched and come back in `blocked` with the reason.
+ */
+export async function removeCopies(db: PrismaClient, actor: string, copyIds: unknown, reason: unknown) {
+  const ids = idList(copyIds);
+  if (!ids.length) throw new DeskError("Select cards first.");
+  const why = String(reason ?? "").trim().slice(0, 200) || "no reason given";
+  return db.$transaction(async (tx) => {
+    const rows = await tx.siteCopy.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, title: true, status: true, ownerId: true, restockId: true, orderId: true, packId: true, slot: true, pocket: true },
+    });
+    const blocked: { id: string; title: string; reason: string }[] = [];
+    let removed = 0;
+    for (const c of rows) {
+      const no = cantDelete(c);
+      if (no) {
+        blocked.push({ id: c.id, title: c.title, reason: no });
+        continue;
+      }
+      // Guarded again in the update, so a copy sold or pooled a moment ago is left alone.
+      const n = await tx.siteCopy.updateMany({
+        where: { id: c.id, status: c.status, ownerId: null, restockId: null, orderId: null, packId: null },
+        data: { status: "REMOVED", slot: null, pocket: null, autoRestock: false },
+      });
+      if (!n.count) {
+        blocked.push({ id: c.id, title: c.title, reason: "changed while deleting; refresh and try again" });
+        continue;
+      }
+      removed++;
+      const was = c.slot != null ? ` (was slot ${c.slot}${c.pocket ? ` pocket ${c.pocket}` : ""})` : "";
+      await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: c.status, toStatus: "REMOVED", actor, reason: `deleted: ${why}${was}` } });
+    }
+    const missing = ids.length - rows.length;
+    return { removed, blocked, missing, skipped: blocked.length + missing };
+  });
+}
+
+/**
+ * Moves one copy to a chosen slot (and pocket, or the first free one). Same rules as receiving: slots 10001 and up,
+ * 20 pockets, and a slot holds one copy of a printing and one card per name, so lookalikes never share a slot.
+ */
+export async function moveToSlot(db: PrismaClient, actor: string, copyId: unknown, slotIn: unknown, pocketIn: unknown) {
+  const id = typeof copyId === "string" && copyId.length <= 60 ? copyId : "";
+  if (!id) throw new DeskError("Choose a card first.");
+  const slot = Number(slotIn);
+  if (!Number.isInteger(slot) || slot < SITE_FIRST_SLOT || slot > SITE_LAST_SLOT) throw new DeskError(`Enter a slot from ${SITE_FIRST_SLOT} to ${SITE_LAST_SLOT}.`);
+  const wantPocket = pocketIn === null || pocketIn === undefined || pocketIn === "" ? null : Number(pocketIn);
+  if (wantPocket !== null && (!Number.isInteger(wantPocket) || wantPocket < 1 || wantPocket > POCKETS_PER_SLOT)) throw new DeskError(`Pocket must be 1 to ${POCKETS_PER_SLOT}, or blank for the first free one.`);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;
+    const c = await tx.siteCopy.findUnique({ where: { id } });
+    if (!c) throw new DeskError("That card isn't in cardbit.com stock.");
+    if (c.status === "SHIP_LOCKED") throw new DeskError("That card is locked for a shipment. Move it after the shipment is packed or released.");
+    if (c.status === "SHIPPED" || c.status === "REMOVED") throw new DeskError("That card isn't on the shelf any more.");
+    const others = await tx.siteCopy.findMany({ where: { slot, id: { not: c.id } }, select: { pocket: true, lookKey: true, faceKey: true, name: true } });
+    if (others.some((o) => o.lookKey === c.lookKey)) throw new DeskError(`Slot ${slot} already holds a copy of this printing. Choose another slot.`);
+    const twin = others.find((o) => o.faceKey === c.faceKey);
+    if (twin) throw new DeskError(`Slot ${slot} already holds a ${twin.name}. A slot holds one card per name, so choose another slot.`);
+    if (others.length >= POCKETS_PER_SLOT) throw new DeskError(`Slot ${slot} is full (${POCKETS_PER_SLOT} cards).`);
+    const taken = new Set(others.map((o) => o.pocket));
+    let pocket = wantPocket ?? 1;
+    if (wantPocket !== null) {
+      if (taken.has(wantPocket)) throw new DeskError(`Pocket ${wantPocket} in slot ${slot} is taken. Leave the pocket blank to use the first free one.`);
+    } else while (taken.has(pocket)) pocket++;
+    if (c.slot === slot && c.pocket === pocket) return { id: c.id, slot, pocket, moved: false };
+    await tx.siteCopy.update({ where: { id: c.id }, data: { slot, pocket } });
+    const from = c.slot != null ? `slot ${c.slot}${c.pocket ? ` pocket ${c.pocket}` : ""}` : "no slot";
+    await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: c.status, toStatus: c.status, actor, reason: `moved from ${from} to slot ${slot} pocket ${pocket}` } });
+    return { id: c.id, slot, pocket, moved: true };
+  });
+}
+
 export async function savePack(db: PrismaClient, id: string, price: unknown, cardsPerPack: unknown, active: boolean) {
   const priceBits = bits(price, "Pack price");
   const n = Number(cardsPerPack);
@@ -90,7 +182,8 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
   const q = (query.q || "").trim().slice(0, 100);
   const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 500);
   const where: Prisma.SiteCopyWhereInput = {
-    ...(status ? { status } : {}),
+    // Deleted copies show only under the Removed filter.
+    ...(status ? { status } : { status: { not: "REMOVED" } }),
     ...(Number.isInteger(query.slot) ? { slot: query.slot } : {}),
     ...(q ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { name: { contains: q, mode: "insensitive" } }, { setName: { contains: q, mode: "insensitive" } }, { number: { contains: q, mode: "insensitive" } }] } : {}),
   };
@@ -115,7 +208,7 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
   return {
     total,
     counts: byStatus,
-    totals: { all: Object.values(byStatus).reduce((a, b) => a + b, 0), ...byStatus }, // ignore filters
+    totals: { all: Object.values(byStatus).reduce((a, b) => a + b, 0) - (byStatus.REMOVED ?? 0), ...byStatus }, // ignore filters; All leaves out deleted
     nextCursor: next,
     next,
     value: await stockValue(db), // ignores filters
