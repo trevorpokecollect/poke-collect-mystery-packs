@@ -52,7 +52,24 @@ function patch(file, text, pairs) {
   return text;
 }
 
+const SHIP_TOGETHER = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'patches/ship-together.js'), 'utf8');
+
 const PATCHES = {
+  'cardbit-collector-tools.js': [
+    // Ship Together: real address form and Cardbits fee on the site (scripts/site/patches/ship-together.js).
+    ["    let review=null;\n", SHIP_TOGETHER + "    let review=null;\n"],
+    ["Browse Packs','packs')+parcelList()+'</div>';\n", "Browse Packs','packs')+parcelList()+'</div>';\n      /* SITE */ if(siteShip())return siteShipPage(opening,held);\n"],
+    ["    function summary(){return ", "    function summary(){/* SITE */ if(siteShip())return siteSummary();return "],
+    ["    function reviewParcel(){\n", "    function reviewParcel(){\n      /* SITE */ if(siteShip())return siteReview();\n"],
+    ["    async function commitParcel(){\n", "    async function commitParcel(){\n      /* SITE */ if(siteShip())return siteCommit();\n"],
+    ["      if(el.hasAttribute('data-parcel-copy')){", "      /* SITE */ if(el.hasAttribute('data-parcel-field')){address[el.dataset.parcelField]=el.value;saveAddress();if(ctx.root().querySelector('[data-parcel-summary] [role=alert]'))updateSummary();return true;}\n      if(el.hasAttribute('data-parcel-copy')){"],
+  ],
+  'cardbit-collector-pages.js': [
+    // Shipment detail: show the site's destination text, Cardbits fee and carrier.
+    ["['Destination',dest?.label],\n            ['Postage','Calculated at Shipping Checkout']",
+     "['Destination',dest?.label || (typeof p.destination==='string' ? p.destination : null)],\n            /* SITE */ ['Shipping',root.CardbitStore?.site ? (p.feeBits ? Number(p.feeBits).toLocaleString('en-US')+' Cardbits' : 'Free') : 'Calculated at Shipping Checkout']"],
+    ["esc([p.tracking.company,'Tracking Number '+p.tracking.number]", "esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number]"],
+  ],
   'cardbit-storefront.js': [
     // The site store reports mode 'shopper-test' (server-held account with per-card retailBits),
     // so the existing server-account code paths apply. These patches cover what differs on the site.
@@ -68,6 +85,8 @@ const PATCHES = {
     ["fetch('/apps/packs/api/pool?product='+enc(product)", "fetch(window.CardbitSite.api('pool?product='+enc(product))"],
     ["fetch('/apps/packs/api/pool?product=' + enc(product)", "fetch(window.CardbitSite.api('pool?product=' + enc(product))"],
     ['<a href="/pages/official-rules">Official Rules</a>', '<a href="/official-rules">Official Rules</a>'],
+    // A single-card ship request goes to Ship Together, which collects the delivery address.
+    ["    /* SITE */ if (site() && action==='topup')", "    /* SITE */ if (site() && action==='ship') { navigate('ship-together/select/'+enc(id)); return; }\n    /* SITE */ if (site() && action==='topup')"],
   ],
 };
 

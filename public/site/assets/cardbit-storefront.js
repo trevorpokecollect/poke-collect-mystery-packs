@@ -1377,6 +1377,7 @@
   let afterLogin=null;
   function review(action,id,amount){
     if(!account()){afterLogin={action,id,amount};modal(loginForm('Sign In to Continue'));return;}
+    /* SITE */ if (site() && action==='ship') { navigate('ship-together/select/'+enc(id)); return; }
     /* SITE */ if (site() && action==='topup') { location.assign(window.CardbitSite.topupURL(amount)); return; }
     const item=action==='topup'?null:itemFor(action,id);
     if(action!=='topup'&&!item){message='That Item Is Unavailable Now.';render();return;}

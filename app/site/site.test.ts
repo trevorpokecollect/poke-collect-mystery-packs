@@ -44,5 +44,11 @@ describe("Cardbit site pages", () => {
     expect(js).toContain("/* SITE */ const site =");
     expect(js).toContain("window.CardbitSite.topupURL(amount)");
     expect(js).not.toContain("/apps/packs/api/pool");
+    expect(js).toContain("navigate('ship-together/select/'+enc(id))");
+    const tools = readFileSync("public/site/assets/cardbit-collector-tools.js", "utf8");
+    // Ship Together sends a real address and pays the fee in Cardbits; excluded states can't be picked.
+    expect(tools).toContain("action:'ship-group',copyIds:item.copyIds,address:item.address,method:'CARDBITS'");
+    expect(tools).toContain("const EXCLUDED = ['AL','HI','ID','MN','NV','NY','UT','WA'];");
+    expect(tools).toContain("SHIP_FEE_BITS = 600, FREE_OVER = 30");
   });
 });

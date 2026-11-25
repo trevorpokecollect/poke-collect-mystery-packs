@@ -178,10 +178,10 @@
         const dest = root.CardbitCollectorRules.destinations[p.destination];
         return page(nav('shipments') + bread('shipments','All Shipments') + start(parcelName(p)) +
           '<div class="cc-status">' + icon('ship',26) + '<div><b>' + esc(parcelState(p)) + '</b><p>' +
-          (p.tracking?.number ? esc([p.tracking.company,'Tracking Number '+p.tracking.number].filter(Boolean).join(' · ')) : 'Tracking Will Appear Here When a Carrier Number Is Available.') + '</p>' +
+          (p.tracking?.number ? esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number].filter(Boolean).join(' · ')) : 'Tracking Will Appear Here When a Carrier Number Is Available.') + '</p>' +
           (trackURL(p) ? '<a class="cb-primary cc-track" target="_blank" rel="noopener noreferrer" href="' + esc(trackURL(p)) + '">Track Package</a>' : '') + '</div></div>' +
-          facts([['Requested',p.at ? date(p.at) : 'Date Unavailable'],['Selected Cards',p.copyIds.length],['Destination',dest?.label],
-            ['Postage','Calculated at Shipping Checkout'],['Parcel Reference',p.earlier ? null : p.id]]) +
+          facts([['Requested',p.at ? date(p.at) : 'Date Unavailable'],['Selected Cards',p.copyIds.length],['Destination',dest?.label || (typeof p.destination==='string' ? p.destination : null)],
+            /* SITE */ ['Shipping',root.CardbitStore?.site ? (p.feeBits ? Number(p.feeBits).toLocaleString('en-US')+' Cardbits' : 'Free') : 'Calculated at Shipping Checkout'],['Parcel Reference',p.earlier ? null : p.id]]) +
           '<div class="cb-actions">' + contact('Cardbit Package ' + (p.tracking?.number || p.id)) + '</div>' +
           '<section class="cb-separated">' + sectionHd('Cards in This Shipment') + tiles(cards) + '</section>');
       }
