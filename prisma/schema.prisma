@@ -1344,6 +1344,9 @@ model SiteCopy {
   ownerId     String?
   poolSlotId  String?  @unique
   orderId     String?
+  packId      String? // set while POOLED in a SitePack pool
+  openingId   String? // pack opening that delivered this copy
+  position    Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@unique([slot, pocket])
@@ -1351,6 +1354,7 @@ model SiteCopy {
   @@unique([slot, faceKey])
   @@index([status, printingKey])
   @@index([ownerId, status])
+  @@index([packId, status])
 }
 
 model SiteCopyEvent {
@@ -1400,6 +1404,52 @@ model SiteWebhookEvent {
   result      String?
   receivedAt  DateTime  @default(now())
   processedAt DateTime?
+}
+
+// Site pack editions (cobalt/prism/gold/ember/amethyst). Pool = SiteCopy rows with packId + POOLED.
+model SitePack {
+  id           String   @id
+  title        String
+  priceBits    Int
+  cardsPerPack Int      @default(1)
+  active       Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SiteOpening {
+  id         String   @id @default(cuid())
+  customerId String
+  packId     String
+  priceBits  Int
+  sealed     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  @@index([customerId, createdAt])
+}
+
+// Current price per printing (retail and buyback offer, in Cardbits). Staff-set or fed by Card Broker.
+model SitePrice {
+  printingKey String   @id
+  retailBits  Int?
+  buybackBits Int?
+  source      String   @default("staff")
+  updatedAt   DateTime @updatedAt
+}
+
+model SiteWant {
+  customerId String
+  cardKey    String
+  createdAt  DateTime @default(now())
+  @@id([customerId, cardKey])
+}
+
+// Idempotent store actions: one row per (customer, client requestId).
+model SiteRequest {
+  id          String   @id // customerId + ":" + requestId
+  fingerprint String
+  result      Json
+  createdAt   DateTime @default(now())
 }
 
 // ---- end Cardbit standalone site: core ------------------------------------------------------
