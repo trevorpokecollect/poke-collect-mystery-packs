@@ -7,6 +7,7 @@ import { priceKey, receiveSiteIntake } from "../core/stock.server";
 import { sitePortfolio } from "./portfolio.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { setLimit, startCoolOff } from "../play/limits.server";
+import { fairDraw, fairView, rotateSeed, setClientSeed, sha256 } from "../play/fair.server";
 import { DEFAULT_TIERS, drawCopies, recentPulls, singleKey, storeAction, storeState, StoreError, tierFor, tierRules } from "./store.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -17,6 +18,8 @@ const card = (eventKey: string, quantity: number, name: string) => ({
 });
 const wipe = async () => {
   await db.siteRequest.deleteMany();
+  await db.siteOpeningFair.deleteMany();
+  await db.siteFairSeed.deleteMany();
   await db.sitePlayEvent.deleteMany();
   await db.sitePlayControl.deleteMany();
   await db.siteWant.deleteMany();
@@ -109,6 +112,30 @@ describe.skipIf(!url)("site store", () => {
     await expect(storeAction(db, customer, { action: "buy", requestId: done, id: "s_x" })).rejects.toMatchObject({ code: "play_paused" });
     const state = await storeState(db, customer);
     expect(state.account?.play.paused?.kind).toBe("cool_off");
+  });
+
+  it("records a verifiable draw for each opening and reveals the seed on rotate", async () => {
+    await receiveSiteIntake(db, card("st:vs", 6, "Mew"));
+    await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
+    await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 500, cardsPerPack: 2 } });
+    await setClientSeed(db, customer.id, "my-lucky-seed");
+    const before = await fairView(db, customer.id);
+    const a = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+    await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+    let v = await fairView(db, customer.id);
+    expect(v.active.nonce).toBe(2);
+    const first = v.openings.find((o) => o.openingId === a.openingId)!;
+    expect(first).toMatchObject({ nonce: 0, clientSeed: "my-lucky-seed", serverSeedHash: before.active.serverSeedHash, serverSeed: null });
+    expect(first.poolIds).toHaveLength(6);
+    const owned = await db.siteCopy.findMany({ where: { openingId: String(a.openingId) } });
+    expect(new Set(first.pickIds)).toEqual(new Set(owned.map((c) => c.id)));
+    await rotateSeed(db, customer.id);
+    v = await fairView(db, customer.id);
+    const revealed = v.openings.find((o) => o.openingId === a.openingId)!;
+    expect(sha256(revealed.serverSeed!)).toBe(revealed.serverSeedHash);
+    expect(fairDraw(revealed.poolIds, 2, revealed.serverSeed!, revealed.clientSeed, revealed.nonce)).toEqual(revealed.pickIds);
+    expect(v.active.serverSeedHash).not.toBe(before.active.serverSeedHash);
+    expect(v.active.nonce).toBe(0);
   });
 
   it("opens packs from the pool without double-selling, sealed until revealed", async () => {

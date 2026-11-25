@@ -1447,6 +1447,7 @@ model SiteOpening {
   createdAt  DateTime @default(now())
   @@index([customerId, createdAt])
   @@index([revealedAt])
+  fair       SiteOpeningFair?
 }
 
 // Current price per printing (retail and buyback offer, in Cardbits). Staff-set or fed by Card Broker.
@@ -1503,6 +1504,34 @@ model SitePlayEvent {
   detail     Json
   createdAt  DateTime @default(now())
   @@index([customerId, createdAt])
+}
+
+// Verified Shuffle: per-customer commit-reveal seeds (app/site/play/fair.server.ts).
+model SiteFairSeed {
+  id             String            @id @default(cuid())
+  customerId     String
+  serverSeed     String // secret until revealedAt
+  serverSeedHash String
+  clientSeed     String
+  nonce          Int               @default(0)
+  revealedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  openings       SiteOpeningFair[]
+  @@index([customerId, revealedAt])
+}
+
+model SiteOpeningFair {
+  openingId      String       @id
+  opening        SiteOpening  @relation(fields: [openingId], references: [id], onDelete: Cascade)
+  seedId         String
+  seed           SiteFairSeed @relation(fields: [seedId], references: [id])
+  serverSeedHash String
+  clientSeed     String
+  nonce          Int
+  poolIds        Json // pack's remaining copy ids, ascending, at draw time
+  pickIds        Json // drawn copy ids in pick order
+  createdAt      DateTime     @default(now())
+  @@index([seedId])
 }
 
 // ---- end Cardbit standalone site: core ------------------------------------------------------

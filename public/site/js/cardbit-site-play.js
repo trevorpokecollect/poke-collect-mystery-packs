@@ -1,6 +1,6 @@
 /*
  * Cardbit standalone site: safer-play extras (site-only, not part of the theme port).
- * - Adds a "Limits & Breaks" link next to Sign Out on My Account and in the footer.
+ * - Adds a "Limits & Breaks" link next to Sign Out on My Account, and footer links to it and Verified Shuffle.
  * - Shows a banner while a cool-off or self-exclusion is active (GET /api/play).
  */
 (() => {
@@ -28,6 +28,11 @@
     a.className = 'cb-play-foot ' + policies.className;
     a.textContent = 'Limits & Breaks';
     policies.insertAdjacentElement('afterend', a);
+    const v = document.createElement('a');
+    v.href = '/verified-shuffle';
+    v.className = 'cb-play-foot ' + policies.className;
+    v.textContent = 'Verified Shuffle';
+    a.insertAdjacentElement('afterend', v);
   }
   function banner(paused) {
     if (!paused || document.querySelector('.cb-play-banner')) return;

@@ -8,6 +8,7 @@ import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
 import { siteRewardsForOpening } from "../rewards/rewards.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
+import { drawForOpening } from "../play/fair.server";
 
 /** Shop key for site rows in shared Cardbit* tables (age, rewards, vault marks). */
 export const SITE_SHOP_KEY = "cardbit-site";
@@ -283,7 +284,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         await debit(pack.priceBits, "PACK", opening.id, `${pack.title}`);
         const prices = await pricesFor(tx, pool.map(pk));
         const value = (c: SiteCopy) => c.retailBits ?? prices.get(pk(c))?.retailBits ?? 0;
-        const drawn = drawCopies(pool, pack.cardsPerPack).sort((x, y) => value(x) - value(y));
+        const drawn = (await drawForOpening(tx, customer.id, opening.id, pool, pack.cardsPerPack)).sort((x, y) => value(x) - value(y));
         for (const [i, c] of drawn.entries()) {
           const n = await tx.siteCopy.updateMany({
             where: { id: c.id, status: "POOLED", packId: pack.id },

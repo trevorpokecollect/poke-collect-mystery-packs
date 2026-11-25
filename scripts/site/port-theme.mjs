@@ -245,6 +245,8 @@ async function section(file, settings = {}) {
 // updates them in the same change. Each anchor must exist, so a theme rewrite fails loudly here.
 const PAGE_COPY = {
   'how-it-works.html': [
+    // Verified Shuffle (site only).
+    ["still waiting to be pulled.</p>", "still waiting to be pulled.</p>\n      <h3>Verified Shuffle</h3>\n      <p>Every paid opening is drawn with a locked secret seed whose fingerprint you can see before you open, plus a client seed you can set yourself. Reveal the seed any time on the <a href=\"/verified-shuffle\">Verified Shuffle</a> page and check that it picked exactly your cards.</p>"],
     ['<b>Free Shipping</b> on Vault shipments of more than 30 cards.', '<b>Free Shipping</b> on Vault shipments of 30 or more cards, or 10,000 Cardbits or more in card value.'],
     ['Vault shipments of more than 30 cards ship free.', 'Vault shipments of 30 or more cards, or 10,000 Cardbits or more in card value, ship free.'],
     // Welcome Rewards on the site: text-alert Cardbits are credited after the number confirms (Trevor, Nov 25).
@@ -254,6 +256,9 @@ const PAGE_COPY = {
     ['          <li>Refer a friend</li>\n', ''],
   ],
   'policies.html': [
+    // Verified Shuffle (site only).
+    ["<li class=\"is-yes\">Odds update live from the packs still unclaimed</li>", "<li class=\"is-yes\">Odds update live from the packs still unclaimed</li>\n          <li class=\"is-yes\">Every draw can be checked on the <a href=\"/verified-shuffle\">Verified Shuffle</a> page</li>"],
+    ["Odds change as packs are opened. <strong>Packs have no minimum card value.</strong>", "Odds change as packs are opened. Each paid opening is drawn with a committed server seed, your client seed and an opening number, and you can verify the draw after revealing the seed on the Verified Shuffle page. <strong>Packs have no minimum card value.</strong>"],
     ['$6 or 600 Cardbits, free over 30 cards.', '$6 or 600 Cardbits, free at 30+ cards or 10,000 Cardbits of card value.'],
     ['<div class="is-free"><b>Free</b><span>Over 30 cards</span></div>', '<div class="is-free"><b>Free</b><span>30+ cards or 10,000 Cardbits value</span></div>'],
     ['shipments of more than 30 cards ship free.', 'shipments of 30 or more cards, or of cards worth 10,000 Cardbits or more in total, ship free.'],
