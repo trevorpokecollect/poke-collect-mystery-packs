@@ -98,7 +98,7 @@ describe.skipIf(!url)("site store", () => {
     expect(state.binder).toHaveLength(0);
   });
 
-  it("enforces Pack Spend Limits and cool-offs on open and buy, but not on buyback", async () => {
+  it("enforces Spend Limits (packs and singles) and cool-offs on open and buy, but not on buyback", async () => {
     await receiveSiteIntake(db, card("st:pl", 3, "Snorlax"));
     await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
     await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 1000, cardsPerPack: 1 } });
@@ -106,6 +106,13 @@ describe.skipIf(!url)("site store", () => {
     await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
     await expect(storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" })).rejects.toMatchObject({ code: "limit_reached", status: 403 });
     expect(await balanceOf(db, customer.id)).toBe(4000);
+    // Singles count toward the same Spend Limit (1,000 used of 1,500).
+    await receiveSiteIntake(db, card("st:ps", 1, "Eevee"));
+    const single = await db.siteCopy.findFirstOrThrow({ where: { status: "FOR_SALE" } });
+    await db.sitePrice.create({ data: { printingKey: priceKey(single.printingKey, single.condition), retailBits: 600 } });
+    await expect(storeAction(db, customer, { action: "buy", requestId: randomUUID(), id: singleKey(single) })).rejects.toMatchObject({ code: "limit_reached" });
+    await db.sitePrice.updateMany({ where: { printingKey: priceKey(single.printingKey, single.condition) }, data: { retailBits: 400 } });
+    await storeAction(db, customer, { action: "buy", requestId: randomUUID(), id: singleKey(single) });
     const done = randomUUID();
     await setLimit(db, customer.id, "spend:day", 1_000_000).catch(() => undefined);
     await startCoolOff(db, customer.id, 24);

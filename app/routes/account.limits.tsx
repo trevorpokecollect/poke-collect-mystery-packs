@@ -1,4 +1,4 @@
-// Limits & Breaks (standalone site): Top-Up Limits, Pack Spend Limits, Cool-Off and Self-Exclusion.
+// Limits & Breaks (standalone site): Top-Up Limits, Spend Limits, Cool-Off and Self-Exclusion.
 // 404 unless CARDBIT_SITE=on. Signed-out visitors go to sign-in. Rules: app/site/play/limits.server.ts.
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
@@ -24,7 +24,7 @@ import { cancelAtCoinflow } from "../site/payments/coinflow-subscriptions.server
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const PATH = "/account/limits";
-const KIND_LABEL: Record<LimitKind, string> = { topup: "Top-Up Limits", spend: "Pack Spend Limits" };
+const KIND_LABEL: Record<LimitKind, string> = { topup: "Top-Up Limits", spend: "Spend Limits" };
 const PERIOD_LABEL = { day: "Daily", week: "Weekly", month: "Monthly" } as const;
 const COOL_LABEL: Record<number, string> = { 24: "24 Hours", 72: "3 Days", 168: "7 Days", 720: "30 Days" };
 const EXCL_LABEL: Record<number, string> = { 6: "6 Months", 12: "1 Year", 60: "5 Years" };
@@ -73,7 +73,7 @@ async function page(customerId: string, flash?: { ok?: string; error?: string })
         <p class="fine">${cur === undefined ? "No limit set." : `Limit ${esc(show(kind, cur))}.`} Used in the last ${p === "day" ? "24 hours" : p === "week" ? "7 days" : "30 days"}: ${esc(show(kind, used))}.</p>${pendTxt}`;
     }).join("");
     return `<h2>${KIND_LABEL[kind]}</h2><p class="fine">${
-      kind === "topup" ? "Caps how much you can pay for Cardbits." : "Caps how many Cardbits you can spend on packs."
+      kind === "topup" ? "Caps how much you can pay for Cardbits." : "Caps how many Cardbits you can spend on packs and singles."
     } Lowering a limit works right away. Raising or removing one takes 24 hours.</p>${rows}`;
   }).join("");
 

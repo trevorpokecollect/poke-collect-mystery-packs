@@ -72,14 +72,14 @@ describe.skipIf(!url)("site responsible-play controls", () => {
     await expect(assertWithinLimits(db, "c3", "topup", 1000, at(25))).resolves.toBeUndefined();
   });
 
-  it("blocks pack spend over the limit from PACK ledger debits", async () => {
+  it("blocks spend over the limit from PACK and SINGLE ledger debits", async () => {
     await setLimit(db, "c4", "spend:month", 2000, t0);
     await db.siteLedger.create({ data: { customerId: "c4", delta: -1500, balanceAfter: 0, kind: "PACK", idempotencyKey: "p1", createdAt: at(-48) } });
-    await db.siteLedger.create({ data: { customerId: "c4", delta: -900, balanceAfter: 0, kind: "SINGLE", idempotencyKey: "s1", createdAt: at(-1) } });
-    await expect(assertWithinLimits(db, "c4", "spend", 500, t0)).resolves.toBeUndefined();
-    await expect(assertWithinLimits(db, "c4", "spend", 501, t0)).rejects.toBeInstanceOf(LimitReached);
+    await db.siteLedger.create({ data: { customerId: "c4", delta: -400, balanceAfter: 0, kind: "SINGLE", idempotencyKey: "s1", createdAt: at(-1) } });
+    await expect(assertWithinLimits(db, "c4", "spend", 100, t0)).resolves.toBeUndefined();
+    await expect(assertWithinLimits(db, "c4", "spend", 101, t0)).rejects.toBeInstanceOf(LimitReached);
     const s = await playSummary(db, "c4", t0);
-    expect(s.used["spend:month"]).toBe(1500);
+    expect(s.used["spend:month"]).toBe(1900);
   });
 
   it("cool-off and self-exclusion pause play, can't be shortened, then expire", async () => {

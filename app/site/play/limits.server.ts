@@ -1,4 +1,4 @@
-// Responsible-play controls for the standalone site: Top-Up Limits ($), Pack Spend Limits
+// Responsible-play controls for the standalone site: Top-Up Limits ($), Spend Limits (packs + singles)
 // (Cardbits), Cool-Off and Self-Exclusion.
 //
 // Rules (Trevor, Nov 24 2026; modeled on Boxed.gg's self-exclusion plus common safer-play norms):
@@ -25,7 +25,7 @@ export const PERIOD_MS: Record<Period, number> = { day: 86_400_000, week: 7 * 86
 export const RAISE_DELAY_MS = 86_400_000;
 export const COOL_OFF_HOURS = [24, 72, 168, 720] as const;
 export const EXCLUSION_MONTHS = [6, 12, 60] as const;
-/** Max a limit can be set to: $10,000 per window for top-ups; 1,000,000 Cardbits for pack spend. */
+/** Max a limit can be set to: $10,000 per window for top-ups; 1,000,000 Cardbits for spend. */
 const MAX: Record<LimitKind, number> = { topup: 1_000_000, spend: 1_000_000 };
 /** An unpaid checkout still counts toward the top-up limit for this long. */
 const PENDING_TOPUP_MS = 2 * 3_600_000;
@@ -50,7 +50,7 @@ export class LimitReached extends Error {
     super(
       kind === "topup"
         ? `This would go over your ${label} Top-Up Limit of ${usd(limit)} (${usd(Math.max(limit - used, 0))} left).`
-        : `This would go over your ${label} Pack Spend Limit of ${bits(limit)} Cardbits (${bits(Math.max(limit - used, 0))} left).`,
+        : `This would go over your ${label} Spend Limit of ${bits(limit)} Cardbits (${bits(Math.max(limit - used, 0))} left).`,
     );
     this.name = "LimitReached";
   }
@@ -208,16 +208,16 @@ export async function topupCentsSince(db: Db, customerId: string, since: Date, n
   return rows.reduce((s, r) => s + r.cents, 0);
 }
 
-/** Cardbits spent on packs in the window (PACK debits net of pack refunds). */
-export async function packSpendSince(db: Db, customerId: string, since: Date) {
-  const agg = await db.siteLedger.aggregate({ where: { customerId, kind: "PACK", createdAt: { gte: since } }, _sum: { delta: true } });
+/** Cardbits spent on packs and singles in the window (PACK and SINGLE debits net of their refunds). */
+export async function spendSince(db: Db, customerId: string, since: Date) {
+  const agg = await db.siteLedger.aggregate({ where: { customerId, kind: { in: ["PACK", "SINGLE"] }, createdAt: { gte: since } }, _sum: { delta: true } });
   return Math.max(-(agg._sum.delta ?? 0), 0);
 }
 
 async function usedFor(db: Db, customerId: string, key: LimitKey, now: Date) {
   const [kind, period] = key.split(":") as [LimitKind, Period];
   const since = new Date(now.getTime() - PERIOD_MS[period]);
-  return kind === "topup" ? topupCentsSince(db, customerId, since, now) : packSpendSince(db, customerId, since);
+  return kind === "topup" ? topupCentsSince(db, customerId, since, now) : spendSince(db, customerId, since);
 }
 
 /** Throws LimitReached if adding `amount` (cents for topup, Cardbits for spend) breaks any limit of that kind. */

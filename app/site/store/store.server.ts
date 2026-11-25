@@ -316,6 +316,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         const price = pick.retailBits ?? (await pricesFor(tx, [pk(pick)])).get(pk(pick))?.retailBits ?? null;
         if (!price || price <= 0) throw new StoreError("unpriced", "Price Unavailable.");
         if (typeof a.amount === "number" && a.amount !== price) throw new StoreError("catalog_changed", "The price changed. Review it again.");
+        await playGuard(() => assertWithinLimits(tx, customer.id, "spend", price));
         await debit(price, "SINGLE", pick.id, `Purchased ${pick.title}`);
         const n = await tx.siteCopy.updateMany({ where: { id: pick.id, status: "FOR_SALE" }, data: { status: "VAULTED", ownerId: customer.id, orderId: key.slice(0, 190) } });
         if (n.count !== 1) throw new StoreError("sold_out", "This single is no longer available.");
