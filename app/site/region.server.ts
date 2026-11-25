@@ -15,14 +15,15 @@ export const US_STATES = new Set([
 
 export type RegionAction = "topup" | "pack_purchase" | "shipping";
 
-export type GeoResult = { country: string; region?: string | null } | null;
+/** anonymous: the connection is a VPN, proxy or Tor exit (ipinfo is_anonymous / privacy flags). */
+export type GeoResult = { country: string; region?: string | null; anonymous?: boolean } | null;
 
 /** IP → country/state. Return null when unknown. Injected so tests and providers can swap. */
 export type GeoLookup = (ip: string) => Promise<GeoResult>;
 
 export class RegionBlocked extends Error {
   constructor(
-    public code: "NOT_US" | "EXCLUDED_STATE" | "UNKNOWN_STATE" | "IP_NOT_US" | "IP_EXCLUDED_STATE",
+    public code: "NOT_US" | "EXCLUDED_STATE" | "UNKNOWN_STATE" | "IP_NOT_US" | "IP_EXCLUDED_STATE" | "IP_ANONYMOUS",
     public source: "billing" | "shipping" | "ip",
     message: string,
   ) {
@@ -65,6 +66,8 @@ function checkAddress(source: "billing" | "shipping", addr: { country?: string |
  * IP: checked when a lookup is configured. A lookup that knows the country but not the state
  * still blocks non-US IPs. A lookup failure or unknown IP does not block (addresses still must pass);
  * callers get ipChecked=false so the fraud guard can log it.
+ * Top-ups (and Club, which uses "topup") also refuse VPN, proxy and Tor connections (Trevor 2026-11-25),
+ * because a VPN shows its own state instead of the customer's.
  */
 export async function assertAllowedRegion(input: RegionInput, geo?: GeoLookup | null): Promise<RegionResult> {
   if (!input.billing) throw new RegionBlocked("UNKNOWN_STATE", "billing", "Enter your billing address.");
@@ -85,6 +88,12 @@ export async function assertAllowedRegion(input: RegionInput, geo?: GeoLookup | 
     return { ipChecked: false, ipRegion: null };
   }
   if (!found || !found.country) return { ipChecked: false, ipRegion: null };
+  if (input.action === "topup" && found.anonymous)
+    throw new RegionBlocked(
+      "IP_ANONYMOUS",
+      "ip",
+      "It looks like you're using a VPN or proxy. Turn it off and try again, so we can confirm you're in a state where Cardbit is available.",
+    );
   if (norm(found.country) !== "US") throw new RegionBlocked("IP_NOT_US", "ip", customerMessage);
   const region = norm(found.region);
   if ((EXCLUDED_STATES as readonly string[]).includes(region))
@@ -134,13 +143,31 @@ export function defaultGeoLookup(env: NodeJS.ProcessEnv = process.env): GeoLooku
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { country?: string; region?: string };
+    const body = (await res.json()) as IpinfoBody;
     const value: GeoResult = body.country
-      ? { country: body.country, region: body.country === "US" ? stateCode(body.region) : null }
+      ? { country: body.country, region: body.country === "US" ? stateCode(body.region) : null, anonymous: isAnonymous(body) }
       : null;
     cache.set(ip, { at: Date.now(), value });
     return value;
   };
+}
+
+type IpinfoBody = {
+  country?: string;
+  region?: string;
+  is_anonymous?: boolean;
+  privacy?: { vpn?: boolean; proxy?: boolean; tor?: boolean };
+  anonymous?: { is_vpn?: boolean; is_proxy?: boolean; is_tor?: boolean };
+};
+
+/**
+ * VPN, proxy or Tor. Core plan sends only is_anonymous; Plus/Max (and the privacy add-on) say which
+ * kind, and then iCloud Private Relay alone (which keeps the customer's real region) is not counted.
+ */
+export function isAnonymous(b: IpinfoBody): boolean {
+  const detail = b.anonymous ?? (b.privacy ? { is_vpn: b.privacy.vpn, is_proxy: b.privacy.proxy, is_tor: b.privacy.tor } : null);
+  if (detail) return Boolean(detail.is_vpn || detail.is_proxy || detail.is_tor);
+  return b.is_anonymous === true;
 }
 
 const STATE_NAMES: Record<string, string> = {

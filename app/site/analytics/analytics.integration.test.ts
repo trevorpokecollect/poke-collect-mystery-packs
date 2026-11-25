@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { classifySource, cleanPath, parseUserAgent, recordPulse } from "./track.server";
 import { customers, funnel, live, overview, parseRange, sales, traffic, zonedMidnight } from "./report.server";
-import { geoLookupFor } from "../region.server";
+import { assertAllowedRegion, geoLookupFor, isAnonymous } from "../region.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -16,6 +16,25 @@ describe("staff IP check", () => {
     expect(geoLookupFor("Trevor@Cardbit.com", env)).toBeNull();
     expect(geoLookupFor("someone@example.com", env)).toBeTypeOf("function");
     expect(geoLookupFor("someone@example.com", {} as NodeJS.ProcessEnv)).toBeNull();
+  });
+});
+
+describe("VPN block on top-ups and Club", () => {
+  const billing = { country: "US", state: "TX" };
+  it("reads ipinfo's anonymity flags", () => {
+    expect(isAnonymous({ is_anonymous: true })).toBe(true);
+    expect(isAnonymous({ is_anonymous: false })).toBe(false);
+    expect(isAnonymous({})).toBe(false);
+    expect(isAnonymous({ is_anonymous: true, anonymous: { is_vpn: false, is_proxy: false, is_tor: false } })).toBe(false); // relay only
+    expect(isAnonymous({ privacy: { vpn: true } })).toBe(true);
+  });
+  it("refuses a VPN on top-ups only, and staff skip the check", async () => {
+    const vpn = async () => ({ country: "US", region: "TX", anonymous: true });
+    await expect(assertAllowedRegion({ action: "topup", billing, ip: "8.8.8.8" }, vpn)).rejects.toMatchObject({ code: "IP_ANONYMOUS" });
+    await expect(assertAllowedRegion({ action: "shipping", billing, shipping: billing, ip: "8.8.8.8" }, vpn)).resolves.toMatchObject({ ipChecked: true });
+    await expect(assertAllowedRegion({ action: "topup", billing, ip: "8.8.8.8" }, async () => ({ country: "US", region: "TX" }))).resolves.toMatchObject({ ipRegion: "TX" });
+    const env = { CARDBIT_SITE_IPINFO_TOKEN: "t", SITE_STAFF_EMAILS: "trevor@cardbit.com" } as unknown as NodeJS.ProcessEnv;
+    await expect(assertAllowedRegion({ action: "topup", billing, ip: "8.8.8.8" }, geoLookupFor("trevor@cardbit.com", env))).resolves.toMatchObject({ ipChecked: false });
   });
 });
 
