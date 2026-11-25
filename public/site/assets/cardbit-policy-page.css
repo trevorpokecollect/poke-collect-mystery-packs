@@ -1,0 +1,254 @@
+/* Cardbit Policies page. Visual language matches How It Works (cardbit-how-it-works.css). */
+@font-face{font-family:'Cardbit Atkinson';src:url('cardbit-type-atkinson.woff') format('woff');font-weight:200 800;font-style:normal;font-display:swap}
+@font-face{font-family:'Cardbit Outfit';src:url('cardbit-outfit-800-latin.woff2') format('woff2');font-weight:800;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Cardbit Outfit';src:url('cardbit-outfit-800-latin-ext.woff2') format('woff2');font-weight:800;font-style:normal;font-display:swap;unicode-range:U+0100-02AF,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20CF,U+2113,U+2C60-2C7F,U+A720-A7FF}
+:root{color-scheme:dark;--cyan:#00e6e1;--apricot:#ffb65c;--cobalt:#4057f5;--panel:#161e21;--high:#1d2729;--line:#2c3a3d;--muted:#b6c4c5;--text:#d4e0df;--display:'Cardbit Outfit','Cardbit Atkinson',system-ui,sans-serif;font-family:'Cardbit Atkinson',system-ui,sans-serif;color:#f6faf9;background:#0d1315}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#0d1315}
+img,svg{max-width:100%}
+a{color:var(--cyan);text-underline-offset:.2em}
+:focus-visible{outline:3px solid var(--apricot);outline-offset:3px}
+.cbp h1,.cbp h2,.cbp h3,.cbp b,.cbp-num,.cbp-btn,.cbp-panel-title{font-family:var(--display);font-weight:800;letter-spacing:-.01em}
+.cbp p{line-height:1.6}
+.cbp strong{color:#fff}
+.cbp-frame{max-width:1180px;margin-inline:auto;padding-inline:clamp(16px,4vw,40px)}
+
+/* Top bar */
+.cbp-top{background:#0b1012;border-bottom:1px solid var(--line)}
+.cbp-bar{display:flex;align-items:center;justify-content:space-between;min-height:68px;gap:16px}
+.cbp-home img{display:block;width:132px;height:44px;object-fit:contain;object-position:left center}
+.cbp-return{font-weight:700;font-size:.95rem}
+.cbp-skip{position:absolute;top:8px;left:12px;z-index:20;padding:10px 16px;background:var(--high);transform:translateY(-200%)}
+.cbp-skip:focus{transform:none}
+
+/* Hero */
+.cbp-hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:clamp(24px,4vw,64px);align-items:center;padding-block:clamp(32px,6vw,80px) clamp(24px,4vw,48px)}
+.cbp-kicker{margin:0 0 10px;color:var(--cyan);font-weight:800;text-transform:uppercase;letter-spacing:.12em;font-size:.82rem}
+.cbp-hero h1{margin:0 0 18px;font-size:clamp(2.4rem,5.4vw,4.3rem);line-height:1.02}
+.cbp-lede{margin:0 0 16px;font-size:clamp(1rem,1.3vw,1.15rem);color:#dfe9e8;max-width:60ch}
+.cbp-meta{margin:0;color:var(--muted);font-size:.92rem}
+.cbp-linkbtn{background:none;border:0;padding:0;color:var(--cyan);font:inherit;text-decoration:underline;text-underline-offset:.2em;cursor:pointer}
+.cbp-hero-art{margin:0;display:grid;place-items:center}
+.cbp-orbit{position:relative;width:min(320px,80vw);aspect-ratio:1;display:grid;place-items:center;border-radius:50%;background:radial-gradient(closest-side,#00e6e126,transparent 70%)}
+.cbp-orbit::before{content:"";position:absolute;inset:6%;border:2px dashed #00e6e14d;border-radius:50%;animation:cbp-spin 40s linear infinite}
+.cbp-orbit-pack{width:46%;height:auto;filter:drop-shadow(0 18px 30px #000b);animation:cbp-float 6s ease-in-out infinite}
+.cbp-shield{position:absolute;right:6%;top:10%;width:30%;filter:drop-shadow(0 8px 18px #000a)}
+.cbp-orbit-latch{position:absolute;left:2%;bottom:4%;width:34%;height:auto;filter:drop-shadow(0 8px 16px #000a)}
+.cbp-draw{stroke-dasharray:60;stroke-dashoffset:60;animation:cbp-dash 1.2s .4s ease-out forwards}
+
+/* Jump bar */
+.cbp-jump{position:sticky;top:0;z-index:10;background:#101619e6;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-block:1px solid var(--line)}
+.cbp-jump-row{display:flex;gap:6px;overflow-x:auto;padding-block:10px;scrollbar-width:none}
+.cbp-jump-row::-webkit-scrollbar{display:none}
+.cbp-jump a{flex:none;padding:8px 14px;border:1px solid var(--line);border-radius:999px;color:#dfe9e8;text-decoration:none;font-weight:700;font-size:.88rem;white-space:nowrap}
+.cbp-jump a:hover,.cbp-jump a[aria-current="true"]{border-color:var(--cyan);color:var(--cyan)}
+.cbp [id^="cbp-"],.cbp-legal details{scroll-margin-top:72px}
+
+/* Section scaffolding */
+.cbp-step{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:clamp(24px,4vw,64px);align-items:start;padding-block:clamp(40px,6vw,88px);border-top:1px solid #1f2a2c}
+.cbp-flip .cbp-copy{order:2}.cbp-flip .cbp-art{order:1}
+.cbp-block{padding-block:clamp(40px,6vw,88px);border-top:1px solid #1f2a2c}
+.cbp-copy h2,.cbp-head-center h2{margin:0 0 16px;font-size:clamp(1.9rem,3.4vw,2.9rem);line-height:1.05}
+.cbp-copy h3{margin:26px 0 8px;font-size:1.2rem}
+.cbp-copy p{margin:0 0 14px;color:var(--text)}
+.cbp-head-center{text-align:center;max-width:760px;margin:0 auto clamp(24px,3vw,40px)}
+.cbp-sub{color:var(--text);margin:0}
+.cbp-sub-left{color:var(--text);margin:0 0 16px}
+.cbp-center{text-align:center}
+.cbp-num{display:inline-flex;align-items:center;gap:10px;margin:0 0 12px;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em;font-size:.85rem}
+.cbp-num span{display:grid;place-items:center;min-width:36px;height:36px;padding-inline:6px;border-radius:999px;background:var(--cyan);color:#0b1416;font-size:1.05rem;letter-spacing:0}
+.cbp-art{display:grid;gap:16px;position:relative}
+.cbp-panel{position:relative;margin:0;padding:clamp(16px,2vw,24px);border:1px solid var(--line);border-radius:20px;background:var(--panel);box-shadow:0 18px 40px #0005}
+.cbp-panel p{margin:0;color:var(--text)}
+.cbp-panel-title{display:block;margin:0 0 14px;font-size:1.05rem;color:#fff}
+.cbp-note{margin:18px 0 0;padding:14px 16px;border-left:4px solid var(--apricot);border-radius:0 14px 14px 0;background:#ffb65c12;color:var(--text);line-height:1.55}
+.cbp-note>b{display:block;margin-bottom:4px;color:var(--apricot)}
+.cbp-fine{font-size:.86rem;color:var(--muted)!important;margin:14px 0 0!important}
+.cbp-btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 22px;border-radius:999px;background:var(--cyan);color:#0b1416;text-decoration:none;font-size:1rem;transition:transform .15s,box-shadow .15s}
+.cbp-btn:hover{transform:translateY(-2px);box-shadow:0 10px 24px #00e6e133}
+
+/* Check lists */
+.cbp-checks{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:9px}
+.cbp-checks li{position:relative;padding-left:32px;color:var(--text);line-height:1.45}
+.cbp-checks li::before{position:absolute;left:0;top:-1px;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;font-weight:800;font-size:.8rem}
+.cbp-checks .is-yes::before{content:"✓";background:#00e6e122;color:var(--cyan)}
+.cbp-checks .is-no::before{content:"✕";background:#ff6b6b22;color:#ff8a8a}
+
+/* Promises */
+.cbp-promises{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.cbp-promises li{display:grid;gap:8px;align-content:start;padding:22px;border:1px solid var(--line);border-radius:20px;background:radial-gradient(120% 90% at 50% 0%,#00e6e114,transparent 60%),var(--panel);transition:transform .2s,border-color .2s}
+.cbp-promises li:hover{transform:translateY(-3px);border-color:var(--cyan)}
+.cbp-promises svg,.cbp-promises img{width:44px;height:44px;color:var(--cyan);object-fit:contain}
+.cbp-promises b{font-size:1.15rem}
+.cbp-promises span{color:var(--muted);line-height:1.5}
+
+/* Cardbits packages */
+.cbp-topups{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.cbp-topups div{display:grid;justify-items:center;gap:2px;padding:16px 8px;border:1px solid var(--line);border-radius:16px;background:var(--high);text-align:center}
+.cbp-topups small{font-family:var(--display);font-weight:800;color:var(--muted)}
+.cbp-topups b{font-size:clamp(1.05rem,2vw,1.4rem)}
+.cbp-topups span{font-size:.78rem;color:var(--muted)}
+.cbp-topups .is-hot{border-color:#ffb65c66;background:linear-gradient(#ffb65c14,transparent),var(--high)}
+.cbp-topups .is-hot span{color:var(--apricot);font-weight:700}
+
+/* Flow */
+.cbp-flow{list-style:none;margin:0;padding:0;display:grid;gap:12px;position:relative}
+.cbp-flow::before{content:"";position:absolute;left:19px;top:20px;bottom:20px;width:3px;background:var(--line)}
+.cbp-flow::after{content:"";position:absolute;left:19px;top:20px;width:3px;height:0;background:var(--cyan);transition:height 1.6s ease}
+.cbp-flow.is-in::after{height:calc(100% - 40px)}
+.cbp-flow li{position:relative;display:grid;grid-template-columns:40px 1fr;column-gap:14px;align-items:center;padding:4px 0}
+.cbp-flow i{grid-row:span 2;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--high);border:2px solid var(--line);font-style:normal;font-family:var(--display);font-weight:800;z-index:1;transition:background .3s,border-color .3s,color .3s}
+.cbp-flow.is-in i{background:var(--cyan);border-color:var(--cyan);color:#0b1416}
+.cbp-flow.is-in li:nth-child(2) i{transition-delay:.4s}.cbp-flow.is-in li:nth-child(3) i{transition-delay:.8s}.cbp-flow.is-in li:nth-child(4) i{transition-delay:1.2s}
+.cbp-flow span{color:var(--muted);font-size:.9rem}
+.cbp-packs-row{display:flex;justify-content:center;gap:clamp(4px,1.2vw,12px)}
+.cbp-packs-row img{width:clamp(48px,8vw,84px);height:auto;filter:drop-shadow(0 10px 16px #0009);animation:cbp-bob 4s ease-in-out infinite;animation-delay:calc(var(--i)*.35s)}
+
+/* Vault paths */
+.cbp-paths{display:grid;justify-items:center}
+.cbp-path-root{display:grid;justify-items:center;gap:6px}
+.cbp-path-root img{width:64px;height:auto;border-radius:6px;box-shadow:0 0 0 2px var(--cyan),0 10px 24px #00e6e133}
+.cbp-path-lines{width:100%;height:60px}
+.cbp-dash{stroke-dasharray:400;stroke-dashoffset:400}
+.cbp-paths.is-in .cbp-dash{animation:cbp-dashlong 1.4s ease-out forwards}
+.cbp-path-leaves{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.cbp-path-leaves div{display:grid;gap:2px;text-align:center;padding:12px 6px;border:1px solid var(--line);border-radius:14px;background:var(--high)}
+.cbp-path-leaves span{font-size:.82rem;color:var(--muted)}
+.cbp-timeline{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;position:relative}
+.cbp-timeline li{display:grid;gap:6px;align-content:start;padding:14px 12px;border-radius:14px;background:var(--high);border-top:3px solid var(--line)}
+.cbp-timeline li:nth-child(2){border-top-color:var(--apricot)}.cbp-timeline li:nth-child(3){border-top-color:var(--cyan)}
+.cbp-timeline span{font-size:.86rem;color:var(--muted);line-height:1.45}
+
+/* Buyback spark */
+.cbp-spark{width:100%;height:auto;display:block}
+.cbp-draw-line{stroke-dasharray:420;stroke-dashoffset:420}
+.cbp-spark.is-in .cbp-draw-line{animation:cbp-dash420 1.6s ease-out forwards}
+.cbp-pulse{transform-origin:320px 38px;animation:cbp-pulse 1.8s ease-in-out infinite}
+.cbp-spark-key{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:.82rem;color:var(--muted)}
+.cbp-spark-key .is-now{color:var(--apricot);font-weight:700;margin-left:auto}
+
+/* Shipping */
+.cbp-price-chips{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:6px 0 18px}
+.cbp-price-chips div{display:grid;justify-items:center;min-width:96px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+.cbp-price-chips b{font-size:1.6rem}
+.cbp-price-chips span{font-size:.8rem;color:var(--muted)}
+.cbp-price-chips em{font-style:normal;color:var(--muted)}
+.cbp-price-chips .is-free{border-color:var(--cyan);background:#00e6e112}.cbp-price-chips .is-free b{color:var(--cyan)}
+.cbp-track{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;position:relative}
+.cbp-track::before,.cbp-track::after{content:"";position:absolute;top:13px;left:12.5%;height:3px;background:var(--line);width:75%}
+.cbp-track::after{background:var(--cyan);width:0;transition:width 1.6s ease}
+.cbp-track.is-in::after{width:75%}
+.cbp-track li{display:grid;justify-items:center;gap:4px;text-align:center}
+.cbp-track i{width:28px;height:28px;border-radius:50%;background:var(--high);border:3px solid var(--line);z-index:1;transition:background .3s,border-color .3s}
+.cbp-track.is-in i{background:var(--cyan);border-color:var(--cyan)}
+.cbp-track.is-in li:nth-child(2) i{transition-delay:.5s}.cbp-track.is-in li:nth-child(3) i{transition-delay:1s}.cbp-track.is-in li:nth-child(4) i{transition-delay:1.5s}
+.cbp-track b{font-size:.95rem}.cbp-track span{font-size:.78rem;color:var(--muted)}
+.cbp-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cbp-good{border-color:#00e6e155}.cbp-good .cbp-panel-title{color:var(--cyan)}
+.cbp-warn{border-color:#ffb65c55}.cbp-warn .cbp-panel-title{color:var(--apricot)}
+
+/* Refund tables */
+.cbp-two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cbp-three{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.cbp-t-good{color:var(--cyan)!important}.cbp-t-warn{color:var(--apricot)!important}
+.cbp-table{width:100%;border-collapse:collapse;font-size:.94rem}
+.cbp-table th,.cbp-table td{padding:10px 4px;border-top:1px solid var(--line);text-align:left;vertical-align:top;line-height:1.4}
+.cbp-table th{font-weight:700;color:#fff;width:52%}
+.cbp-table td{color:var(--muted)}
+.cbp-dispute{margin-top:16px}
+.cbp-steps4{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.cbp-steps4 li{display:grid;gap:8px;align-content:start;padding:14px;border-radius:14px;background:var(--high);color:var(--text);line-height:1.45;font-size:.92rem}
+.cbp-steps4 i{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--apricot);color:#1a1205;font-style:normal;font-family:var(--display);font-weight:800}
+
+/* Rewards */
+.cbp-nopurchase{display:grid;gap:16px;overflow:visible}
+.cbp-stamp{justify-self:center;display:grid;justify-items:center;padding:16px 26px;border:3px solid var(--apricot);border-radius:16px;transform:rotate(-4deg);color:var(--apricot);text-transform:uppercase;letter-spacing:.08em}
+.cbp-stamp span{font-weight:700;font-size:.9rem}
+.cbp-stamp b{font-size:clamp(1.4rem,3vw,2rem)}
+.cbp-reveal.is-in .cbp-stamp{animation:cbp-stamp .5s .2s cubic-bezier(.2,1.6,.4,1) both}
+.cbp-mini{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.cbp-mini li{display:grid;gap:2px;padding:12px 14px;border-radius:14px;background:var(--high)}
+.cbp-mini span{font-size:.86rem;color:var(--muted)}
+.cbp-mascot{position:absolute;right:-14px;bottom:-18px;width:72px;height:auto;filter:drop-shadow(0 8px 16px #000a);pointer-events:none}
+
+/* Map */
+.cbp-map{display:grid;grid-template-columns:repeat(11,1fr);grid-template-rows:repeat(8,auto);gap:4px}
+.cbp-map span{grid-column:var(--c);grid-row:var(--r);display:grid;place-items:center;aspect-ratio:1;border-radius:6px;background:#00e6e12b;border:1px solid #00e6e155;color:#dffcfb;font-size:clamp(.5rem,1.1vw,.72rem);font-weight:700}
+.cbp-map span.is-off{background:#26302f;border-color:#3a4645;color:#6f7d7c;text-decoration:line-through}
+.cbp-js .cbp-map span{opacity:0;transform:scale(.6)}
+.cbp-map.is-in span{opacity:1;transform:none;transition:opacity .35s var(--d),transform .35s var(--d)}
+.cbp-legend{display:flex;align-items:center;gap:8px;margin:12px 0 0!important;font-size:.84rem;color:var(--muted)!important}
+.cbp-legend span{display:inline-block;width:14px;height:14px;border-radius:4px;margin-left:6px}
+.cbp-legend .is-on{background:#00e6e12b;border:1px solid #00e6e155}.cbp-legend .is-off{background:#26302f;border:1px solid #3a4645}
+
+/* Rules */
+.cbp-rules{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.cbp-rules li{display:grid;gap:4px;padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+.cbp-rules span{color:var(--muted);font-size:.92rem;line-height:1.45}
+
+/* Legal */
+.cbp-legal{display:grid;gap:10px;max-width:900px;margin-inline:auto}
+.cbp-legal details{border:1px solid var(--line);border-radius:16px;background:var(--panel)}
+.cbp-legal summary{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;padding:18px 54px 18px 20px;cursor:pointer;list-style:none;position:relative}
+.cbp-legal summary::-webkit-details-marker{display:none}
+.cbp-legal summary::after{content:"+";position:absolute;right:20px;top:50%;transform:translateY(-50%);color:var(--cyan);font-size:1.6rem;line-height:1}
+.cbp-legal details[open] summary::after{content:"−"}
+.cbp-legal summary b{font-size:1.15rem}
+.cbp-legal summary span{color:var(--muted);font-size:.86rem}
+.cbp-legal-body{padding:0 20px 20px;color:var(--text);line-height:1.65;font-size:.97rem;max-width:78ch;overflow-wrap:anywhere}
+.cbp-legal-body h3{font-family:var(--display);font-size:1.08rem;color:#fff;margin:26px 0 8px}
+.cbp-legal-body p{margin:0 0 12px}
+.cbp-legal-body ul,.cbp-legal-body ol{margin:0 0 12px;padding-left:22px}
+.cbp-legal-body li{margin-bottom:6px}
+.cbp-legal-link{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;padding:18px 20px;border:1px dashed var(--line);border-radius:16px;text-decoration:none;color:#fff}
+.cbp-legal-link span{color:var(--muted);font-size:.86rem}
+.cbp-legal-link::after{content:"→";margin-left:auto;color:var(--cyan);font-size:1.3rem}
+
+/* Footer */
+.cbp-support{display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-block:clamp(24px,4vw,48px);padding-block:clamp(24px,3vw,36px);border-top:1px solid var(--line)}
+.cbp-support h2{margin:0 0 6px;font-size:1.6rem}
+.cbp-support p{margin:4px 0;color:var(--muted);max-width:70ch;font-size:.92rem}
+.cbp-endorse{font-size:.84rem}
+
+/* Reveal */
+.cbp-js .cbp-reveal{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
+.cbp-js .cbp-reveal.is-in{opacity:1;transform:none}
+
+@keyframes cbp-spin{to{transform:rotate(360deg)}}
+@keyframes cbp-float{50%{transform:translateY(-10px) rotate(-2deg)}}
+@keyframes cbp-bob{50%{transform:translateY(-6px)}}
+@keyframes cbp-dash{to{stroke-dashoffset:0}}
+@keyframes cbp-dashlong{to{stroke-dashoffset:0}}
+@keyframes cbp-dash420{to{stroke-dashoffset:0}}
+@keyframes cbp-pulse{50%{transform:scale(1.5);opacity:.6}}
+@keyframes cbp-stamp{from{transform:rotate(-4deg) scale(1.6);opacity:0}}
+
+@media (max-width:900px){
+  .cbp-hero,.cbp-step{grid-template-columns:1fr}
+  .cbp-flip .cbp-copy,.cbp-flip .cbp-art{order:0}
+  .cbp-hero-art{order:-1}.cbp-orbit{width:min(240px,64vw)}
+  .cbp-promises,.cbp-rules,.cbp-three{grid-template-columns:1fr 1fr}
+  .cbp-steps4{grid-template-columns:1fr 1fr}
+}
+@media (max-width:600px){
+  .cbp-promises,.cbp-rules,.cbp-three,.cbp-two,.cbp-split,.cbp-steps4{grid-template-columns:1fr}
+  .cbp-topups{grid-template-columns:1fr 1fr}
+  .cbp-timeline{grid-template-columns:1fr}
+  .cbp-track b{font-size:.82rem}
+  .cbp-table th{width:50%}
+  .cbp-mascot{right:-6px;bottom:-12px;width:56px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .cbp *,.cbp *::before,.cbp *::after{animation:none!important;transition:none!important}
+  .cbp-draw,.cbp-dash,.cbp-draw-line{stroke-dashoffset:0}
+  .cbp-flow::after{height:calc(100% - 40px)}.cbp-track::after{width:75%}
+}
+@media print{
+  .cbp-top,.cbp-jump,.cbp-skip,.cbp-hero-art,.cbp-art,.cbp-btn,.cbp-packs-row{display:none!important}
+  body,:root{background:#fff;color:#000}
+  .cbp *{color:#000!important;background:none!important;box-shadow:none!important;opacity:1!important;transform:none!important}
+  .cbp-step{grid-template-columns:1fr}
+  .cbp-legal details{border:0}.cbp-legal summary::after{display:none}
+}

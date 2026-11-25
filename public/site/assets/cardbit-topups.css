@@ -1,0 +1,7 @@
+.cb-wallet-packages { margin-block: 1.5rem 2rem; }
+.cb-package-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap:.8rem; }
+.cb-package { display:flex; min-width:0; flex-direction:column; align-items:flex-start; gap:.5rem; border:1px solid #42445a; border-radius:12px; padding:1rem; background:#171923; color:#faf8f3; }
+.cb-package strong { font-size:1.18rem; font-variant-numeric:tabular-nums; }
+.cb-package small { color:#ffbf72; }
+.cb-package a { margin-top:auto; }
+.cb-package a:focus-visible,[data-real-wallet] button:focus-visible { outline:3px solid #ffbf72; outline-offset:3px; }

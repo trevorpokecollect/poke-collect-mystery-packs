@@ -1,0 +1,83 @@
+/* Cardbit pre-listing polish: card categories, Cardbits packages, shipments, reveal value. Loaded last. */
+
+/* Card categories in place of pack subtext */
+#cardbit-store .cb-cats { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 14px; padding:0; list-style:none; }
+#cardbit-store .cb-cats-compact { margin:8px 0 10px; gap:5px; }
+#cardbit-store .cb-cat { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:3px 10px 3px 7px; border:1px solid #33416a; border-radius:999px; background:#141c30; color:#e7ebf7; font-size:.8rem; font-weight:700; line-height:1; white-space:nowrap; }
+#cardbit-store .cb-cats-compact .cb-cat { min-height:24px; padding:2px 8px 2px 6px; font-size:.72rem; gap:5px; }
+#cardbit-store .cb-cat svg { display:block; flex:none; }
+#cardbit-store .cb-cat-code { display:inline-grid; place-items:center; min-width:20px; height:16px; padding:0 3px; border-radius:4px; font-size:.62rem; font-weight:800; letter-spacing:.04em; color:#0d1426; background:currentColor; }
+#cardbit-store .cb-cat-code { color:inherit; }
+#cardbit-store .cb-cat-pokemon { border-color:#5a4a1e; background:#2a2412; color:#ffd36b; }
+#cardbit-store .cb-cat-modern { border-color:#2f4596; background:#151f45; color:#9fb0ff; }
+#cardbit-store .cb-cat-vintage { border-color:#6a4a2a; background:#2a1d12; color:#ffb65c; }
+#cardbit-store .cb-cat-english { border-color:#235a66; background:#10272d; color:#7fe3ef; }
+#cardbit-store .cb-cat-japanese { border-color:#6a2a38; background:#2d1218; color:#ff8fa3; }
+#cardbit-store .cb-cat-code { background:transparent; border:1.5px solid currentColor; }
+
+/* Vault history toggle: keep the two buttons apart */
+#cardbit-store .cbp .cbp-ranges { gap:4px; flex-wrap:wrap; }
+#cardbit-store .cbp-ranges button { padding:6px 12px; border-radius:6px; white-space:nowrap; }
+#cardbit-store .cbp-history-mode { max-width:100%; }
+
+/* Cardbits packages */
+#cardbit-store .cb-wallet-packages { margin-block:1.5rem 2.25rem; }
+#cardbit-store .cb-package-head h2 { margin:0; }
+#cardbit-store .cb-package-head p { margin:6px 0 16px; color:#c3c9da; }
+#cardbit-store .cb-package-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr)); gap:14px; }
+#cardbit-store .cb-package { position:relative; display:flex; flex-direction:column; align-items:center; text-align:center; gap:6px; min-width:0; padding:22px 16px 16px; border:1px solid #33416a; border-radius:16px; background:linear-gradient(180deg,#1a2442 0%,#121a2f 100%); color:#faf8f3; }
+#cardbit-store .cb-package-bonus { border-color:#4b5bd6; }
+#cardbit-store .cb-package-best { border-color:#ffb65c; box-shadow:0 0 0 1px #ffb65c55,0 14px 40px #ffb65c1f; }
+#cardbit-store .cb-package-flag { position:absolute; top:-11px; left:50%; transform:translateX(-50%); padding:4px 10px; border-radius:999px; background:#ffb65c; color:#17213b; font-size:.7rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
+#cardbit-store .cb-package-coin { width:44px; height:48px; object-fit:contain; filter:drop-shadow(0 4px 10px #4057f566); }
+#cardbit-store .cb-package-total { display:flex; flex-direction:column; align-items:center; line-height:1; }
+#cardbit-store .cb-package-number { font-size:clamp(1.7rem,3vw,2.1rem); font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+#cardbit-store .cb-package-unit { margin-top:4px; color:#aeb8d8; font-size:.82rem; font-weight:700; }
+#cardbit-store .cb-package-math { margin:2px 0 0; color:#c3c9da; font-size:.82rem; }
+#cardbit-store .cb-package-chip { display:inline-block; padding:3px 9px; border-radius:999px; background:#4057f5; color:#fff; font-size:.72rem; font-weight:800; }
+#cardbit-store .cb-package-price { margin:6px 0 4px; font-size:1.15rem; font-weight:800; color:#ffce95; }
+#cardbit-store .cb-package :is(a,button) { width:100%; margin-top:auto; }
+#cardbit-store .cb-package-note { margin-top:12px; }
+
+/* Shipments: one card per package */
+#cardbit-store .cc-packages { display:grid; gap:14px; }
+#cardbit-store .cc-package { border:1px solid var(--cb-border,#33416a); border-radius:14px; padding:16px; background:#121a2c; }
+#cardbit-store .cc-package-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:12px 20px; }
+#cardbit-store .cc-package-head h3 { margin:0 8px 0 0; display:inline; font-size:1.05rem; }
+#cardbit-store .cc-package-state { vertical-align:middle; }
+#cardbit-store .cc-package-tracking { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+#cardbit-store .cc-package-tracking dl { display:grid; grid-template-columns:auto auto; gap:2px 12px; margin:0; font-size:.88rem; }
+#cardbit-store .cc-package-tracking dt { color:var(--cb-muted,#aab3c8); }
+#cardbit-store .cc-package-tracking dd { margin:0; font-weight:700; font-variant-numeric:tabular-nums; word-break:break-all; }
+#cardbit-store .cc-package-tracking p { margin:0; }
+#cardbit-store .cc-package .cc-member-list { margin:12px 0; }
+#cardbit-store .cc-package .cb-actions, #cardbit-store .cc-support-row { margin-top:12px; }
+#cardbit-store .cc-status .cc-track { margin-top:10px; }
+
+/* Cardbits value inside the reveal */
+.lo-bits, .cbop-bits {
+  position:absolute; left:50%; z-index:5; display:inline-flex; align-items:center; gap:7px;
+  padding:7px 14px 7px 9px; border-radius:999px; border:1px solid #ffd59a;
+  background:linear-gradient(180deg,#24305a 0%,#17213b 100%); color:#faf8f3;
+  box-shadow:0 8px 26px #0009,0 0 0 3px #ffb65c33; pointer-events:none; white-space:nowrap;
+  opacity:0; transform:translate(-50%,14px) scale(.6);
+}
+.lo-bits { bottom:9%; }
+.cbop-bits { bottom:-16px; }
+.lo-bits img, .cbop-bits img { width:24px; height:26px; object-fit:contain; }
+.lo-bits strong, .cbop-bits strong { font-size:1.25rem; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.01em; }
+.lo-bits span, .cbop-bits small { font-size:.78rem; font-weight:700; color:#ffce95; }
+.lo-bits.is-in, .cbop-bits.is-in { animation:cb-bits-pop .62s cubic-bezier(.2,1.4,.4,1) forwards; }
+.lo-bits.is-still, .cbop-bits.is-still { animation:none; opacity:1; transform:translate(-50%,0); }
+@keyframes cb-bits-pop {
+  0% { opacity:0; transform:translate(-50%,14px) scale(.6); }
+  60% { opacity:1; transform:translate(-50%,-3px) scale(1.08); }
+  100% { opacity:1; transform:translate(-50%,0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lo-bits, .cbop-bits { animation:none !important; opacity:1; transform:translate(-50%,0); }
+}
+@media (max-width: 560px) {
+  .lo-bits strong, .cbop-bits strong { font-size:1.05rem; }
+  .lo-bits img, .cbop-bits img { width:20px; height:22px; }
+}

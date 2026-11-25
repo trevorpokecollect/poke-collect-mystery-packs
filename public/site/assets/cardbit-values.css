@@ -1,0 +1,16 @@
+.cb-reference{display:inline-flex;align-items:center;gap:.32em;white-space:nowrap;font-family:inherit;font-weight:600;font-size:.93em;line-height:1.3;font-variant-numeric:tabular-nums;vertical-align:middle;color:inherit}
+.cb-reference img{position:static!important;width:1.12em!important;height:1.3em!important;max-width:none!important;display:inline-block!important;object-fit:contain!important;transform:none!important;filter:none!important}
+.cb-ref-line{display:flex;align-items:center;gap:.5rem;color:#e9edf7;font-size:.9rem;margin:.35rem 0}
+.cb-pool-tiers{display:flex;flex-wrap:wrap;gap:.45rem;margin:.9rem 0;padding:0;list-style:none}
+.cb-pool-tiers li{border:1px solid #56616c;border-radius:.6rem;padding:.35rem .65rem;font-size:.88rem;color:#f5f6f9;background:#202733}
+.cb-pool-tiers b{margin-right:.35rem}.cbp-card>.cb-reference,.cbop-result-card>.cb-reference{margin:.35rem 0}
+.cb-art-value{display:block;margin:.3rem 0;color:inherit}.cc-fan .cb-art-value,.cb-card-view .cb-art-value,.ct-print-art .cb-art-value{display:none}
+@media (max-width: 480px) {
+  .cb-head { grid-template-columns: minmax(0, 1fr) auto; }
+  .cb-head .cb-brand, .cb-head .cb-lockup { min-width: 0; max-width: 100%; }
+  .cb-head .cb-binder-link { width: 44px; min-width: 44px; min-height: 44px; padding-inline: 0; justify-content: center; }
+  .cb-head .cb-binder-link span { display: none; }
+  #cardbit-store .cb-head .cb-binder-link svg { display: block; flex-shrink: 0; }
+}
+
+.cb-retail-quote{display:inline-flex;flex-wrap:wrap;align-items:baseline;column-gap:.55em;row-gap:.1em;line-height:1.4}.cb-retail-quote>small{font:inherit;font-size:.84em;opacity:.85}

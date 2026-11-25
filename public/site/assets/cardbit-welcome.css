@@ -1,0 +1,87 @@
+#cardbit-store cardbit-welcome-summary { display:block; }
+#cardbit-store .cbw-summary,
+#cardbit-store .cbw-total,
+#cardbit-store .cbw-method {
+  border:1px solid #35484e;
+  border-radius:16px;
+  background:#162024;
+}
+#cardbit-store .cbw-summary {
+  display:grid;
+  grid-template-columns:minmax(0,1.5fr) auto auto;
+  align-items:center;
+  gap:24px;
+  padding:24px clamp(18px,3vw,38px);
+  background:linear-gradient(110deg,#1b3031,#172127 63%);
+}
+#cardbit-store .cbw-account { margin:24px 0; }
+#cardbit-store .cbw-summary-title,
+#cardbit-store .cbw-total { display:flex; align-items:center; gap:16px; min-width:0; }
+#cardbit-store .cbw-summary-title h2 { font-size:clamp(21px,2vw,28px); }
+#cardbit-store .cbw-summary-title p,
+#cardbit-store .cbw-intro p,
+#cardbit-store .cbw-desc,
+#cardbit-store .cbw-after p { margin-top:7px; color:#bdcdce; }
+#cardbit-store .cbw-coin { object-fit:contain; width:55px; height:62px; flex:none; }
+#cardbit-store .cbw-split { padding:0; margin:0; display:flex; align-items:center; list-style:none; }
+#cardbit-store .cbw-split li { display:grid; padding:0 16px; border-left:1px solid #395056; }
+#cardbit-store .cbw-split strong { color:#9df2e4; font-size:23px; line-height:1.1; font-variant-numeric:tabular-nums; }
+#cardbit-store .cbw-split li > span { color:#e4eeeb; font-size:14px; }
+#cardbit-store .cbw-split small { display:block; color:#adbfbe; font-size:12px; margin-top:3px; }
+#cardbit-store .cbw-legal a,
+#cardbit-store .cbw-after p a { color:#9fe9e2; text-decoration:underline; text-underline-offset:3px; }
+#cardbit-store .cbw-page { max-width:1040px; }
+#cardbit-store .cbw-intro { display:flex; align-items:center; justify-content:space-between; gap:30px; margin-bottom:26px; }
+#cardbit-store .cbw-intro h1 { max-width:19ch; font-size:clamp(35px,4.6vw,62px); letter-spacing:-.042em; line-height:1.02; }
+#cardbit-store .cbw-intro h1 span { color:#98f2e3; }
+#cardbit-store .cbw-intro p { max-width:53ch; font-size:17px; margin-top:13px; }
+#cardbit-store .cbw-total { flex:none; padding:15px 21px; background:linear-gradient(130deg,#1e3334,#162125); }
+#cardbit-store .cbw-total b { display:block; color:#f4fbf9; font-size:28px; font-variant-numeric:tabular-nums; line-height:1.1; }
+#cardbit-store .cbw-total b span { color:#a8bcbe; font-size:18px; font-weight:500; }
+#cardbit-store .cbw-total small { color:#c7d6d4; font-size:14px; }
+#cardbit-store .cbw-methods { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+#cardbit-store .cbw-method { min-width:0; padding:clamp(18px,2.8vw,30px); }
+#cardbit-store .cbw-method-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
+#cardbit-store .cbw-method-head h2 { font-size:25px; }
+#cardbit-store .cbw-amount { display:inline-block; color:#a8f0e5; background:#213737; border:1px solid #3c5a57; border-radius:7px; padding:3px 8px; font-weight:650; font-variant-numeric:tabular-nums; white-space:nowrap; }
+#cardbit-store .cbw-amount span { font-size:12px; font-weight:500; }
+#cardbit-store .cbw-desc { min-height:1.5em; margin-bottom:21px; }
+#cardbit-store .cbw-field { display:grid; gap:5px; font-size:14px; font-weight:600; color:#cad8d8; }
+#cardbit-store .cbw-field input { min-width:0; width:100%; padding:10px 12px; border:1px solid #3b4e53; border-radius:8px; background:#10181b; color:#c6d3d4; }
+#cardbit-store .cbw-consent { display:flex; align-items:flex-start; gap:10px; padding:14px 0; cursor:pointer; line-height:1.4; }
+#cardbit-store .cbw-consent input { width:19px; height:19px; flex:none; margin:2px 0 0; }
+#cardbit-store .cbw-legal,
+#cardbit-store .cbw-kept { font-size:13px; line-height:1.48; color:#bccdce; margin-bottom:14px; }
+#cardbit-store .cbw-method button { min-height:44px; }
+#cardbit-store .cbw-method .cb-secondary { border-color:#4e6469; background:#263539; }
+#cardbit-store .cbw-method :is(.cb-secondary,.cb-primary):hover { filter:brightness(1.12); }
+#cardbit-store .cbw-controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+#cardbit-store .cbw-quiet { border:0; background:transparent; padding:5px 2px; text-decoration:underline; text-underline-offset:3px; color:#c6d5d5; font-size:14px; }
+#cardbit-store :is(.cbw-pending,.cbw-confirmed) { border-left:3px solid #ffc786; padding-left:13px; margin:21px 0 16px; }
+#cardbit-store .cbw-confirmed { border-color:#7ee1b3; }
+#cardbit-store :is(.cbw-pending,.cbw-confirmed) p { color:#bbcccc; margin-top:3px; }
+#cardbit-store .cbw-feedback:not(:empty) { margin-top:15px; color:#e0f4ec; }
+#cardbit-store .cbw-after { margin-top:23px; padding-top:19px; border-top:1px solid #354345; }
+#cardbit-store .cbw-after p { max-width:74ch; margin:0; font-size:14px; line-height:1.5; }
+#cardbit-store .cbw-after .cbw-controls { margin-top:17px; }
+@media (max-width:850px) {
+  #cardbit-store .cbw-summary { grid-template-columns:minmax(0,1fr) auto; gap:14px; }
+  #cardbit-store .cbw-summary-title { grid-column:1/-1; }
+  #cardbit-store .cbw-split li:first-child { padding-left:0; border:0; }
+}
+@media (max-width:650px) {
+  #cardbit-store .cbw-methods { grid-template-columns:minmax(0,1fr); gap:14px; }
+  #cardbit-store .cbw-intro { flex-direction:column; align-items:flex-start; gap:15px; margin-bottom:18px; }
+  #cardbit-store .cbw-total { padding:8px 13px; gap:9px; border-radius:10px; }
+  #cardbit-store .cbw-total .cbw-coin { width:27px; height:32px; }
+  #cardbit-store .cbw-total > div { display:flex; align-items:center; gap:10px; }
+  #cardbit-store .cbw-total b { font-size:20px; }
+  #cardbit-store .cbw-total b span { font-size:15px; }
+  #cardbit-store .cbw-desc { margin-bottom:14px; }
+}
+@media (max-width:430px) {
+  #cardbit-store .cbw-summary { grid-template-columns:minmax(0,1fr); }
+  #cardbit-store .cbw-summary > a { justify-self:start; }
+  #cardbit-store .cbw-summary-title { gap:12px; }
+  #cardbit-store .cbw-summary-title .cbw-coin { width:38px; height:46px; }
+}

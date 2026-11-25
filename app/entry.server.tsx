@@ -6,6 +6,7 @@ import { createReadableStreamFromReadable } from "@react-router/node";
 import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
+import { SITE_ENABLED, htmlResponse, storefrontShell } from "./site/shell.server";
 
 startGiveawayClock();
 
@@ -17,6 +18,12 @@ export default async function handleRequest(
   responseHeaders: Headers,
   reactRouterContext: EntryContext
 ) {
+  // Cardbit standalone site (CARDBIT_SITE=on only): the home page is the storefront shell.
+  // The _index route stays the Shopify app's install page everywhere else.
+  const url = new URL(request.url);
+  if (SITE_ENABLED() && url.pathname === "/" && !url.searchParams.has("shop")) {
+    return htmlResponse(storefrontShell({ title: "cardbit · Digital Packs, Real Cards" }));
+  }
   addDocumentResponseHeaders(request, responseHeaders);
   const userAgent = request.headers.get("user-agent");
   const callbackName = isbot(userAgent ?? '')

@@ -1,0 +1,277 @@
+/* Cardbit How It Works. Scoped to the storefront root; tokens come from cardbit-storefront.css. */
+#cardbit-store .hiw { --hiw-cyan:#00e6e1; --hiw-apricot:#ffb65c; --hiw-cobalt:#4057f5; --hiw-panel:#161e21; --hiw-high:#1d2729; --hiw-line:#2c3a3d; --hiw-muted:#b6c4c5;
+  padding-bottom:clamp(40px,6vw,90px); }
+#cardbit-store .hiw h1,#cardbit-store .hiw h2,#cardbit-store .hiw h3,#cardbit-store .hiw b.hiw-price,#cardbit-store .hiw .hiw-num,
+#cardbit-store .hiw-loop b,#cardbit-store .hiw-topup b,#cardbit-store .hiw-calc-out b,#cardbit-store .hiw-pack-info b,#cardbit-store .hiw-ship b,
+#cardbit-store .hiw-eq b,#cardbit-store .hiw-eq-result b,#cardbit-store .hiw-ladder b,#cardbit-store .hiw-xp b,#cardbit-store .hiw-streak b,
+#cardbit-store .hiw-mini-bits b,#cardbit-store .hiw-badges b,#cardbit-store .hiw-price,#cardbit-store .hiw-badge,#cardbit-store .hiw-vault-head b,
+#cardbit-store .hiw-panel-title,#cardbit-store .hiw-odds figcaption b,#cardbit-store .hiw-give-art b,#cardbit-store .hiw-loop-n,#cardbit-store .hiw-note>b {
+  font-family:var(--cb-display,'Cardbit Atkinson',system-ui,sans-serif); font-weight:800; letter-spacing:-.01em; }
+#cardbit-store .hiw p { line-height:1.6; }
+#cardbit-store .hiw a:not([class]) { color:var(--hiw-cyan); }
+#cardbit-store .hiw strong { color:#fff; }
+#cardbit-store .hiw-small { font-size:.9rem; color:var(--hiw-muted); }
+
+/* Hero */
+#cardbit-store .hiw-hero { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); gap:clamp(24px,4vw,64px); align-items:center; padding-block:clamp(30px,5vw,72px) clamp(24px,3vw,40px); }
+#cardbit-store .hiw-kicker { margin:0 0 10px; color:var(--hiw-cyan); font-weight:800; text-transform:uppercase; letter-spacing:.12em; font-size:.82rem; }
+#cardbit-store .hiw-hero h1 { margin:0 0 18px; font-size:clamp(2.2rem,5vw,4rem); line-height:1.02; }
+#cardbit-store .hiw-lede { margin:0 0 14px; font-size:clamp(1rem,1.3vw,1.15rem); color:#dfe9e8; max-width:60ch; }
+#cardbit-store .hiw-loop { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; position:relative; }
+#cardbit-store .hiw-loop li a { position:relative; display:grid; justify-items:center; gap:6px; padding:22px 12px 18px; height:100%; box-sizing:border-box; border:1px solid var(--hiw-line); border-radius:20px;
+  background:radial-gradient(120% 90% at 50% 0%,#00e6e11a,transparent 60%),var(--hiw-panel); color:#f6faf9; text-decoration:none; text-align:center; transition:transform .2s, border-color .2s; }
+#cardbit-store .hiw-loop li a:hover { transform:translateY(-3px); border-color:var(--hiw-cyan); }
+#cardbit-store .hiw-loop li a:focus-visible { outline:3px solid var(--hiw-apricot); outline-offset:3px; }
+#cardbit-store .hiw-loop img { width:64px; height:64px; object-fit:contain; filter:drop-shadow(0 6px 14px #0009); }
+#cardbit-store .hiw-loop b { font-size:1.15rem; }
+#cardbit-store .hiw-loop small { color:var(--hiw-muted); font-size:.85rem; }
+#cardbit-store .hiw-loop-n { position:absolute; top:10px; left:12px; display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:var(--hiw-cyan); color:#0b1416; font-size:.95rem; }
+
+/* Jump bar */
+#cardbit-store .hiw-jump { position:sticky; top:0; z-index:5; background:#101619e6; backdrop-filter:blur(8px); border-block:1px solid var(--hiw-line); }
+#cardbit-store .hiw-jump-row { display:flex; gap:6px; overflow-x:auto; padding-block:10px; scrollbar-width:none; }
+#cardbit-store .hiw-jump-row::-webkit-scrollbar { display:none; }
+#cardbit-store .hiw-jump a { flex:none; padding:8px 14px; border:1px solid var(--hiw-line); border-radius:999px; color:#dfe9e8; text-decoration:none; font-weight:700; font-size:.88rem; white-space:nowrap; }
+#cardbit-store .hiw-jump a:hover,#cardbit-store .hiw-jump a[aria-current="true"] { border-color:var(--hiw-cyan); color:var(--hiw-cyan); }
+#cardbit-store .hiw-jump a:focus-visible { outline:3px solid var(--hiw-apricot); outline-offset:1px; }
+#cardbit-store .hiw [id^="hiw-"] { scroll-margin-top:72px; }
+
+/* Steps */
+#cardbit-store .hiw-step { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); gap:clamp(24px,4vw,64px); align-items:start; padding-block:clamp(40px,6vw,88px); border-top:1px solid #1f2a2c; }
+#cardbit-store .hiw-flip .hiw-copy { order:2; }
+#cardbit-store .hiw-flip .hiw-art { order:1; }
+#cardbit-store .hiw-copy h2 { margin:0 0 16px; font-size:clamp(1.9rem,3.4vw,2.9rem); line-height:1.05; }
+#cardbit-store .hiw-copy h3 { margin:26px 0 8px; font-size:1.25rem; }
+#cardbit-store .hiw-copy p { margin:0 0 14px; color:#d4e0df; }
+#cardbit-store .hiw-copy-center { text-align:center; max-width:760px; margin-inline:auto; }
+#cardbit-store .hiw-num { display:inline-flex; align-items:center; gap:10px; margin:0 0 12px !important; color:var(--hiw-cyan) !important; text-transform:uppercase; letter-spacing:.1em; font-size:.85rem; }
+#cardbit-store .hiw-num span { display:grid; place-items:center; width:36px; height:36px; border-radius:50%; background:var(--hiw-cyan); color:#0b1416; font-size:1.1rem; letter-spacing:0; }
+#cardbit-store .hiw-num-alt { color:var(--hiw-apricot) !important; }
+#cardbit-store .hiw-num-alt img { width:28px; height:28px; object-fit:contain; }
+#cardbit-store .hiw-art { display:grid; gap:16px; position:relative; }
+#cardbit-store .hiw-panel { position:relative; margin:0; padding:clamp(16px,2vw,24px); border:1px solid var(--hiw-line); border-radius:20px; background:var(--hiw-panel); box-shadow:0 18px 40px #0005; }
+#cardbit-store .hiw-panel-title { margin:0 0 14px !important; font-size:1.05rem; color:#fff; }
+#cardbit-store .hiw-mascot { position:absolute; right:-14px; bottom:-18px; width:72px; height:auto; filter:drop-shadow(0 8px 16px #000a); pointer-events:none; }
+#cardbit-store .hiw-note { margin:18px 0 0; padding:14px 16px; border-left:4px solid var(--hiw-apricot); border-radius:0 14px 14px 0; background:#ffb65c12; }
+#cardbit-store .hiw-note>b { display:block; margin-bottom:4px; color:var(--hiw-apricot); }
+#cardbit-store .hiw-note p { margin:0; font-size:.95rem; }
+#cardbit-store .hiw-checks { list-style:none; margin:0 0 14px; padding:0; display:grid; gap:8px; }
+#cardbit-store .hiw-checks li { position:relative; padding-left:30px; color:#d4e0df; line-height:1.5; }
+#cardbit-store .hiw-checks li::before { content:""; position:absolute; left:0; top:.15em; width:20px; height:20px; border-radius:50%; background:var(--hiw-cyan) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3 3 7-7' fill='none' stroke='%230b1416' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat; }
+#cardbit-store .hiw-checks b { color:#fff; }
+
+/* 1. Cardbits */
+#cardbit-store .hiw-topups { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+#cardbit-store .hiw-topup { position:relative; display:grid; justify-items:center; gap:4px; padding:26px 6px 14px; border:1px solid var(--hiw-line); border-radius:16px; background:var(--hiw-high); text-align:center; }
+#cardbit-store .hiw-topup b { font-size:1.2rem; color:#fff; }
+#cardbit-store .hiw-topup small { color:var(--hiw-muted); font-size:.78rem; }
+#cardbit-store .hiw-price { font-size:1.35rem; color:var(--hiw-cyan); }
+#cardbit-store .hiw-stack { position:relative; display:block; height:56px; width:56px; }
+#cardbit-store .hiw-stack img { position:absolute; left:6px; width:44px; height:44px; object-fit:contain; filter:drop-shadow(0 3px 5px #0008); }
+#cardbit-store .hiw-stack img:nth-child(1) { bottom:0; } #cardbit-store .hiw-stack img:nth-child(2) { bottom:6px; left:10px; }
+#cardbit-store .hiw-stack img:nth-child(3) { bottom:12px; left:3px; } #cardbit-store .hiw-stack img:nth-child(4) { bottom:18px; left:9px; }
+#cardbit-store .hiw-badge { position:absolute; top:-11px; left:50%; transform:translateX(-50%); padding:3px 9px; border-radius:999px; background:var(--hiw-apricot); color:#241500; font-size:.72rem; white-space:nowrap; }
+#cardbit-store .hiw-topup-bonus { border-color:#ffb65c66; }
+#cardbit-store .hiw-topup-best { border-color:var(--hiw-apricot); background:radial-gradient(100% 80% at 50% 0%,#ffb65c22,transparent 70%),var(--hiw-high); }
+#cardbit-store .hiw-welcome { display:flex; align-items:center; gap:16px; background:linear-gradient(120deg,#4057f526,transparent 70%),var(--hiw-panel); }
+#cardbit-store .hiw-welcome img { flex:none; width:64px; height:64px; }
+#cardbit-store .hiw-welcome b { font-family:var(--cb-display); font-size:1.15rem; }
+#cardbit-store .hiw-welcome p { margin:4px 0 0; color:#d4e0df; font-size:.95rem; }
+#cardbit-store .hiw-calc h3 { margin:0 0 12px; font-size:1.1rem; }
+#cardbit-store .hiw-calc-row { display:grid; grid-template-columns:2fr 1fr; gap:10px; }
+#cardbit-store .hiw-calc label { display:grid; gap:6px; font-weight:700; font-size:.85rem; color:var(--hiw-muted); }
+#cardbit-store .hiw-calc select,#cardbit-store .hiw-calc input { width:100%; box-sizing:border-box; min-height:44px; padding:8px 12px; border:1px solid #3a4a4e; border-radius:12px; background:#0f1517; color:#fff; font:inherit; font-size:1rem; }
+#cardbit-store .hiw-calc select:focus-visible,#cardbit-store .hiw-calc input:focus-visible { outline:3px solid var(--hiw-apricot); outline-offset:1px; }
+#cardbit-store .hiw-calc-out { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+#cardbit-store .hiw-calc-out>span { display:grid; gap:2px; padding:12px; border-radius:14px; background:#0f1517; text-align:center; }
+#cardbit-store .hiw-calc-out b { font-size:1.5rem; color:var(--hiw-cyan); }
+#cardbit-store .hiw-calc-out>span:last-child b { color:var(--hiw-apricot); }
+#cardbit-store .hiw-calc-out small { color:var(--hiw-muted); font-size:.8rem; }
+
+/* 2. Packs */
+#cardbit-store .hiw-packs { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+#cardbit-store .hiw-pack { display:grid; grid-template-rows:auto 1fr; gap:10px; padding:12px 8px; border:1px solid var(--hiw-line); border-radius:18px; background:var(--hiw-panel); text-align:center; }
+#cardbit-store .hiw-pack>img { width:100%; height:auto; aspect-ratio:16/22; object-fit:contain; filter:drop-shadow(0 10px 18px #000b); transition:transform .25s; }
+#cardbit-store .hiw-pack:hover>img { transform:translateY(-4px) rotate(-2deg); }
+#cardbit-store .hiw-pack-info { display:grid; gap:6px; align-content:start; justify-items:center; }
+#cardbit-store .hiw-pack-info b { font-size:.98rem; line-height:1.1; }
+#cardbit-store .hiw-pack-count { font-size:.8rem; color:var(--hiw-muted); font-weight:700; }
+#cardbit-store .hiw-pack-price { display:inline-flex; align-items:center; gap:4px; font-family:var(--cb-display); font-weight:800; color:var(--hiw-cyan); }
+#cardbit-store .hiw-tags { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; }
+#cardbit-store .hiw-tags i { font-style:normal; font-size:.66rem; font-weight:700; padding:2px 6px; border-radius:999px; background:#243134; color:#cfe0df; }
+#cardbit-store .hiw-pack-link { font-size:.78rem; font-weight:800; color:var(--hiw-apricot); text-decoration:none; }
+#cardbit-store .hiw-pack-link:hover { text-decoration:underline; }
+#cardbit-store .hiw-odds figcaption { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
+#cardbit-store .hiw-odds figcaption small { color:var(--hiw-muted); font-weight:700; font-size:.8rem; }
+#cardbit-store .hiw-oddsbar { display:flex; height:18px; border-radius:999px; overflow:hidden; background:#0f1517; }
+#cardbit-store .hiw-oddsbar span { width:var(--w); }
+#cardbit-store .t1 { background:#6f8a8c; } #cardbit-store .t2 { background:var(--hiw-cobalt); } #cardbit-store .t3 { background:var(--hiw-cyan); } #cardbit-store .t4 { background:var(--hiw-apricot); }
+#cardbit-store .hiw-oddskey { list-style:none; margin:12px 0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; font-size:.85rem; color:var(--hiw-muted); }
+#cardbit-store .hiw-oddskey li { display:grid; grid-template-columns:auto 1fr; align-items:center; column-gap:6px; }
+#cardbit-store .hiw-oddskey i { width:10px; height:10px; border-radius:3px; }
+#cardbit-store .hiw-oddskey b { grid-column:2; color:#fff; font-size:1rem; }
+#cardbit-store .hiw-left { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:#0f1517; font-size:.85rem; font-weight:700; }
+#cardbit-store .hiw-meter { height:8px; border-radius:999px; background:#26302f; overflow:hidden; }
+#cardbit-store .hiw-meter i { display:block; height:100%; width:var(--w); background:var(--hiw-apricot); border-radius:inherit; }
+#cardbit-store .hiw-odds p { margin:10px 0 0; font-size:.8rem; color:var(--hiw-muted); }
+
+/* 3. Opening */
+#cardbit-store .hiw-reveal { list-style:none; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+#cardbit-store .hiw-reveal li { display:grid; justify-items:center; gap:6px; text-align:center; position:relative; }
+#cardbit-store .hiw-reveal li:not(:last-child)::after { content:""; position:absolute; right:-12px; top:38%; width:12px; height:2px; background:var(--hiw-cyan); }
+#cardbit-store .hiw-frame { display:grid; place-items:center; width:100%; aspect-ratio:5/7; border-radius:14px; background:radial-gradient(circle at 50% 40%,#00e6e122,transparent 65%),#0f1517; overflow:hidden; }
+#cardbit-store .hiw-frame img { width:78%; height:auto; border-radius:8px; filter:drop-shadow(0 8px 16px #000b); }
+#cardbit-store .hiw-frame-win { background:radial-gradient(circle at 50% 40%,#ffb65c44,transparent 65%),#0f1517; box-shadow:inset 0 0 0 2px var(--hiw-apricot); }
+#cardbit-store .hiw-reveal b { font-size:1rem; }
+#cardbit-store .hiw-reveal small { color:var(--hiw-muted); font-size:.78rem; line-height:1.3; }
+#cardbit-store .hiw-buttons { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding-right:80px; }
+#cardbit-store .hiw-fake { padding:10px 16px; border-radius:999px; background:var(--hiw-cyan); color:#0b1416; font-weight:800; font-size:.9rem; }
+#cardbit-store .hiw-fake-ghost { background:transparent; border:1px solid #4a5b5e; color:#e7f3f2; }
+#cardbit-store .hiw-buttons img { position:absolute; right:14px; bottom:8px; width:64px; height:64px; }
+
+/* 4. Vault */
+#cardbit-store .hiw-vault-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:16px; }
+#cardbit-store .hiw-vault-head small { display:block; color:var(--hiw-muted); font-size:.8rem; font-weight:700; }
+#cardbit-store .hiw-vault-head b { font-size:1.2rem; }
+#cardbit-store .hiw-vault-total { text-align:right; padding:8px 14px; border-radius:14px; background:linear-gradient(120deg,#ffb65c22,transparent),#0f1517; }
+#cardbit-store .hiw-vault-total b { color:var(--hiw-apricot); font-size:1rem; }
+#cardbit-store .hiw-vault-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+#cardbit-store .hiw-vcard { position:relative; display:block; padding:6px; border-radius:12px; background:#0f1517; }
+#cardbit-store .hiw-vcard img { display:block; width:100%; aspect-ratio:5/7; object-fit:cover; border-radius:7px; }
+#cardbit-store .hiw-vcard i { position:absolute; left:10px; bottom:10px; padding:2px 8px; border-radius:999px; font-style:normal; font-size:.68rem; font-weight:800; }
+#cardbit-store .s-held { background:#00e6e1; color:#0b1416; } #cardbit-store .s-ship { background:var(--hiw-cobalt); color:#fff; } #cardbit-store .s-sold { background:#3a4648; color:#e7f3f2; }
+
+/* 5. Choices */
+#cardbit-store .hiw-wide { display:block; }
+#cardbit-store .hiw-fork { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:28px; align-items:start; }
+#cardbit-store .hiw-choice { padding-top:52px; margin-top:36px; }
+#cardbit-store .hiw-choice-icon { position:absolute; top:-36px; left:24px; display:grid; place-items:center; width:72px; height:72px; border-radius:22px; background:var(--hiw-high); border:1px solid var(--hiw-line); }
+#cardbit-store .hiw-choice-icon img { width:60px; height:60px; }
+#cardbit-store .hiw-choice h3 { margin:0 0 10px; font-size:1.4rem; }
+#cardbit-store .hiw-choice p { margin:0 0 12px; color:#d4e0df; }
+#cardbit-store .hiw-choice-sell { border-color:#00e6e155; }
+#cardbit-store .hiw-choice-ship { border-color:#4057f566; }
+#cardbit-store .hiw-mini { display:flex; align-items:center; justify-content:center; gap:14px; margin:4px 0 14px; padding:14px; border-radius:14px; background:#0f1517; }
+#cardbit-store .hiw-mini-card img { width:58px; border-radius:6px; display:block; }
+#cardbit-store .hiw-mini-arrow { font-size:1.6rem; color:var(--hiw-cyan); font-weight:800; }
+#cardbit-store .hiw-mini-bits { display:grid; justify-items:center; }
+#cardbit-store .hiw-mini-bits b { font-size:1.6rem; color:var(--hiw-cyan); }
+#cardbit-store .hiw-mini-bits small { color:var(--hiw-muted); font-size:.78rem; }
+#cardbit-store .hiw-fine { margin:0; padding-left:18px; display:grid; gap:6px; color:var(--hiw-muted); font-size:.88rem; line-height:1.45; }
+#cardbit-store .hiw-ship { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; margin:4px 0 10px; padding:14px; border-radius:14px; background:#0f1517; text-align:center; }
+#cardbit-store .hiw-ship b { display:inline-flex; align-items:center; gap:4px; font-size:1.6rem; color:#fff; }
+#cardbit-store .hiw-ship small { display:block; color:var(--hiw-muted); font-size:.78rem; }
+#cardbit-store .hiw-or { color:var(--hiw-muted); font-weight:800; }
+#cardbit-store .hiw-free { padding:8px 12px; border-radius:12px; background:#ffb65c1a; color:#ffe2bd !important; font-size:.92rem; }
+#cardbit-store .hiw-free b { color:var(--hiw-apricot); }
+#cardbit-store .hiw-shipsteps { margin:0; padding:0; list-style:none; counter-reset:s; display:grid; gap:8px; }
+#cardbit-store .hiw-shipsteps li { counter-increment:s; display:flex; align-items:center; gap:10px; font-size:.9rem; color:#d4e0df; }
+#cardbit-store .hiw-shipsteps li::before { content:counter(s); flex:none; display:grid; place-items:center; width:24px; height:24px; border-radius:50%; background:var(--hiw-cobalt); color:#fff; font-weight:800; font-size:.8rem; }
+
+/* 6. Sparks */
+#cardbit-store .hiw-eq { display:grid; grid-template-columns:1fr auto 1fr auto 1fr; align-items:center; gap:6px; text-align:center; }
+#cardbit-store .hiw-eq>span:not(.hiw-op) { display:grid; gap:2px; padding:12px 6px; border-radius:14px; background:#0f1517; }
+#cardbit-store .hiw-eq small { color:var(--hiw-muted); font-size:.74rem; font-weight:700; }
+#cardbit-store .hiw-eq b { font-size:1.45rem; }
+#cardbit-store .hiw-eq i { font-style:normal; font-size:.72rem; color:var(--hiw-muted); }
+#cardbit-store .hiw-op { font-size:1.4rem; font-weight:800; color:var(--hiw-muted); }
+#cardbit-store .hiw-eq-result { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:14px; padding:14px; border-radius:14px; background:linear-gradient(120deg,#ffb65c26,#4057f526); }
+#cardbit-store .hiw-eq-result span { color:#e7f3f2; font-weight:700; }
+#cardbit-store .hiw-eq-result b { display:inline-flex; align-items:center; gap:8px; font-size:1.7rem; color:var(--hiw-apricot); }
+#cardbit-store .hiw-sparkshop ul { list-style:none; margin:0; padding:0 70px 0 0; display:grid; gap:8px; }
+#cardbit-store .hiw-sparkshop li { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border-radius:12px; background:#0f1517; font-size:.9rem; color:#d4e0df; }
+#cardbit-store .hiw-sparkshop li b { color:var(--hiw-apricot); white-space:nowrap; font-family:var(--cb-display); }
+
+/* 7. Levels */
+#cardbit-store .hiw-xp { list-style:none; margin:0 0 6px; padding:0; display:grid; gap:8px; }
+#cardbit-store .hiw-xp li { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:var(--hiw-panel); border:1px solid var(--hiw-line); color:#d4e0df; }
+#cardbit-store .hiw-xp b { flex:none; min-width:72px; color:var(--hiw-cyan); font-size:1.1rem; }
+#cardbit-store .hiw-ladder { list-style:none; display:grid; gap:8px; }
+#cardbit-store .hiw-ladder li { display:grid; grid-template-columns:56px 1fr auto; grid-template-rows:auto auto; column-gap:14px; align-items:center; padding:8px 12px; border-radius:14px; background:#0f1517; }
+#cardbit-store .hiw-ladder img { grid-row:span 2; width:52px; height:52px; object-fit:contain; }
+#cardbit-store .hiw-ladder b { font-size:1.05rem; }
+#cardbit-store .hiw-ladder span { grid-row:span 2; grid-column:3; padding:4px 10px; border-radius:999px; background:#243134; font-weight:800; font-size:.82rem; color:var(--hiw-cyan); }
+#cardbit-store .hiw-ladder small { color:var(--hiw-muted); font-size:.78rem; }
+#cardbit-store .hiw-ladder li:first-child { background:linear-gradient(110deg,#ff7ad922,#7cf3ff22,#ffb65c22),#0f1517; }
+#cardbit-store .hiw-streak ol { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; align-items:end; height:150px; }
+#cardbit-store .hiw-streak li { display:grid; grid-template-rows:1fr auto auto; justify-items:center; height:100%; gap:2px; }
+#cardbit-store .hiw-streak i { align-self:end; width:100%; height:var(--h); min-height:10px; border-radius:8px 8px 4px 4px; background:linear-gradient(180deg,var(--hiw-apricot),#ff7a3d); }
+#cardbit-store .hiw-streak b { font-size:.8rem; color:var(--hiw-apricot); }
+#cardbit-store .hiw-streak small { font-size:.7rem; color:var(--hiw-muted); }
+
+/* 8. Leaderboard & giveaway */
+#cardbit-store .hiw-duo { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:24px; }
+#cardbit-store .hiw-duo h3 { margin:0 0 14px; font-size:1.4rem; }
+#cardbit-store .hiw-duo p { color:#d4e0df; }
+#cardbit-store .hiw-podium { display:flex; justify-content:center; align-items:end; gap:8px; height:170px; margin-bottom:14px; }
+#cardbit-store .hiw-podium span { position:relative; display:grid; justify-items:center; align-content:start; width:96px; border-radius:14px 14px 0 0; background:linear-gradient(180deg,#243134,#161e21); }
+#cardbit-store .hiw-podium img { width:64px; height:64px; object-fit:contain; margin-top:-40px; filter:drop-shadow(0 6px 12px #000b); }
+#cardbit-store .hiw-podium i { font-style:normal; font-family:var(--cb-display); font-weight:800; font-size:1.6rem; margin-top:4px; }
+#cardbit-store .hiw-podium .p1 { height:120px; background:linear-gradient(180deg,#ffb65c55,#161e21); } #cardbit-store .hiw-podium .p1 i { color:var(--hiw-apricot); }
+#cardbit-store .hiw-podium .p2 { height:90px; } #cardbit-store .hiw-podium .p3 { height:70px; }
+#cardbit-store .hiw-give-art { position:relative; display:flex; align-items:center; justify-content:flex-end; height:130px; margin-bottom:14px; padding-right:12px; border-radius:16px; background:radial-gradient(circle at 25% 50%,#ffb65c33,transparent 55%),#0f1517; }
+#cardbit-store .hiw-give-art img { position:absolute; width:58px; filter:drop-shadow(0 6px 10px #000a); }
+#cardbit-store .hiw-give-art .c1 { left:12%; top:18%; width:72px; } #cardbit-store .hiw-give-art .c2 { left:30%; top:44%; } #cardbit-store .hiw-give-art .c3 { left:4%; top:56%; width:44px; }
+#cardbit-store .hiw-give-art span { display:grid; text-align:right; color:var(--hiw-muted); font-weight:700; font-size:.85rem; }
+#cardbit-store .hiw-give-art b { font-size:1.4rem; color:#fff; }
+#cardbit-store .hiw-entries { margin:0 0 14px; padding:0; list-style:none; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+#cardbit-store .hiw-entries li { padding:8px 12px; border-radius:12px; background:#0f1517; font-size:.88rem; font-weight:700; color:#e7f3f2; }
+#cardbit-store .hiw-entries li::before { content:"+ "; color:var(--hiw-cyan); }
+#cardbit-store .hiw-postcard { padding:12px 14px; border-radius:12px; border:1px dashed #ffb65c88; font-size:.9rem; margin:0; }
+#cardbit-store .hiw-postcard b { color:var(--hiw-apricot); }
+
+/* 9. Trust */
+#cardbit-store .hiw-trust { display:grid; grid-template-columns:auto 1fr; gap:clamp(20px,4vw,48px); align-items:center; margin-block:clamp(30px,5vw,70px); padding:clamp(22px,4vw,44px); border-radius:28px; border:1px solid var(--hiw-line);
+  background:radial-gradient(80% 120% at 0% 0%,#00e6e11f,transparent 60%),radial-gradient(70% 120% at 100% 100%,#4057f526,transparent 60%),var(--hiw-panel); box-sizing:border-box; }
+#cardbit-store .hiw-trust-latch { width:clamp(120px,16vw,200px); height:auto; filter:drop-shadow(0 12px 26px #000b); }
+#cardbit-store .hiw-trust h2 { margin:0 0 10px; font-size:clamp(1.8rem,3.2vw,2.6rem); }
+#cardbit-store .hiw-trust p { margin:0 0 16px; color:#d4e0df; max-width:68ch; }
+#cardbit-store .hiw-badges { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+#cardbit-store .hiw-badges li { display:grid; gap:2px; padding:12px 14px 12px 46px; border-radius:14px; background:#0f1517; position:relative; }
+#cardbit-store .hiw-badges li::before { content:""; position:absolute; left:14px; top:14px; width:22px; height:22px; border-radius:50%; background:var(--hiw-cyan) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3 3 7-7' fill='none' stroke='%230b1416' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat; }
+#cardbit-store .hiw-badges b { font-size:1.02rem; }
+#cardbit-store .hiw-badges span { color:var(--hiw-muted); font-size:.88rem; line-height:1.4; }
+
+/* FAQ + CTA */
+#cardbit-store .hiw-faq { padding-top:clamp(20px,3vw,40px); }
+#cardbit-store .hiw-faq>h2 { margin:0 0 18px; font-size:clamp(1.7rem,3vw,2.4rem); }
+#cardbit-store .hiw-faq .cb-faq p { line-height:1.6; }
+#cardbit-store .hiw-cta { text-align:center; padding-block:clamp(36px,5vw,64px) 0; }
+#cardbit-store .hiw-cta h2 { margin:0 0 18px; font-size:clamp(1.7rem,3vw,2.4rem); }
+#cardbit-store .hiw-cta-row { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; }
+
+/* Motion */
+@media (prefers-reduced-motion:no-preference) {
+  #cardbit-store .hiw [data-hiw-in] { opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s cubic-bezier(.2,.8,.3,1); }
+  #cardbit-store .hiw [data-hiw-in].is-in { opacity:1; transform:none; }
+  #cardbit-store .hiw-frame-win img { animation:hiw-glow 2.6s ease-in-out infinite; }
+  @keyframes hiw-glow { 50% { filter:drop-shadow(0 0 18px #ffb65caa); } }
+}
+
+/* Responsive */
+@media (max-width:1000px) {
+  #cardbit-store .hiw-hero,#cardbit-store .hiw-step { grid-template-columns:1fr; }
+  #cardbit-store .hiw-flip .hiw-copy,#cardbit-store .hiw-flip .hiw-art { order:initial; }
+  #cardbit-store .hiw-fork { grid-template-columns:1fr; }
+  #cardbit-store .hiw-packs { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media (max-width:700px) {
+  #cardbit-store .hiw-loop { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  #cardbit-store .hiw-topups { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:18px; }
+  #cardbit-store .hiw-packs { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #cardbit-store .hiw-duo,#cardbit-store .hiw-badges { grid-template-columns:1fr; }
+  #cardbit-store .hiw-trust { grid-template-columns:1fr; justify-items:center; text-align:center; }
+  #cardbit-store .hiw-badges li { text-align:left; }
+  #cardbit-store .hiw-eq { grid-template-columns:1fr; }
+  #cardbit-store .hiw-op { line-height:1; }
+  #cardbit-store .hiw-oddskey { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #cardbit-store .hiw-entries { grid-template-columns:1fr; }
+  #cardbit-store .hiw-vault-head { flex-direction:column; }
+  #cardbit-store .hiw-vault-total { text-align:left; }
+  #cardbit-store .hiw-reveal small { display:none; }
+  #cardbit-store .hiw-mascot { right:-6px; bottom:-12px; width:56px; }
+  #cardbit-store .hiw-sparkshop ul { padding-right:0; padding-bottom:40px; }
+  #cardbit-store .hiw-give-art img { width:40px; }
+  #cardbit-store .hiw-give-art .c1 { left:8%; top:16%; width:50px; } #cardbit-store .hiw-give-art .c2 { left:24%; top:48%; } #cardbit-store .hiw-give-art .c3 { left:3%; top:60%; width:32px; }
+  #cardbit-store .hiw-give-art b { font-size:1.15rem; }
+}
