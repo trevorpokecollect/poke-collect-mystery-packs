@@ -6,7 +6,7 @@ const req = (headers: Record<string, string> = {}) => new Request("https://site.
 const env = (extra: Record<string, string> = {}) => ({ CARDBIT_SITE: "on", SITE_STAFF_EMAILS: "trevor@example.com, Ops@Example.com", ...extra }) as NodeJS.ProcessEnv;
 
 describe("staff gate", () => {
-  const as = (email: string | null) => async () => (email === null ? null : { id: "u", email });
+  const as = (email: string | null) => async () => (email === null ? null : { id: "u", email, signedInAt: new Date() });
   it("allows listed emails only, case-insensitively", async () => {
     expect(await staffUser(req(), as("ops@example.com"), env())).toEqual({ id: "u", email: "ops@example.com" });
     expect(await staffUser(req(), as("someone@example.com"), env())).toBeNull();

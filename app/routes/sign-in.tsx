@@ -1,4 +1,5 @@
 // Standalone-site sign-in: Google or a 6-digit email code. 404 unless CARDBIT_SITE=on.
+import { GuardRefused, assertSignInRate } from "../site/core/guard.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import {
@@ -49,8 +50,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
   const url = new URL(request.url);
   const returnTo = safeReturn(url.searchParams.get("return_to"));
-  if (await currentCustomer(db, request)) return Response.redirect(new URL(returnTo, url).toString(), 303);
-  return html(page({ returnTo, step: "email", error: url.searchParams.get("error") || undefined }));
+  const fresh = url.searchParams.get("fresh") === "1";
+  if (!fresh && (await currentCustomer(db, request))) return Response.redirect(new URL(returnTo, url).toString(), 303);
+  const note = fresh ? "Staff tools need a fresh sign-in. Sign in again to continue." : undefined;
+  return html(page({ returnTo, step: "email", note, error: url.searchParams.get("error") || undefined }));
 }
 
 // The storefront's sign-in dialog posts here with Accept: application/json and gets JSON back
@@ -67,6 +70,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const email = String(f.get("email") || "").slice(0, 254);
   try {
     if (f.get("intent") === "send") {
+      await assertSignInRate(db, clientIp(request));
       const issued = await issueEmailCode(db, email, clientIp(request));
       await sendEmail(
         { db, mailer: mailerFromEnv() },
@@ -84,9 +88,10 @@ export async function action({ request }: ActionFunctionArgs) {
     if (asJson) return json({ ok: true, signedIn: true, returnTo }, 200, { "Set-Cookie": cookie });
     return new Response(null, { status: 303, headers: { Location: returnTo, "Set-Cookie": cookie } });
   } catch (e) {
-    if (!(e instanceof SignInError)) console.error("sign-in failed", e);
-    const message = e instanceof SignInError ? e.message : "Sign-in is unavailable right now. Please try again.";
-    if (asJson) return json({ error: message }, e instanceof SignInError ? 400 : 500);
+    const known = e instanceof SignInError || e instanceof GuardRefused;
+    if (!known) console.error("sign-in failed", e);
+    const message = known ? (e as Error).message : "Sign-in is unavailable right now. Please try again.";
+    if (asJson) return json({ error: message }, e instanceof GuardRefused ? 429 : known ? 400 : 500);
     return html(page({ returnTo, step: f.get("intent") === "send" ? "email" : "code", email, error: message }), 400);
   }
 }

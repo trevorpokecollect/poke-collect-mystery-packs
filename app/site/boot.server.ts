@@ -9,3 +9,7 @@ if (process.env.CARDBIT_SITE === "on") registerSiteShipping({ copies: sqlCopySto
 import db from "../db.server";
 import { startAutoRestockClock } from "./core/restock.server";
 startAutoRestockClock(db);
+
+// Nightly Cardbits balance check (read-only; emails staff on a mismatch). SITE_LEDGER_CHECK=off disables it.
+import { startLedgerCheckClock } from "./core/ledger-check.server";
+startLedgerCheckClock(db);

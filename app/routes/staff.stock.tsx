@@ -4,7 +4,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import type { Prisma } from "@prisma/client";
 import prisma from "../db.server";
-import { currentCustomer } from "../site/core/auth.server";
+import { currentStaffCandidate } from "../site/core/auth.server";
 import { esc } from "../site/core/simple-page";
 import { priceKey, shelfLabel } from "../site/core/stock.server";
 import { DeskError, movePool, setListing, setPrice } from "../site/core/stock-desk.server";
@@ -13,7 +13,7 @@ import { DemoError, demoSummary, giveDemoPacks, giveDemoVaultCards, grantDemoCar
 import { notFound, sameOrigin, staffUser } from "../site/shipping/staff.server";
 
 const STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"];
-const resolve = (r: Request) => currentCustomer(prisma, r);
+const resolve = (r: Request) => currentStaffCandidate(prisma, r);
 const loc = (slot: number | null, pocket: number | null) => {
   if (slot == null) return "Unfiled";
   return shelfLabel(slot, pocket);
@@ -98,6 +98,9 @@ export async function action({ request }: ActionFunctionArgs) {
 async function demoAction(intent: string, fd: FormData, actor: string) {
   const email = String(fd.get("email") || "");
   const plural = (n: number, w: string) => `${n.toLocaleString("en-US")} ${w}${n === 1 ? "" : "s"}`;
+  // Giving free Cardbits, packs or cards is off unless SITE_DEMO_TOOLS=on (launch hardening, Nov 25).
+  if (["demo-credit", "demo-packs", "demo-vault"].includes(intent) && process.env.SITE_DEMO_TOOLS !== "on")
+    throw new DemoError("Demo tools are off. Set SITE_DEMO_TOOLS=on in Railway to use them.");
   switch (intent) {
     case "demo-mark":
     case "demo-unmark": {

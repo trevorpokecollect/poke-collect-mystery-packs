@@ -1,6 +1,6 @@
 // Minimal server-rendered page in the Cardbit palette (sign-in, checkout, payment return).
 import { protectionScript } from "../payments/coinflow.server";
-import { pulseTag } from "../shell.server";
+import { SITE_SECURITY_HEADERS, pulseTag } from "../shell.server";
 
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -27,4 +27,4 @@ label{display:block;font-weight:700;font-size:.875rem;margin:14px 0 6px;color:#d
 }
 
 export const htmlResponse = (s: string, status = 200, headers: Record<string, string> = {}) =>
-  new Response(s, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...headers } });
+  new Response(s, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...SITE_SECURITY_HEADERS, ...headers } });

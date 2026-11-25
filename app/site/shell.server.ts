@@ -226,16 +226,21 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
 </html>`;
 }
 
+/** Browser hardening for every standalone-site page. Kept compatible with the inline scripts, Coinflow's
+ *  device script and Stripe/Coinflow redirects: no script-src rules, only framing, plugins and base URL. */
+export const SITE_SECURITY_HEADERS: Record<string, string> = {
+  "Strict-Transport-Security": "max-age=31536000",
+  "Content-Security-Policy": "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "same-origin",
+  "X-Frame-Options": "DENY",
+  "Permissions-Policy": "camera=(self), microphone=(), geolocation=(), payment=(self)",
+};
+
 export function htmlResponse(html: string, status = 200): Response {
   return new Response(html, {
     status,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "same-origin",
-      "X-Frame-Options": "DENY",
-    },
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", ...SITE_SECURITY_HEADERS },
   });
 }
 

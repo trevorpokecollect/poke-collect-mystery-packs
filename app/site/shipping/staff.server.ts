@@ -3,7 +3,16 @@
 // gets a plain 404 so the pages don't advertise themselves.
 
 export type StaffUser = { id: string; email: string };
-export type SessionResolver = (request: Request) => Promise<{ id: string; email: string | null } | null>;
+/** signedInAt = when this browser's session was created (a fresh sign-in, not a rolled visit). */
+export type SessionResolver = (request: Request) => Promise<{ id: string; email: string | null; signedInAt?: Date | null } | null>;
+
+/** Staff tools need a sign-in from the last SITE_STAFF_SESSION_HOURS (default 12), not just a 90-day customer session. */
+export const staffFreshMs = (env: NodeJS.ProcessEnv = process.env) => {
+  const h = Number(env.SITE_STAFF_SESSION_HOURS);
+  return (Number.isFinite(h) && h > 0 ? h : 12) * 3_600_000;
+};
+
+
 
 export function staffEmails(env: NodeJS.ProcessEnv = process.env): Set<string> {
   return new Set(
@@ -25,6 +34,13 @@ export async function staffUser(
   const who = await resolve(request);
   const email = who?.email?.trim().toLowerCase();
   if (!who || !email || !allowed.has(email)) return null;
+  if (!who.signedInAt || Date.now() - who.signedInAt.getTime() > staffFreshMs(env)) {
+    const url = new URL(request.url);
+    throw new Response(null, {
+      status: 303,
+      headers: { Location: `/sign-in?fresh=1&return_to=${encodeURIComponent(url.pathname + url.search)}`, "Cache-Control": "no-store" },
+    });
+  }
   return { id: who.id, email };
 }
 

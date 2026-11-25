@@ -27,9 +27,11 @@ export const setCookie = (name: string, value: string, maxAgeSec: number) =>
   `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}${secure()}`;
 export const clearCookie = (name: string) => `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure()}`;
 
-export function clientIp(request: Request) {
-  return (request.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
-}
+export { clientIp } from "../region.server";
+import { clientIp } from "../region.server";
+
+/** Terms + Privacy version shown as clickwrap on the sign-in forms ("By continuing you agree…"). */
+export const TERMS_VERSION = process.env.SITE_TERMS_VERSION || "2026-11-24";
 
 /** Only same-origin relative paths are allowed as return targets. */
 export function safeReturn(to: string | null | undefined) {
@@ -55,6 +57,10 @@ export async function createSessionToken(db: PrismaClient, customerId: string, r
 
 export async function createSession(db: PrismaClient, customerId: string, request: Request) {
   const { token } = await createSessionToken(db, customerId, request);
+  // Every web sign-in passes the clickwrap, so record which Terms version was agreed to and when.
+  await db.siteCustomer
+    .update({ where: { id: customerId }, data: { termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() } })
+    .catch((e) => console.warn("[site] terms record failed", (e as Error).message));
   return setCookie(SESSION_COOKIE, token, COOKIE_DAYS * 86400);
 }
 
@@ -72,6 +78,15 @@ export async function currentCustomer(db: PrismaClient, request: Request): Promi
       .catch((e) => console.warn("[site] session roll failed", (e as Error).message));
   }
   return c;
+}
+
+/** The signed-in customer plus when this session was created (for staff freshness checks). */
+export async function currentStaffCandidate(db: PrismaClient, request: Request) {
+  const c = await currentCustomer(db, request);
+  if (!c) return null;
+  const token = cookieValue(request, SESSION_COOKIE);
+  const s = token ? await db.siteSession.findUnique({ where: { id: sha(token) }, select: { createdAt: true } }) : null;
+  return { id: c.id, email: c.email, signedInAt: s?.createdAt ?? null };
 }
 
 export async function endSession(db: PrismaClient, request: Request) {

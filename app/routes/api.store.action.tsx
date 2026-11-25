@@ -9,6 +9,7 @@ import { RegionBlocked } from "../site/region.server";
 import { CopyLockError, FeePaymentError, ShippingError, createShipment, parseAddress } from "../site/shipping/service.server";
 import { siteShippingDeps } from "../site/shipping/wire.server";
 import { staffEmails } from "../site/shipping/staff.server";
+import { GuardRefused, assertRate, assertShipAllowed } from "../site/core/guard.server";
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 
@@ -21,6 +22,9 @@ async function ship(request: Request, customer: { id: string; email: string; fro
     return json({ error: "Choose each held card once.", code: "invalid" }, 400);
   if (input.method !== undefined && input.method !== "CARDBITS") return json({ error: "Shipping is paid with Cardbits.", code: "invalid" }, 400);
   try {
+    // A replayed click (same requestId) returns the shipment it already made, even during a hold.
+    const already = await db.siteShipment.findUnique({ where: { idempotencyKey: `ship:${customer.id}:${requestId}`.slice(0, 190) }, select: { id: true } });
+    if (!already) await assertShipAllowed(db, customer.id);
     const r = await createShipment(siteShippingDeps(), {
       customerId: customer.id,
       customerEmail: customer.email,
@@ -34,6 +38,7 @@ async function ship(request: Request, customer: { id: string; email: string; fro
     });
     return { shipmentId: r.shipment.id, replay: r.replay };
   } catch (e) {
+    if (e instanceof GuardRefused) return json({ error: e.message, code: e.code }, e.status);
     if (e instanceof ShippingError && e.code === "ADDRESS_INVALID") return json({ error: e.message, code: "address_invalid", fields: e.details }, 400);
     if (e instanceof ShippingError) return json({ error: e.message, code: e.code.toLowerCase() }, 409);
     if (e instanceof RegionBlocked) return json({ error: e.message, code: "region_blocked" }, 403);
@@ -57,6 +62,12 @@ export async function action({ request }: ActionFunctionArgs) {
     input = JSON.parse(raw);
   } catch {
     return json({ error: "Invalid request.", code: "invalid" }, 400);
+  }
+  try {
+    if (input && typeof input.action === "string") assertRate(customer.id, input.action);
+  } catch (e) {
+    if (e instanceof GuardRefused) return json({ error: e.message, code: e.code }, e.status);
+    throw e;
   }
   if ((input?.action === "ship" || input?.action === "ship-group") && input?.address) {
     const shipped = await ship(request, customer, input);

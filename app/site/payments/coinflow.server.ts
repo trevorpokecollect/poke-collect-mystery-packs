@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual, createHash } from "node:crypto";
 import type { Prisma, PrismaClient, SiteTopup } from "@prisma/client";
 import { applyLedger, balanceOf, TOPUP_PACKAGES } from "../core/ledger.server";
 import { siteFundEntries, voidSiteFundEntries } from "../promos/promos.server";
+import { assessTopupRisk, sendRiskAlert, type ProcessorRisk, type RiskOutcome } from "./risk.server";
 
 type Tx = Prisma.TransactionClient;
 type Env = NodeJS.ProcessEnv;
@@ -142,6 +143,8 @@ export type CoinflowEvent = {
     total?: Cents;
     totals?: { subtotal?: Cents; total?: Cents };
     webhookInfo?: { topupId?: string; customerId?: string } | null;
+    /** Processor fraud score when it sends one (Stripe Radar outcome, mapped in stripe-site.server). */
+    risk?: ProcessorRisk;
   };
 };
 
@@ -149,6 +152,8 @@ export type WebhookDeps = {
   db: PrismaClient;
   /** Called after a top-up is credited (send receipt). Errors are logged, not retried. */
   onCredited?: (topup: SiteTopup, balance: number, email: string) => Promise<void>;
+  /** Staff fraud alert (defaults to email). */
+  riskAlert?: (topup: SiteTopup, email: string, outcome: RiskOutcome) => Promise<void>;
 };
 
 export const eventId = (raw: string) => createHash("sha256").update(raw).digest("hex");
@@ -180,7 +185,7 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
   if (type === "Settled") {
     const topupId = d.webhookInfo?.topupId;
     if (!topupId || !d.id) return "ignored:no_topup";
-    let credited: { t: SiteTopup; balance: number } | null = null;
+    let credited: { t: SiteTopup; balance: number; risk: RiskOutcome } | null = null;
     const result = await db.$transaction(async (tx) => {
       const t = await lockTopup(tx, { id: topupId });
       if (!t) return "ignored:unknown_topup";
@@ -197,13 +202,16 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
       if (t.bonusBits > 0)
         await applyLedger(tx, { customerId: t.customerId, delta: t.bonusBits, kind: "BONUS", idempotencyKey: `topup:${t.id}:bonus`, ref: d.id, note: "Top-up bonus" });
       await siteFundEntries(tx, t.customerId, t.id, t.baseBits); // Daily Giveaway: 1 entry per 100 paid Cardbits
-      credited = { t, balance: await balanceOf(tx, t.customerId) };
+      // Fraud review: a risky payment pauses shipping (or freezes the account) and alerts staff.
+      const risk = await assessTopupRisk(tx, t, d.risk);
+      credited = { t, balance: await balanceOf(tx, t.customerId), risk };
       return "credited";
     });
-    if (credited && deps.onCredited) {
-      const c = credited as { t: SiteTopup; balance: number };
+    if (credited) {
+      const c = credited as { t: SiteTopup; balance: number; risk: RiskOutcome };
       const customer = await db.siteCustomer.findUnique({ where: { id: c.t.customerId } });
-      if (customer) await deps.onCredited(c.t, c.balance, customer.email).catch((e) => console.error("[site] topup receipt failed", e));
+      if (customer && deps.onCredited) await deps.onCredited(c.t, c.balance, customer.email).catch((e) => console.error("[site] topup receipt failed", e));
+      if (customer) await (deps.riskAlert ?? sendRiskAlert)(c.t, customer.email, c.risk);
     }
     return result;
   }

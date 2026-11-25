@@ -9,6 +9,7 @@ import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, geoLook
 import { CoinflowError, coinflowConfigured, createCheckoutLink, topupPackage } from "../site/payments/coinflow.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits } from "../site/play/limits.server";
 import { createStripeCheckout, siteStripe, siteStripeConfig, topupProvider } from "../site/payments/stripe-site.server";
+import { GuardRefused, assertRate, assertTopupAllowed, threeDSecureFor } from "../site/core/guard.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -64,6 +65,12 @@ async function guard(request: Request, amountRaw: string | null, returnTo: strin
       return { res: blocked(`${e.message} Manage them on the Limits & Breaks page (/account/limits).`, returnTo, 403), problem: { error: e.message, status: 403, code: e.code } };
     throw e;
   }
+  try {
+    await assertTopupAllowed(db, customer, topupPackage(amount)!.cents);
+  } catch (e) {
+    if (e instanceof GuardRefused) return { res: blocked(e.message, returnTo, e.status), problem: { error: e.message, status: e.status, code: e.code } };
+    throw e;
+  }
   if (topupProvider() === "coinflow" && !coinflowConfigured()) return fail("Card checkout isn't open yet.", 503);
   return { customer, amount };
 }
@@ -92,10 +99,17 @@ export async function action({ request }: ActionFunctionArgs) {
   if (g.res) return asJson ? json({ error: g.problem.error, code: g.problem.code }, g.problem.status) : g.res;
   const state = String(fd.get("state") || "").trim().toUpperCase();
   const zip = String(fd.get("zip") || "").trim();
+  const deviceId = String(fd.get("device_id") || "").slice(0, 200) || null;
   const again = (error: string, status = 400) =>
     asJson ? json({ error }, status) : htmlResponse(form({ amount: g.amount, returnTo, state, zip, error }), status);
   const go = (location: string) => (asJson ? json({ redirect: location }) : new Response(null, { status: 303, headers: { Location: location } }));
   if (!/^\d{5}$/.test(zip)) return again("Enter a 5-digit ZIP code.");
+  try {
+    assertRate(g.customer.id, "topup");
+  } catch (e) {
+    if (e instanceof GuardRefused) return again(e.message, e.status);
+    throw e;
+  }
   const ip = clientIp(request);
   let region;
   try {
@@ -114,21 +128,29 @@ export async function action({ request }: ActionFunctionArgs) {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`site-topup:${g.customer.id}`}, 0))::text`;
       await assertNotPaused(tx, g.customer.id);
       await assertWithinLimits(tx, g.customer.id, "topup", p.cents);
+      await assertTopupAllowed(tx, g.customer, p.cents);
       return tx.siteTopup.create({
-        data: { customerId: g.customer.id, ...p, provider, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion },
+        data: { customerId: g.customer.id, ...p, provider, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion, deviceId, userAgent: (request.headers.get("user-agent") || "").slice(0, 300) || null },
       });
     });
   } catch (e) {
     if (e instanceof PlayPaused || e instanceof LimitReached) return again(e.message, 403);
+    if (e instanceof GuardRefused) return again(e.message, e.status);
     throw e;
   }
   const callbackUrl = `${siteOrigin()}/checkout/cardbits/return?topup=${encodeURIComponent(topup.id)}&return_to=${encodeURIComponent(returnTo)}`;
   if (provider === "stripe") {
     try {
-      const url = await createStripeCheckout(siteStripe(siteStripeConfig()!), topup, g.customer.email, {
-        success: callbackUrl,
-        cancel: `${siteOrigin()}/checkout/cardbits?amount=${p.baseBits}&return_to=${encodeURIComponent(returnTo)}`,
-      });
+      const url = await createStripeCheckout(
+        siteStripe(siteStripeConfig()!),
+        topup,
+        g.customer.email,
+        {
+          success: callbackUrl,
+          cancel: `${siteOrigin()}/checkout/cardbits?amount=${p.baseBits}&return_to=${encodeURIComponent(returnTo)}`,
+        },
+        await threeDSecureFor(db, g.customer, p.cents),
+      );
       return go(url);
     } catch (e) {
       console.error("[site] stripe checkout failed", (e as Error).message);
@@ -136,7 +158,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
   try {
-    const link = await createCheckoutLink({ topup, email: g.customer.email, ip, deviceId: String(fd.get("device_id") || "") || null, callbackUrl });
+    const link = await createCheckoutLink({ topup, email: g.customer.email, ip, deviceId, callbackUrl });
     return go(link);
   } catch (e) {
     if (e instanceof CoinflowError) return again(e.message, 502);

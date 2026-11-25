@@ -217,7 +217,7 @@ ${pickListHtml(s)}
 }
 
 export function renderDesk(d: Awaited<ReturnType<typeof loadDesk>>, staffEmail: string) {
-  const body = `<header class="top"><a href="${DESK_PATH}" class="brand">cardbit <span>Shipping Desk</span></a><span class="who">${esc(staffEmail)}</span></header>
+  const body = `<header class="top"><a href="${DESK_PATH}" class="brand">cardbit <span>Shipping Desk</span></a><span class="who"><a href="/staff/review">Fraud Review</a> · ${esc(staffEmail)}</span></header>
 ${d.msg ? `<p class="flash ok" role="status">${esc(d.msg)}</p>` : ""}${d.err ? `<p class="flash bad" role="alert">${esc(d.err)}</p>` : ""}
 <main class="grid"><aside><h2>Queue</h2>${queueHtml(d.queue, d.selected?.id ?? null)}</aside>
 <div>${d.selected ? detailHtml(d.selected, d) : `<p class="empty">Pick a shipment from the queue.</p>`}

@@ -118,14 +118,16 @@ export function isPrivateIp(ip: string) {
   );
 }
 
-/** First public client IP. Railway's edge sets X-Forwarded-For; the left-most entry is the client. */
+/**
+ * The visitor's IP. Railway's edge sets X-Real-IP to the address that actually connected; the
+ * left-most X-Forwarded-For entry is whatever the client sent, so it is only a fallback for local
+ * runs with no edge in front.
+ */
 export function clientIp(request: Request): string | null {
-  const xff = request.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return request.headers.get("x-real-ip");
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real.slice(0, 64);
+  const first = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return first ? first.slice(0, 64) : null;
 }
 
 /**

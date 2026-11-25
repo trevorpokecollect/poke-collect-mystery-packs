@@ -37,6 +37,7 @@ export async function createStripeCheckout(
   t: SiteTopup,
   email: string,
   urls: { success: string; cancel: string },
+  threeDS: "any" | "automatic" = "automatic",
 ) {
   const total = t.baseBits + t.bonusBits;
   const session = await stripe.checkout.sessions.create(
@@ -59,7 +60,7 @@ export async function createStripeCheckout(
       metadata: { topupId: t.id, customerId: t.customerId, site: "cardbit-site" },
       payment_intent_data: { metadata: { topupId: t.id, customerId: t.customerId, site: "cardbit-site" } },
       billing_address_collection: "required",
-      payment_method_options: { card: { request_three_d_secure: "automatic" } },
+      payment_method_options: { card: { request_three_d_secure: threeDS } },
     },
     { idempotencyKey: `site-topup:${t.id}` },
   );
@@ -67,12 +68,26 @@ export async function createStripeCheckout(
   return session.url;
 }
 
+/** Stripe Radar's verdict on the payment (risk_level normal/elevated/highest, risk_score with Radar for Fraud Teams). */
+async function radarRisk(stripe: Partial<Pick<Stripe, "paymentIntents">>, paymentIntent: string) {
+  if (!stripe.paymentIntents) return null;
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ["latest_charge"] });
+    const charge = intent.latest_charge;
+    const outcome = charge && typeof charge !== "string" ? charge.outcome : null;
+    return outcome ? { level: outcome.risk_level ?? null, score: outcome.risk_score ?? null } : null;
+  } catch (e) {
+    console.warn("[site] radar lookup failed", (e as Error).message);
+    return null;
+  }
+}
+
 const pi = (v: string | { id: string } | null | undefined) => (typeof v === "string" ? v : v?.id) || null;
 
 /** Handles one signature-verified Stripe event for site top-ups. Safe to replay. */
 export async function handleSiteStripeEvent(
   deps: WebhookDeps,
-  stripe: Pick<Stripe, "checkout">,
+  stripe: Pick<Stripe, "checkout"> & Partial<Pick<Stripe, "paymentIntents">>,
   config: SiteStripeConfig,
   event: Stripe.Event,
 ): Promise<string> {
@@ -91,7 +106,12 @@ export async function handleSiteStripeEvent(
       if (!t || t.provider !== "stripe") return "ignored:unknown_topup";
       return handleCoinflowEvent(deps, {
         eventType: "Settled",
-        data: { id: `stripe:${paymentIntent}`, subtotal: { cents: s.amount_total ?? -1, currency: "USD" }, webhookInfo: { topupId, customerId: s.metadata?.customerId } },
+        data: {
+          id: `stripe:${paymentIntent}`,
+          subtotal: { cents: s.amount_total ?? -1, currency: "USD" },
+          webhookInfo: { topupId, customerId: s.metadata?.customerId },
+          risk: await radarRisk(stripe, paymentIntent),
+        },
       });
     }
     case "charge.refunded": {

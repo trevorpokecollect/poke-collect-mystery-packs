@@ -333,8 +333,15 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
           const o = await tx.siteOpening.findUnique({ where: { id: c.openingId } });
           if (o?.sealed) throw new StoreError("not_found", "Open this pack first.", 404);
         }
-        const offer = (await pricesFor(tx, [pk(c)])).get(pk(c))?.buybackBits ?? null;
+        const price = (await pricesFor(tx, [pk(c)])).get(pk(c));
+        const offer = price?.buybackBits ?? null;
         if (!offer || offer <= 0) throw new StoreError("no_offer", "No current buyback offer for this copy.");
+        // Sanity: an offer above the selling price is a pricing error (it would let buy + sell back mint Cardbits).
+        const retailNow = c.retailBits ?? price?.retailBits ?? null;
+        if (retailNow != null && offer > retailNow) {
+          console.error("[site] buyback offer above retail, refused", pk(c), offer, retailNow);
+          throw new StoreError("no_offer", "No current buyback offer for this copy.");
+        }
         if (a.amount !== offer) throw new StoreError("catalog_changed", "The Cardbits offer changed. Review the current price.");
         await applyLedger(tx, { customerId: customer.id, delta: offer, kind: "BUYBACK", idempotencyKey: key, ref: c.id, note: `Sold back ${c.title}` });
         // Verified restocks (Trevor, Nov 25): the card goes to Draft, same slot, marked for the hourly automatic

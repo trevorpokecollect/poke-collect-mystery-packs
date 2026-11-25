@@ -2,13 +2,13 @@
 // customer's email is in SITE_STAFF_EMAILS.
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
-import { currentCustomer } from "../site/core/auth.server";
+import { currentStaffCandidate } from "../site/core/auth.server";
 import { deskAction, loadDesk, renderDesk } from "../site/shipping/desk.server";
 import { notFound, sameOrigin, staffUser } from "../site/shipping/staff.server";
 import { siteShippingDeps } from "../site/shipping/wire.server";
 import { mailerFromEnv } from "../site/email/mailer.server";
 
-const resolve = (request: Request) => currentCustomer(prisma, request);
+const resolve = (request: Request) => currentStaffCandidate(prisma, request);
 
 const html = (body: string) =>
   new Response(body, {

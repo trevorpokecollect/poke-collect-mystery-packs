@@ -1272,6 +1272,10 @@ model SiteCustomer {
   googleSub String?  @unique
   name      String?
   signupMethod String? // email | google | apple | discord | demo (set once, at account creation)
+  termsVersion    String? // Terms + Privacy version agreed to at the latest sign-in (clickwrap on every sign-in)
+  termsAcceptedAt DateTime?
+  riskStatus      String   @default("ok") // ok | review (shipping waits for staff) | trusted (staff vouched; no automatic review)
+  riskNote        String?
   frozenAt  DateTime?
   closedAt  DateTime?
   createdAt DateTime @default(now())
@@ -1410,6 +1414,10 @@ model SiteTopup {
   billingZip   String
   ip           String?
   ipRegion     String?
+  deviceId     String? // Coinflow/nSure device ID at checkout (chargeback evidence)
+  userAgent    String?
+  riskLevel    String? // normal | elevated | highest, set when credited (risk.server.ts)
+  riskReasons  Json?
   clawedBits   Int      @default(0) // Cardbits taken back on refund/chargeback
   owedBits     Int      @default(0) // part already spent that could not be taken back
   createdAt    DateTime @default(now())
