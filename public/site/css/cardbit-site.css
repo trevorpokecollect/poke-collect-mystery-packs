@@ -29,3 +29,18 @@
 .cbr-age label { display: flex; gap: .5rem; align-items: center; margin: 1rem 0 .4rem; font-weight: 700; }
 .cbr-age-error { color: #ff8a7a; min-height: 1.2em; margin: 0; font-size: .9rem; }
 .cbr-age-actions { display: flex; gap: .6rem; justify-content: flex-end; margin-top: .8rem; }
+
+/* Header wallet: one pill with the balance and a "+" that opens Buy Cardbits (replaces the loose
+   "Buy Cardbits" text). The link keeps .cb-wallet-link and its aria-label "Buy Cardbits, Balance ...". */
+#cardbit-store[data-mode="site"] .cb-wallet-link { display:inline-flex; align-items:stretch; gap:0; min-height:40px; border:1px solid #305154; border-radius:10px; overflow:hidden; background:#14292b; }
+#cardbit-store[data-mode="site"] .cb-wallet-link .cb-buy-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+#cardbit-store[data-mode="site"] .cb-wallet-link .cb-balance { border:0; border-radius:0; background:transparent; min-height:0; padding:0 10px 0 8px; font:800 .95rem/1 var(--cb-display, "Cardbit Outfit", system-ui, sans-serif); color:#a5f5ed; }
+#cardbit-store[data-mode="site"] .cb-wallet-link::after { content:"+"; display:grid; place-items:center; width:36px; background:#00e6e1; color:#0b1416; font:800 1.35rem/1 var(--cb-display, "Cardbit Outfit", system-ui, sans-serif); transition:background .2s; }
+#cardbit-store[data-mode="site"] .cb-wallet-link:hover::after { background:#7cf3ff; }
+#cardbit-store[data-mode="site"] .cb-wallet-link:hover .cb-buy-label { text-decoration:none; }
+#cardbit-store[data-mode="site"] .cb-wallet-link:focus-visible { outline:2px solid #a5f5ed; outline-offset:3px; border-radius:10px; }
+@media (max-width: 640px) {
+  #cardbit-store[data-mode="site"] .cb-wallet-link { min-height:40px; }
+  #cardbit-store[data-mode="site"] .cb-wallet-link .cb-balance { padding:0 7px 0 6px; font-size:.82rem; }
+  #cardbit-store[data-mode="site"] .cb-wallet-link::after { width:30px; font-size:1.2rem; }
+}
