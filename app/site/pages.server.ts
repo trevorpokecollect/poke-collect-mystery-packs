@@ -2,6 +2,7 @@
  * Cardbit standalone site: standalone (non-storefront) pages, ported from the theme.
  */
 import policies from "./partials/policies.html?raw";
+import { robotsTags } from "./seo.server";
 import { STYLES, SITE_CSS_V, assetUrl, shareMeta, pulseTag } from "./shell.server";
 import rewardsIn from "./partials/rewards-in.html?raw";
 import { withClubIconUrls } from "./play/club-icons";
@@ -14,13 +15,14 @@ import leaderboardOut from "./partials/leaderboard-out.html?raw";
 const optional = import.meta.glob("./partials/official-rules.html", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const officialRules = optional["./partials/official-rules.html"] ?? null;
 
-function page(title: string, description: string, body: string, styles: string[]): string {
+function page(title: string, description: string, body: string, styles: string[], path: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b0f17">
+    ${robotsTags(path)}
     <meta name="referrer" content="same-origin">
     <title>${title} · cardbit</title>
     ${shareMeta({ title: `${title} · cardbit`, description })}
@@ -40,6 +42,7 @@ export function policiesPage(): string {
     "Cardbit Terms of Service, Refund, Shipping and Privacy policies: Cardbits, packs, vault storage, buybacks and shipping.",
     policies,
     ["cardbit-policy-page.css"],
+    "/policies",
   );
 }
 
@@ -49,7 +52,7 @@ export function officialRulesPage(): string | null {
   const body = `<div id="cardbit-store" data-mode="site" class="cb-standalone">${siteHeader()}
 <div class="cbp" id="cbp"><main class="cbp-frame cbp-legal" id="cbp-main" tabindex="-1"><p class="cbp-crumb"><a href="/policies">All Policies</a></p><h1>Official Rules</h1><div class="cbp-legal-body">${officialRules}</div></main></div>
 ${siteFooter()}</div>${walletScript}`;
-  return page("Official Rules", "Official Rules for Cardbit's Daily Giveaway, Daily Spinner and Weekly Leaderboard.", body, [...STYLES, "cardbit-policy-page.css"]);
+  return page("Official Rules", "Official Rules for Cardbit's Daily Giveaway, Daily Spinner and Weekly Leaderboard.", body, [...STYLES, "cardbit-policy-page.css"], "/official-rules");
 }
 
 // Same header and footer the storefront draws (cardbit-storefront.js header()/footer()), for pages served outside it.
@@ -95,10 +98,10 @@ const script = (name: string) => `<script src="${assetUrl(name)}" defer></script
 
 export function rewardsPage(customer: { name: string | null; email: string } | null): string {
   const body = withChrome(member(withClubIconUrls(customer ? rewardsIn : rewardsOut), customer)) + walletScript + (customer ? script("cardbit-rewards.js") : "");
-  return page("Rewards", "Cardbit Rewards: levels, XP, daily check-in streaks, free Daily Spins and Latch & Friends icons.", body, rewardStyles);
+  return page("Rewards", "Cardbit Rewards: levels, XP, daily check-in streaks, free Daily Spins and Latch & Friends icons.", body, rewardStyles, "/rewards");
 }
 
 export function leaderboardPage(customer: { name: string | null; email: string } | null): string {
   const body = withChrome(member(customer ? leaderboardIn : leaderboardOut, customer)) + walletScript + script("cardbit-leaderboard.js");
-  return page("Leaderboard", "Cardbit Weekly Leaderboard: the top collectors this week.", body, rewardStyles);
+  return page("Leaderboard", "Cardbit Weekly Leaderboard: the top collectors this week.", body, rewardStyles, "/leaderboard");
 }

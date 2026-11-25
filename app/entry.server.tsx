@@ -23,7 +23,7 @@ export default async function handleRequest(
   // The _index route stays the Shopify app's install page everywhere else.
   const url = new URL(request.url);
   if (SITE_ENABLED() && url.pathname === "/" && !url.searchParams.has("shop")) {
-    return htmlResponse(storefrontShell({ title: "cardbit · Digital Packs, Real Cards" }));
+    return htmlResponse(storefrontShell({ title: "cardbit · Digital Packs, Real Cards", indexPath: "/" }));
   }
   addDocumentResponseHeaders(request, responseHeaders);
   const userAgent = request.headers.get("user-agent");

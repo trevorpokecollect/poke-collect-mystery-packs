@@ -62,7 +62,11 @@ function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule
     language: c.language,
     game: c.game,
     image: c.image,
-    rarity: null as string | null,
+    rarity: c.rarity ?? null,
+    kind: c.kind, // card | slab | sealed
+    ...(c.kind === "slab" ? { grader: c.grader, grade: c.grade, certNumber: c.certNumber } : {}),
+    ...(c.kind === "sealed" ? { sealedType: c.sealedType } : {}),
+    photos: Array.isArray(c.photos) ? (c.photos as string[]) : [],
     tier,
     priceBits: retail,
     retailBits: retail,
@@ -165,6 +169,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
         at: o.createdAt.toISOString(),
         createdAt: o.createdAt.toISOString(),
         sealed: o.sealed,
+        reversed: Boolean(o.reversedAt), // staff reversed it: Cardbits returned, cards back in stock
         cardCount: cards.length,
         cards: o.sealed ? [] : cards.map((c) => copyView(c, openingPrices)),
         rewards: o.sealed ? null : earned.get(o.id) ?? null,
@@ -380,7 +385,7 @@ function storeTx(db: PrismaClient, customer: SiteCustomer, a: StoreAction, reqId
 export async function recentPulls(db: PrismaClient, limit = 12) {
   const take = Math.min(Math.max(Math.floor(limit) || 12, 1), 24);
   const openings = await db.siteOpening.findMany({
-    where: { sealed: false, demo: false, revealedAt: { not: null } },
+    where: { sealed: false, demo: false, revealedAt: { not: null }, reversedAt: null },
     orderBy: { revealedAt: "desc" },
     take,
     select: { id: true, packId: true, revealedAt: true },

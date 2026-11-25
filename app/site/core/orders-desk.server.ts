@@ -59,7 +59,7 @@ export async function listOrders(db: PrismaClient, query: OrdersQuery) {
       title: packs.get(o.packId) ?? o.packId,
       bits: -o.priceBits,
       cents: null,
-      status: o.sealed && !o.revealedAt ? "Sealed" : o.revealedAt ? "Opened" : "Opening",
+      status: o.reversedAt ? "Reversed" : o.sealed && !o.revealedAt ? "Sealed" : o.revealedAt ? "Opened" : "Opening",
       demo: o.demo,
       detail: null,
       image: null,

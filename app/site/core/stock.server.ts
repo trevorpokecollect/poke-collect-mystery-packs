@@ -172,7 +172,51 @@ export async function receiveSiteIntake(db: PrismaClient, raw: unknown): Promise
   const era = (raw as Record<string, unknown>)?.era;
   if ((era === "Modern" || era === "Vintage") && reply.copies.length)
     await db.siteCopy.updateMany({ where: { id: { in: reply.copies.map((c) => c.id) } }, data: { era } });
+  // Optional item details (rarity; slab and sealed fields for later mystery products); not part of the digest.
+  const details = intakeDetails(raw);
+  if (Object.keys(details).length && reply.copies.length)
+    await db.siteCopy.updateMany({ where: { id: { in: reply.copies.map((c) => c.id) } }, data: details });
   return reply;
+}
+
+export const ITEM_KINDS = ["card", "slab", "sealed"] as const;
+
+/**
+ * Optional product data on a receipt (Shopify-gap audit, Nov 25 2026). Raw singles send rarity only.
+ * Graded slabs (kind "slab") carry grader, grade and cert number; sealed product (kind "sealed") carries
+ * its sealed type. weightOz is the item's own shipping weight when it isn't a sleeved card.
+ */
+export function intakeDetails(raw: unknown) {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const text = (k: string, max: number) => {
+    const v = r[k];
+    if (v == null || v === "") return undefined;
+    if (typeof v !== "string" || v.trim().length > max) throw new IntakeRejected(`Invalid ${k}.`, 422);
+    return v.trim();
+  };
+  const out: { kind?: string; rarity?: string; grader?: string; grade?: string; certNumber?: string; sealedType?: string; weightOz?: number; photos?: string[] } = {};
+  const kind = text("kind", 10);
+  if (kind !== undefined) {
+    if (!(ITEM_KINDS as readonly string[]).includes(kind)) throw new IntakeRejected("kind must be card, slab or sealed.", 422);
+    out.kind = kind;
+  }
+  for (const [k, max] of [["rarity", 80], ["grader", 20], ["grade", 20], ["certNumber", 40], ["sealedType", 80]] as const) {
+    const v = text(k, max);
+    if (v !== undefined) out[k] = v;
+  }
+  if (out.kind === "slab" && (!out.grader || !out.grade)) throw new IntakeRejected("Slabs need a grader and a grade.", 422);
+  if (out.kind === "sealed" && !out.sealedType) throw new IntakeRejected("Sealed products need a sealed type.", 422);
+  if (r.weightOz != null) {
+    const w = Number(r.weightOz);
+    if (!Number.isFinite(w) || w <= 0 || w > 1600) throw new IntakeRejected("weightOz must be between 0 and 1,600.", 422);
+    out.weightOz = Math.round(w * 10) / 10;
+  }
+  if (r.photos != null) {
+    if (!Array.isArray(r.photos) || r.photos.length > 6 || r.photos.some((u) => typeof u !== "string" || !/^https:\/\//.test(u) || u.length > 2000))
+      throw new IntakeRejected("photos must be up to 6 https URLs.", 422);
+    out.photos = r.photos as string[];
+  }
+  return out;
 }
 
 async function receiveRow(db: PrismaClient, row: SiteIntake, body: string): Promise<Reply> {
