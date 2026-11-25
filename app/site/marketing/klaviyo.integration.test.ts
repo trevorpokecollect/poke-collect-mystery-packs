@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { balanceOf } from "../core/ledger.server";
 import { klaviyoConfig, METRICS, noteShortfall, resetKlaviyoAccountCheck, runKlaviyoSync, type Fetch } from "./klaviyo.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -8,6 +9,7 @@ const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://loc
 const env = { KLAVIYO_PRIVATE_KEY: "pk_test", KLAVIYO_EMAIL_LIST_ID: "LIST1", SITE_ORIGIN: "https://cardbit.com" } as NodeJS.ProcessEnv;
 
 type Call = { method: string; path: string; body: any };
+let smsConfirmed = false;
 function fakeKlaviyo(org = "Cardbit", fail?: (c: Call) => number | null) {
   const calls: Call[] = [];
   const f = (async (input: string, init: RequestInit) => {
@@ -15,6 +17,7 @@ function fakeKlaviyo(org = "Cardbit", fail?: (c: Call) => number | null) {
     calls.push(c);
     const status = fail?.(c) ?? null;
     if (status) return new Response("nope", { status });
+    if (c.path.startsWith("/profiles?")) return new Response(JSON.stringify({ data: smsConfirmed ? [{ attributes: { subscriptions: { sms: { marketing: { consent: "SUBSCRIBED" } } } } }] : [] }), { status: 200 });
     if (c.path === "/accounts") return new Response(JSON.stringify({ data: [{ attributes: { contact_information: { organization_name: org } } }] }), { status: 200 });
     return new Response("", { status: 202 });
   }) as unknown as Fetch;
@@ -150,5 +153,25 @@ describe.skipIf(!url)("site Klaviyo sync", () => {
     const k2 = fakeKlaviyo();
     await runKlaviyoSync({ db, env, fetch: k2.fetch });
     expect((await db.siteKlaviyoEvent.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("SENT");
+  });
+
+  it("subscribes a requested phone for Klaviyo double opt-in and credits 300 Cardbits once confirmed", async () => {
+    process.env.CARDBIT_SITE_WELCOME = "on";
+    const smsEnv = { ...env, KLAVIYO_SMS_LIST_ID: "SMS1" } as NodeJS.ProcessEnv;
+    await db.siteMarketing.update({ where: { customerId: fan.id }, data: { smsPhone: "+12565550123", smsRequestedAt: new Date(Date.now() - 30_000), syncedAt: null } });
+    smsConfirmed = false;
+    const k = fakeKlaviyo();
+    const r1 = await runKlaviyoSync({ db, env: smsEnv, fetch: k.fetch });
+    const sub = k.calls.filter((c) => c.path === "/profile-subscription-bulk-create-jobs").find((c) => c.body.data.relationships.list.data.id === "SMS1")!;
+    expect(sub.body.data.attributes.profiles.data[0].attributes).toMatchObject({ phone_number: "+12565550123" });
+    expect(r1).toMatchObject({ sms: { checked: 1, confirmed: 0 } });
+    expect(await balanceOf(db, fan.id)).toBe(0);
+    smsConfirmed = true;
+    const r2 = await runKlaviyoSync({ db, env: smsEnv, fetch: fakeKlaviyo().fetch });
+    expect(r2).toMatchObject({ sms: { confirmed: 1 } });
+    expect(await balanceOf(db, fan.id)).toBe(300);
+    smsConfirmed = false;
+    await db.siteLedger.deleteMany({ where: { customerId: fan.id } });
+    await db.siteWallet.deleteMany({ where: { customerId: fan.id } });
   });
 });

@@ -9,6 +9,7 @@
 
 import { createHash } from "node:crypto";
 import type { PrismaClient, SiteCustomer, SiteMarketing } from "@prisma/client";
+import { confirmSms } from "../promos/promos.server";
 
 export const METRICS = {
   viewed: "Viewed Item", // R01 Browse Reminder
@@ -88,6 +89,9 @@ const emailOn = (m: Pick<SiteMarketing, "emailOptInAt" | "emailOptOutAt">) => !!
 const smsOn = (m: Pick<SiteMarketing, "smsConfirmedAt" | "smsOptOutAt" | "smsPhone">) =>
   !!m.smsPhone && !!m.smsConfirmedAt && (!m.smsOptOutAt || m.smsOptOutAt < m.smsConfirmedAt);
 
+const smsRequested = (m: Pick<SiteMarketing, "smsRequestedAt" | "smsOptOutAt" | "smsPhone">) =>
+  !!m.smsPhone && !!m.smsRequestedAt && (!m.smsOptOutAt || m.smsOptOutAt < m.smsRequestedAt);
+
 /** Pushes changed consent rows (syncedAt null) to Klaviyo, then marks them synced. */
 export async function syncConsent(deps: KlaviyoDeps, cfg: Config, limit = 100) {
   const now = deps.now?.() ?? new Date();
@@ -106,8 +110,10 @@ export async function syncConsent(deps: KlaviyoDeps, cfg: Config, limit = 100) {
     else if (m.emailOptOutAt || c.closedAt) unsubEmail.push({ type: "profile", attributes: { ...base, subscriptions: { email: { marketing: { consent: "UNSUBSCRIBED" } } } } });
     if (cfg.smsListId && m.smsPhone) {
       const phone = { ...base, phone_number: m.smsPhone };
-      if (smsOn(m) && !c.closedAt)
-        subSms.push({ type: "profile", attributes: { ...phone, subscriptions: { sms: { marketing: { consent: "SUBSCRIBED", consented_at: m.smsConfirmedAt!.toISOString() } } } } });
+      // A requested (not yet confirmed) number is subscribed too: Klaviyo's SMS double opt-in then texts
+      // "Reply YES", and pollSmsConfirmations() credits the reward once Klaviyo shows it confirmed.
+      if ((smsOn(m) || smsRequested(m)) && !c.closedAt)
+        subSms.push({ type: "profile", attributes: { ...phone, subscriptions: { sms: { marketing: { consent: "SUBSCRIBED", consented_at: (m.smsConfirmedAt ?? m.smsRequestedAt)!.toISOString() } } } } });
       else if (m.smsOptOutAt || c.closedAt) unsubSms.push({ type: "profile", attributes: { ...phone, subscriptions: { sms: { marketing: { consent: "UNSUBSCRIBED" } } } } });
     }
   }
@@ -332,6 +338,29 @@ export async function sendEvents(deps: KlaviyoDeps, cfg: Config, limit = 200) {
   return { sent, failed };
 }
 
+/** Credits the text-signup reward once Klaviyo shows the number confirmed (customer replied YES). */
+export async function pollSmsConfirmations(deps: KlaviyoDeps, cfg: Config, limit = 50) {
+  if (!cfg.smsListId) return { checked: 0, confirmed: 0 };
+  const now = deps.now?.() ?? new Date();
+  const since = new Date(now.getTime() - 14 * 86400_000);
+  const rows = await deps.db.siteMarketing.findMany({
+    where: { smsConfirmedAt: null, smsPhone: { not: null }, smsRequestedAt: { gte: since } },
+    orderBy: { smsRequestedAt: "asc" },
+    take: limit,
+  });
+  let confirmed = 0;
+  for (const m of rows) {
+    if (!smsRequested(m)) continue;
+    const q = `/profiles?filter=${encodeURIComponent(`equals(phone_number,"${m.smsPhone}")`)}&additional-fields[profile]=subscriptions`;
+    const res = await call(deps, cfg, "GET", q);
+    const subscribed = (res?.data ?? []).some((p: any) => p?.attributes?.subscriptions?.sms?.marketing?.consent === "SUBSCRIBED");
+    if (!subscribed) continue;
+    const r = await confirmSms(deps.db, m.customerId, m.smsPhone!, now);
+    if (r.credited) confirmed++;
+  }
+  return { checked: rows.length, confirmed };
+}
+
 /** One pass: account check, consent sync, collect, send. Safe to run any time; no-op without the key. */
 export async function runKlaviyoSync(deps: KlaviyoDeps) {
   const cfg = klaviyoConfig(deps.env);
@@ -339,9 +368,10 @@ export async function runKlaviyoSync(deps: KlaviyoDeps) {
   const account = await verifyAccount(deps, cfg);
   if (!account.ok) return { enabled: false as const, reason: "wrong_account", account: account.name };
   const consent = await syncConsent(deps, cfg);
+  const sms = await pollSmsConfirmations(deps, cfg);
   const queued = await collectEvents(deps, cfg);
   const sent = await sendEvents(deps, cfg);
-  return { enabled: true as const, consent, queued, ...sent };
+  return { enabled: true as const, consent, sms, queued, ...sent };
 }
 
 let timer: ReturnType<typeof setInterval> | undefined;
