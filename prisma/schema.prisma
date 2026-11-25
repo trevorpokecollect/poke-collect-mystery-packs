@@ -1811,3 +1811,32 @@ model SiteNexusAlert {
   period    String
   createdAt DateTime @default(now())
 }
+
+// ---- Cardbit standalone site: Discord community (Nov 25 2026) ---------------------------------
+// A customer's linked Discord account, for the site-rank Linked Roles (Rookie → Mythic) on the Cardbit
+// Discord server and the opt-in live pulls feed. Tokens are AES-GCM encrypted and only carry the
+// `identify role_connections.write` scopes. Unlinking deletes the row.
+model SiteDiscordLink {
+  customerId    String    @id
+  discordUserId String    @unique
+  discordName   String?
+  accessToken   String? // encrypted; null once Discord revokes it (customer must link again)
+  refreshToken  String? // encrypted
+  expiresAt     DateTime?
+  pushedLevel   Int? // level last sent to Discord
+  pushedAt      DateTime?
+  shareFeedAt   DateTime? // opted in to the live pulls feed at this time; null = off (default)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// One row per pull posted (or attempted) to the Discord pulls feed, so a pull is never posted twice.
+model SiteDiscordPost {
+  copyId     String   @id
+  customerId String
+  openingId  String
+  postedAt   DateTime?
+  error      String?
+  createdAt  DateTime @default(now())
+  @@index([customerId])
+}

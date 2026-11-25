@@ -385,6 +385,7 @@ export async function eraseCustomer(db: PrismaClient, actor: string, input: { cu
     await tx.siteEmailCode.deleteMany({ where: { email: oldEmail } });
     await tx.siteAppHandoff.deleteMany({ where });
     await tx.siteWant.deleteMany({ where });
+    await tx.siteDiscordLink.deleteMany({ where }); // Discord rank role and pulls feed link
     await tx.siteVisit.updateMany({ where, data: { customerId: null } });
     await tx.siteChatMessage.updateMany({ where, data: { name: "Former Member", body: "[removed]", deletedAt: new Date(), deletedBy: actor } });
     await tx.siteTopup.updateMany({ where, data: { ip: null, userAgent: null, deviceId: null } });
