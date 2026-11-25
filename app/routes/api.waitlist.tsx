@@ -5,7 +5,7 @@ import type { ActionFunctionArgs } from "react-router";
 import db from "../db.server";
 import { clientIp } from "../site/core/auth.server";
 import { json, sameOriginJson, siteOn } from "../site/store/http.server";
-import { FOUNDING_TOTAL, WaitlistError, joinWaitlist } from "../site/waitlist/waitlist.server";
+import { FOUNDING, FOUNDING_TOTAL, WaitlistError, joinWaitlist } from "../site/waitlist/waitlist.server";
 
 export const loader = () => new Response("Not found", { status: 404 });
 
@@ -20,7 +20,7 @@ export async function action({ request }: ActionFunctionArgs) {
       r.status === "already" ? "You're Already on the List. Your Founding Collector Spot Is Saved."
       : r.status === "updated" ? "Phone Number Added to Your Founding Collector Spot."
       : "You're In. Welcome, Founding Collector.";
-    return json({ ok: true, ...r, bonus: FOUNDING_TOTAL, message, ...(r.phoneTaken ? { note: "That Phone Number Is Already on the List, So We Saved Your Email Only." } : {}) });
+    return json({ ok: true, ...r, bonus: FOUNDING_TOTAL, founding: FOUNDING, message, ...(r.phoneTaken ? { note: "That Phone Number Is Already on the List, So We Saved Your Email Only." } : {}) });
   } catch (e) {
     if (e instanceof WaitlistError) return json({ error: e.message, code: e.code }, e.status);
     throw e;

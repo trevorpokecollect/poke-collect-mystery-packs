@@ -319,6 +319,26 @@
     if (!ok) return;
     if (data && data.status === 'already') $('[data-wl-success-title]', ok).textContent = "You're Already on the List";
     if (data && data.note) { const p = d.createElement('p'); p.textContent = data.note; ok.insertBefore(p, $('.wl-share', ok)); }
+    // No phone saved: they have the email part only (400). Say so, and offer to add a number for the other 600.
+    const text = $('[data-wl-success-text]', ok);
+    if (data && data.phoneSaved === false && text) {
+      const f = data.founding || { email: 400, sms: 600 };
+      const fmt = (x) => Number(x).toLocaleString('en-US');
+      text.innerHTML = '';
+      text.append('Watch your inbox. When Cardbit launches, sign up with this email and make your first top-up to unlock ');
+      const b = d.createElement('b'); b.textContent = fmt(f.email) + ' Cardbits'; text.append(b, '. Add your mobile number for text alerts to get ' + fmt(f.sms) + ' more.');
+      if (!$('[data-wl-addphone]', ok)) {
+        const add = d.createElement('button');
+        add.type = 'button'; add.className = 'wl-btn wl-btn--ghost'; add.dataset.wlAddphone = '';
+        add.textContent = 'Add My Number (+' + fmt(f.sms) + ')';
+        add.addEventListener('click', () => {
+          ok.hidden = true; form.hidden = false;
+          const t = wrap.querySelector('.wl-join__title'); if (t) t.hidden = false;
+          form.elements.phone.focus();
+        });
+        $('.wl-share', ok).prepend(add);
+      }
+    }
     form.hidden = true;
     ok.hidden = false;
     const title = wrap.querySelector('.wl-join__title');
