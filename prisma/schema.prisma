@@ -1219,6 +1219,7 @@ model SiteShipmentItem {
   shipment   SiteShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   copyId     String
   title      String
+  image      String?
   slot       Int?
   pocket     Int?
 

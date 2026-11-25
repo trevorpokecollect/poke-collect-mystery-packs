@@ -14,7 +14,8 @@ export function packingSlipHtml(s: SiteShipment & { items: SiteShipmentItem[] })
   const rows = items
     .map((i, n) => {
       const loc = i.slot != null ? `S${i.slot}${i.pocket != null ? `·P${i.pocket}` : ""}` : "—";
-      return `<tr><td class="n">${n + 1}</td><td>${esc(i.title)}</td><td class="loc">${loc}</td><td class="chk">☐</td></tr>`;
+      const img = i.image ? `<img src="${esc(i.image)}" alt="" width="36">` : "";
+      return `<tr><td class="n">${n + 1}</td><td class="img">${img}</td><td>${esc(i.title)}</td><td class="loc">${loc}</td><td class="chk">☐</td></tr>`;
     })
     .join("");
   const fee = s.feeKind === "FREE" ? "Free (over 30 cards)" : s.feeKind === "CARDBITS" ? "600 Cardbits" : "$6.00";
@@ -31,13 +32,13 @@ h1{font-family:${BRAND.heading};font-weight:800;font-size:22px;margin:0 0 4px;co
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{font-family:${BRAND.heading};text-align:left;border-bottom:1px solid ${BRAND.line};padding:6px 4px}
 td{border-bottom:1px solid ${BRAND.line};padding:6px 4px;vertical-align:top}
-td.n{width:28px;color:${BRAND.muted}} td.loc{width:80px;font-family:monospace} td.chk{width:24px;text-align:center}
+td.n{width:28px;color:${BRAND.muted}} td.img{width:44px} td.img img{display:block;border-radius:3px} td.loc{width:80px;font-family:monospace} td.chk{width:24px;text-align:center}
 .foot{margin-top:18px;font-size:12px;color:${BRAND.muted}}
 </style></head><body>
 <div class="top"><div><h1>cardbit</h1><div class="muted">Hosted by Poke-Collect.</div>
 <div class="muted">Shipment ${esc(s.id)}<br>Requested ${esc(s.createdAt.toISOString().slice(0, 10))} · Ship by ${esc(shipBy)} UTC</div></div>
 <div class="addr"><strong>Ship To</strong><br>${esc(a.name)}<br>${esc(a.street1)}${a.street2 ? `<br>${esc(a.street2)}` : ""}<br>${esc(a.city)}, ${esc(a.state)} ${esc(a.zip)}</div></div>
-<table><thead><tr><th>#</th><th>Card</th><th>Location</th><th>✓</th></tr></thead><tbody>${rows}</tbody></table>
+<table><thead><tr><th>#</th><th></th><th>Card</th><th>Location</th><th>✓</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="foot">${s.cardCount} card${s.cardCount === 1 ? "" : "s"} · Shipping: ${esc(fee)}${tracking}<br>Every card is guaranteed authentic. Questions: hello@cardbit.com</div>
 </body></html>`;
 }

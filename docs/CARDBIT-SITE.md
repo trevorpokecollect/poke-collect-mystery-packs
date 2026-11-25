@@ -104,7 +104,13 @@ Flow:
 4. Tracking — Shippo `track_updated` webhook at `/site/webhooks/shippo?token=…`. The handler re-reads
    tracking from Shippo, dedupes, only moves forward. First TRANSIT (or staff `markShipped`) moves
    copies SHIP_LOCKED → SHIPPED and emails "shipped"; DELIVERED emails "delivered".
-5. `shippingQueue` lists paid shipments with `overdue` past the 48-hour promise. `packingSlipHtml`
+5. Fix Card (staff, before a label): `fixShipmentCard(deps, id, { action: "swap" | "remove", copyId, revision })`.
+   Swap takes the lowest filed FOR_SALE copy of the same printing and condition, makes it the customer's
+   SHIP_LOCKED copy, and returns the old copy to stock unfiled (staff re-inspect and re-file it), so the
+   customer never owns two copies. Remove returns the card to the customer's vault; the last card can't be
+   removed (cancel instead); the fee is unchanged. Both claim the shipment row first, so they serialize with
+   Buy Label and with another desk. Pick lines carry the card photo (`SiteShipmentItem.image`).
+6. `shippingQueue` lists paid shipments with `overdue` past the 48-hour promise. `packingSlipHtml`
    prints the card list sorted by slot/pocket.
 
 Contracts the lead implements (`app/site/shipping/types.ts`): `CopyStore` on SiteCopy

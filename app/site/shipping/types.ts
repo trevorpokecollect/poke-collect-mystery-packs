@@ -5,7 +5,13 @@ import type { Prisma } from "@prisma/client";
 
 export type Tx = Prisma.TransactionClient;
 
-export type LockedCopy = { id: string; title: string; slot: number | null; pocket: number | null };
+export type LockedCopy = {
+  id: string;
+  title: string;
+  slot: number | null;
+  pocket: number | null;
+  image: string | null;
+};
 
 export class CopyLockError extends Error {
   constructor(message: string, public unavailable: string[]) {
@@ -23,6 +29,13 @@ export interface CopyStore {
   lockForShipment(tx: Tx, customerId: string, copyIds: string[], shipmentId: string): Promise<LockedCopy[]>;
   /** SHIP_LOCKED -> VAULTED for every copy on the shipment (cancel before label). */
   release(tx: Tx, shipmentId: string, copyIds: string[]): Promise<void>;
+  /**
+   * Fix Card "swap": the picked copy is wrong or damaged. In one transaction, a filed FOR_SALE copy of
+   * the same printing and condition becomes the customer's SHIP_LOCKED copy on this shipment, and the
+   * old copy goes back to stock (FOR_SALE, unfiled so staff re-inspect and re-file it). Ownership moves
+   * with the swap so the customer never holds two copies. Throws CopyLockError when no replacement exists.
+   */
+  swapForShipment(tx: Tx, shipmentId: string, customerId: string, oldCopyId: string, actor: string): Promise<LockedCopy>;
   /** SHIP_LOCKED -> SHIPPED for every copy on the shipment (left the building). Idempotent. */
   markShipped(tx: Tx, shipmentId: string, copyIds: string[]): Promise<void>;
 }

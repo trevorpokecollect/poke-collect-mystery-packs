@@ -207,7 +207,14 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
       if (locked.length !== copyIds.length)
         throw new CopyLockError("Some cards are no longer in your vault.", copyIds.filter((id) => !locked.some((l) => l.id === id)));
       await tx.siteShipmentItem.createMany({
-        data: locked.map((c) => ({ shipmentId: created.id, copyId: c.id, title: c.title, slot: c.slot, pocket: c.pocket })),
+        data: locked.map((c) => ({
+          shipmentId: created.id,
+          copyId: c.id,
+          title: c.title,
+          image: c.image,
+          slot: c.slot,
+          pocket: c.pocket,
+        })),
       });
       let paymentRef = created.paymentRef;
       if (fee.kind === "CARDBITS") {
@@ -269,6 +276,63 @@ export async function cancelShipment(deps: ShippingDeps, shipmentId: string, act
     await tx.siteShipmentEvent.create({
       data: { shipmentId: s.id, kind: "canceled", fromStatus: s.status, toStatus: "CANCELED", actor, detail: { reason } },
     });
+    return tx.siteShipment.findUniqueOrThrow({ where: { id: s.id }, include: { items: true } });
+  });
+}
+
+// ---------- Fix Card (staff, before a label) ----------
+
+export type FixCardInput = {
+  action: "swap" | "remove";
+  copyId: string;
+  /** shipment.updatedAt ISO string the desk last saw; a mismatch means someone else changed it. */
+  revision?: string;
+};
+
+/**
+ * Swap a picked copy for another filed copy of the same printing and condition, or remove it and
+ * return it to the customer's vault. Only while the shipment is PAID (no label yet). The shipment row
+ * is claimed first, so this serializes against buyLabel and against another desk's Fix Card.
+ * The fee is unchanged: a shipment that qualified for free shipping stays free.
+ */
+export async function fixShipmentCard(deps: ShippingDeps, shipmentId: string, input: FixCardInput, actor: string) {
+  return deps.db.$transaction(async (tx) => {
+    const now = deps.now?.() ?? new Date();
+    const s = await tx.siteShipment.findUnique({ where: { id: shipmentId }, include: { items: true } });
+    if (!s) throw new ShippingError("Shipment not found.", "NOT_FOUND");
+    if (input.revision && s.updatedAt.toISOString() !== input.revision)
+      throw new ShippingError("This shipment changed. Refresh it.", "WRONG_STATE");
+    const claim = await tx.siteShipment.updateMany({
+      where: { id: shipmentId, status: "PAID", updatedAt: s.updatedAt },
+      data: { updatedAt: now > s.updatedAt ? now : new Date(s.updatedAt.getTime() + 1) },
+    });
+    if (claim.count !== 1)
+      throw new ShippingError(
+        s.status === "PAID" ? "This shipment changed. Refresh it." : "Fix cards before buying the label.",
+        "WRONG_STATE",
+      );
+    const item = s.items.find((i) => i.copyId === input.copyId);
+    if (!item) throw new ShippingError("That card is no longer on this shipment.", "NOT_FOUND");
+
+    if (input.action === "swap") {
+      const next = await deps.copies.swapForShipment(tx, s.id, s.customerId, item.copyId, actor);
+      await tx.siteShipmentItem.delete({ where: { id: item.id } });
+      await tx.siteShipmentItem.create({
+        data: { shipmentId: s.id, copyId: next.id, title: next.title, image: next.image, slot: next.slot, pocket: next.pocket },
+      });
+      await tx.siteShipmentEvent.create({
+        data: { shipmentId: s.id, kind: "card_swapped", actor, detail: { from: item.copyId, to: next.id, title: next.title } },
+      });
+    } else {
+      if (s.items.length <= 1)
+        throw new ShippingError("This is the last card on the shipment. Cancel the shipment instead.", "WRONG_STATE");
+      await deps.copies.release(tx, s.id, [item.copyId]);
+      await tx.siteShipmentItem.delete({ where: { id: item.id } });
+      await tx.siteShipment.update({ where: { id: s.id }, data: { cardCount: { decrement: 1 } } });
+      await tx.siteShipmentEvent.create({
+        data: { shipmentId: s.id, kind: "card_removed", actor, detail: { copyId: item.copyId, title: item.title, returnedTo: "vault" } },
+      });
+    }
     return tx.siteShipment.findUniqueOrThrow({ where: { id: s.id }, include: { items: true } });
   });
 }

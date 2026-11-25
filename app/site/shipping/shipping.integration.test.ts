@@ -5,6 +5,7 @@ import { LogMailer } from "../email/mailer.server";
 import { sendEmail, sendPendingEmails, shipmentNotifier } from "../email/outbox.server";
 import {
   buyLabel,
+  fixShipmentCard,
   cancelShipment,
   createShipment,
   handleTrackingWebhook,
@@ -18,7 +19,6 @@ import { FeePaymentError, type FeePayer, type Tx } from "./types";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
-const T = "TestSiteCopy";
 
 class FakeShippo implements ShippingProvider {
   labels = 0;
@@ -78,30 +78,36 @@ describe.skipIf(!url)("site shipping (integration)", () => {
 
   beforeAll(async () => {
     execFileSync("npx", ["prisma", "migrate", "deploy"], { env: { ...process.env, DATABASE_URL: url }, stdio: "ignore" });
-    await db.$executeRawUnsafe(`DROP TABLE IF EXISTS "${T}"`);
-    await db.$executeRawUnsafe(
-      `CREATE TABLE "${T}" (id text primary key, title text not null, slot int, pocket int, status text not null, "ownerId" text, "orderId" text, "updatedAt" timestamptz default now())`,
-    );
   });
   afterAll(async () => {
-    await db.$executeRawUnsafe(`DROP TABLE IF EXISTS "${T}"`);
     await db.$disconnect();
   });
   beforeEach(async () => {
     await db.siteShipment.deleteMany();
     await db.siteEmail.deleteMany();
-    await db.$executeRawUnsafe(`DELETE FROM "${T}"`);
+    await db.siteCopyEvent.deleteMany();
+    await db.siteCopy.deleteMany();
+    const copy = (id: string, status: string, owner: string | null, slot: number | null, pocket: number | null, printing: string) =>
+      db.siteCopy.create({
+        data: {
+          id, receiptKey: `rk-${id}`, printingKey: printing, title: `Card ${id}`, game: "pokemon", setName: "Test",
+          number: id, name: `Card ${id}`, finish: "normal", language: "en", condition: "NM",
+          image: `https://img.test/${id}.webp`, slot, pocket, lookKey: `look-${id}`, faceKey: `face-${id}`,
+          status, ownerId: owner,
+        },
+      });
     for (let i = 1; i <= 40; i++)
-      await db.$executeRawUnsafe(
-        `INSERT INTO "${T}" (id, title, slot, pocket, status, "ownerId") VALUES ($1, $2, $3, $4, 'VAULTED', $5)`,
-        `c${i}`, `Card ${i}`, Math.ceil(i / 20), ((i - 1) % 20) + 1, i <= 35 ? "u1" : "u2",
-      );
+      await copy(`c${i}`, "VAULTED", i <= 35 ? "u1" : "u2", 10000 + Math.ceil(i / 20), ((i - 1) % 20) + 1, `p${i}`);
+    // Spares for Fix Card: two filed for-sale copies of c1's printing, one unfiled (not eligible).
+    await copy("spare-a", "FOR_SALE", null, 10005, 2, "p1");
+    await copy("spare-b", "FOR_SALE", null, 10005, 1, "p1");
+    await copy("spare-unfiled", "FOR_SALE", null, null, null, "p1");
     shippo = new FakeShippo();
     balances = new Map([["u1", 1000], ["u2", 100]]);
     mailer = new LogMailer();
     deps = {
       db,
-      copies: sqlCopyStore(T),
+      copies: sqlCopyStore(),
       fees: memoryFees(balances),
       provider: shippo,
       notify: shipmentNotifier({ db, mailer, env: {} }),
@@ -110,8 +116,7 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     };
   });
 
-  const statusOf = async (id: string) =>
-    (await db.$queryRawUnsafe<{ status: string }[]>(`SELECT status FROM "${T}" WHERE id = $1`, id))[0].status;
+  const statusOf = async (id: string) => (await db.siteCopy.findUniqueOrThrow({ where: { id } })).status;
   const base = (over: Partial<Parameters<typeof createShipment>[1]> = {}) => ({
     customerId: "u1",
     customerEmail: "ash@example.com",
@@ -223,6 +228,45 @@ describe.skipIf(!url)("site shipping (integration)", () => {
       "Your Cards Have Shipped",
       "Your Cards Were Delivered",
     ]);
+  });
+
+  it("Fix Card swap: replacement becomes the customer's locked copy, old copy goes back to stock unfiled", async () => {
+    const { shipment } = await createShipment(deps, base());
+    const fixed = await fixShipmentCard(deps, shipment.id, { action: "swap", copyId: "c1", revision: shipment.updatedAt.toISOString() }, "staff:a");
+    expect(fixed.items.map((i) => i.copyId).sort()).toEqual(["c2", "spare-b"]);
+    expect(fixed.items.find((i) => i.copyId === "spare-b")).toMatchObject({ slot: 10005, pocket: 1, image: "https://img.test/spare-b.webp" });
+    const old = await db.siteCopy.findUniqueOrThrow({ where: { id: "c1" } });
+    expect(old).toMatchObject({ status: "FOR_SALE", ownerId: null, orderId: null, slot: null, pocket: null });
+    expect(await db.siteCopy.findUniqueOrThrow({ where: { id: "spare-b" } })).toMatchObject({ status: "SHIP_LOCKED", ownerId: "u1", orderId: shipment.id });
+    expect(await db.siteCopyEvent.count({ where: { copyId: { in: ["c1", "spare-b"] } } })).toBeGreaterThanOrEqual(3);
+    // Stale revision from the desk is refused.
+    await expect(fixShipmentCard(deps, shipment.id, { action: "swap", copyId: "c2", revision: shipment.updatedAt.toISOString() }, "staff:a")).rejects.toMatchObject({ code: "WRONG_STATE" });
+    // Next swap of the same printing takes the other filed spare, never the unfiled one, then runs out.
+    await fixShipmentCard(deps, shipment.id, { action: "swap", copyId: "spare-b" }, "staff:a");
+    await expect(fixShipmentCard(deps, shipment.id, { action: "swap", copyId: "spare-a" }, "staff:a")).rejects.toMatchObject({ name: "CopyLockError" });
+    expect(await db.siteCopy.findUniqueOrThrow({ where: { id: "spare-unfiled" } })).toMatchObject({ status: "FOR_SALE" });
+  });
+
+  it("Fix Card remove: card returns to the customer's vault, last card can't be removed, no fixes after label", async () => {
+    const { shipment } = await createShipment(deps, base());
+    const fixed = await fixShipmentCard(deps, shipment.id, { action: "remove", copyId: "c1" }, "staff:a");
+    expect(fixed).toMatchObject({ cardCount: 1, feeBits: 600 });
+    expect(await db.siteCopy.findUniqueOrThrow({ where: { id: "c1" } })).toMatchObject({ status: "VAULTED", ownerId: "u1", orderId: null, slot: 10001 });
+    await expect(fixShipmentCard(deps, shipment.id, { action: "remove", copyId: "c2" }, "staff:a")).rejects.toMatchObject({ code: "WRONG_STATE" });
+    await buyLabel(deps, shipment.id, "staff:a");
+    await expect(fixShipmentCard(deps, shipment.id, { action: "swap", copyId: "c2" }, "staff:a")).rejects.toMatchObject({ code: "WRONG_STATE" });
+  });
+
+  it("Fix Card and Buy Label at the same moment: one wins cleanly", async () => {
+    const { shipment } = await createShipment(deps, base());
+    await Promise.allSettled([
+      buyLabel(deps, shipment.id, "staff:a"),
+      fixShipmentCard(deps, shipment.id, { action: "swap", copyId: "c1" }, "staff:b"),
+    ]);
+    const s = await db.siteShipment.findUniqueOrThrow({ where: { id: shipment.id }, include: { items: true } });
+    const locked = await db.siteCopy.findMany({ where: { orderId: shipment.id, status: "SHIP_LOCKED" } });
+    expect(locked.map((c) => c.id).sort()).toEqual(s.items.map((i) => i.copyId).sort());
+    expect(shippo.labels).toBeLessThanOrEqual(1);
   });
 
   it("lists overdue paid shipments for staff", async () => {
