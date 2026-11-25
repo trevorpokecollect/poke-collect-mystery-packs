@@ -49,7 +49,8 @@ describe("Cardbit site pages", () => {
     // Ship Together sends a real address and pays the fee in Cardbits; excluded states can't be picked.
     expect(tools).toContain("action:'ship-group',copyIds:item.copyIds,address:item.address,method:'CARDBITS'");
     expect(tools).toContain("const EXCLUDED = ['AL','HI','ID','MN','NV','NY','UT','WA'];");
-    expect(tools).toContain("SHIP_FEE_BITS = 600, FREE_OVER = 30");
+    expect(tools).toContain("SHIP_FEE_BITS = 600, FREE_CARDS = 30, FREE_VALUE = 10000");
+    expect(tools).toContain("const freeShip = (n, v) => n >= FREE_CARDS || v >= FREE_VALUE;");
     // Live Pulls card feed on home (no text ticker), plain footer Policies link.
     expect(js).toContain("window.CardbitSite.api('recent?limit=12')");
     expect(js).toContain("(site() ? pullFeed() : '')");
@@ -61,5 +62,9 @@ describe("Cardbit site pages", () => {
     expect(hero).toContain("gap = (W + ph * 1.64) / count");
     expect(hero).toContain("colL, colR");
     expect(hero).toContain("SITE: the card sinks into an open box");
+    // Round 2: no pack tile tags, Vault market data from /api/portfolio, copy matches the free-shipping rule.
+    expect(js).toContain("(site() ? '' : categoryTags(pack.id,true))");
+    expect(readFileSync("public/site/assets/cardbit-collector-pages.js", "utf8")).toContain("root.CardbitSite?.marketLabel?.(c)");
+    for (const f of ["how-it-works.html", "policies.html"]) expect(readFileSync("app/site/partials/" + f, "utf8")).not.toMatch(/more than 30 cards|over 30 cards/i);
   });
 });
