@@ -27,7 +27,7 @@ export async function action({ request }: ActionFunctionArgs) {
       message = r.credited ? r.credited + " Cardbits Added to Your Wallet." : "Email Preference Saved.";
     } else if (input?.action === "sms") {
       await requestSms(db, customer, input.phone, input.consent, ctx);
-      message = "Text Alerts Requested. Reply YES to the Confirmation Text to Earn Your Reward.";
+      message = "Text Alerts Requested. Reply YES to Our Confirmation Text to Earn Your Reward.";
     } else if (input?.action === "leave") {
       await leave(db, customer, input.channel);
       message = "Preference Turned Off. You Keep Your Earned Cardbits.";

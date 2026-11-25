@@ -33,7 +33,7 @@
  "cardbit-flair.js": "fee874ef12",
  "cardbit-font-licenses.txt": "63a4499fd6",
  "cardbit-giveaway-entry.css": "b395bee872",
- "cardbit-giveaway-entry.js": "5752118884",
+ "cardbit-giveaway-entry.js": "1902fd81ab",
  "cardbit-giveaway-facebook.png": "92a60806e5",
  "cardbit-giveaway-instagram.png": "8b7b006bbe",
  "cardbit-giveaway-prize.webp": "958e7c4590",
@@ -155,7 +155,7 @@
  "cardbit-spin-holo.svg": "3770f57bf1",
  "cardbit-spin-silver.svg": "b1acd1f212",
  "cardbit-storefront.css": "3db8369d6a",
- "cardbit-storefront.js": "66a0cf057f",
+ "cardbit-storefront.js": "ce0d1358e4",
  "cardbit-style.css": "415c4a5c17",
  "cardbit-topups.css": "767d517e06",
  "cardbit-type-atkinson.woff": "c51eccf38d",
@@ -164,6 +164,6 @@
  "cardbit-value-view.js": "46c5fab406",
  "cardbit-values.css": "a2977e5201",
  "cardbit-welcome.css": "f0690aea76",
- "cardbit-welcome.js": "1af4cfd571",
+ "cardbit-welcome.js": "2030e29734",
  "cardbit-wildcard-edition.webp": "3739b2cce2"
 }

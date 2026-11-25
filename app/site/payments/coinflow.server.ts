@@ -6,6 +6,7 @@
 import { createHmac, timingSafeEqual, createHash } from "node:crypto";
 import type { Prisma, PrismaClient, SiteTopup } from "@prisma/client";
 import { applyLedger, balanceOf, TOPUP_PACKAGES } from "../core/ledger.server";
+import { siteFundEntries, voidSiteFundEntries } from "../promos/promos.server";
 
 type Tx = Prisma.TransactionClient;
 type Env = NodeJS.ProcessEnv;
@@ -195,6 +196,7 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
       await applyLedger(tx, { customerId: t.customerId, delta: t.baseBits, kind: "TOPUP", idempotencyKey: `topup:${t.id}:base`, ref: d.id, note: "Coinflow card top-up" });
       if (t.bonusBits > 0)
         await applyLedger(tx, { customerId: t.customerId, delta: t.bonusBits, kind: "BONUS", idempotencyKey: `topup:${t.id}:bonus`, ref: d.id, note: "Top-up bonus" });
+      await siteFundEntries(tx, t.customerId, t.id, t.baseBits); // Daily Giveaway: 1 entry per 100 paid Cardbits
       credited = { t, balance: await balanceOf(tx, t.customerId) };
       return "credited";
     });
@@ -219,6 +221,7 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
       if (want === 0) return "replay";
       const r = await clawBack(tx, t, want, "REFUND", `refund:${d.refundId || paymentId}`);
       if (r.replay) return "replay";
+      await voidSiteFundEntries(tx, t.id);
       await tx.siteTopup.update({
         where: { id: t.id },
         data: { status: "REFUNDED", clawedBits: { increment: r.taken }, owedBits: { increment: r.owed } },
@@ -236,6 +239,7 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
       const want = t.baseBits + t.bonusBits - t.clawedBits;
       const r = want > 0 ? await clawBack(tx, t, want, "CHARGEBACK", `chargeback:${paymentId}`) : { taken: 0, owed: 0, replay: false };
       if (r.replay) return "replay";
+      await voidSiteFundEntries(tx, t.id);
       await tx.siteTopup.update({
         where: { id: t.id },
         data: { status: "CHARGEBACK", clawedBits: { increment: r.taken }, owedBits: { increment: r.owed } },

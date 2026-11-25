@@ -174,7 +174,7 @@
     if (ownPage && route === ownPage) return location.href.split('#')[0];
     if (ownPage) { const home = new URL(root.dataset.storeRoot || '/', location.origin); if (route) home.searchParams.set('cb', route); if (root.dataset.previewTheme) home.searchParams.set('preview_theme_id', root.dataset.previewTheme); return home.href; }
     if (!route && window.CardbitWelcome?.isSample) return window.CardbitWelcome.exit;
-    if (route === 'welcome' && window.CardbitWelcome) return window.CardbitWelcome.entry;
+    if (route === 'welcome' && window.CardbitWelcome && !site()) return window.CardbitWelcome.entry;
     let u=new URL(location.href);u.hash='';
     const nativeSlug = editions[nativeEdition(root?.dataset.productId)]?.slug;
     if (nativeSlug && !['packs/'+nativeSlug,'packs/'+nativeSlug+'/pool','open/'+nativeSlug].includes(route)) {
@@ -1504,7 +1504,7 @@
     detachSeriesPool = () => {};
     if(destroyOpening){destroyOpening();destroyOpening=null;}
     const path=readRoute(),parts=path.split('/').map(s=>{try{return decodeURIComponent(s);}catch{return '';}}),[base,id,sub]=parts;
-    if (base === 'welcome' && window.CardbitWelcome && !window.CardbitWelcome.isSample) {
+    if (base === 'welcome' && window.CardbitWelcome && !window.CardbitWelcome.isSample && !site()) {
       location.replace(window.CardbitWelcome.entry);
       return;
     }
@@ -1521,7 +1521,7 @@
       else if(base==='cardbits' && root.dataset.memberPath && !isDemoShopper()){body=bitsPage();title='My Cardbits';}
       else if(!state && !isMysteryRoute(path)){body='<div class="cb-wrap cb-page">'+(message?empty('Store Unavailable',message,'','','clock')+btn('retry','Try Again','cb-primary'):'<div class="cb-loading" role="status">'+icon('pack',30)+'Loading Packs…</div>')+'</div>';title='Cardbit';}
       else if(!base){body=home();title='Mystery Packs';}
-      else if(base==='welcome' && window.CardbitWelcome?.isSample){body=window.CardbitWelcome.page(state);title='Welcome Rewards';}
+      else if(base==='welcome' && (window.CardbitWelcome?.isSample || (site() && window.CardbitWelcome))){body=window.CardbitWelcome.page(state);title='Welcome Rewards';}
       else if(base==='packs'&&!id){body=packsPage();title='Browse Packs';}
       else if(base==='packs'&&id==='compare'){body=pages.compare(sub,parts[3]);title='Compare Editions';}
       else if(base==='packs'&&sub==='pool'&&appSeriesEnabled({id})){body=seriesPoolPage(id,parts[3]);title=packTitle({id})+' Card Pool';}
@@ -1596,7 +1596,7 @@
     const current=readRoute();
     const ownPage=root?.dataset.defaultRoute;
     if ((ownPage && route !== ownPage) || (!ownPage && route === 'help' && root?.dataset.howPage)) { location.assign(href(route)); return; }
-    if (window.CardbitWelcome && ((route === 'welcome' && !window.CardbitWelcome.isSample) || (!route && window.CardbitWelcome.isSample))) {
+    if (window.CardbitWelcome && !site() && ((route === 'welcome' && !window.CardbitWelcome.isSample) || (!route && window.CardbitWelcome.isSample))) {
       location.assign(href(route));
       return;
     }

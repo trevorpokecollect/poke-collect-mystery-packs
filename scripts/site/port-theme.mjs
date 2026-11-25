@@ -84,6 +84,11 @@ const PATCHES = {
     ["esc([p.tracking.company,'Tracking Number '+p.tracking.number]", "esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number]"],
   ],
   'cardbit-storefront.js': [
+    // Site Welcome Rewards render in the app at /welcome (no on-device sample wallet).
+    ["    if (route === 'welcome' && window.CardbitWelcome) return window.CardbitWelcome.entry;", "    if (route === 'welcome' && window.CardbitWelcome && !site()) return window.CardbitWelcome.entry;"],
+    ["    if (base === 'welcome' && window.CardbitWelcome && !window.CardbitWelcome.isSample) {", "    if (base === 'welcome' && window.CardbitWelcome && !window.CardbitWelcome.isSample && !site()) {"],
+    ["else if(base==='welcome' && window.CardbitWelcome?.isSample){body=window.CardbitWelcome.page(state);", "else if(base==='welcome' && (window.CardbitWelcome?.isSample || (site() && window.CardbitWelcome))){body=window.CardbitWelcome.page(state);"],
+    ["    if (window.CardbitWelcome && ((route === 'welcome' && !window.CardbitWelcome.isSample) || (!route && window.CardbitWelcome.isSample))) {", "    if (window.CardbitWelcome && !site() && ((route === 'welcome' && !window.CardbitWelcome.isSample) || (!route && window.CardbitWelcome.isSample))) {"],
     // Shop Singles: same eager first rows as Chase.
     ["  function shopTile(card, meta) {\n", "  function shopTile(card, meta, eager=false) {\n"],
     ["    return link('shop/'+enc(card.id),frontScan(card,false)+", "    return link('shop/'+enc(card.id),frontScan(card,eager)+"],
@@ -154,6 +159,13 @@ const PATCHES = {
     ["    items.forEach(el => { el.setAttribute('data-hiw-in', ''); io.observe(el); });\n",
      "    items.forEach(el => { el.setAttribute('data-hiw-in', ''); io.observe(el); });\n    /* SITE */ const sweep = () => items.forEach(el => { if (!el.classList.contains('is-in') && el.getBoundingClientRect().top < innerHeight) { el.classList.add('is-in'); io.unobserve(el); } });\n    /* SITE */ requestAnimationFrame(sweep); addEventListener('scroll', sweep, {passive:true}); addEventListener('resize', sweep); addEventListener('load', sweep);\n    /* SITE */ const tick = setInterval(() => { if (!root.isConnected || [...items].every(el => el.classList.contains('is-in'))) clearInterval(tick); else sweep(); }, 700); // IntersectionObserver can stall (hidden or embedded views); timers still run.\n    /* SITE */ addEventListener('beforeprint', () => items.forEach(el => el.classList.add('is-in')));\n"],
   ],
+  'cardbit-giveaway-entry.js': [
+    // Site: path routing (home is "/"), sign-in return_to, email signup lives in Welcome Rewards.
+    ["  function onHome() {\n", "  function onHome() {\n    /* SITE */ if (script.dataset.endpoint === '/api/giveaway') return location.pathname === '/' && !location.hash;\n"],
+    ["      login.searchParams.set('return_url',back.pathname + back.search);", "      login.searchParams.set(/* SITE */ script.dataset.endpoint === '/api/giveaway' ? 'return_to' : 'return_url',back.pathname + back.search);"],
+    ["      extraLink.href = root + '?cb=cardbits';", "      extraLink.href = /* SITE */ script.dataset.endpoint === '/api/giveaway' ? '/cardbits' : root + '?cb=cardbits';"],
+    ["    if (key === 'email') preferences.href = root + '?cb=welcome';", "    if (key === 'email') preferences.href = /* SITE */ script.dataset.endpoint === '/api/giveaway' ? '/welcome' : root + '?cb=welcome';"],
+  ],
   'cardbit-flair.js': [
     // Holo shine sits on the pack image's own box and rotation, not the whole stage (pack page).
     ["    img.after(holo);\n  }\n", "    img.after(holo);\n    /* SITE */ fitHolo(img, holo);\n  }\n  /* SITE */ function fitHolo(img, holo) {\n    const sync = () => {\n      const host = img.parentElement;\n      if (!host || !holo.isConnected || !img.offsetWidth) return;\n      const t = getComputedStyle(img).transform;\n      const turned = t && t !== 'none';\n      if (!turned && img.offsetWidth >= host.clientWidth - 2 && img.offsetHeight >= host.clientHeight - 2) return;\n      Object.assign(holo.style, {inset:'auto', left:img.offsetLeft+'px', top:img.offsetTop+'px', width:img.offsetWidth+'px', height:img.offsetHeight+'px', transform:turned ? t : ''});\n    };\n    sync();\n    if (!img.complete) img.addEventListener('load', sync, {once:true});\n    if (window.ResizeObserver) new ResizeObserver(sync).observe(img);\n  }\n"],
@@ -214,6 +226,10 @@ const engine = new Liquid({ root: [join(theme, 'snippets')], extname: '.liquid',
 engine.registerFilter('asset_url', name => `/site/assets/${name}`);
 engine.registerFilter('stylesheet_tag', () => ''); // the shell links stylesheets itself
 engine.registerFilter('image_url', v => v);
+// Theme translations (en.default.json allows comments).
+const LOCALE = JSON.parse(readFileSync(join(theme, 'locales/en.default.json'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''));
+engine.registerFilter('t', key => String(key).split('.').reduce((o, k) => o?.[k], LOCALE) ?? key);
+engine.registerFilter('sha256', v => createHash('sha256').update(String(v)).digest('hex'));
 engine.registerTag('schema', { parse(_t, rem) { this.tpls = []; const s = this.liquid.parser.parseStream(rem).on('tag:endschema', function () { s.stop(); }).on('template', () => {}).on('end', () => { throw new Error('schema not closed'); }); s.start(); }, render() { return ''; } });
 engine.registerTag('doc', { parse(_t, rem) { const s = this.liquid.parser.parseStream(rem).on('tag:enddoc', function () { s.stop(); }).on('template', () => {}); s.start(); }, render() { return ''; } });
 const ctx = { routes: { root_url: '/' }, section: { settings: {} }, pages: {}, theme: { role: 'main' }, shop: {} };
@@ -231,11 +247,17 @@ const PAGE_COPY = {
   'how-it-works.html': [
     ['<b>Free Shipping</b> on Vault shipments of more than 30 cards.', '<b>Free Shipping</b> on Vault shipments of 30 or more cards, or 10,000 Cardbits or more in card value.'],
     ['Vault shipments of more than 30 cards ship free.', 'Vault shipments of 30 or more cards, or 10,000 Cardbits or more in card value, ship free.'],
+    // Welcome Rewards on the site: text-alert Cardbits are credited after the number confirms (Trevor, Nov 25).
+    ['then add text alerts for <strong>300 more</strong>.</p>', 'then add text alerts for <strong>300 more</strong> once you confirm your number by text.</p>'],
+    // Daily Giveaway on the site: email news + one Whatnot follow unlock entry; referrals aren't offered on the site yet.
+    ['Join once a day for your free entry, then earn bonus entries:', 'Join once a day for your free entry (Cardbit email news must be on, and you follow us on Whatnot once), then earn bonus entries:'],
+    ['          <li>Refer a friend</li>\n', ''],
   ],
   'policies.html': [
     ['$6 or 600 Cardbits, free over 30 cards.', '$6 or 600 Cardbits, free at 30+ cards or 10,000 Cardbits of card value.'],
     ['<div class="is-free"><b>Free</b><span>Over 30 cards</span></div>', '<div class="is-free"><b>Free</b><span>30+ cards or 10,000 Cardbits value</span></div>'],
     ['shipments of more than 30 cards ship free.', 'shipments of 30 or more cards, or of cards worth 10,000 Cardbits or more in total, ship free.'],
+    ['Signup rewards are one per person, email and phone number.', 'Signup rewards are one per person, email and phone number. Text-alert Cardbits are added after you confirm your number by replying YES to our text.'],
     ['<strong>Free shipping</strong> for any single shipment of more than 30 cards.', '<strong>Free shipping</strong> for any single shipment of 30 or more cards, or of cards worth 10,000 Cardbits or more in total.'],
   ],
 };
@@ -247,6 +269,25 @@ writeFileSync(join(outPartials, 'how-it-works.html'), how);
 
 const policySettings = JSON.parse(readFileSync(join(theme, 'templates/index.policies.json'), 'utf8')).sections.policies.settings;
 writeFileSync(join(outPartials, 'policies.html'), patch('policies.html', await section('cardbit-policies.liquid', policySettings), PAGE_COPY['policies.html']));
+
+// Daily Giveaway window and home pill (the site's own drawing, /api/giveaway). Referral entries are not
+// wired on the site yet, so that bonus method is left out rather than promised. Paid-Cardbit entries are live.
+{
+  const prev = { shop: ctx.shop, theme: ctx.theme, request: ctx.request };
+  Object.assign(ctx, { shop: { permanent_domain: 'hhuuev-81.myshopify.com' }, theme: { id: 168753070242, role: 'main' }, request: { page_type: 'index' } });
+  let html = await engine.parseAndRender(readFileSync(join(theme, 'sections', 'cardbit-giveaway-placement.liquid'), 'utf8'), { ...ctx, section: { settings: {} } });
+  Object.assign(ctx, prev);
+  html = html.replace(/<script src="\/site\/assets\/cardbit-giveaway-entry\.js"[\s\S]*?><\/script>/, '<script src="/site/assets/cardbit-giveaway-entry.js" data-cardbit-entry data-account="site" data-endpoint="/api/giveaway" data-root="/" data-login="/sign-in" defer></script>');
+  for (const method of ['referral']) {
+    const re = new RegExp('<button type="button" class="cbg-method cbg-' + method + '"[\\s\\S]*?</button>');
+    if (!re.test(html)) throw new Error('giveaway method ' + method + ' markup changed');
+    html = html.replace(re, '');
+  }
+  html = html.replace('Email Marketing Must Be Enabled.', 'Cardbit Email News Must Be On (Welcome Rewards).');
+  html = html.replace('Enable Email Marketing in Your Cardbit Account to Unlock Entry.', 'Join Cardbit Email News in Welcome Rewards to Unlock Entry.').replace('>Email Preferences<', '>Join Email News<');
+  if (!html.includes('data-cbg-dialog') || /apps\/packs|account_login|customer_authentication/.test(html)) throw new Error('giveaway: unported markup');
+  writeFileSync(join(outPartials, 'giveaway.html'), html.trim() + '\n');
+}
 
 // Rewards and Leaderboard: signed-in and signed-out variants. %%FIRST%%/%%LAST%% are filled per request.
 const member = { first_name: '%%FIRST%%', last_name: '%%LAST%%' };

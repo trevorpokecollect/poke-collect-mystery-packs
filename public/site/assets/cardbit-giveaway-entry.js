@@ -61,6 +61,7 @@
     return new Date(afternoon.getTime() + hoursUntilEight * 3600000).toISOString();
   }
   function onHome() {
+    /* SITE */ if (script.dataset.endpoint === '/api/giveaway') return location.pathname === '/' && !location.hash;
     const p = new URLSearchParams(location.search), route = p.get('cb'), surface = p.get('view');
     return (!surface || surface === 'daily-giveaway') && (!route || route === 'home') &&
       (!location.hash || /^#(?:home|daily-giveaway)?\/?$/i.test(location.hash));
@@ -196,7 +197,7 @@
     join.setAttribute('aria-disabled', String(Boolean(already || writing || ['loading','paused','held'].includes(key))));
     const preferences = el('preferences');
     preferences.hidden = key !== 'email';
-    if (key === 'email') preferences.href = root + '?cb=welcome';
+    if (key === 'email') preferences.href = /* SITE */ script.dataset.endpoint === '/api/giveaway' ? '/welcome' : root + '?cb=welcome';
     if (lock || view?.whatnotDone) { eligibleForm = false; el('eligibility').hidden = true; }
     if (lock || (!view?.entered && activeExtra !== 'purchase')) { activeExtra = ''; el('extra').hidden = true; }
     const done = { whatnot:view?.whatnotDone, facebook:view?.claimed?.includes('facebook'),
@@ -299,7 +300,7 @@
       } else if (!sample) detail = t.no_ref;
     } else if (kind === 'purchase') {
       heading = t.purchase; detail = t.buy_info;
-      extraLink.href = root + '?cb=cardbits'; extraLink.textContent = t.view_topups; extraLink.hidden = false;
+      extraLink.href = /* SITE */ script.dataset.endpoint === '/api/giveaway' ? '/cardbits' : root + '?cb=cardbits'; extraLink.textContent = t.view_topups; extraLink.hidden = false;
     } else {
       heading = t.share_title; detail = sample ? t.share_sample : t.share_alt;
       if (sample) { extraButton.hidden = false; extraButton.textContent = t.share_try; extraButton.dataset.action = 'shared'; }
@@ -318,7 +319,7 @@
     if (lock === 'signin') {
       const back = new URL(location.href); back.searchParams.set('giveaway','open');
       const login = new URL(script.dataset.login,location.origin);
-      login.searchParams.set('return_url',back.pathname + back.search);
+      login.searchParams.set(/* SITE */ script.dataset.endpoint === '/api/giveaway' ? 'return_to' : 'return_url',back.pathname + back.search);
       location.assign(login.href); return;
     }
     if (lock === 'email' || lock === 'error') { notice(''); await load(); return; }

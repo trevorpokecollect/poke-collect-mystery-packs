@@ -11,6 +11,7 @@
 import { protectionScript } from "./payments/coinflow.server";
 import manifest from "./assets-manifest.json";
 import howItWorks from "./partials/how-it-works.html?raw";
+import giveaway from "./partials/giveaway.html?raw";
 import siteStoreSource from "../../public/site/js/cardbit-site-store.js?raw";
 import siteCssSource from "../../public/site/css/cardbit-site.css?raw";
 import siteAuthSource from "../../public/site/js/cardbit-site-auth.js?raw";
@@ -51,6 +52,8 @@ export const STYLES = [
   "cardbit-polish.css",
   "cardbit-flair.css",
   "cardbit-portfolio.css",
+  "cardbit-welcome.css",
+  "cardbit-giveaway-entry.css",
 ];
 const SCRIPTS = [
   "cardbit-collector-rules.js",
@@ -66,6 +69,7 @@ const SCRIPTS = [
   "cardbit-collector-pages.js",
   "cardbit-flair.js",
   "cardbit-how-it-works.js",
+  "WELCOME",
   "cardbit-storefront.js",
   "cardbit-rewards-nav.js",
   "cardbit-market-chart.js",
@@ -123,7 +127,9 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
   const scripts = SCRIPTS.map((name) =>
     name === "SITE_STORE"
       ? `<script src="/site/js/cardbit-site-store.js?v=${SITE_STORE_V}" defer></script>`
-      : name === "PORTFOLIO"
+      : name === "WELCOME"
+        ? `<script src="${assetUrl("cardbit-welcome.js")}" data-cardbit-welcome data-endpoint="/api/welcome" data-policies="/policies" defer></script>`
+        : name === "PORTFOLIO"
         ? `<script src="${assetUrl("cardbit-portfolio.js")}" data-portfolio-endpoint="/api/portfolio" defer></script>`
         : `<script src="${assetUrl(name)}" defer></script>`,
   ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>`;
@@ -161,6 +167,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     </div>
     <noscript><p>Enable JavaScript to Browse the Cards or Open a Pack.</p><a href="mailto:Support@cardbit.com">Support@cardbit.com</a></noscript>
     ${howItWorks}
+    ${giveaway.replace(/src="\/site\/assets\/([^"?]+)"/g, (m, name) => (files[name] ? `src="${assetUrl(name)}"` : m))}
   </body>
 </html>`;
 }

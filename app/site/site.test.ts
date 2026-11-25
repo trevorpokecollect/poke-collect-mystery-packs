@@ -32,6 +32,11 @@ describe("Cardbit site pages", () => {
     expect(rulesHtml).toContain('class="cb-nav"');
     expect(rulesHtml).toContain('class="cb-footer"');
     expect(rulesHtml).not.toContain("hello@cardbit.com");
+    // Welcome Rewards + Daily Giveaway are wired to the site APIs.
+    const home = await (await splat(args("")) as Response).text();
+    expect(home).toContain('data-endpoint="/api/giveaway"');
+    expect(home).toContain('data-cardbit-welcome data-endpoint="/api/welcome"');
+    expect(home).not.toContain("cbg-referral");
     for (const path of ["open/cobalt", "welcome"]) expect((await splat(args(path)) as Response).status).toBe(200);
   });
 

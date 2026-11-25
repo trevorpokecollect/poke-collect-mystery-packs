@@ -11,9 +11,9 @@
 // enable the site's CardbitGiveawayConfig row.
 import type { Prisma, PrismaClient, SiteCustomer } from "@prisma/client";
 import { applyLedger } from "../core/ledger.server";
-import { activeRound, lockDesk, sha } from "../../giveaway/entries.server";
+import { activeRound, lockDesk, post, sha } from "../../giveaway/entries.server";
 import { drawWinners, snapshotHash } from "../../giveaway/draw";
-import { drawWindow, giveawayTotals, PRIZE, rulesLink, STATES } from "../../giveaway/rules";
+import { drawWindow, giveawayTotals, paidEntries, PRIZE, rulesLink, STATES } from "../../giveaway/rules";
 
 export const SITE_GIVEAWAY_SHOP = "cardbit-site";
 export const WELCOME = { email: 200, sms: 300 } as const;
@@ -205,6 +205,29 @@ export async function settleDueSiteRounds(db: PrismaClient, clock = () => new Da
     if (done) closed++;
   }
   return closed;
+}
+
+/** Official Rules: 1 entry per 100 paid Cardbits (base top-up only, never the bonus). Inside the credit transaction. */
+export async function siteFundEntries(tx: Tx, customerId: string, topupId: string, paidBits: number) {
+  const entries = paidEntries(paidBits);
+  if (!entries) return;
+  const shop = SITE_GIVEAWAY_SHOP;
+  await lockDesk(tx, shop);
+  if (!(await tx.cardbitGiveawayConfig.findUnique({ where: { shop } }))?.enabled) return;
+  const { day } = await activeRound(tx, new Date(), shop);
+  await post(tx, { day, customerId, key: "fund:" + topupId, kind: "purchase", entries }, shop);
+}
+
+/** A refund or chargeback voids that top-up's entries (a closed drawing's snapshot stays as drawn). */
+export async function voidSiteFundEntries(tx: Tx, topupId: string) {
+  const shop = SITE_GIVEAWAY_SHOP;
+  await lockDesk(tx, shop);
+  const event = await tx.cardbitGiveawayEvent.findUnique({ where: { shop_key: { shop, key: "fund:" + topupId } } });
+  if (!event || event.voided) return;
+  await tx.cardbitGiveawayEvent.update({ where: { id: event.id }, data: { voided: true } });
+  const round = await tx.cardbitGiveawayRound.findUnique({ where: { shop_day: { shop, day: event.day } } });
+  if (round?.closedAt)
+    await tx.cardbitGiveawayAudit.create({ data: { shop, actor: "payment-review", action: "closed-draw-funding-review", detail: event.day + " " + event.key } });
 }
 
 /** Staff settings for the site's drawing (Card Broker desk, server-to-server). */

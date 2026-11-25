@@ -80,3 +80,9 @@ it redirects to `cardbit://signed-in?code=<one-time code>` (2 minutes, single us
 The app then calls `POST /api/app/session {code, verifier}` → `{token, expiresAt, state}` plus the `cb_site`
 cookie; the token is an ordinary `SiteSession` (90 days). Table `SiteAppHandoff`, migration
 `20261125090000_site_app_handoff`. No change to existing sign-in code. App repo: private `trevorpokecollect/cardbit-ios`.
+
+### Welcome Rewards and Daily Giveaway (Nov 25)
+- `/api/welcome` (app/site/promos/promos.server.ts): email news 200 Cardbits credited at signup (BONUS, `welcome:email:<id>`); text alerts 300 credited only when the number confirms (`confirmSms`, via `POST /internal/site-promos {action:"sms-confirmed"}` from the texting provider bridge). One reward per channel per account; a confirmed number stays on its account. Consent lives in `SiteMarketing`. Off unless `CARDBIT_SITE_WELCOME=on`.
+- `/welcome` page and the home band come from `scripts/site/overrides/cardbit-welcome.js` (replaces the theme's on-device preview).
+- `/api/giveaway`: the Shopify giveaway engine with shop key `cardbit-site` (the site runs its own daily drawing). Requires Cardbit email news on, one Whatnot visit, and an unfrozen account. 1 entry per 100 paid Cardbits on Coinflow top-ups (voided on refund or chargeback). Elapsed rounds settle lazily on GET and pay the winner's site wallet (REWARD, `giveaway:<day>`). Closed until staff send `POST /internal/site-promos {action:"giveaway-settings", enabled:true, rulesUrl, freeInstructions}`.
+- Not on the site yet: referral entries (the method card is removed) and a winner email.

@@ -6,7 +6,7 @@ import { activeRound, enterOrBonus } from "../../giveaway/entries.server";
 import { customerView } from "../../giveaway/service.server";
 import {
   SITE_GIVEAWAY_SHOP as shop, confirmSms, joinEmail, leave, PromoError, requestSms, setSiteGiveaway,
-  settleDueSiteRounds, subscribedToEmail, usPhone, welcomeView,
+  settleDueSiteRounds, siteFundEntries, subscribedToEmail, usPhone, voidSiteFundEntries, welcomeView,
 } from "./promos.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -89,5 +89,17 @@ describe.skipIf(!url)("site promos", () => {
     expect(closed.participantCount).toBe(1);
     expect(await balanceOf(db, a.id)).toBe(200 + 10000);
     expect(await settleDueSiteRounds(db)).toBe(0);
+  });
+
+  it("adds 1 entry per 100 paid Cardbits only while entries are open, and voids them on refund", async () => {
+    await db.$transaction((tx) => siteFundEntries(tx, a.id, "t-closed", 1000));
+    expect(await db.cardbitGiveawayEvent.count({ where: { shop } })).toBe(0);
+    await setSiteGiveaway(db, "test", { enabled: true, rulesUrl: "https://cardbit.com/official-rules", freeInstructions: "Mail a postcard." });
+    await db.$transaction((tx) => siteFundEntries(tx, a.id, "t1", 1050));
+    await db.$transaction((tx) => siteFundEntries(tx, a.id, "t1", 1050));
+    const e = await db.cardbitGiveawayEvent.findUniqueOrThrow({ where: { shop_key: { shop, key: "fund:t1" } } });
+    expect(e).toMatchObject({ kind: "purchase", entries: 10, voided: false });
+    await db.$transaction((tx) => voidSiteFundEntries(tx, "t1"));
+    expect((await db.cardbitGiveawayEvent.findUniqueOrThrow({ where: { id: e.id } })).voided).toBe(true);
   });
 });
