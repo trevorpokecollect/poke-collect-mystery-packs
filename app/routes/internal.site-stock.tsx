@@ -1,6 +1,6 @@
 // Card Broker "Inventory" tab ↔ site stock. Server-to-server only (pairing secret).
 // GET  ?status=&q=&cursor=&limit=  or POST {status?, q?, slot?, after?, limit?} (no intent) → listStock()
-// POST {intent:"price", printingKey, priceBits, buybackBits}
+// POST {intent:"price", printingKey, condition, priceBits|null, buybackBits|null}
 //      {intent:"pool", copyIds, packId} | {intent:"unpool", copyIds}
 //      {intent:"pack", packId, priceBits, cardsPerPack, active}
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
@@ -49,8 +49,8 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     switch (b.intent) {
       case "price": {
-        const p = await setPrice(db, actor, String(b.printingKey || ""), b.priceBits, b.buybackBits);
-        return Response.json({ ok: true, price: { printingKey: p.printingKey, priceBits: p.retailBits, buybackBits: p.buybackBits } });
+        const p = await setPrice(db, actor, String(b.printingKey || ""), String(b.condition || ""), b.priceBits, b.buybackBits);
+        return Response.json({ ok: true, price: { printingKey: String(b.printingKey), condition: String(b.condition), priceBits: p.retailBits, buybackBits: p.buybackBits } });
       }
       case "pool":
         return Response.json({ ok: true, ...(await movePool(db, actor, (b.copyIds as string[]) || [], String(b.packId || "") || "missing")) });

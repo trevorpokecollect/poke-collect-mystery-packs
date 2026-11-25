@@ -41,8 +41,11 @@ export function lookKey(r: Pick<SiteIntake, "game" | "setName" | "number">) {
 }
 export const faceKey = (name: string) =>
   digest(fold(name).normalize("NFKD").replace(/[^\p{L}\p{N}]/gu, ""));
-export const printingKey = (r: SiteIntake) =>
+export const printingKey = (r: Pick<SiteIntake, "game" | "setName" | "number" | "finish" | "language">) =>
   digest([lookKey(r), fold(r.finish), fold(r.language)]);
+
+/** Price identity: printing AND condition (NM and LP copies are priced separately). */
+export const priceKey = (printing: string, condition: string) => `${printing}|${fold(condition)}`;
 
 export const shelfAddress = (slot: number) => ({
   shelf: Math.ceil(slot / 100),
@@ -92,9 +95,49 @@ type Placed = { id: string; slot: number; pocket: number };
 type Reply = { received: number; copies: Placed[] };
 
 /** Idempotent receipt. Same eventKey + same body returns the original reply; a different body is a 409. */
+/**
+ * Optional Card Broker price on a receipt or price feed, in Cardbits (100 = $1, so cents = Cardbits).
+ * Card Broker owns prices; each push replaces the printing's current price and buyback offer.
+ */
+export function intakePrice(raw: unknown): { retailBits: number | null; buybackBits: number | null } | null {
+  const r = raw as Record<string, unknown>;
+  if (r?.priceBits === undefined && r?.buybackBits === undefined) return null;
+  const v = (k: string) => {
+    const x = r[k];
+    if (x === null || x === undefined) return null;
+    if (!Number.isSafeInteger(x) || (x as number) < 1 || (x as number) > 10_000_000)
+      throw new IntakeRejected(`${k} must be a whole number of Cardbits from 1 to 10,000,000, or null.`, 422);
+    return x as number;
+  };
+  const retailBits = v("priceBits");
+  const buybackBits = v("buybackBits");
+  if (retailBits != null && buybackBits != null && buybackBits > retailBits)
+    throw new IntakeRejected("buybackBits can't be higher than priceBits.", 422);
+  return { retailBits, buybackBits };
+}
+
+export async function applyBrokerPrice(
+  db: PrismaClient | Prisma.TransactionClient,
+  key: string,
+  price: { retailBits: number | null; buybackBits: number | null },
+) {
+  await db.sitePrice.upsert({
+    where: { printingKey: key },
+    create: { printingKey: key, ...price, source: "cardbroker" },
+    update: { ...price, source: "cardbroker" },
+  });
+}
+
 export async function receiveSiteIntake(db: PrismaClient, raw: unknown): Promise<Reply> {
   const row = validateIntake(raw);
+  const price = intakePrice(raw); // not part of the receipt digest: a re-sent price is not a conflict
   const body = digest(row);
+  const reply = await receiveRow(db, row, body);
+  if (price) await applyBrokerPrice(db, priceKey(printingKey(row), row.condition), price);
+  return reply;
+}
+
+async function receiveRow(db: PrismaClient, row: SiteIntake, body: string): Promise<Reply> {
   return db.$transaction(
     async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;

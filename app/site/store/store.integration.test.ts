@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { balanceOf, postLedger } from "../core/ledger.server";
-import { receiveSiteIntake } from "../core/stock.server";
+import { priceKey, receiveSiteIntake } from "../core/stock.server";
 import { drawCopies, singleKey, storeAction, storeState, StoreError } from "./store.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -50,7 +50,8 @@ describe.skipIf(!url)("site store", () => {
 
   it("sells a priced single once, lists stock grouped by printing", async () => {
     await receiveSiteIntake(db, card("st:1", 2, "Pikachu"));
-    const copy = (await db.siteCopy.findFirstOrThrow()).printingKey;
+    const first = await db.siteCopy.findFirstOrThrow();
+    const copy = priceKey(first.printingKey, first.condition);
     let state = await storeState(db, null);
     expect(state.singles).toHaveLength(0); // unpriced stays hidden
     await db.sitePrice.create({ data: { printingKey: copy, retailBits: 300, buybackBits: 200 } });
@@ -95,10 +96,18 @@ describe.skipIf(!url)("site store", () => {
     expect(state.openings.find((o) => o.id === sealed.id)?.cards).toHaveLength(1);
   });
 
+  it("takes Card Broker's price from the receipt, per condition", async () => {
+    await receiveSiteIntake(db, { ...card("st:4", 1, "Abra"), priceBits: 250, buybackBits: 200 });
+    await receiveSiteIntake(db, { ...card("st:5", 1, "Abra"), condition: "Lightly Played", priceBits: 180, buybackBits: 144 });
+    const s = await storeState(db, null);
+    expect(s.singles.map((x) => [x.condition, x.priceBits, x.buybackBits]).sort()).toEqual([["Lightly Played", 180, 144], ["Near Mint", 250, 200]]);
+    await expect(receiveSiteIntake(db, { ...card("st:6", 1, "Abra"), priceBits: 100, buybackBits: 200 })).rejects.toThrow();
+  });
+
   it("rejects spending without enough Cardbits and on frozen accounts", async () => {
     await receiveSiteIntake(db, card("st:3", 1, "Mew"));
     const c = await db.siteCopy.findFirstOrThrow();
-    await db.sitePrice.create({ data: { printingKey: c.printingKey, retailBits: 9000 } });
+    await db.sitePrice.create({ data: { printingKey: priceKey(c.printingKey, c.condition), retailBits: 9000 } });
     await expect(storeAction(db, customer, { action: "buy", requestId: randomUUID(), id: singleKey(c) })).rejects.toMatchObject({ code: "insufficient_bits" });
     const frozen = await db.siteCustomer.update({ where: { id: customer.id }, data: { frozenAt: new Date() } });
     await expect(storeAction(db, frozen, { action: "buy", requestId: randomUUID(), id: singleKey(c) })).rejects.toMatchObject({ code: "account_frozen" });

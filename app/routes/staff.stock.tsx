@@ -6,7 +6,8 @@ import type { Prisma } from "@prisma/client";
 import prisma from "../db.server";
 import { currentCustomer } from "../site/core/auth.server";
 import { esc } from "../site/core/simple-page";
-import { shelfAddress } from "../site/core/stock.server";
+import { priceKey, shelfAddress } from "../site/core/stock.server";
+import { DeskError, setPrice } from "../site/core/stock-desk.server";
 import { notFound, sameOrigin, staffUser } from "../site/shipping/staff.server";
 
 const STATUSES = ["FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"];
@@ -37,18 +38,12 @@ export async function action({ request }: ActionFunctionArgs) {
   const back = String(fd.get("back") || "/staff/stock");
   let note = "";
   if (intent === "price") {
-    const printingKey = String(fd.get("printingKey") || "");
-    const retailBits = bitsOrNull(fd.get("retailBits"));
-    const buybackBits = bitsOrNull(fd.get("buybackBits"));
-    if (!printingKey || Number.isNaN(retailBits) || Number.isNaN(buybackBits)) note = "Enter whole Cardbits amounts.";
-    else if (retailBits != null && buybackBits != null && buybackBits > retailBits) note = "Buyback can't be higher than the price.";
-    else {
-      await prisma.sitePrice.upsert({
-        where: { printingKey },
-        create: { printingKey, retailBits, buybackBits, source: `staff:${staff.email}` },
-        update: { retailBits, buybackBits, source: `staff:${staff.email}` },
-      });
-      note = "Price saved.";
+    try {
+      await setPrice(prisma, `staff:${staff.email}`, String(fd.get("printingKey") || ""), String(fd.get("condition") || ""), fd.get("retailBits"), fd.get("buybackBits"));
+      note = "Price saved. Card Broker's next price update replaces it.";
+    } catch (e) {
+      if (!(e instanceof DeskError)) throw e;
+      note = e.message;
     }
   } else if (intent === "pool" || intent === "unpool") {
     const ids = fd.getAll("copyId").map(String).filter(Boolean).slice(0, 500);
@@ -110,7 +105,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prisma.siteCopy.groupBy({ by: ["packId"], where: { status: "POOLED" }, _count: { _all: true } }),
   ]);
   const prices = new Map(
-    (await prisma.sitePrice.findMany({ where: { printingKey: { in: [...new Set(rows.map((r) => r.printingKey))] } } })).map((p) => [p.printingKey, p]),
+    (await prisma.sitePrice.findMany({ where: { printingKey: { in: [...new Set(rows.map((r) => priceKey(r.printingKey, r.condition)))] } } })).map((p) => [p.printingKey, p]),
   );
   const count = (s: string) => counts.find((c) => c.status === s)?._count._all ?? 0;
   const back = esc(url.pathname + url.search.replace(/([?&])note=[^&]*&?/, "$1"));
@@ -131,13 +126,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const body = rows.length
     ? rows
         .map((r) => {
-          const p = prices.get(r.printingKey);
+          const p = prices.get(priceKey(r.printingKey, r.condition));
           const pickable = (r.status === "FOR_SALE" || r.status === "POOLED") && !r.ownerId;
           return `<tr><td>${pickable ? `<input type="checkbox" name="copyId" value="${esc(r.id)}" form="bulk" aria-label="Select ${esc(r.title)}">` : ""}</td>
 <td>${r.image ? `<img src="${esc(r.image)}" alt="" width="40" loading="lazy">` : ""}</td>
 <td><b>${esc(r.title)}</b><br><span class="m">${esc([r.setName, r.number, r.finish, r.language, r.condition].filter(Boolean).join(" · "))}</span></td>
 <td>${esc(loc(r.slot, r.pocket))}</td><td>${esc(r.status)}${r.packId ? `<br><span class="m">${esc(r.packId)}</span>` : ""}</td>
-<td><form method="post" class="pr"><input type="hidden" name="intent" value="price"><input type="hidden" name="printingKey" value="${esc(r.printingKey)}"><input type="hidden" name="back" value="${back}">
+<td><form method="post" class="pr"><input type="hidden" name="intent" value="price"><input type="hidden" name="printingKey" value="${esc(r.printingKey)}"><input type="hidden" name="condition" value="${esc(r.condition)}"><input type="hidden" name="back" value="${back}">
 <input name="retailBits" value="${p?.retailBits ?? ""}" placeholder="Price" inputmode="numeric" size="6" aria-label="Price in Cardbits">
 <input name="buybackBits" value="${p?.buybackBits ?? ""}" placeholder="Buyback" inputmode="numeric" size="6" aria-label="Buyback in Cardbits"><button>Save</button></form></td>
 <td class="m">${r.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC</td></tr>`;
@@ -159,7 +154,7 @@ button{padding:8px 14px;border:0;border-radius:8px;background:#4057F5;color:#fff
 ${note ? `<p class="note" role="status">${esc(note)}</p>` : ""}
 <h2>Packs</h2><p class="m">Prices in Cardbits (100 = $1). A pack can only be bought while it's on sale and its pool has enough cards.</p>${packRows}
 <h2>Cards</h2><form class="search"><input name="q" value="${esc(q)}" placeholder="Search name, set or number" aria-label="Search"><input type="hidden" name="status" value="${esc(status)}"><button>Search</button></form>
-<div>${chips}</div><p class="m">${total.toLocaleString("en-US")} card${total === 1 ? "" : "s"}${total > rows.length ? `, newest ${rows.length} shown` : ""}. Singles show in the shop once their printing has a price. Prices apply to every copy of that printing.</p>
+<div>${chips}</div><p class="m">${total.toLocaleString("en-US")} card${total === 1 ? "" : "s"}${total > rows.length ? `, newest ${rows.length} shown` : ""}. Singles show in the shop once their printing has a price. Card Broker sets prices per printing and condition; a price saved here lasts until its next update.</p>
 <form method="post" id="bulk" class="bulk"><input type="hidden" name="back" value="${back}">
 <select name="packId" aria-label="Pack">${packOpts}</select><button name="intent" value="pool">Add Selected to Pack Pool</button>
 <button name="intent" value="unpool">Return Selected to Shop</button></form>

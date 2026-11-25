@@ -1,6 +1,6 @@
 // Stock desk operations shared by /staff/stock (site staff) and /internal/site-stock (Card Broker).
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { shelfAddress } from "./stock.server";
+import { priceKey, shelfAddress } from "./stock.server";
 
 export const STOCK_STATUSES = ["FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
 
@@ -13,15 +13,19 @@ const bits = (v: unknown, label: string) => {
   return n;
 };
 
-export async function setPrice(db: PrismaClient, actor: string, printingKey: string, retail: unknown, buyback: unknown) {
+/** Price for one printing in one condition. null = no current price/offer (single not sold / no buyback). */
+export async function setPrice(db: PrismaClient, actor: string, printingKey: string, condition: string, retail: unknown, buyback: unknown) {
   if (!printingKey || printingKey.length > 500) throw new DeskError("Missing printing.");
+  if (!condition || condition.length > 60) throw new DeskError("Missing condition.");
   const retailBits = bits(retail, "Price");
   const buybackBits = bits(buyback, "Buyback");
   if (retailBits != null && buybackBits != null && buybackBits > retailBits) throw new DeskError("Buyback can't be higher than the price.");
-  if (!(await db.siteCopy.findFirst({ where: { printingKey }, select: { id: true } }))) throw new DeskError("No copies of that printing.");
+  const key = priceKey(printingKey, condition);
+  const copies = await db.siteCopy.findMany({ where: { printingKey }, select: { condition: true }, distinct: ["condition"] });
+  if (!copies.some((c) => priceKey(printingKey, c.condition) === key)) throw new DeskError("No copies of that printing in that condition.");
   return db.sitePrice.upsert({
-    where: { printingKey },
-    create: { printingKey, retailBits, buybackBits, source: actor },
+    where: { printingKey: key },
+    create: { printingKey: key, retailBits, buybackBits, source: actor },
     update: { retailBits, buybackBits, source: actor },
   });
 }
@@ -78,7 +82,7 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
   ]);
   const page = rows.slice(0, limit);
   const prices = new Map(
-    (await db.sitePrice.findMany({ where: { printingKey: { in: [...new Set(page.map((r) => r.printingKey))] } } })).map((p) => [p.printingKey, p]),
+    (await db.sitePrice.findMany({ where: { printingKey: { in: [...new Set(page.map((r) => priceKey(r.printingKey, r.condition)))] } } })).map((p) => [p.printingKey, p]),
   );
   const byStatus = Object.fromEntries(STOCK_STATUSES.map((s) => [s, counts.find((c) => c.status === s)?._count._all ?? 0])) as Record<string, number>;
   const next = rows.length > limit ? page[page.length - 1].id : null;
@@ -93,7 +97,7 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
       return { id: p.id, title: p.title, priceBits: p.priceBits, cardsPerPack: p.cardsPerPack, active: p.active, pooled, packsAvailable: Math.floor(pooled / p.cardsPerPack) };
     }),
     copies: page.map((r) => {
-      const p = prices.get(r.printingKey);
+      const p = prices.get(priceKey(r.printingKey, r.condition));
       const where = r.slot != null ? shelfAddress(r.slot) : null;
       return {
         id: r.id,
@@ -119,6 +123,8 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
         priceBits: r.retailBits ?? p?.retailBits ?? null,
         retailBits: r.retailBits ?? p?.retailBits ?? null,
         buybackBits: p?.buybackBits ?? null,
+        priceSource: r.retailBits != null ? "copy" : p?.source ?? null,
+        priceUpdatedAt: p?.updatedAt.toISOString() ?? null,
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),
       };

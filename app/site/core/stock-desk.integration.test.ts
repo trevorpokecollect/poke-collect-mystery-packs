@@ -34,8 +34,9 @@ describe.skipIf(!url)("stock desk", () => {
     expect(rest.next).toBeNull();
     expect(first.copies[0]).not.toHaveProperty("ownerId");
 
-    await expect(setPrice(db, "t", first.copies[0].printingKey, 100, 200)).rejects.toThrow(DeskError);
-    await setPrice(db, "t", first.copies[0].printingKey, 300, 150);
+    await expect(setPrice(db, "t", first.copies[0].printingKey, "Near Mint", 100, 200)).rejects.toThrow(DeskError);
+    await setPrice(db, "t", first.copies[0].printingKey, "near mint", 300, 150);
+    await expect(setPrice(db, "t", first.copies[0].printingKey, "Damaged", 300, 150)).rejects.toThrow(DeskError);
     expect((await listStock(db, {})).copies.every((c) => c.retailBits === 300 && c.buybackBits === 150)).toBe(true);
 
     const ids = first.copies.map((c) => c.id);

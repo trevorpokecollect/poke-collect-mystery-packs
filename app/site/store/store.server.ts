@@ -4,6 +4,8 @@
 import { createHash, randomInt } from "node:crypto";
 import type { Prisma, PrismaClient, SiteCopy, SiteCustomer } from "@prisma/client";
 import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.server";
+import { priceKey } from "../core/stock.server";
+const pk = (c: Pick<SiteCopy, "printingKey" | "condition">) => priceKey(c.printingKey, c.condition);
 
 type Tx = Prisma.TransactionClient;
 
@@ -64,7 +66,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
   const owned = customer
     ? await db.siteCopy.findMany({ where: { ownerId: customer.id, status: { in: ["VAULTED", "SHIP_LOCKED", "SHIPPED"] } }, orderBy: { updatedAt: "desc" } })
     : [];
-  const prices = await pricesFor(db, [...pooled, ...forSale, ...owned].map((c) => c.printingKey));
+  const prices = await pricesFor(db, [...pooled, ...forSale, ...owned].map(pk));
 
   const packViews = packs.map((p) => {
     const pool = pooled.filter((c) => c.packId === p.id);
@@ -78,7 +80,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
       remaining: Math.floor(n / p.cardsPerPack),
       remainingCards: n,
       drawModel: "uniform-without-replacement",
-      cards: pool.map((c) => ({ ...cardView(c, prices.get(c.printingKey), c.id), remaining: 1, chanceInPack: n >= p.cardsPerPack ? p.cardsPerPack / n : 0 })),
+      cards: pool.map((c) => ({ ...cardView(c, prices.get(pk(c)), c.id), remaining: 1, chanceInPack: n >= p.cardsPerPack ? p.cardsPerPack / n : 0 })),
     };
   });
 
@@ -90,7 +92,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
     else groups.set(k, { copy: c, available: 1 });
   }
   const singles = [...groups.entries()]
-    .map(([k, g]) => ({ ...cardView(g.copy, prices.get(g.copy.printingKey), k), editionId: null, available: g.available }))
+    .map(([k, g]) => ({ ...cardView(g.copy, prices.get(pk(g.copy)), k), editionId: null, available: g.available }))
     .filter((c) => c.priceBits != null && c.priceBits > 0);
 
   if (!customer) {
@@ -109,9 +111,9 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
   const sealed = new Set(openings.filter((o) => o.sealed).map((o) => o.id));
   // Copies from pack openings may have been sold back since; keep the opening record intact.
   const openingCopies = await db.siteCopy.findMany({ where: { openingId: { in: openings.map((o) => o.id) } }, orderBy: { position: "asc" } });
-  const openingPrices = await pricesFor(db, openingCopies.map((c) => c.printingKey));
+  const openingPrices = await pricesFor(db, openingCopies.map(pk));
   const copyView = (c: SiteCopy, p: Prices) => ({
-    ...cardView(c, p.get(c.printingKey), c.id),
+    ...cardView(c, p.get(pk(c)), c.id),
     physicalCopyId: singleKey(c),
     cardId: singleKey(c),
     status: c.ownerId === customer.id ? (c.status === "VAULTED" ? "held" : c.status === "SHIP_LOCKED" ? "shipping" : c.status === "SHIPPED" ? "shipped" : "returned") : "returned",
@@ -230,8 +232,8 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
           data: { customerId: customer.id, packId: pack.id, priceBits: pack.priceBits, sealed: a.openLater === true },
         });
         await debit(pack.priceBits, "PACK", opening.id, `${pack.title}`);
-        const prices = await pricesFor(tx, pool.map((c) => c.printingKey));
-        const value = (c: SiteCopy) => c.retailBits ?? prices.get(c.printingKey)?.retailBits ?? 0;
+        const prices = await pricesFor(tx, pool.map(pk));
+        const value = (c: SiteCopy) => c.retailBits ?? prices.get(pk(c))?.retailBits ?? 0;
         const drawn = drawCopies(pool, pack.cardsPerPack).sort((x, y) => value(x) - value(y));
         for (const [i, c] of drawn.entries()) {
           const n = await tx.siteCopy.updateMany({
@@ -253,7 +255,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         if (!group.length) throw new StoreError("sold_out", "This single is no longer available.");
         const pick = group[0];
         await lockKey(tx, `site-copy:${pick.id}`);
-        const price = pick.retailBits ?? (await pricesFor(tx, [pick.printingKey])).get(pick.printingKey)?.retailBits ?? null;
+        const price = pick.retailBits ?? (await pricesFor(tx, [pk(pick)])).get(pk(pick))?.retailBits ?? null;
         if (!price || price <= 0) throw new StoreError("unpriced", "Price Unavailable.");
         if (typeof a.amount === "number" && a.amount !== price) throw new StoreError("catalog_changed", "The price changed. Review it again.");
         await debit(price, "SINGLE", pick.id, `Purchased ${pick.title}`);
@@ -269,7 +271,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
           const o = await tx.siteOpening.findUnique({ where: { id: c.openingId } });
           if (o?.sealed) throw new StoreError("not_found", "Open this pack first.", 404);
         }
-        const offer = (await pricesFor(tx, [c.printingKey])).get(c.printingKey)?.buybackBits ?? null;
+        const offer = (await pricesFor(tx, [pk(c)])).get(pk(c))?.buybackBits ?? null;
         if (!offer || offer <= 0) throw new StoreError("no_offer", "No current buyback offer for this copy.");
         if (a.amount !== offer) throw new StoreError("catalog_changed", "The Cardbits offer changed. Review the current price.");
         await applyLedger(tx, { customerId: customer.id, delta: offer, kind: "BUYBACK", idempotencyKey: key, ref: c.id, note: `Sold back ${c.title}` });
