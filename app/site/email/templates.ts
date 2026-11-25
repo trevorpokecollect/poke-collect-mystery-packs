@@ -161,9 +161,9 @@ export function renderEmail<K extends EmailKind>(kind: K, data: EmailData[K], en
               row("Total", esc(bits(d.totalBits)), true) +
               row("Balance", esc(bits(d.balanceBits))),
           ) + `<p style="margin:14px 0 0;font-size:13px;color:${BRAND.muted}">Order ${esc(d.orderId)}.</p>`,
-          cta: { label: "Open My Packs", href: `${base}/my-packs` },
+          cta: { label: "Open My Packs", href: `${base}/openings` },
         }),
-        text: `Your packs are ready\n\n${d.lines.map((l) => `${l.quantity} x ${l.name}: ${bits(l.bits)}`).join("\n")}\nTotal: ${bits(d.totalBits)}\nBalance: ${bits(d.balanceBits)}\n\nOrder ${d.orderId}.\nOpen them: ${base}/my-packs${textFooter}`,
+        text: `Your packs are ready\n\n${d.lines.map((l) => `${l.quantity} x ${l.name}: ${bits(l.bits)}`).join("\n")}\nTotal: ${bits(d.totalBits)}\nBalance: ${bits(d.balanceBits)}\n\nOrder ${d.orderId}.\nOpen them: ${base}/openings${textFooter}`,
       };
     }
     case "pack_opened": {
@@ -225,10 +225,10 @@ export function renderEmail<K extends EmailKind>(kind: K, data: EmailData[K], en
             table(row("Shipping", esc(fee)) + row("Cards", String(n))) +
             `<p style="margin:16px 0 6px;font-family:${BRAND.heading};font-weight:800;color:${BRAND.navy}">Shipping To</p><p style="margin:0 0 14px">${addressHtml(d.address)}</p>` +
             `<p style="margin:16px 0 6px;font-family:${BRAND.heading};font-weight:800;color:${BRAND.navy}">Cards</p>${list(d.cards)}`,
-          cta: { label: "View Shipment", href: `${base}/vault/shipments/${encodeURIComponent(d.shipmentId)}` },
+          cta: { label: "View Shipment", href: `${base}/shipments/${encodeURIComponent(d.shipmentId)}` },
           footnote: "We replace packages the carrier loses. If tracking shows delivered but the package was stolen or damaged, file a claim with the carrier.",
         }),
-        text: `We're packing your cards\n\nWe ship within 48 hours, by ${fmtDate(d.processBy)}.\nShipping: ${fee}\n\nShipping to:\n${addressText(d.address)}\n\nCards:\n${d.cards.map((c) => `- ${c}`).join("\n")}\n\n${base}/vault/shipments/${d.shipmentId}${textFooter}`,
+        text: `We're packing your cards\n\nWe ship within 48 hours, by ${fmtDate(d.processBy)}.\nShipping: ${fee}\n\nShipping to:\n${addressText(d.address)}\n\nCards:\n${d.cards.map((c) => `- ${c}`).join("\n")}\n\n${base}/shipments/${d.shipmentId}${textFooter}`,
       };
     }
     case "shipment_shipped": {

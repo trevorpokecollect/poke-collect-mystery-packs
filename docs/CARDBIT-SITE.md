@@ -89,7 +89,7 @@ Unchanged sources: retail and buyback come from Poke-Collect's per-card buylist 
 ## Shipping + transactional email (branch `cardbit-site-shipping`)
 
 Code: `app/site/region.server.ts`, `app/site/shipping/*`, `app/site/email/*`,
-route `app/routes/site.webhooks.shippo.tsx` (404 unless `CARDBIT_SITE_MODE=on`).
+route `app/routes/site.webhooks.shippo.tsx` (404 unless `CARDBIT_SITE=on`).
 Tables (fenced block at the end of `schema.prisma`): `SiteShipment`, `SiteShipmentItem`,
 `SiteShipmentEvent`, `SiteEmail`.
 
@@ -116,7 +116,7 @@ Email: `sendEmail(deps, kind, to, data, dedupeKey)` — kinds `signin_code`, `to
 `pack_receipt`, `pack_opened`, `buyback_confirmation`, `shipment_created|shipped|delivered`.
 Call after your transaction commits; the dedupe key (e.g. pull id, order id) guarantees one send.
 Sign-in codes are never stored. `sendPendingEmails` retries failures (run from the site cron).
-Email links assume routes `/packs`, `/my-packs`, `/vault`, `/vault/shipments/:id` on `CARDBIT_SITE_URL`.
+Email links assume routes `/packs`, `/openings`, `/vault`, `/shipments/:id` on `CARDBIT_SITE_URL`.
 
 Env (site / app-site): `SHIPPO_API_TOKEN` (test key set), `SHIPPO_WEBHOOK_TOKEN` (set),
 `CARDBIT_SHIP_FROM_*` (ship-from address — needed before label tests),

@@ -17,7 +17,7 @@ export function registerSiteShipping(parts: { copies: CopyStore; fees: FeePayer 
 
 /** Site routes are dark unless this service runs as the standalone site. */
 export function siteEnabled(env: NodeJS.ProcessEnv = process.env) {
-  return env.CARDBIT_SITE_MODE === "on";
+  return env.CARDBIT_SITE === "on";
 }
 
 export function siteShippingDeps(env: NodeJS.ProcessEnv = process.env): ShippingDeps {
