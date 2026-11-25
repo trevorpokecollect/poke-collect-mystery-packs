@@ -39,6 +39,7 @@
       window.fbq('track', 'PageView');
     }
     if (cfg.tiktok) {
+      window.TiktokAnalyticsObject = 'ttq'; // TikTok's events.js finds its queue through this name
       const t = (window.ttq = window.ttq || []);
       t.methods = ['page', 'track', 'identify', 'instances', 'debug', 'on', 'off', 'once', 'ready', 'alias', 'group', 'enableCookie', 'disableCookie', 'holdConsent', 'revokeConsent', 'grantConsent'];
       t.setAndDefer = (o, m) => { o[m] = function () { o.push([m].concat([].slice.call(arguments, 0))); }; };
@@ -171,10 +172,14 @@
     const c = choice();
     if (c === 'granted') load();
     else if (c == null) banner();
-    if (!addFooterLink()) {
-      let tries = 0;
-      const t = setInterval(() => { if (addFooterLink() || ++tries > 20) clearInterval(t); }, 500);
-    }
+    addFooterLink();
+    // The storefront redraws its footer after loading, so put the link back whenever it goes missing.
+    let queued = false;
+    new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; addFooterLink(); });
+    }).observe(document.body, { childList: true, subtree: true });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();

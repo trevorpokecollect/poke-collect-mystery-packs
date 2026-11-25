@@ -59,8 +59,8 @@
     const button = (action, text, style) => '<button type="button" class="' + style + '" data-cbw-action="' + action + '">' + text + '</button>';
     let controls;
     if (c.status === 'pending') {
-      controls = '<div class="cbw-pending"><b>Awaiting Confirmation</b><p>We’ll Text a Confirmation to the Number Ending in ' + esc(c.last4 || '') +
-        '. Reply YES to Earn ' + m.amount + ' Cardbits.</p></div><div class="cbw-controls">' + button('leave', 'Cancel Request', 'cbw-quiet') + '</div>';
+      controls = '<div class="cbw-pending"><b>Awaiting Confirmation</b><p>Our Text Line Opens Soon. We’ll Text a Confirmation to the Number Ending in ' + esc(c.last4 || '') +
+        ' as Soon as It Does. Reply YES to Earn ' + m.amount + ' Cardbits.</p></div><div class="cbw-controls">' + button('leave', 'Cancel Request', 'cbw-quiet') + '</div>';
     } else if (c.status === 'subscribed') {
       controls = '<div class="cbw-confirmed"><b>' + (c.awardedAt ? 'Reward Earned' : 'Preference Saved') + '</b><p>' +
         (c.awardedAt ? m.amount + ' Cardbits Added to Your Wallet.' : 'You’re Signed Up.') + '</p></div>' +
@@ -69,7 +69,7 @@
       const field = key === 'email'
         ? '<label class="cbw-field">Email Address<input type="email" value="' + esc(view.email?.address || '') + '" readonly aria-readonly="true"></label>'
         : '<label class="cbw-field">Mobile Number<input type="tel" autocomplete="tel" inputmode="tel" placeholder="(555) 555-0123" data-cbw-contact required></label>';
-      const legal = key === 'sms' ? '<p class="cbw-legal" id="cbw-sms-terms">Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. US numbers only. <a href="' + esc(policies) + '" target="_blank" rel="noopener">Terms and Privacy</a>.</p>' : '';
+      const legal = key === 'sms' ? '<p class="cbw-legal" id="cbw-sms-terms">Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. US numbers only. See our <a href="' + esc(policies) + '#sms-terms" target="_blank" rel="noopener">Text Message Terms</a> and <a href="' + esc(policies) + '#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>.</p>' : '';
       controls = '<form data-cbw-form>' + field + '<label class="cbw-consent"><input type="checkbox" data-cbw-consent required' +
         (key === 'sms' ? ' aria-describedby="cbw-sms-terms"' : '') + '><span>' + m.consent + '</span></label>' + legal +
         (c.awardedAt ? '<p class="cbw-kept">Reward Already Earned. You Can Rejoin at Any Time.</p>' : '') +
