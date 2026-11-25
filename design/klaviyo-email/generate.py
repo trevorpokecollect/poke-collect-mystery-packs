@@ -83,10 +83,15 @@ def h1(t): return row(f'<h1 class="h1" style="margin:14px 0 12px;{H}font-size:40
 def h2(t, top=26): return row(f'<h2 class="h2" style="margin:0 0 6px;{H}font-size:26px;line-height:30px;color:#f6faf9;">{t}</h2>', f"{top}px 32px 0")
 def p(t, size=17, color="#d4e0df", pad="0 32px 6px"): return row(f'<p style="margin:0;{B}font-size:{size}px;line-height:{int(size*1.6)}px;color:{color};">{t}</p>', pad)
 def small(t): return row(f'<p style="margin:0;{B}font-size:13px;line-height:19px;color:#8fa0a2;">{t}</p>', "12px 32px 0")
+def _pbtn(t,u): return f'<td class="btn stack" style="border-radius:14px;background:#00e6e1;"><a href="{u}" style="display:inline-block;padding:15px 24px;{H}font-size:16px;color:#062022;text-decoration:none;border-radius:14px;">{t}</a></td>'
 def buttons(primary=None, secondary=None, pad="18px 32px 28px"):
     cells = []
     if primary:
-        cells.append(f'<td class="btn stack" style="border-radius:14px;background:#00e6e1;"><a href="{primary[1]}" style="display:inline-block;padding:15px 24px;{H}font-size:16px;color:#062022;text-decoration:none;border-radius:14px;">{primary[0]}</a></td>')
+        if len(primary) == 3:
+            c, (t1, u1), (t2, u2) = primary
+            cells.append(f"{{% if {c} %}}{_pbtn(t1,u1)}{{% else %}}{_pbtn(t2,u2)}{{% endif %}}")
+        else:
+            cells.append(_pbtn(*primary))
     if secondary:
         if cells: cells.append('<td class="stack-gap" style="width:10px;font-size:0;">&nbsp;</td>')
         cells.append(f'<td class="btn stack" style="border-radius:14px;border:1px solid #00e6e1;"><a href="{secondary[1]}" style="display:inline-block;padding:14px 22px;{H}font-size:15px;color:#00e6e1;text-decoration:none;border-radius:14px;">{secondary[0]}</a></td>')
@@ -114,7 +119,7 @@ def shelf(gif="shelfed540.gif"):
         row(f'<a href="https://cardbit.com/packs"><img src="{K}{gif}" width="536" alt="Mystery, Booster, Gold, Japanese and Wildcard Edition packs" style="width:100%;max-width:536px;border-radius:14px;"></a>', "10px 32px 0") +
         buttons(None, ("Browse Pack Editions", "https://cardbit.com/packs")))
 def cond_btn(cond, t1, u1, t2, u2):
-    return (f"{{% if {cond} %}}{t1}{{% else %}}{t2}{{% endif %}}", f"{{% if {cond} %}}{u1}{{% else %}}{u2}{{% endif %}}")
+    return (cond, (t1, u1), (t2, u2))
 
 T = {}
 T["F01"] = (("Your 1,000 Founding Cardbits Are Reserved", "Founding Collector: make your first top-up at launch to unlock your bonus Cardbits."),
