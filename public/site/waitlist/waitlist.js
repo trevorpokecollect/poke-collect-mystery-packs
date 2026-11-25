@@ -1,7 +1,7 @@
 /* Cardbit coming-soon waitlist: motion + signup. No libraries.
  * - Hero: headline split, cursor tilt + holo on the pack, looping rip → rise → flip reveal, pack swaps.
  * - Pinned How It Works scenes driven by scroll progress.
- * - 3D pack carousel (buttons, dots, arrows, swipe), reveals, wheel / XP / shuffle demos (visual only).
+ * - 3D pack carousel (buttons, dots, arrows, swipe), reveals, Daily Spin reel / XP / shuffle demos (visual only).
  * - POST /api/waitlist, success state with confetti; consent-gated Lead event if an ad pixel is loaded.
  * Everything respects prefers-reduced-motion. */
 (() => {
@@ -81,11 +81,11 @@
   /* ---------- hero rip loop ---------- */
   const A = window.CardbitWaitlist || {};
   const packs = A.packs || [];
-  const cards = A.cards || [];
+  const rips = A.rips || [], backs = A.backs || [];
   if (rip && !reduce && packs.length) {
-    let n = 0, c = 0;
+    let n = 0;
     const body = $('.wl-rip__body', rip), topEl = $('.wl-rip__top', rip), shine = $('.wl-rip__shine', rip);
-    const fronts = $$('[data-wl-front]', rip);
+    const fronts = $$('[data-wl-front]', rip), backEls = $$('[data-wl-back]', rip);
     const setPack = (i) => {
       const url = `url('${packs[i % packs.length]}')`;
       [body, topEl].forEach((el) => el.style.setProperty('--art', url));
@@ -106,7 +106,10 @@
         await wait(520);
         n++;
         setPack(n);
-        fronts.forEach((f) => { c++; f.src = cards[c % cards.length]; });
+        // Each pack shows pulls its rules allow (and the Japanese card back for Japanese).
+        const pulls = rips[n % rips.length] || [], back = backs[n % backs.length];
+        fronts.forEach((f, k) => { if (pulls[k]) f.src = pulls[k]; });
+        if (back) backEls.forEach((b) => { b.src = back; });
         rip.dataset.phase = 'enter';
         await wait(700);
       }
@@ -217,18 +220,40 @@
   }
 
   /* ---------- play demos (visual only; nothing is awarded) ---------- */
-  const wheel = $('[data-wl-wheel]'), xp = $('[data-wl-xp]'), lvl = $('[data-wl-level]'), shuffle = $('[data-wl-shuffle]'), hash = $('[data-wl-hash]');
+  const reel = $('[data-wl-reel]'), xp = $('[data-wl-xp]'), lvl = $('[data-wl-level]'), shuffle = $('[data-wl-shuffle]'), hash = $('[data-wl-hash]');
   const once = (el, fn) => {
     if (!el) return;
     const o = new IntersectionObserver(([en]) => { if (en.isIntersecting) { fn(); o.disconnect(); } }, { threshold: .4 });
     o.observe(el);
   };
-  once(wheel, () => {
-    if (reduce) return;
-    let turns = 0;
-    const spin = () => { turns += 1440 + Math.floor(Math.random() * 360); wheel.style.transform = `rotate(${turns}deg)`; };
+  // Daily Spin: the same prize reel as the real spin (tiles slide under the marker and stop on one).
+  once(reel, () => {
+    const track = $('[data-wl-reel-track]', reel);
+    const tiles = $$('.wl-tile', track);
+    if (!track || tiles.length < 12) return;
+    const step = () => tiles[1].offsetLeft - tiles[0].offsetLeft;
+    const at = (i) => reel.clientWidth / 2 - (tiles[i].offsetLeft + tiles[i].offsetWidth / 2);
+    // Land on a card, then Sparks, then a card, then XP... always near the end of the strip.
+    const order = ['card', 'sparks', 'card', 'xp'];
+    let k = 0;
+    const target = () => {
+      const want = order[k++ % order.length];
+      const ok = tiles.map((t, i) => i).filter((i) => i >= tiles.length - 12 && i < tiles.length - 3 && tiles[i].dataset.k === want);
+      return ok[Math.floor(Math.random() * ok.length)] ?? tiles.length - 6;
+    };
+    const place = (x, ms) => { track.style.transition = ms ? `transform ${ms}ms cubic-bezier(.08,.6,.12,1)` : 'none'; track.style.transform = `translateX(${x}px)`; };
+    if (reduce) { const i = target(); tiles[i].classList.add('is-winner'); place(at(i), 0); return; }
+    const spin = () => {
+      tiles.forEach((t) => t.classList.remove('is-winner'));
+      place(at(2), 0);
+      void track.offsetWidth;
+      const i = target();
+      const jitter = (Math.random() - 0.5) * (step() - 30);
+      place(at(i) + jitter, 4200);
+      setTimeout(() => { place(at(i), 250); tiles[i].classList.add('is-winner'); }, 4250);
+    };
     spin();
-    setInterval(spin, 5200);
+    setInterval(spin, 7000);
   });
   once(xp, () => {
     xp.style.width = '72%';

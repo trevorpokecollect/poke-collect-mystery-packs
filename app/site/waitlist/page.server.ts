@@ -21,18 +21,30 @@ const PACKS = [
   { id: "wildcard", name: "Wildcard", cards: "1 Card", tags: ["Modern", "Vintage", "English", "Japanese"], line: "Anything Can Happen. That's the Point." },
 ];
 
-// Real cards from the packs' pools: modern English (ex), Japanese and vintage (Gold / Wildcard).
-const CARDS = [
-  "cardbit-latch-pikachu-173-jp.webp",
-  "cardbit-latch-clefairy-184.webp",
-  "cardbit-pilot-50938395164834.webp",
-  "cardbit-latch-pilot-50938395459746.webp",
-  "cardbit-chase-bellossom.jpg",
-  "cardbit-latch-pilot-50938395361442.webp",
-  "cardbit-pichu.webp",
-  "cardbit-pilot-50938395558050.webp",
-  "cardbit-latch-pilot-50938395328674.webp",
-];
+// Real hits only (Trevor, Nov 25: no regular commons). Each one fits the rules of the packs it is shown with:
+// Mystery = modern English; Booster = modern English/Japanese; Japanese = modern Japanese;
+// Gold and Wildcard = modern + vintage, English/Japanese.
+const HITS = {
+  pikachuJp: "cardbit-latch-pikachu-173-jp.webp", // Japanese art rare (modern JP)
+  clefairy: "cardbit-latch-clefairy-184.webp", // Lillie's Clefairy ex special illustration rare (modern EN)
+  slowking: "cardbit-latch-slowking-014.webp", // 1st Edition holo (vintage EN)
+  lucario: "cardbit-pilot-50938395558050.webp", // Lucario ex (modern EN)
+  bellossom: "cardbit-chase-bellossom.jpg", // 1st Edition holo (vintage EN)
+  jumpluff: "cardbit-chase-jumpluff.jpg", // 1st Edition holo (vintage EN)
+  pichu: "cardbit-pichu.webp", // 1st Edition holo (vintage EN)
+  medicham: "cardbit-latch-pilot-50938395459746.webp", // Medicham ex (modern EN)
+} as const;
+const CARDS = [HITS.pikachuJp, HITS.clefairy, HITS.slowking, HITS.lucario, HITS.bellossom, HITS.jumpluff, HITS.pichu, HITS.medicham];
+// Hero rip: three pulls per pack, in PACKS order, all allowed in that pack.
+const RIPS: Record<string, string[]> = {
+  mystery: [HITS.clefairy, HITS.lucario, HITS.medicham],
+  booster: [HITS.pikachuJp, HITS.clefairy, HITS.lucario],
+  gold: [HITS.slowking, HITS.clefairy, HITS.bellossom],
+  japanese: [HITS.pikachuJp, HITS.pikachuJp, HITS.pikachuJp],
+  wildcard: [HITS.jumpluff, HITS.pikachuJp, HITS.pichu],
+};
+const REEL: [string, number][] = [["sparks", 25], ["card", 3], ["xp", 25], ["sparks", 50], ["xp", 10], ["card", 2], ["sparks", 10], ["xp", 50], ["card", 0], ["sparks", 25], ["xp", 25], ["card", 6], ["sparks", 100], ["xp", 10], ["card", 1], ["sparks", 25], ["xp", 50], ["card", 4], ["sparks", 50], ["xp", 25], ["card", 5], ["sparks", 10], ["xp", 10], ["card", 7], ["sparks", 25], ["xp", 50], ["card", 2], ["sparks", 50], ["xp", 25], ["card", 0], ["sparks", 10], ["xp", 10]];
+const BACK: Record<string, string> = { japanese: "cardbit-card-back-ja-modern.webp" };
 
 const FRIENDS = [
   ["latch", "Latch", "webp"], ["blazebit", "Blazebit", "svg"], ["driplink", "Driplink", "svg"], ["mossbit", "Mossbit", "svg"],
@@ -114,7 +126,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
     @font-face{font-family:'Cardbit Atkinson';src:url('${assetUrl("cardbit-type-atkinson.woff")}') format('woff');font-weight:200 800;font-display:swap}
   </style>
   <link rel="stylesheet" href="/site/waitlist/waitlist.css?v=${CSS_V}">
-  <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), cards: CARDS.map((c) => assetUrl(c)) }).replace(/</g, "\\u003c")};</script>
+  <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), rips: PACKS.map((p) => RIPS[p.id].map((c) => assetUrl(c))), backs: PACKS.map((p) => assetUrl(BACK[p.id] || "cardbit-card-back-en.webp")) }).replace(/</g, "\\u003c")};</script>
   <script src="/site/waitlist/waitlist.js?v=${JS_V}" defer></script>
   ${pulseTag()}
 </head>
@@ -154,7 +166,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
         <img class="wl-side wl-side--r" src="${pack("japanese")}" alt="" width="842" height="1520">
         <div class="wl-rip" data-wl-rip>
           <div class="wl-rip__cards">
-            ${[0, 1, 2].map((i) => `<div class="wl-rip__card" style="--i:${i}"><div class="wl-flip"><img class="wl-flip__back" src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" data-wl-front src="${card(i)}" alt=""></div></div>`).join("")}
+            ${[0, 1, 2].map((i) => `<div class="wl-rip__card" style="--i:${i}"><div class="wl-flip"><img class="wl-flip__back" data-wl-back src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" data-wl-front src="${assetUrl(RIPS.mystery[i])}" alt=""></div></div>`).join("")}
           </div>
           <div class="wl-rip__pack" data-wl-pack>
             <div class="wl-rip__body" style="--art:url('${pack("mystery")}')"></div>
@@ -163,7 +175,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
           </div>
           <div class="wl-rip__burst"></div>
         </div>
-        <img class="wl-stage__latch" src="${assetUrl("cardbit-latch-rig-cut.webp")}" alt="" width="713" height="790">
+        <img class="wl-stage__latch" src="/site/waitlist/latch-full.webp?v=2" alt="" width="713" height="790">
       </div>
       <a class="wl-scrollcue" href="#how" aria-label="See How Cardbit Works"><span></span></a>
     </section>
@@ -225,12 +237,11 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
       <h2 id="wl-play-h" class="wl-h2" data-wl-reveal>Come Back Every Day</h2>
       <div class="wl-grid3">
         <article class="wl-card wl-feature" data-wl-reveal>
-          <div class="wl-wheel" aria-hidden="true"><svg viewBox="0 0 200 200" data-wl-wheel>${Array.from({ length: 8 }, (_, i) => {
-            const a0 = (i * 45 - 90) * Math.PI / 180, a1 = ((i + 1) * 45 - 90) * Math.PI / 180;
-            const p = (a: number) => `${100 + 92 * Math.cos(a)},${100 + 92 * Math.sin(a)}`;
-            return `<path d="M100,100 L${p(a0)} A92,92 0 0,1 ${p(a1)} Z" fill="${["#00e6e1", "#4057f5", "#ffb65c", "#7b5cff"][i % 4]}" opacity="${i % 2 ? 0.75 : 1}"/>`;
-          }).join("")}<circle cx="100" cy="100" r="22" fill="#0b1114" stroke="#fff" stroke-width="3"/></svg><span class="wl-wheel__pin"></span></div>
-          <h3>Daily Spins</h3><p>A free spin every day. Level up to unlock better wheels and better rewards.</p>
+          <div class="wl-reel" aria-hidden="true" data-wl-reel><span class="wl-reel__mk wl-reel__mk--t"></span><div class="wl-reel__track" data-wl-reel-track>${REEL.map(([k, x]) =>
+            k === "card" ? `<div class="wl-tile is-card" data-k="card"><img src="${card(x)}" alt="" loading="lazy"></div>`
+            : k === "sparks" ? `<div class="wl-tile is-sparks" data-k="sparks"><img src="${assetUrl("cardbit-sparks.svg")}" alt=""><b>${x}</b><span>Sparks</span></div>`
+            : `<div class="wl-tile is-xp" data-k="xp"><i>XP</i><b>+${x}</b><span>XP</span></div>`).join("")}</div><span class="wl-reel__mk wl-reel__mk--b"></span></div>
+          <h3>Daily Spins</h3><p>A free spin every day for Sparks, XP or a real card. Level up to unlock better spins with bigger prizes.</p>
         </article>
         <article class="wl-card wl-feature" data-wl-reveal>
           <div class="wl-level" aria-hidden="true"><img src="${friend("nimbyte")}" alt=""><div><b>Level <span data-wl-level>7</span></b><div class="wl-xp"><i data-wl-xp></i></div><small>XP From Every Pack You Open</small></div></div>
@@ -271,7 +282,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
     </section>
 
     <section class="wl-final" aria-labelledby="wl-final-h">
-      <div class="wl-final__cards" aria-hidden="true">${[3, 5, 0, 4, 6].map((c, i) => `<img src="${card(c)}" alt="" style="--i:${i}" loading="lazy">`).join("")}</div>
+      <div class="wl-final__cards" aria-hidden="true">${[2, 1, 0, 5, 6].map((c, i) => `<img src="${card(c)}" alt="" style="--i:${i}" loading="lazy">`).join("")}</div>
       <div class="wl-card wl-final__box" data-wl-reveal>
         <p class="wl-eyebrow">Launching Soon</p>
         <h2 id="wl-final-h" class="wl-h2">Become a Founding Collector</h2>
