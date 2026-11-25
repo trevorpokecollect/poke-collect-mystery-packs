@@ -6,7 +6,7 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import type { Prisma } from "@prisma/client";
 import { gql } from "../lib/orders.server";
-import { addVaultCardsToShipment, moveVault, recentShipments, resolveCustomer, returnShipmentToVault } from "../lib/vault.server";
+import { addVaultCardsToShipment, moveVault, recentShipments, releaseOrderCards, resolveCustomer, returnShipmentToVault } from "../lib/vault.server";
 
 // Customer service for vault shipments: put a shipment's cards back in the vault (refunding any
 // shipping paid), or add cards
@@ -126,6 +126,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? { preview: { text: `Move ${what} from ${from.label} to ${to.label}?`, from: String(form.get("from")), to: String(form.get("to")) } }
         : { ok: `Moved ${what} from ${from.label} to ${to.label}. They'll see them under My Packs when logged in.` };
     }
+    if (form.get("intent") === "previewRelease" || form.get("intent") === "release") {
+      const order = String(form.get("order") || "");
+      const dryRun = form.get("intent") === "previewRelease";
+      const r = await releaseOrderCards(db, admin, session.shop, order, { dryRun });
+      const cards = `${r.cards} card${r.cards === 1 ? "" : "s"}`;
+      if (dryRun) {
+        return { releasePreview: { text: `Take back ${cards} from ${r.orderName} and put them back in stock? The customer loses them from My Packs. No money is refunded.`, order } };
+      }
+      return {
+        ok:
+          `${r.released} card${r.released === 1 ? "" : "s"} from ${r.orderName} ${r.released === 1 ? "is" : "are"} back in stock.` +
+          (r.flagged ? ` ${r.flagged} had changed owners on Vault Market and ${r.flagged === 1 ? "was" : "were"} flagged instead.` : ""),
+      };
+    }
     return { error: "Unknown action." };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "That didn't work. Please try again." };
@@ -177,8 +191,42 @@ export default function VaultShipments() {
           </s-button>
         </s-stack>
       </s-section>
+      <s-section heading="Release Order Cards">
+        <s-stack gap="base">
+          <s-paragraph>
+            Takes a pack order&apos;s cards back from the customer and returns them to stock, with no refund. Use it when an
+            order can&apos;t be refunded in Shopify, e.g. while a chargeback is open. Cards on a live shipment need Return To
+            Vault first.
+          </s-paragraph>
+          <s-text-field label="Pack order number" placeholder="#262048" data-release="order" />
+          <s-button
+            disabled={busy}
+            onClick={(e) => {
+              const section = (e.currentTarget as HTMLElement).closest("s-section")!;
+              const order = (section.querySelector('[data-release="order"]') as HTMLInputElement | null)?.value ?? "";
+              submit({ intent: "previewRelease", order }, { method: "post" });
+            }}
+          >
+            Preview Release
+          </s-button>
+        </s-stack>
+      </s-section>
       <s-section>
         <s-stack gap="base">
+          {result && "releasePreview" in result && result.releasePreview ? (
+            <s-banner tone="warning">
+              <s-stack gap="small">
+                <s-text>{result.releasePreview.text}</s-text>
+                <s-button
+                  variant="primary"
+                  disabled={busy}
+                  onClick={() => submit({ intent: "release", order: result.releasePreview!.order }, { method: "post" })}
+                >
+                  Confirm Release
+                </s-button>
+              </s-stack>
+            </s-banner>
+          ) : null}
           {result && "error" in result ? <s-banner tone="critical">{result.error}</s-banner> : null}
           {result && "ok" in result ? <s-banner tone="success">{result.ok}</s-banner> : null}
           {result && "preview" in result && result.preview ? (

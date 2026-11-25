@@ -4,10 +4,10 @@
 import type { AdminApiContext } from "@shopify/shopify-app-react-router/server";
 import db from "../db.server";
 import { drawForOrder } from "./pool.server";
-import { fulfillVaultPackLines, fulfillWholeOrder, holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
+import { fulfillVaultPackLines, fulfillWholeOrder, gql, holdOrder, setOpenLinkMetafield, tagOrder } from "./orders.server";
 import { packsPageUrl, storefrontBase } from "./links.server";
 import { checkTopTierGone } from "./top-tier-alert.server";
-import { markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
+import { BLOCKED_TAG, customerBlocked, markShipmentPaid, VAULT_ATTRIBUTE } from "./vault.server";
 import { completeSale, MARKET_ATTRIBUTE, METRICS, notify } from "./market.server";
 import { choseVaultRate, vaultSinglesFromOrder } from "./vault-singles.server";
 import { settleCreditCodes } from "./credit.server";
@@ -30,6 +30,13 @@ export interface OrderPayload {
 }
 
 export async function handlePaidOrder(shop: string, admin: AdminApiContext | undefined, order: OrderPayload) {
+  // Blocked customers (chargebacks): cancel and refund the order before any pack is drawn.
+  const customerId = order.customer?.admin_graphql_api_id ?? null;
+  if (admin && customerId && (await customerBlocked(admin, customerId).catch(() => false))) {
+    await cancelBlockedOrder(admin, order).catch((e) => console.error(`Cancelling blocked customer's ${order.name} failed`, e));
+    return;
+  }
+
   // Any order can use a Vault Credit code: record it and give back what the cart didn't use.
   await settleCreditCodes(db, order).catch((error) => console.error(`Settling Vault Credit codes on ${order.name} failed`, error));
 
@@ -115,3 +122,22 @@ export async function handlePaidOrder(shop: string, admin: AdminApiContext | und
   }
 }
 
+
+/** Cancels a blocked customer's order: full refund to the original payment, items restocked, tagged for staff. */
+async function cancelBlockedOrder(admin: AdminApiContext, order: OrderPayload) {
+  const data = await gql(admin, `#graphql
+    query BlockedOrderState($id: ID!) { order(id: $id) { cancelledAt } }`, { id: order.admin_graphql_api_id });
+  if (data.order?.cancelledAt) return;
+  await gql(
+    admin,
+    `#graphql
+      mutation BlockedOrderCancel($orderId: ID!, $note: String) {
+        orderCancel(orderId: $orderId, reason: FRAUD, refundMethod: { originalPaymentMethodsRefund: true }, restock: true, notifyCustomer: false, staffNote: $note) {
+          orderCancelUserErrors { field message }
+        }
+      }`,
+    { orderId: order.admin_graphql_api_id, note: `Auto-cancelled and refunded: customer is tagged ${BLOCKED_TAG}.` },
+  );
+  await tagOrder(admin, order.admin_graphql_api_id, ["blocked-customer-cancelled"]).catch((e) => console.error("Tag failed", e));
+  console.warn(`Cancelled ${order.name}: customer is tagged ${BLOCKED_TAG}.`);
+}
