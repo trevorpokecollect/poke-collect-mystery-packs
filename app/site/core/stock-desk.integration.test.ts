@@ -88,11 +88,11 @@ describe.skipIf(!url)("stock desk", () => {
     expect(z.slot).toBe(10002); // Pidgey can't share slot 10001
     expect(await moveToSlot(db, "card-broker:momo", y.id, 10050, null)).toMatchObject({ slot: 10050, pocket: 1, moved: true });
     expect(await moveToSlot(db, "t", x.id, 10050, 5)).toMatchObject({ slot: 10050, pocket: 5 });
-    await expect(moveToSlot(db, "t", z.id, 10050, null)).rejects.toThrow("already holds a Pidgey");
-    await expect(moveToSlot(db, "t", z.id, 10051, 0)).rejects.toThrow("Pocket must be 1");
-    await expect(moveToSlot(db, "t", z.id, 500, null)).rejects.toThrow("10001");
+    await expect(moveToSlot(db, "t", z.id, 10050, null)).rejects.toThrow("Shelf 1 · Box 1 · Row 2 · Slot 20 already holds a Pidgey");
+    await expect(moveToSlot(db, "t", z.id, 10051, 0)).rejects.toThrow("Card position must be 1");
+    await expect(moveToSlot(db, "t", z.id, 500, null)).rejects.toThrow("Choose a Box, Row and Slot");
     await moveToSlot(db, "t", z.id, 10060, 3);
-    await expect(moveToSlot(db, "t", y.id, 10060, 3)).rejects.toThrow("Pocket 3 in slot 10060 is taken");
+    await expect(moveToSlot(db, "t", y.id, 10060, 3)).rejects.toThrow("Card 3 in Shelf 1 · Box 1 · Row 2 · Slot 30 is taken");
     const ev = await db.siteCopyEvent.findFirst({ where: { copyId: x.id, reason: { startsWith: "moved" } } });
     expect(ev).toMatchObject({ actor: "t", reason: "moved from slot 10001 pocket 1 to slot 10050 pocket 5", fromStatus: "DRAFT", toStatus: "DRAFT" });
     await db.siteCopy.update({ where: { id: z.id }, data: { status: "SHIP_LOCKED" } });

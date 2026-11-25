@@ -2,6 +2,7 @@
 // Buy Label (Shippo), Mark Shipped, Cancel, Print Slip. Server-rendered HTML with plain forms
 // (post → redirect → get), so it works without client JavaScript.
 
+import { shelfLabel } from "../core/stock.server";
 import type { SiteShipment, SiteShipmentItem } from "@prisma/client";
 import { BRAND, esc, usd } from "../brand/html";
 import {
@@ -162,7 +163,7 @@ function pickListHtml(s: Shipment) {
       const photo = i.image
         ? `<img src="${esc(i.image)}" alt="${esc(i.title)}" loading="lazy">`
         : `<div class="nophoto">No Photo</div>`;
-      const loc = i.slot != null ? `Slot ${i.slot}${i.pocket != null ? ` · Pocket ${i.pocket}` : ""}` : "Not filed";
+      const loc = shelfLabel(i.slot, i.pocket);
       const fix = editable
         ? `<details class="fix"><summary>Fix Card</summary>
 <form method="post"><input type="hidden" name="intent" value="swap"><input type="hidden" name="shipmentId" value="${esc(s.id)}"><input type="hidden" name="copyId" value="${esc(i.copyId)}"><input type="hidden" name="revision" value="${esc(rev)}"><button>Swap For Another Copy</button><small>Wrong or damaged copy. Takes the next filed copy of the same printing and condition. This copy goes back to stock to re-inspect and re-file.</small></form>

@@ -47,11 +47,28 @@ export const printingKey = (r: Pick<SiteIntake, "game" | "setName" | "number" | 
 /** Price identity: printing AND condition (NM and LP copies are priced separately). */
 export const priceKey = (printing: string, condition: string) => `${printing}|${fold(condition)}`;
 
-export const shelfAddress = (slot: number) => ({
-  shelf: Math.ceil(slot / 100),
-  box: Math.ceil(slot / 20),
-  slot,
-});
+// Physical layout (Trevor, Nov 25): BCW 5-row boxes, divider every 20 sleeved cards. 20 cards per slot, 30 slots per
+// row, 5 rows per box, 2 boxes per shelf; box numbers run on across shelves. Stored slot numbers (10001+) never change.
+export const SLOTS_PER_ROW = 30;
+export const ROWS_PER_BOX = 5;
+export const BOXES_PER_SHELF = 2;
+export const shelfAddress = (slot: number) => {
+  const i = Math.max(0, slot - SITE_FIRST_SLOT);
+  const box = Math.floor(i / (SLOTS_PER_ROW * ROWS_PER_BOX)) + 1;
+  return {
+    shelf: Math.ceil(box / BOXES_PER_SHELF),
+    box,
+    row: Math.floor((i % (SLOTS_PER_ROW * ROWS_PER_BOX)) / SLOTS_PER_ROW) + 1,
+    rowSlot: (i % SLOTS_PER_ROW) + 1,
+    slot,
+  };
+};
+/** "Shelf 1 · Box 1 · Row 1 · Slot 2 · Card 7" for staff, packers and Card Broker messages. */
+export const shelfLabel = (slot: number | null, pocket?: number | null) => {
+  if (slot == null) return "Not filed";
+  const a = shelfAddress(slot);
+  return `Shelf ${a.shelf} · Box ${a.box} · Row ${a.row} · Slot ${a.rowSlot}${pocket != null ? ` · Card ${pocket}` : ""}`;
+};
 
 export function validateIntake(raw: unknown): SiteIntake {
   const r = raw as Record<string, unknown>;
