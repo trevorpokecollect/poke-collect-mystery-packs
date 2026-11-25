@@ -110,7 +110,10 @@ Flow:
    customer never owns two copies. Remove returns the card to the customer's vault; the last card can't be
    removed (cancel instead); the fee is unchanged. Both claim the shipment row first, so they serialize with
    Buy Label and with another desk. Pick lines carry the card photo (`SiteShipmentItem.image`).
-6. `shippingQueue` lists paid shipments with `overdue` past the 48-hour promise. `packingSlipHtml`
+6. Staff desk: `/staff/shipping` (queue, pick list with photos and slot/pocket, Fix Card, Compare Rates,
+   Buy Label, Print Label, Mark Dropped Off, Cancel) and `/staff/shipping/slip/:id`. 404 unless
+   `CARDBIT_SITE=on` and the signed-in customer's email is in `SITE_STAFF_EMAILS`; posts must be same-origin.
+7. `shippingQueue` lists paid shipments with `overdue` past the 48-hour promise. `packingSlipHtml`
    prints the card list sorted by slot/pocket.
 
 Contracts the lead implements (`app/site/shipping/types.ts`): `CopyStore` on SiteCopy

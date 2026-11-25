@@ -15,6 +15,7 @@ import {
 } from "./service.server";
 import type { Address, Label, Rate, ShippingProvider, Tracking } from "./shippo.server";
 import { sqlCopyStore } from "./sql-copy-store";
+import { deskAction, loadDesk } from "./desk.server";
 import { FeePaymentError, type FeePayer, type Tx } from "./types";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -267,6 +268,19 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     const locked = await db.siteCopy.findMany({ where: { orderId: shipment.id, status: "SHIP_LOCKED" } });
     expect(locked.map((c) => c.id).sort()).toEqual(s.items.map((i) => i.copyId).sort());
     expect(shippo.labels).toBeLessThanOrEqual(1);
+  });
+
+  it("desk: form posts swap, buy label and report errors back to the page", async () => {
+    const { shipment } = await createShipment(deps, base());
+    const form = (o: Record<string, string>) => { const f = new FormData(); for (const [k, v] of Object.entries(o)) f.set(k, v); return f; };
+    let to = await deskAction(deps, form({ intent: "swap", shipmentId: shipment.id, copyId: "c1" }), "staff:t");
+    expect(to).toContain("msg=");
+    to = await deskAction(deps, form({ intent: "remove", shipmentId: shipment.id, copyId: "nope" }), "staff:t");
+    expect(new URL(to, "https://x").searchParams.get("err")).toContain("no longer on this shipment");
+    to = await deskAction(deps, form({ intent: "label", shipmentId: shipment.id }), "staff:t");
+    expect(new URL(to, "https://x").searchParams.get("msg")).toContain("Label bought: USPS 9400");
+    const view = await loadDesk(deps, new URL(`https://site.test/staff/shipping?id=${shipment.id}`));
+    expect(view.selected?.status).toBe("LABEL_PURCHASED");
   });
 
   it("lists overdue paid shipments for staff", async () => {
