@@ -1370,4 +1370,36 @@ model SiteIntakeReceipt {
   response  Json
   createdAt DateTime @default(now())
 }
+// One Coinflow card checkout for a Cardbits top-up. Credited once on Coinflow "Settled".
+model SiteTopup {
+  id           String   @id @default(cuid())
+  customerId   String
+  baseBits     Int
+  bonusBits    Int
+  cents        Int
+  status       String   @default("PENDING") // PENDING | CREDITED | REFUNDED | CHARGEBACK | CHARGEBACK_WON | CHARGEBACK_LOST
+  paymentId    String?  @unique
+  billingState String
+  billingZip   String
+  ip           String?
+  ipRegion     String?
+  clawedBits   Int      @default(0) // Cardbits taken back on refund/chargeback
+  owedBits     Int      @default(0) // part already spent that could not be taken back
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@index([customerId, createdAt])
+}
+
+// Raw processor webhook log (dedupe + audit). No card data is ever in these payloads.
+model SiteWebhookEvent {
+  id          String    @id // sha256 of raw body
+  provider    String
+  eventType   String
+  ref         String?
+  payload     Json
+  result      String?
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+}
+
 // ---- end Cardbit standalone site: core ------------------------------------------------------

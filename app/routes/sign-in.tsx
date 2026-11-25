@@ -12,6 +12,7 @@ import {
 } from "../site/core/auth.server";
 import { sendEmail } from "../site/email/outbox.server";
 import { mailerFromEnv } from "../site/email/mailer.server";
+import { protectionScript } from "../site/payments/coinflow.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -35,7 +36,7 @@ function page(o: { returnTo: string; step: "email" | "code"; email?: string; err
          <form method="post"><input type="hidden" name="intent" value="send"><input type="hidden" name="return_to" value="${rt}">
          <input type="hidden" name="email" value="${esc(o.email || "")}"><button class="link" type="submit">Send A New Code</button></form>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sign In · Cardbit</title><meta name="robots" content="noindex">
+<title>Sign In · Cardbit</title><meta name="robots" content="noindex">${protectionScript()}
 <style>
 :root{--bg:#17213B;--panel:#1f2b4a;--ink:#FAF8F3;--muted:#c7cbd6;--cobalt:#4057F5;--apricot:#FFB65C;--err:#ff8a80}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:16px/1.5 "Atkinson Hyperlegible Next","Atkinson Hyperlegible",system-ui,sans-serif;padding:16px}

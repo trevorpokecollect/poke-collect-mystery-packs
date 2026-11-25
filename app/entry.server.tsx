@@ -7,6 +7,7 @@ import { type EntryContext } from "react-router";
 import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { SITE_ENABLED, htmlResponse, storefrontShell } from "./site/shell.server";
+import "./site/boot.server";
 
 startGiveawayClock();
 

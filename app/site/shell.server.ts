@@ -8,6 +8,7 @@
  * Mirrors the theme's layout/cardbit-dark.liquid. Regenerate assets and partials with
  * scripts/site/port-theme.mjs; do not hand-edit public/site/assets.
  */
+import { protectionScript } from "./payments/coinflow.server";
 import manifest from "./assets-manifest.json";
 import howItWorks from "./partials/how-it-works.html?raw";
 
@@ -116,6 +117,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
       window.cardbitAssets = ${assetMap()};
       window.cardbitValueIcon = window.cardbitAssets["bits-card-emblem.png"];
     </script>
+    ${protectionScript()}
     ${scripts}
   </head>
   <body>

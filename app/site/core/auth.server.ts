@@ -125,7 +125,7 @@ export async function upsertCustomer(
 // ---- Google OAuth (authorization code + PKCE) ------------------------------------------------
 const GOOGLE_STATE = "cb_site_g";
 export function siteOrigin() {
-  return (process.env.SITE_ORIGIN || "https://app-site-site.up.railway.app").replace(/\/$/, "");
+  return (process.env.SITE_ORIGIN || process.env.CARDBIT_SITE_URL || "https://app-site-site.up.railway.app").replace(/\/$/, "");
 }
 export function googleStart(returnTo: string) {
   const id = process.env.GOOGLE_CLIENT_ID;

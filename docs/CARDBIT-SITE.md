@@ -132,3 +132,14 @@ Env (site / app-site): `SHIPPO_API_TOKEN` (test key set), `SHIPPO_WEBHOOK_TOKEN`
 `CARDBIT_SITE_RESEND_API_KEY` (pending Trevor), `CARDBIT_SITE_MAIL_FROM` (set),
 `CARDBIT_SITE_IPINFO_TOKEN` (optional; without it IP isn't checked, addresses still are),
 `CARDBIT_SITE_URL`.
+
+## Cardbits top-up (Coinflow card checkout)
+
+- `/checkout/cardbits?amount=1000|5000|10000|50000&return_to=` (sign-in required) asks for billing state + ZIP, runs the state block (billing + IP), records a PENDING `SiteTopup`, then redirects to Coinflow's hosted link (`POST {api}/checkout/link`, `webhookInfo.topupId`, `standaloneLinkConfig.callbackUrl` = `/checkout/cardbits/return`).
+- `/webhooks/coinflow` verifies `COINFLOW_WEBHOOK_SECRET` (Authorization header or `Coinflow-Signature` HMAC, 5 min tolerance), logs every event in `SiteWebhookEvent`, and:
+  - `Settled`: amount must equal the package; credits `TOPUP` + separate `BONUS` once (`topup:{id}:base|bonus`), sends `topup_receipt`.
+  - `Refund`: takes back the refunded share as far as the balance allows; the spent part goes to `SiteTopup.owedBits`.
+  - `Card Payment Chargeback Opened`: same claw-back, freezes the account. `Won` returns the Cardbits (account stays frozen for staff review); `Lost` just records it.
+- Coinflow's chargeback-protection script (nSure) is in the head of every site page; sandbox partner id `COINFTEST`, production partner id via `COINFLOW_NSURE_PARTNER_ID`.
+- Optional env: `COINFLOW_PRODUCT_TYPE` (default `topUp`), `COINFLOW_SETTLEMENT_TYPE`, `COINFLOW_AUTH_BLOCKCHAIN`.
+- Shipping fees: `ledgerFeePayer` (app/site/core/fees.server.ts) debits `SHIPPING` / refunds `REFUND`; USD shipping stays off. Wired in app/site/boot.server.ts.
