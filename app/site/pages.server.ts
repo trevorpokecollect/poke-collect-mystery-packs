@@ -2,7 +2,7 @@
  * Cardbit standalone site: standalone (non-storefront) pages, ported from the theme.
  */
 import policies from "./partials/policies.html?raw";
-import { STYLES, SITE_CSS_V, assetUrl, shareMeta } from "./shell.server";
+import { STYLES, SITE_CSS_V, assetUrl, shareMeta, pulseTag } from "./shell.server";
 import rewardsIn from "./partials/rewards-in.html?raw";
 import { withClubIconUrls } from "./play/club-icons";
 import rewardsOut from "./partials/rewards-out.html?raw";
@@ -28,6 +28,7 @@ function page(title: string, description: string, body: string, styles: string[]
     ${styles.map((name) => `<link rel="stylesheet" href="${assetUrl(name)}">`).join("\n    ")}
     ${styles.includes("cardbit-storefront.css") ? `<link rel="stylesheet" href="/site/css/cardbit-site.css?v=${SITE_CSS_V}">` : ""}
     <style>body{margin:0;background:#101619;color:#f6faf9}</style>
+    ${pulseTag()}
   </head>
   <body>${body}</body>
 </html>`;
