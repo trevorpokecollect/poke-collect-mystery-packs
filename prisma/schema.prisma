@@ -1276,6 +1276,8 @@ model SiteCustomer {
   termsAcceptedAt DateTime?
   riskStatus      String   @default("ok") // ok | review (shipping waits for staff) | trusted (staff vouched; no automatic review)
   riskNote        String?
+  tags            String[] @default([]) // staff tags (Card Broker Customers), lowercased, Shopify-style
+  staffNote       String? // staff-only note about the customer (Card Broker Customers)
   frozenAt  DateTime?
   closedAt  DateTime?
   createdAt DateTime @default(now())
@@ -1321,6 +1323,8 @@ model SiteMarketing {
   smsRequestedAt DateTime?
   smsConfirmedAt DateTime?
   smsOptOutAt    DateTime?
+  emailSource    String? // where the latest email consent change came from: welcome-rewards | account | staff | klaviyo
+  smsSource      String? // same, for text alerts
   termsVersion   String?
   ip             String?
   syncedAt       DateTime?

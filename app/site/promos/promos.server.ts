@@ -74,7 +74,7 @@ export async function welcomeView(db: PrismaClient, customer: SiteCustomer | nul
   };
 }
 
-type Ctx = { ip?: string | null; now?: Date };
+type Ctx = { ip?: string | null; now?: Date; source?: string };
 
 /** Opt in to email news. Credits 200 Cardbits the first time only. */
 export async function joinEmail(db: PrismaClient, customer: SiteCustomer, consent: unknown, ctx: Ctx = {}) {
@@ -83,8 +83,8 @@ export async function joinEmail(db: PrismaClient, customer: SiteCustomer, consen
   return db.$transaction(async (tx) => {
     await tx.siteMarketing.upsert({
       where: { customerId: customer.id },
-      create: { customerId: customer.id, emailOptInAt: now, termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null },
-      update: { emailOptInAt: now, termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null, syncedAt: null },
+      create: { customerId: customer.id, emailOptInAt: now, emailSource: ctx.source ?? "welcome-rewards", termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null },
+      update: { emailOptInAt: now, emailSource: ctx.source ?? "welcome-rewards", termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null, syncedAt: null },
     });
     const { replay } = await applyLedger(tx, {
       customerId: customer.id, delta: WELCOME.email, kind: "BONUS",
@@ -109,8 +109,8 @@ export async function requestSms(db: PrismaClient, customer: SiteCustomer, phone
   try {
     await db.siteMarketing.upsert({
       where: { customerId: customer.id },
-      create: { customerId: customer.id, smsPhone: number, smsRequestedAt: now, termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null },
-      update: { smsPhone: number, smsRequestedAt: now, termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null, syncedAt: null },
+      create: { customerId: customer.id, smsPhone: number, smsRequestedAt: now, smsSource: ctx.source ?? "welcome-rewards", termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null },
+      update: { smsPhone: number, smsRequestedAt: now, smsSource: ctx.source ?? "welcome-rewards", termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null, syncedAt: null },
     });
   } catch (e) {
     if ((e as { code?: string }).code === "P2002") throw new PromoError("That Number Is Already Linked to Another Cardbit Account.");
@@ -133,9 +133,10 @@ export async function confirmSms(db: PrismaClient, customerId: string, phone: st
   });
 }
 
-export async function leave(db: PrismaClient, customer: SiteCustomer, channel: unknown, now = new Date()) {
+/** Unsubscribe. source: "account" (the customer), "staff" (Card Broker, on the customer's request) or "klaviyo". */
+export async function leave(db: PrismaClient, customer: Pick<SiteCustomer, "id">, channel: unknown, now = new Date(), source = "account") {
   if (channel !== "email" && channel !== "sms") throw new PromoError("Choose Email or Texts.", 400);
-  const data = channel === "email" ? { emailOptOutAt: now, syncedAt: null } : { smsOptOutAt: now, syncedAt: null };
+  const data = channel === "email" ? { emailOptOutAt: now, emailSource: source, syncedAt: null } : { smsOptOutAt: now, smsSource: source, syncedAt: null };
   await db.siteMarketing.upsert({ where: { customerId: customer.id }, create: { customerId: customer.id, ...data }, update: data });
 }
 
