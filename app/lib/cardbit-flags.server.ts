@@ -26,12 +26,17 @@ export const isQaCustomer = (customerId: string | null | undefined, env: NodeJS.
 export const flagMode = (flag: EngagementFlag, env: NodeJS.ProcessEnv = process.env) =>
   env[flag] === "on" ? "on" : env[flag] === "qa" ? "qa" : "off";
 
+/** Shop key for the standalone cardbit.com site's rows in the Cardbit* engagement tables. */
+export const SITE_REWARDS_SHOP = "cardbit-site";
+
 export function featureOn(
   flag: EngagementFlag,
   shop: string,
   customerId?: string | null,
   env: NodeJS.ProcessEnv = process.env,
 ) {
+  // The standalone site has no QA customer list, so only "on" opens a feature there.
+  if (shop === SITE_REWARDS_SHOP) return env.CARDBIT_SITE === "on" && flagMode(flag, env) === "on";
   if (!isCardbit(shop, env)) return false;
   const mode = flagMode(flag, env);
   return mode === "on" || (mode === "qa" && isQaCustomer(customerId, env));
