@@ -114,3 +114,66 @@ describe("storefront shell", () => {
     for (const s of ["AL", "HI", "ID", "MN", "NV", "NY", "UT", "WA"]) expect(js).not.toContain(`['${s}',`);
   });
 });
+
+describe("more sign-in options", () => {
+  it("shows only configured providers", async () => {
+    const { signInProviders } = await import("./core/oauth.server");
+    expect(signInProviders({})).toEqual([]);
+    expect(signInProviders({ GOOGLE_CLIENT_ID: "g", GOOGLE_CLIENT_SECRET: "s", DISCORD_CLIENT_ID: "d", DISCORD_CLIENT_SECRET: "s" })).toEqual(["google", "discord"]);
+  });
+
+  it("starts Discord and Apple with state cookies; Apple uses form_post", async () => {
+    const { oauthStart } = await import("./core/oauth.server");
+    const env = { DISCORD_CLIENT_ID: "d", DISCORD_CLIENT_SECRET: "s", APPLE_CLIENT_ID: "com.cardbit.web", APPLE_TEAM_ID: "T", APPLE_KEY_ID: "K", APPLE_PRIVATE_KEY: "x" };
+    const d = oauthStart("discord", "/vault", { age: true }, env);
+    expect(new URL(d.url).searchParams.get("scope")).toBe("identify email");
+    expect(d.cookie).toMatch(/^cb_site_discord=.*Path=\/auth\/discord/);
+    expect(decodeURIComponent(d.cookie)).toContain('"age":true');
+    const a = oauthStart("apple", "//evil", {}, env);
+    expect(new URL(a.url).searchParams.get("response_mode")).toBe("form_post");
+    expect(decodeURIComponent(a.cookie)).toContain('"returnTo":"/account"');
+    expect(() => oauthStart("discord", "/", {}, {})).toThrow(/not set up/);
+  });
+
+  it("signs the Apple client secret with the .p8 key (ES256)", async () => {
+    const { generateKeyPairSync, verify } = await import("node:crypto");
+    const { appleClientSecret } = await import("./core/oauth.server");
+    const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+    const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString().replace(/\n/g, "\\n");
+    const jwt = appleClientSecret({ APPLE_CLIENT_ID: "com.cardbit.web", APPLE_TEAM_ID: "TEAM", APPLE_KEY_ID: "KEY", APPLE_PRIVATE_KEY: pem }, 1000);
+    const [h, b, sig] = jwt.split(".");
+    expect(JSON.parse(Buffer.from(h, "base64url").toString())).toEqual({ alg: "ES256", kid: "KEY" });
+    expect(JSON.parse(Buffer.from(b, "base64url").toString())).toMatchObject({ iss: "TEAM", sub: "com.cardbit.web", aud: "https://appleid.apple.com", exp: 1300 });
+    expect(verify("sha256", Buffer.from(`${h}.${b}`), { key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(sig, "base64url"))).toBe(true);
+  });
+
+  it("finishes Discord only with a verified email and a matching state", async () => {
+    const { oauthFinish } = await import("./core/oauth.server");
+    const env = { DISCORD_CLIENT_ID: "d", DISCORD_CLIENT_SECRET: "s" };
+    const created: unknown[] = [];
+    const db = {
+      siteCustomer: {
+        findUnique: async () => null,
+        create: async ({ data }: { data: Record<string, unknown> }) => (created.push(data), { id: "c9", ...data }),
+      },
+    } as never;
+    const cookie = `cb_site_discord=${encodeURIComponent(JSON.stringify({ state: "abc", returnTo: "/vault", age: true }))}`;
+    const req = new Request("http://site.test/auth/discord/callback", { headers: { cookie } });
+    const fetcher = (verified: boolean) =>
+      (async (url: string) =>
+        new Response(JSON.stringify(String(url).includes("token") ? { access_token: "t" } : { email: "Ash@Example.com", verified, global_name: "Ash" }))) as never;
+    await expect(oauthFinish(db, "discord", req, new URLSearchParams("state=nope&code=x"), fetcher(true), env)).rejects.toThrow(/expired/);
+    await expect(oauthFinish(db, "discord", req, new URLSearchParams("state=abc&code=x"), fetcher(false), env)).rejects.toThrow(/verified email/);
+    const r = await oauthFinish(db, "discord", req, new URLSearchParams("state=abc&code=x"), fetcher(true), env);
+    expect(r).toMatchObject({ returnTo: "/vault", age: true });
+    expect(created).toEqual([{ email: "ash@example.com", googleSub: null, name: "Ash" }]);
+  });
+
+  it("puts a one-tap link in the code email with the code only in the #fragment", async () => {
+    const { renderEmail } = await import("./email/templates");
+    const r = renderEmail("signin_code", { code: "482913", minutes: 10, email: "a@example.com", returnTo: "/vault" }, { SITE_ORIGIN: "https://cardbit.com" } as never);
+    expect(r.html).toContain("https://cardbit.com/sign-in/link?e=a%40example.com&amp;rt=%2Fvault#c=482913");
+    expect(r.text).toContain("#c=482913");
+    expect(renderEmail("signin_code", { code: "482913", minutes: 10 }).html).not.toContain("/sign-in/link");
+  });
+});
