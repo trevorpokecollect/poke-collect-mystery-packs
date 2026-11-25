@@ -91,3 +91,20 @@ describe("waitlist page", () => {
     expect(html).toContain('<link rel="canonical" href="https://cardbit.com/">');
   });
 });
+
+describe("links page (Instagram bio)", () => {
+  it("is served even in coming-soon mode, with every link and the consent-gated pixels", async () => {
+    const prev = { ...process.env };
+    Object.assign(process.env, on, { CARDBIT_SITE: "on" });
+    try {
+      const { loader } = await import("../../routes/$");
+      const res = (await loader({ request: new Request("https://cardbit.com/links"), params: { "*": "links" } } as never)) as Response;
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      for (const s of ["Join the Waitlist", "https://discord.gg/F9Z6jbgj4Y", "instagram.com/cardbitshop", "facebook.com/cardbitshop", 'href="/policies"', "cardbit-site-pulse.js"])
+        expect(html).toContain(s);
+    } finally {
+      process.env = prev;
+    }
+  });
+});

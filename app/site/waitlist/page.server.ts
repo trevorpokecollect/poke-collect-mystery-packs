@@ -57,7 +57,7 @@ const friend = (id: string) => {
 const pack = (id: string) => assetUrl(`cardbit-latch-pack-${id}.webp`);
 
 // Community callout under the hero signup (Trevor, Nov 25): Instagram, Facebook, Discord. Icons match the site footer.
-const SOCIALS = [
+export const SOCIALS = [
   { id: "instagram", name: "Instagram", href: "https://www.instagram.com/cardbitshop", label: "Follow Cardbit on Instagram",
     icon: '<svg aria-hidden="true" focusable="false" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6" fill="currentColor"/></svg>' },
   { id: "facebook", name: "Facebook", href: "https://www.facebook.com/cardbitshop", label: "Follow Cardbit on Facebook",
