@@ -128,7 +128,7 @@ describe.skipIf(!url)("site Klaviyo sync", () => {
     const byMetric = new Map(k.calls.filter((c) => c.path === "/events").map((c) => [c.body.data.attributes.metric.data.attributes.name, c.body.data.attributes.properties]));
     expect(byMetric.get(METRICS.backInStock)).toMatchObject({ item_name: "Charizard ex", condition_display: "NM" });
     expect(byMetric.get(METRICS.backInStock).item_url).toMatch(/^https:\/\/cardbit\.com\/shop\/s_[0-9a-f]{20}$/);
-    expect(byMetric.get(METRICS.restocked)).toMatchObject({ edition_name: "Gold Pack", item_url: "https://cardbit.com/packs/kl-pack", restock_version: 2 });
+    expect(byMetric.get(METRICS.restocked)).toMatchObject({ edition_name: "Gold Pack", edition_key: "gold", item_url: "https://cardbit.com/packs/kl-pack", restock_version: 2 });
     expect(byMetric.get(METRICS.viewed)).toMatchObject({ item_type: "pack", item_url: "https://cardbit.com/packs/kl-pack" });
     // The automatic hourly restock does not email anyone.
     expect(await db.siteKlaviyoEvent.count({ where: { metric: METRICS.restocked } })).toBe(1);

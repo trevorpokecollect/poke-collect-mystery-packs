@@ -174,7 +174,9 @@ const packProps = (origin: string, p: { id: string; title: string }) => ({
   item_type: "pack",
   item_name: p.title,
   edition_name: p.title,
-  edition_key: p.id,
+  // The R05 template switches pack art on mystery | booster | gold | japanese | wildcard.
+  edition_key: ["mystery", "booster", "gold", "japanese", "wildcard"].find((k) => p.title.toLowerCase().includes(k)) ?? p.id,
+  pack_id: p.id,
   item_url: `${origin}/packs/${p.id}`,
   item_image_url: null,
 });
