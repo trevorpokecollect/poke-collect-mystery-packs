@@ -13,7 +13,8 @@ export type LedgerKind =
   | "REFUND"
   | "CHARGEBACK"
   | "ADJUST"
-  | "REWARD";
+  | "REWARD"
+  | "SUBSCRIPTION";
 
 export class InsufficientCardbits extends Error {
   code = "insufficient_bits";

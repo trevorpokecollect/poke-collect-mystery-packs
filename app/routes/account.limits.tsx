@@ -19,6 +19,8 @@ import {
   type LimitKey,
   type LimitKind,
 } from "../site/play/limits.server";
+import { currentSubscription, requestCancel } from "../site/play/subscriptions.server";
+import { cancelAtCoinflow } from "../site/payments/coinflow-subscriptions.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const PATH = "/account/limits";
@@ -134,6 +136,13 @@ export async function action({ request }: ActionFunctionArgs) {
     if (op === "cool" || op === "exclude") {
       if (fd.get("confirm") !== "yes") throw new PlayInputError("Check the box to confirm.");
       const until = op === "cool" ? await startCoolOff(db, customer.id, Number(fd.get("hours"))) : await selfExclude(db, customer.id, Number(fd.get("months")));
+      // A break also stops Cardbit Club renewals (perks already paid for last until the month ends).
+      if (await currentSubscription(db, customer.id))
+        await requestCancel(db, customer.id, cancelAtCoinflow, op === "cool" ? "cool_off" : "self_exclusion").catch(async (e) => {
+          console.error("[site] subscription cancel on break failed; staff must cancel at Coinflow", customer.id, (e as Error).message);
+          const s = await currentSubscription(db, customer.id);
+          if (s) await db.siteSubscription.update({ where: { id: s.id }, data: { status: "CANCELED", canceledAt: new Date(), cancelReason: "break_processor_cancel_failed" } });
+        });
       return htmlResponse(await page(customer.id, { ok: `${op === "cool" ? "Cool-off" : "Self-exclusion"} active until ${fmtDate(until)}.` }));
     }
     throw new PlayInputError("Choose an option.");

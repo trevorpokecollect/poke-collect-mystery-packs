@@ -1327,7 +1327,7 @@ model SiteLedger {
   customerId     String
   delta          Int
   balanceAfter   Int
-  kind           String // TOPUP | BONUS | PACK | SINGLE | BUYBACK | SHIPPING | REFUND | CHARGEBACK | ADJUST | REWARD
+  kind           String // TOPUP | BONUS | PACK | SINGLE | BUYBACK | SHIPPING | REFUND | CHARGEBACK | ADJUST | REWARD | SUBSCRIPTION
   ref            String?
   idempotencyKey String   @unique
   note           String?
@@ -1532,6 +1532,41 @@ model SiteOpeningFair {
   pickIds        Json // drawn copy ids in pick order
   createdAt      DateTime     @default(now())
   @@index([seedId])
+}
+
+// Cardbit Club subscriptions (app/site/play/subscriptions.server.ts). OFF unless SITE_SUBSCRIPTIONS=on.
+model SiteSubscription {
+  id               String    @id @default(cuid())
+  customerId       String
+  tier             String // plus | pro | ultimate
+  provider         String    @default("coinflow")
+  providerRef      String    @unique // processor subscription id
+  status           String    @default("PENDING") // PENDING | ACTIVE | PAST_DUE | CANCELED | EXPIRED
+  currentPeriodEnd DateTime?
+  canceledAt       DateTime?
+  cancelReason     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  payments         SiteSubscriptionPayment[]
+  @@index([customerId, status])
+}
+
+model SiteSubscriptionPayment {
+  id             String           @id @default(cuid())
+  subscriptionId String
+  subscription   SiteSubscription @relation(fields: [subscriptionId], references: [id])
+  customerId     String
+  paymentId      String           @unique
+  cents          Int
+  paidBits       Int
+  bonusBits      Int
+  periodStart    DateTime
+  periodEnd      DateTime
+  status         String           @default("CREDITED") // CREDITED | REFUNDED | CHARGEBACK
+  clawedBits     Int              @default(0)
+  owedBits       Int              @default(0)
+  createdAt      DateTime         @default(now())
+  @@index([customerId, createdAt])
 }
 
 // ---- end Cardbit standalone site: core ------------------------------------------------------

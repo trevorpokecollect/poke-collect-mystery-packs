@@ -9,6 +9,9 @@ import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
 import { siteRewardsForOpening } from "../rewards/rewards.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
 import { drawForOpening } from "../play/fair.server";
+import { subscriberBonusForOpening } from "../play/subscriptions.server";
+import { SITE_SHOP as SITE_REWARDS_SHOP_KEY } from "../rewards/rewards.server";
+import { awardXp } from "../../lib/cardbit-levels.server";
 
 /** Shop key for site rows in shared Cardbit* tables (age, rewards, vault marks). */
 export const SITE_SHOP_KEY = "cardbit-site";
@@ -295,7 +298,9 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         }
         // XP + Sparks for a paid pack, in this transaction, keyed by opening id (demo openings never come through here).
         const pulledBuyback = drawn.reduce((sum, c) => sum + (prices.get(pk(c))?.buybackBits ?? 0), 0);
-        await siteRewardsForOpening(tx, customer.id, opening.id, pack.priceBits, pulledBuyback);
+        const rewards = await siteRewardsForOpening(tx, customer.id, opening.id, pack.priceBits, pulledBuyback);
+        // Cardbit Club: +XP% and +Sparks% on top (no-op unless SITE_SUBSCRIPTIONS=on and the plan is paid up).
+        await subscriberBonusForOpening(tx, SITE_REWARDS_SHOP_KEY, customer.id, opening.id, rewards, { xp: (i) => awardXp(tx, i) });
         result = { openingId: opening.id, sealed: opening.sealed };
       } else if (a.action === "reveal") {
         const o = await tx.siteOpening.findFirst({ where: { id: a.id || "", customerId: customer.id } });

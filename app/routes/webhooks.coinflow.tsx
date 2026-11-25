@@ -4,6 +4,7 @@ import type { ActionFunctionArgs } from "react-router";
 import db from "../db.server";
 import { eventId, handleCoinflowEvent, verifyWebhook, type CoinflowEvent } from "../site/payments/coinflow.server";
 import { topupReceiptSender } from "../site/payments/receipts.server";
+import { handleCoinflowSubscriptionEvent } from "../site/payments/coinflow-subscriptions.server";
 
 export async function loader() {
   return new Response("Not found", { status: 404 });
@@ -32,7 +33,13 @@ export async function action({ request }: ActionFunctionArgs) {
       .catch((e: { code?: string }) => {
         if (e.code !== "P2002") throw e;
       });
-  const result = await handleCoinflowEvent({ db, onCredited: topupReceiptSender() }, ev);
+  // Cardbit Club: subscription lifecycle and renewal payments go to the subscription handler; refunds
+  // and chargebacks try top-ups first, then subscription payments.
+  const t = ev.eventType || "";
+  const subFirst = t.startsWith("Subscription ") || (t === "Settled" && !ev.data?.webhookInfo?.topupId);
+  let result = subFirst ? await handleCoinflowSubscriptionEvent(db, ev) : null;
+  if (result === null) result = await handleCoinflowEvent({ db, onCredited: topupReceiptSender() }, ev);
+  if (/^ignored:(unknown_payment|no_topup)/.test(result)) result = (await handleCoinflowSubscriptionEvent(db, ev)) ?? result;
   await db.siteWebhookEvent.update({ where: { id }, data: { result, processedAt: new Date() } });
   return Response.json({ ok: true, result });
 }
