@@ -10,6 +10,7 @@ import { CopyLockError, FeePaymentError, ShippingError, createShipment, parseAdd
 import { siteShippingDeps } from "../site/shipping/wire.server";
 import { staffEmails } from "../site/shipping/staff.server";
 import { GuardRefused, assertRate, assertShipAllowed } from "../site/core/guard.server";
+import { gateApi } from "../site/waitlist/gate.server";
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 
@@ -52,6 +53,7 @@ export const loader = () => new Response("Not found", { status: 404 });
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!siteOn()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   if (request.method !== "POST" || !sameOriginJson(request)) return json({ error: "Invalid request.", code: "invalid" }, 400);
   const customer = await currentCustomer(db, request);
   if (!customer) return json({ error: "Sign In to Continue.", code: "sign_in" }, 401);

@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual, createHash } from "node:crypto";
 import type { Prisma, PrismaClient, SiteTopup } from "@prisma/client";
 import { applyLedger, balanceOf, TOPUP_PACKAGES } from "../core/ledger.server";
 import { siteFundEntries, voidSiteFundEntries } from "../promos/promos.server";
+import { clawFounding, settleFounding } from "../waitlist/waitlist.server";
 import { assessTopupRisk, sendRiskAlert, type ProcessorRisk, type RiskOutcome } from "./risk.server";
 
 type Tx = Prisma.TransactionClient;
@@ -202,6 +203,7 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
       if (t.bonusBits > 0)
         await applyLedger(tx, { customerId: t.customerId, delta: t.bonusBits, kind: "BONUS", idempotencyKey: `topup:${t.id}:bonus`, ref: d.id, note: "Top-up bonus" });
       await siteFundEntries(tx, t.customerId, t.id, t.baseBits); // Daily Giveaway: 1 entry per 100 paid Cardbits
+      await settleFounding(tx, t.customerId, { topupId: t.id }); // Founding Collector bonus unlocks with the first top-up
       // Fraud review: a risky payment pauses shipping (or freezes the account) and alerts staff.
       const risk = await assessTopupRisk(tx, t, d.risk);
       credited = { t, balance: await balanceOf(tx, t.customerId), risk };
@@ -229,6 +231,7 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
       if (want === 0) return "replay";
       const r = await clawBack(tx, t, want, "REFUND", `refund:${d.refundId || paymentId}`);
       if (r.replay) return "replay";
+      await clawFounding(tx, t, "REFUND");
       await voidSiteFundEntries(tx, t.id);
       await tx.siteTopup.update({
         where: { id: t.id },
@@ -248,6 +251,7 @@ export async function handleCoinflowEvent(deps: WebhookDeps, ev: CoinflowEvent):
       const r = want > 0 ? await clawBack(tx, t, want, "CHARGEBACK", `chargeback:${paymentId}`) : { taken: 0, owed: 0, replay: false };
       if (r.replay) return "replay";
       await voidSiteFundEntries(tx, t.id);
+      await clawFounding(tx, t, "CHARGEBACK");
       await tx.siteTopup.update({
         where: { id: t.id },
         data: { status: "CHARGEBACK", clawedBits: { increment: r.taken }, owedBits: { increment: r.owed } },

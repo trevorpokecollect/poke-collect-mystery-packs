@@ -4,6 +4,7 @@ import db from "../db.server";
 import { currentCustomer } from "../site/core/auth.server";
 import { SITE_ENABLED, htmlResponse, notFound } from "../site/shell.server";
 import { rewardsPage } from "../site/pages.server";
+import { gatePage } from "../site/waitlist/gate.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) =>
-  SITE_ENABLED() ? htmlResponse(rewardsPage(await currentCustomer(db, request))) : notFound();
+  !SITE_ENABLED() ? notFound() : (gatePage(request) ?? htmlResponse(rewardsPage(await currentCustomer(db, request))));

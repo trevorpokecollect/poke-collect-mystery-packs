@@ -5,14 +5,20 @@ import db from "../db.server";
 import { clientIp, currentCustomer } from "../site/core/auth.server";
 import { json, sameOriginJson, siteOn } from "../site/store/http.server";
 import { PromoError, joinEmail, leave, requestSms, welcomeOn, welcomeView } from "../site/promos/promos.server";
+import { foundingView } from "../site/waitlist/waitlist.server";
+import { gateApi } from "../site/waitlist/gate.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!siteOn()) return new Response("Not found", { status: 404 });
-  return json(await welcomeView(db, await currentCustomer(db, request)));
+  { const gated = gateApi(request); if (gated) return gated; }
+  const customer = await currentCustomer(db, request);
+  // Founding Collector (waitlist) badge + bonus status, for the account pages.
+  return json({ ...(await welcomeView(db, customer)), founding: customer ? await foundingView(db, customer) : null });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!siteOn()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   if (!welcomeOn()) return json({ error: "Welcome Rewards Are Not Open Yet." }, 404);
   if (request.method !== "POST" || !sameOriginJson(request)) return json({ error: "Method not allowed." }, 405);
   const customer = await currentCustomer(db, request);

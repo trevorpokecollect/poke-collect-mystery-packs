@@ -12,6 +12,7 @@ import { PlayPaused, assertNotPaused, fmtDate } from "../site/play/limits.server
 import { SubscriptionError, TIERS, currentSubscription, requestCancel, subscriptionView, tierById, type TierId } from "../site/play/subscriptions.server";
 import { AGE_REQUIRED, ageConfirmed } from "../lib/cardbit-age.server";
 import { SITE_SHOP } from "../site/rewards/rewards.server";
+import { gateApi, gatePage } from "../site/waitlist/gate.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const PATH = "/club";
@@ -77,6 +78,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
+  { const gated = gatePage(request); if (gated) return gated; }
   const customer = await currentCustomer(db, request);
   const url = new URL(request.url);
   return htmlResponse(await page(customer?.id ?? null, url.searchParams.get("joined") ? { ok: "Thanks! Your plan activates as soon as the payment clears." } : undefined));
@@ -84,6 +86,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   if (!sameOrigin(request)) return new Response("Forbidden", { status: 403 });
   const customer = await currentCustomer(db, request);
   if (!customer) return new Response(null, { status: 303, headers: { Location: `/sign-in?return_to=${encodeURIComponent(PATH)}` } });

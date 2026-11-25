@@ -7,11 +7,13 @@ import { json, sameOriginJson, siteOn } from "../site/store/http.server";
 import { enterOrBonus } from "../giveaway/entries.server";
 import { customerView, promptView } from "../giveaway/service.server";
 import { SITE_GIVEAWAY_SHOP as shop, giveawayHeld, settleDueSiteRounds, subscribedToEmail } from "../site/promos/promos.server";
+import { gateApi } from "../site/waitlist/gate.server";
 
 const SAFE = /^(Enter today|Choose an|Your entry|Visit Whatnot|Confirm you|The daily|Email subscription)/;
 
 async function handle(request: Request, mutate: boolean) {
   if (!siteOn()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   const customer = await currentCustomer(db, request);
   const id = customer?.id ?? null;
   if (mutate && (!customer || request.method !== "POST")) return json({ error: "Sign in to enter." }, 403);

@@ -8,6 +8,8 @@ import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { SITE_ENABLED, htmlResponse, storefrontShell } from "./site/shell.server";
 import "./site/boot.server";
+import { gatePass, previewRedirect } from "./site/waitlist/gate.server";
+import { waitlistResponse } from "./site/waitlist/page.server";
 
 startGiveawayClock();
 
@@ -23,6 +25,10 @@ export default async function handleRequest(
   // The _index route stays the Shopify app's install page everywhere else.
   const url = new URL(request.url);
   if (SITE_ENABLED() && url.pathname === "/" && !url.searchParams.has("shop")) {
+    // Coming-soon mode (CARDBIT_WAITLIST=on): the public sees the waitlist; staff use ?preview=<key>.
+    const preview = previewRedirect(request);
+    if (preview) return preview;
+    if (!gatePass(request)) return waitlistResponse();
     return htmlResponse(storefrontShell({ title: "cardbit · Digital Packs, Real Cards", indexPath: "/" }));
   }
   addDocumentResponseHeaders(request, responseHeaders);

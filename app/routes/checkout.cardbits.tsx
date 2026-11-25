@@ -11,6 +11,7 @@ import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits } from ".
 import { createStripeCheckout, siteStripe, siteStripeConfig, topupProvider } from "../site/payments/stripe-site.server";
 import { GuardRefused, assertRate, assertTopupAllowed, threeDSecureFor } from "../site/core/guard.server";
 import { PromoCodeError, normalizeCode, quotePromo, releasePendingUses } from "../site/promos/promo-codes.server";
+import { gateApi, gatePage } from "../site/waitlist/gate.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -85,6 +86,7 @@ const json = (body: unknown, status = 200) =>
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
+  { const gated = gatePage(request); if (gated) return gated; }
   const url = new URL(request.url);
   const returnTo = safeReturn(url.searchParams.get("return_to") || "/");
   const g = await guard(request, url.searchParams.get("amount"), returnTo);
@@ -94,6 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   const asJson = wantsJson(request);
   const fd = await request.formData();
   const returnTo = safeReturn(String(fd.get("return_to") || "/"));

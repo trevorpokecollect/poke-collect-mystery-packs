@@ -21,6 +21,7 @@ import {
 } from "../site/play/limits.server";
 import { currentSubscription, requestCancel } from "../site/play/subscriptions.server";
 import { cancelAtCoinflow } from "../site/payments/coinflow-subscriptions.server";
+import { gateApi, gatePage } from "../site/waitlist/gate.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const PATH = "/account/limits";
@@ -102,6 +103,7 @@ async function page(customerId: string, flash?: { ok?: string; error?: string })
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
+  { const gated = gatePage(request); if (gated) return gated; }
   const customer = await currentCustomer(db, request);
   if (!customer) return new Response(null, { status: 303, headers: { Location: `/sign-in?return_to=${encodeURIComponent(PATH)}` } });
   return htmlResponse(await page(customer.id));
@@ -109,6 +111,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   if (!sameOrigin(request)) return new Response("Forbidden", { status: 403 });
   const customer = await currentCustomer(db, request);
   if (!customer) return new Response(null, { status: 303, headers: { Location: `/sign-in?return_to=${encodeURIComponent(PATH)}` } });

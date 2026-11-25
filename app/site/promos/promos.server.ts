@@ -11,6 +11,7 @@
 // enable the site's CardbitGiveawayConfig row.
 import type { Prisma, PrismaClient, SiteCustomer } from "@prisma/client";
 import { applyLedger } from "../core/ledger.server";
+import { settleFounding } from "../waitlist/waitlist.server";
 import { activeRound, lockDesk, post, sha } from "../../giveaway/entries.server";
 import { drawWinners, snapshotHash } from "../../giveaway/draw";
 import { drawWindow, giveawayTotals, paidEntries, PRIZE, rulesLink, STATES } from "../../giveaway/rules";
@@ -129,7 +130,9 @@ export async function confirmSms(db: PrismaClient, customerId: string, phone: st
       customerId, delta: WELCOME.sms, kind: "BONUS",
       idempotencyKey: "welcome:sms:" + customerId, ref: "welcome", note: "Welcome Rewards: Text Signup",
     });
-    return { credited: replay ? 0 : WELCOME.sms };
+    // Founding Collectors who already topped up get the rest of their text bonus (600 total) now.
+    const founding = await settleFounding(tx, customerId, { now });
+    return { credited: (replay ? 0 : WELCOME.sms) + founding.credited };
   });
 }
 
