@@ -4,6 +4,7 @@
 import policies from "./partials/policies.html?raw";
 import { STYLES, SITE_CSS_V, assetUrl } from "./shell.server";
 import rewardsIn from "./partials/rewards-in.html?raw";
+import { withClubIconUrls } from "./play/club-icons";
 import rewardsOut from "./partials/rewards-out.html?raw";
 import leaderboardIn from "./partials/leaderboard-in.html?raw";
 import leaderboardOut from "./partials/leaderboard-out.html?raw";
@@ -90,7 +91,7 @@ const rewardStyles = [...STYLES, "cardbit-rewards.css"];
 const script = (name: string) => `<script src="${assetUrl(name)}" defer></script>`;
 
 export function rewardsPage(customer: { name: string | null; email: string } | null): string {
-  const body = withChrome(member(customer ? rewardsIn : rewardsOut, customer)) + walletScript + (customer ? script("cardbit-rewards.js") : "");
+  const body = withChrome(member(withClubIconUrls(customer ? rewardsIn : rewardsOut), customer)) + walletScript + (customer ? script("cardbit-rewards.js") : "");
   return page("Rewards", "Cardbit Rewards: levels, XP, daily check-in streaks, free Daily Spins and Latch & Friends icons.", body, rewardStyles);
 }
 

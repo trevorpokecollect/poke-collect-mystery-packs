@@ -9,6 +9,8 @@ import { LevelError, dailyCheckIn, rewardsView, setAvatar } from "../lib/cardbit
 import { SpinError, dailySpin } from "../lib/cardbit-spinner.server";
 import { AGE_REQUIRED, ageConfirmed, confirmAge } from "../lib/cardbit-age.server";
 import { PlayPaused, assertNotPaused } from "../site/play/limits.server";
+import { activeTier } from "../site/play/subscriptions.server";
+import { CLUB_SUFFIX, clubIcons, isClubIcon } from "../site/play/club-icons";
 import { SITE_SHOP, siteLeaderboardOn, siteLevelsOn, siteWeeklyStandings } from "../site/rewards/rewards.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -17,7 +19,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const customer = await currentCustomer(db, request);
   const leaderboard = siteLeaderboardOn() ? await siteWeeklyStandings(db, customer?.id) : null;
   if (!customer) return json({ enabled: true, signedIn: false, leaderboard });
-  return json({ signedIn: true, ...(await rewardsView(db, SITE_SHOP, customer.id)), leaderboard });
+  return json({ signedIn: true, ...(await viewWithClub(customer.id)), leaderboard });
+}
+
+// Rewards view plus the animated Club icons (unlocked while a Club plan's perks apply).
+async function viewWithClub(customerId: string) {
+  const [view, tier] = await Promise.all([rewardsView(db, SITE_SHOP, customerId), activeTier(db, customerId)]);
+  // Perks ended: fall back to the regular version of the same character if it's unlocked.
+  if (!tier && isClubIcon(view.avatar.iconId)) {
+    const base = view.avatar.iconId.slice(0, -CLUB_SUFFIX.length);
+    const iconId = view.icons.some((i) => i.id === base && i.unlocked) ? base : null;
+    await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId } }, data: { iconId } });
+    view.avatar.iconId = iconId;
+  }
+  return { ...view, icons: [...view.icons, ...clubIcons(Boolean(tier))] };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -37,7 +52,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     if (input?.action === "checkin") {
       const result = await dailyCheckIn(db, SITE_SHOP, customer.id);
-      return json({ checkIn: result, ...(await rewardsView(db, SITE_SHOP, customer.id)) });
+      return json({ checkIn: result, ...(await viewWithClub(customer.id)) });
     }
     if (input?.action === "spin") {
       if (!(await ageConfirmed(db, SITE_SHOP, customer.id))) return json(AGE_REQUIRED, 403);
@@ -45,12 +60,18 @@ export async function action({ request }: ActionFunctionArgs) {
       const spin = await dailySpin(db, SITE_SHOP, customer.id, input.tier);
       return json({
         result: { tier: spin.tier, prizeKind: spin.prizeKind, amount: spin.amount, card: spin.card, replay: spin.replay },
-        ...(await rewardsView(db, SITE_SHOP, customer.id)),
+        ...(await viewWithClub(customer.id)),
       });
+    }
+    if (input?.action === "avatar" && isClubIcon(input.iconId)) {
+      if (!(await activeTier(db, customer.id))) return json({ error: "Club icons are for Cardbit Club members." }, 403);
+      await setAvatar(db, SITE_SHOP, customer.id, { color: input.color ?? undefined });
+      await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: customer.id } }, data: { iconId: input.iconId } });
+      return json(await viewWithClub(customer.id));
     }
     if (input?.action === "avatar") {
       await setAvatar(db, SITE_SHOP, customer.id, { iconId: input.iconId, color: input.color });
-      return json(await rewardsView(db, SITE_SHOP, customer.id));
+      return json(await viewWithClub(customer.id));
     }
     return json({ error: "Unknown action." }, 400);
   } catch (error) {

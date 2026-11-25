@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><style>
+@keyframes cb-bob-cryobyte{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes cb-scan-cryobyte{0%{transform:translateY(-80px)}100%{transform:translateY(300px)}}
+@keyframes cb-rim-cryobyte{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+.cb-bob-cryobyte{animation:cb-bob-cryobyte 2.6s ease-in-out infinite}
+.cb-scan-cryobyte{animation:cb-scan-cryobyte 3.2s linear infinite}
+.cb-rim-cryobyte{animation:cb-rim-cryobyte 1.8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.cb-bob-cryobyte,.cb-scan-cryobyte,.cb-rim-cryobyte{animation:none}}
+</style>
+<defs><radialGradient id="bg-cryobyte" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#2a5b7a"/><stop offset="1" stop-color="#0f1526"/></radialGradient>
+<linearGradient id="face-cryobyte" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b303b"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+<filter id="glow-cryobyte" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<pattern id="grid-cryobyte" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#8FE3FF" stroke-opacity=".10" stroke-width="1"/></pattern>
+<clipPath id="c-cryobyte"><circle cx="128" cy="128" r="128"/></clipPath></defs><g clip-path="url(#c-cryobyte)"><rect width="256" height="256" fill="url(#bg-cryobyte)"/><rect width="256" height="256" fill="url(#grid-cryobyte)"/><g class="cb-bob-cryobyte">
+<ellipse cx="128" cy="226" rx="60" ry="9" fill="#000" opacity=".3"/>
+<rect x="104" y="200" width="16" height="14" fill="#2a2e36"/><rect x="97" y="212" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="97" y="220" width="30" height="5" rx="2" fill="#8FE3FF"/><rect x="144" y="200" width="16" height="14" fill="#2a2e36"/><rect x="137" y="212" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="137" y="220" width="30" height="5" rx="2" fill="#8FE3FF"/><g transform="translate(74,170) scale(1,1)"><rect x="-9" y="-14" width="18" height="16" rx="4" fill="#e7eaef"/><rect x="-9" y="-4" width="18" height="5" fill="#8FE3FF"/><path d="M-10,4 a10,10 0 1,0 20,0" stroke="#e7eaef" stroke-width="7" fill="none" stroke-linecap="round"/></g><g transform="translate(190,170) scale(-1,1)"><rect x="-9" y="-14" width="18" height="16" rx="4" fill="#e7eaef"/><rect x="-9" y="-4" width="18" height="5" fill="#8FE3FF"/><path d="M-10,4 a10,10 0 1,0 20,0" stroke="#e7eaef" stroke-width="7" fill="none" stroke-linecap="round"/></g><g fill="#8FE3FF" filter="url(#glow-cryobyte)"><rect x="92" y="58" width="8" height="34"/><rect x="80" y="70" width="32" height="8"/><rect x="164" y="58" width="8" height="34"/><rect x="152" y="70" width="32" height="8"/></g><polygon points="132,80 184,108 184,170 132,200 80,170 80,108" fill="url(#face-cryobyte)" stroke="#8FE3FF" stroke-width="7" stroke-linejoin="round" filter="url(#glow-cryobyte)"/><g stroke="#8FE3FF" stroke-width="3" opacity=".8"><path d="M132,98 V114 M124,102 L140,110 M140,102 L124,110"/></g><rect x="104.0" y="131" width="16" height="18" rx="3" fill="#fff"/><rect x="144.0" y="131" width="16" height="18" rx="3" fill="#fff"/><rect x="124" y="164" width="16" height="4" rx="2" fill="#fff"/></g></g>
+<defs><linearGradient id="scan-cryobyte" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="club-clip-cryobyte"><circle cx="128" cy="128" r="128"/></clipPath></defs>
+<g clip-path="url(#club-clip-cryobyte)"><rect class="cb-scan-cryobyte" x="0" y="0" width="256" height="60" fill="url(#scan-cryobyte)"/></g>
+<circle class="cb-rim-cryobyte" cx="128" cy="128" r="124" fill="none" stroke="#8CE8FF" stroke-width="7"/></svg>

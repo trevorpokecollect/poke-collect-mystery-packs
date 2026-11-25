@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><style>
+@keyframes cb-bob-glitchog{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes cb-scan-glitchog{0%{transform:translateY(-80px)}100%{transform:translateY(300px)}}
+@keyframes cb-rim-glitchog{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+.cb-bob-glitchog{animation:cb-bob-glitchog 2.6s ease-in-out infinite}
+.cb-scan-glitchog{animation:cb-scan-glitchog 3.2s linear infinite}
+.cb-rim-glitchog{animation:cb-rim-glitchog 1.8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.cb-bob-glitchog,.cb-scan-glitchog,.cb-rim-glitchog{animation:none}}
+</style>
+<defs><radialGradient id="bg-glitchog" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#3c1f6b"/><stop offset="1" stop-color="#120f24"/></radialGradient>
+<linearGradient id="face-glitchog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b303b"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+<filter id="glow-glitchog" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<pattern id="grid-glitchog" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#B26BFF" stroke-opacity=".10" stroke-width="1"/></pattern>
+<clipPath id="c-glitchog"><circle cx="128" cy="128" r="128"/></clipPath></defs><g clip-path="url(#c-glitchog)"><rect width="256" height="256" fill="url(#bg-glitchog)"/><rect width="256" height="256" fill="url(#grid-glitchog)"/><g class="cb-bob-glitchog">
+<ellipse cx="128" cy="226" rx="60" ry="9" fill="#000" opacity=".3"/>
+<g filter="url(#glow-glitchog)"><polygon points="70,128 54,84 98,108" fill="#ff4fd8" opacity="0.8"/><polygon points="96,100 98,52 126,94" fill="#B26BFF" opacity="1"/><polygon points="124,92 146,46 154,96" fill="#7cf3ff" opacity="0.9"/><polygon points="152,98 192,66 178,118" fill="#B26BFF" opacity="1"/><polygon points="176,122 216,112 186,148" fill="#ff4fd8" opacity="0.8"/></g><rect x="104" y="202" width="16" height="14" fill="#2a2e36"/><rect x="97" y="214" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="97" y="222" width="30" height="5" rx="2" fill="#B26BFF"/><rect x="144" y="202" width="16" height="14" fill="#2a2e36"/><rect x="137" y="214" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="137" y="222" width="30" height="5" rx="2" fill="#B26BFF"/><rect x="78" y="100" width="108" height="100" rx="40" fill="url(#face-glitchog)" stroke="#B26BFF" stroke-width="7" filter="url(#glow-glitchog)"/><rect x="88" y="134" width="30" height="5" fill="#ff4fd8" opacity=".7"/><rect x="150" y="160" width="26" height="4" fill="#7cf3ff" opacity=".7"/><g transform="translate(-3,0)" opacity=".55"><polygon points="103.0,136.0 123.0,146.0 123.0,151.0 103.0,149.0" fill="#ff4fd8"/><polygon points="141.0,146.0 161.0,136.0 161.0,149.0 141.0,151.0" fill="#ff4fd8"/></g><g transform="translate(3,0)" opacity=".55"><polygon points="103.0,136.0 123.0,146.0 123.0,151.0 103.0,149.0" fill="#7cf3ff"/><polygon points="141.0,146.0 161.0,136.0 161.0,149.0 141.0,151.0" fill="#7cf3ff"/></g><polygon points="103.0,136.0 123.0,146.0 123.0,151.0 103.0,149.0" fill="#fff"/><polygon points="141.0,146.0 161.0,136.0 161.0,149.0 141.0,151.0" fill="#fff"/><path d="M130.0,170 Q136,177 142.0,167" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/></g></g>
+<defs><linearGradient id="scan-glitchog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="club-clip-glitchog"><circle cx="128" cy="128" r="128"/></clipPath></defs>
+<g clip-path="url(#club-clip-glitchog)"><rect class="cb-scan-glitchog" x="0" y="0" width="256" height="60" fill="url(#scan-glitchog)"/></g>
+<circle class="cb-rim-glitchog" cx="128" cy="128" r="124" fill="none" stroke="#FF4DD2" stroke-width="7"/></svg>

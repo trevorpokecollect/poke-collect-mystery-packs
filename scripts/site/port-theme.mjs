@@ -143,6 +143,9 @@ const PATCHES = {
     [SHIP_HOME_FROM, SHIP_HOME],
   ],
   'cardbit-rewards.js': [
+    // Cardbit Club icons: locked label says Club, not a level.
+    ["b.append(img(iconUrls[i.id], 64, 64), el('span', null, i.name), el('small', null, i.unlocked ? '' : 'Level ' + i.minLevel));\n      b.setAttribute('aria-label', i.unlocked ? i.name : i.name + ', Unlocks at Level ' + i.minLevel);",
+     "b.append(img(iconUrls[i.id], 64, 64), el('span', null, i.name), el('small', null, i.unlocked ? '' : /* SITE */ i.club ? 'Club' : 'Level ' + i.minLevel));\n      b.setAttribute('aria-label', i.unlocked ? i.name : i.name + (/* SITE */ i.club ? ', For Cardbit Club Members' : ', Unlocks at Level ' + i.minLevel));"],
     // 18+ confirmation when the server asks for it (site only; Shopify uses its own age gate).
     ["  async function call(body) {\n", AGE_CONFIRM + "  async function call(body) {\n"],
     ["    if (!res.ok) throw Object.assign(new Error(data.error || 'Something Went Wrong.'), { status: res.status });",

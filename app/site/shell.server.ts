@@ -20,6 +20,7 @@ import sitePlaySource from "../../public/site/js/cardbit-site-play.js?raw";
 import sitePlayCssSource from "../../public/site/css/cardbit-site-play.css?raw";
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
+import { CLUB_ICON_URLS } from "./play/club-icons";
 
 const files = manifest as Record<string, string>;
 // Cache-busting versions for the site's own files (not part of the theme port).
@@ -94,6 +95,7 @@ function rewardIcons(): string {
   // Latch & Friends icons for the header Rewards badge (same files as the Rewards page).
   const map: Record<string, string> = {};
   for (const id of ICON_IDS) map[id] = assetUrl(`cardbit-icon-${id}${id.startsWith("latch") ? ".webp" : ".svg"}`);
+  Object.assign(map, CLUB_ICON_URLS); // animated Cardbit Club icons (site only)
   return JSON.stringify(map).replace(/</g, "\\u003c");
 }
 

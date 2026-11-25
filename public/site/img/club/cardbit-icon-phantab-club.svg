@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><style>
+@keyframes cb-bob-phantab{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes cb-scan-phantab{0%{transform:translateY(-80px)}100%{transform:translateY(300px)}}
+@keyframes cb-rim-phantab{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+.cb-bob-phantab{animation:cb-bob-phantab 2.6s ease-in-out infinite}
+.cb-scan-phantab{animation:cb-scan-phantab 3.2s linear infinite}
+.cb-rim-phantab{animation:cb-rim-phantab 1.8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.cb-bob-phantab,.cb-scan-phantab,.cb-rim-phantab{animation:none}}
+</style>
+<defs><radialGradient id="bg-phantab" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#3a2a6b"/><stop offset="1" stop-color="#120f24"/></radialGradient>
+<linearGradient id="face-phantab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b303b"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+<filter id="glow-phantab" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<pattern id="grid-phantab" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#C7B4FF" stroke-opacity=".10" stroke-width="1"/></pattern>
+<clipPath id="c-phantab"><circle cx="128" cy="128" r="128"/></clipPath></defs><g clip-path="url(#c-phantab)"><rect width="256" height="256" fill="url(#bg-phantab)"/><rect width="256" height="256" fill="url(#grid-phantab)"/><g class="cb-bob-phantab">
+<ellipse cx="128" cy="226" rx="60" ry="9" fill="#000" opacity=".3"/>
+<path d="M84,74 H180 V196 L166,184 L152,198 L138,184 L124,198 L110,184 L96,198 L84,186 Z" fill="url(#face-phantab)" stroke="#C7B4FF" stroke-width="6" stroke-linejoin="round" filter="url(#glow-phantab)" opacity=".95"/><path d="M84,74 H180 V96 H84 Z" fill="#C7B4FF" opacity=".9"/><g fill="#17191f"><circle cx="96" cy="85" r="4"/><circle cx="108" cy="85" r="4"/><circle cx="120" cy="85" r="4"/></g><path d="M78,140 Q60,134 56,150" stroke="#C7B4FF" stroke-width="9" fill="none" stroke-linecap="round" opacity=".85"/><path d="M186,140 Q202,126 206,112" stroke="#C7B4FF" stroke-width="9" fill="none" stroke-linecap="round" opacity=".85"/><rect x="108" y="122" width="14" height="20" rx="4" fill="#fff"/><rect x="142" y="122" width="14" height="20" rx="4" fill="#fff"/><rect x="124" y="156" width="16" height="14" rx="6" fill="#fff"/><rect x="186" y="52" width="14" height="14" rx="2.52" fill="#C7B4FF" filter="url(#glow-phantab)"/></g></g>
+<defs><linearGradient id="scan-phantab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="club-clip-phantab"><circle cx="128" cy="128" r="128"/></clipPath></defs>
+<g clip-path="url(#club-clip-phantab)"><rect class="cb-scan-phantab" x="0" y="0" width="256" height="60" fill="url(#scan-phantab)"/></g>
+<circle class="cb-rim-phantab" cx="128" cy="128" r="124" fill="none" stroke="#B07CFF" stroke-width="7"/></svg>

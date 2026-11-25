@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><style>
+@keyframes cb-bob-wyrmware{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes cb-scan-wyrmware{0%{transform:translateY(-80px)}100%{transform:translateY(300px)}}
+@keyframes cb-rim-wyrmware{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+.cb-bob-wyrmware{animation:cb-bob-wyrmware 2.6s ease-in-out infinite}
+.cb-scan-wyrmware{animation:cb-scan-wyrmware 3.2s linear infinite}
+.cb-rim-wyrmware{animation:cb-rim-wyrmware 1.8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.cb-bob-wyrmware,.cb-scan-wyrmware,.cb-rim-wyrmware{animation:none}}
+</style>
+<defs><radialGradient id="bg-wyrmware" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#5a1424"/><stop offset="1" stop-color="#140d1a"/></radialGradient>
+<linearGradient id="face-wyrmware" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b303b"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+<filter id="glow-wyrmware" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<pattern id="grid-wyrmware" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#FF4D6D" stroke-opacity=".10" stroke-width="1"/></pattern>
+<clipPath id="c-wyrmware"><circle cx="128" cy="128" r="128"/></clipPath></defs><g clip-path="url(#c-wyrmware)"><rect width="256" height="256" fill="url(#bg-wyrmware)"/><rect width="256" height="256" fill="url(#grid-wyrmware)"/><g class="cb-bob-wyrmware">
+<ellipse cx="128" cy="226" rx="60" ry="9" fill="#000" opacity=".3"/>
+<g stroke="#FF4D6D" stroke-width="3" fill="none" stroke-linejoin="round" filter="url(#glow-wyrmware)" opacity=".9"><polygon points="80,132 34,86 50,150"/><path d="M80,132 L50,150 M34,86 L62,118"/><polygon points="184,132 230,86 214,150"/><path d="M184,132 L214,150 M230,86 L202,118"/><path d="M106,60 L94,30 L118,56 M158,60 L170,30 L146,56"/></g><rect x="104" y="202" width="16" height="14" fill="#2a2e36"/><rect x="97" y="214" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="97" y="222" width="30" height="5" rx="2" fill="#FF4D6D"/><rect x="144" y="202" width="16" height="14" fill="#2a2e36"/><rect x="137" y="214" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="137" y="222" width="30" height="5" rx="2" fill="#FF4D6D"/><polygon points="132,52 178,82 184,150 160,200 104,200 80,150 86,82" fill="url(#face-wyrmware)" stroke="#FF4D6D" stroke-width="7" stroke-linejoin="round" filter="url(#glow-wyrmware)"/><g stroke="#FF4D6D" stroke-width="2" opacity=".45" fill="none"><path d="M132,52 V96 M86,82 L132,96 L178,82 M80,150 L132,186 L184,150 M132,186 V200"/></g><polygon points="104,120 128,128 128,138 104,134" fill="#fff"/><polygon points="160,120 136,128 136,138 160,134" fill="#fff"/><path d="M116,162 L124,168 L132,162 L140,168 L148,162" stroke="#fff" stroke-width="3.5" fill="none" stroke-linejoin="round"/></g></g>
+<defs><linearGradient id="scan-wyrmware" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="club-clip-wyrmware"><circle cx="128" cy="128" r="128"/></clipPath></defs>
+<g clip-path="url(#club-clip-wyrmware)"><rect class="cb-scan-wyrmware" x="0" y="0" width="256" height="60" fill="url(#scan-wyrmware)"/></g>
+<circle class="cb-rim-wyrmware" cx="128" cy="128" r="124" fill="none" stroke="#FF4D6A" stroke-width="7"/></svg>

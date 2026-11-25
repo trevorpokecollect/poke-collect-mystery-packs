@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><style>
+@keyframes cb-bob-nimbyte{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes cb-scan-nimbyte{0%{transform:translateY(-80px)}100%{transform:translateY(300px)}}
+@keyframes cb-rim-nimbyte{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+.cb-bob-nimbyte{animation:cb-bob-nimbyte 2.6s ease-in-out infinite}
+.cb-scan-nimbyte{animation:cb-scan-nimbyte 3.2s linear infinite}
+.cb-rim-nimbyte{animation:cb-rim-nimbyte 1.8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.cb-bob-nimbyte,.cb-scan-nimbyte,.cb-rim-nimbyte{animation:none}}
+</style>
+<defs><radialGradient id="bg-nimbyte" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#1f5a8a"/><stop offset="1" stop-color="#0f1526"/></radialGradient>
+<linearGradient id="face-nimbyte" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b303b"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+<filter id="glow-nimbyte" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<pattern id="grid-nimbyte" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#6FD3FF" stroke-opacity=".10" stroke-width="1"/></pattern>
+<clipPath id="c-nimbyte"><circle cx="128" cy="128" r="128"/></clipPath></defs><g clip-path="url(#c-nimbyte)"><rect width="256" height="256" fill="url(#bg-nimbyte)"/><rect width="256" height="256" fill="url(#grid-nimbyte)"/><g class="cb-bob-nimbyte">
+<ellipse cx="128" cy="226" rx="60" ry="9" fill="#000" opacity=".3"/>
+<rect x="106" y="200" width="16" height="14" fill="#2a2e36"/><rect x="99" y="212" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="99" y="220" width="30" height="5" rx="2" fill="#6FD3FF"/><rect x="142" y="200" width="16" height="14" fill="#2a2e36"/><rect x="135" y="212" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="135" y="220" width="30" height="5" rx="2" fill="#6FD3FF"/><path d="M92,190 H170 A34,34 0 0 0 176,124 A40,40 0 0 0 102,108 A32,32 0 0 0 92,190 Z" fill="url(#face-nimbyte)" stroke="#6FD3FF" stroke-width="7" stroke-linejoin="round" filter="url(#glow-nimbyte)"/><g filter="url(#glow-nimbyte)"><path d="M132,72 V40 M120,52 L132,40 L144,52" stroke="#6FD3FF" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g><path d="M40,120 H66 M34,134 H58 M196,150 H222 M204,164 H226" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".55"/><path d="M104,154 L114,144 L124,154" stroke="#fff" stroke-width="6" fill="none" stroke-linejoin="round" stroke-linecap="round"/><path d="M144,154 L154,144 L164,154" stroke="#fff" stroke-width="6" fill="none" stroke-linejoin="round" stroke-linecap="round"/><path d="M128.0,172 Q134,179 140.0,169" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/></g></g>
+<defs><linearGradient id="scan-nimbyte" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="club-clip-nimbyte"><circle cx="128" cy="128" r="128"/></clipPath></defs>
+<g clip-path="url(#club-clip-nimbyte)"><rect class="cb-scan-nimbyte" x="0" y="0" width="256" height="60" fill="url(#scan-nimbyte)"/></g>
+<circle class="cb-rim-nimbyte" cx="128" cy="128" r="124" fill="none" stroke="#7DF9FF" stroke-width="7"/></svg>

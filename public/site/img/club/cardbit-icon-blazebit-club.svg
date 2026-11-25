@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><style>
+@keyframes cb-bob-blazebit{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes cb-scan-blazebit{0%{transform:translateY(-80px)}100%{transform:translateY(300px)}}
+@keyframes cb-rim-blazebit{0%,100%{stroke-opacity:.35}50%{stroke-opacity:1}}
+.cb-bob-blazebit{animation:cb-bob-blazebit 2.6s ease-in-out infinite}
+.cb-scan-blazebit{animation:cb-scan-blazebit 3.2s linear infinite}
+.cb-rim-blazebit{animation:cb-rim-blazebit 1.8s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.cb-bob-blazebit,.cb-scan-blazebit,.cb-rim-blazebit{animation:none}}
+</style>
+<defs><radialGradient id="bg-blazebit" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#7a2a1a"/><stop offset="1" stop-color="#1a1220"/></radialGradient>
+<linearGradient id="face-blazebit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b303b"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+<filter id="glow-blazebit" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<pattern id="grid-blazebit" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#FF7A3D" stroke-opacity=".10" stroke-width="1"/></pattern>
+<clipPath id="c-blazebit"><circle cx="128" cy="128" r="128"/></clipPath></defs><g clip-path="url(#c-blazebit)"><rect width="256" height="256" fill="url(#bg-blazebit)"/><rect width="256" height="256" fill="url(#grid-blazebit)"/><g class="cb-bob-blazebit">
+<ellipse cx="128" cy="226" rx="60" ry="9" fill="#000" opacity=".3"/>
+<rect x="102" y="200" width="16" height="14" fill="#2a2e36"/><rect x="95" y="212" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="95" y="220" width="30" height="5" rx="2" fill="#FF7A3D"/><rect x="146" y="200" width="16" height="14" fill="#2a2e36"/><rect x="139" y="212" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="139" y="220" width="30" height="5" rx="2" fill="#FF7A3D"/><g transform="translate(76,170) scale(1,1)"><rect x="-9" y="-14" width="18" height="16" rx="4" fill="#e7eaef"/><rect x="-9" y="-4" width="18" height="5" fill="#FF7A3D"/><path d="M-10,4 a10,10 0 1,0 20,0" stroke="#e7eaef" stroke-width="7" fill="none" stroke-linecap="round"/></g><g transform="translate(188,170) scale(-1,1)"><rect x="-9" y="-14" width="18" height="16" rx="4" fill="#e7eaef"/><rect x="-9" y="-4" width="18" height="5" fill="#FF7A3D"/><path d="M-10,4 a10,10 0 1,0 20,0" stroke="#e7eaef" stroke-width="7" fill="none" stroke-linecap="round"/></g><path d="M96,206 H160 Q178,206 178,188 V132 H170 V112 H162 V96 H154 V80 H146 V66 H138 V80 H130 V100 H122 V86 H114 V100 H106 V116 H98 V132 H86 V188 Q86,206 96,206 Z" fill="url(#face-blazebit)" stroke="#FF7A3D" stroke-width="7" stroke-linejoin="round" filter="url(#glow-blazebit)"/><g fill="#FFB65C"><rect x="138" y="52" width="8" height="8"/><rect x="118" y="70" width="6" height="6"/><rect x="160" y="78" width="6" height="6" fill="#ffd27a"/></g><polygon points="100.0,137.5 124.0,147.5 124.0,153.5 100.0,151.5" fill="#fff"/><polygon points="140.0,147.5 164.0,137.5 164.0,151.5 140.0,153.5" fill="#fff"/><path d="M133.0,172 Q140,179 147.0,169" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round"/></g></g>
+<defs><linearGradient id="scan-blazebit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<clipPath id="club-clip-blazebit"><circle cx="128" cy="128" r="128"/></clipPath></defs>
+<g clip-path="url(#club-clip-blazebit)"><rect class="cb-scan-blazebit" x="0" y="0" width="256" height="60" fill="url(#scan-blazebit)"/></g>
+<circle class="cb-rim-blazebit" cx="128" cy="128" r="124" fill="none" stroke="#FF7A3D" stroke-width="7"/></svg>
