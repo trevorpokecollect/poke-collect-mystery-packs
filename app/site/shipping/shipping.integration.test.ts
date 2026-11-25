@@ -15,6 +15,7 @@ import {
 } from "./service.server";
 import type { Address, Label, Rate, ShippingProvider, Tracking } from "./shippo.server";
 import { sqlCopyStore } from "./sql-copy-store";
+import { priceKey } from "../core/stock.server";
 import { deskAction, loadDesk } from "./desk.server";
 import { FeePaymentError, type FeePayer, type Tx } from "./types";
 
@@ -150,6 +151,19 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     const { shipment } = await createShipment(deps, base({ copyIds: ids }));
     expect(shipment).toMatchObject({ feeKind: "FREE", feeBits: 0 });
     expect(balances.get("u1")).toBe(1000);
+  });
+
+  it("ships free at 10,000 Cardbits of card value (copy retail, else Card Broker retail, else buyback)", async () => {
+    await db.sitePrice.deleteMany({ where: { printingKey: { in: [priceKey("p1", "NM"), priceKey("p2", "NM")] } } });
+    await db.siteCopy.update({ where: { id: "c1" }, data: { retailBits: 6000 } });
+    await db.sitePrice.create({ data: { printingKey: priceKey("p2", "NM"), buybackBits: 3999 } });
+    const short = await createShipment(deps, base({ idempotencyKey: "v-1" }));
+    expect(short.shipment).toMatchObject({ feeKind: "CARDBITS", feeBits: 600 });
+    await cancelShipment(deps, short.shipment.id, "staff:t", "value test");
+    await db.sitePrice.update({ where: { printingKey: priceKey("p2", "NM") }, data: { buybackBits: 4000 } });
+    const { shipment } = await createShipment(deps, base({ idempotencyKey: "v-2" }));
+    expect(shipment).toMatchObject({ feeKind: "FREE", feeBits: 0 });
+    await db.sitePrice.deleteMany({ where: { printingKey: priceKey("p2", "NM") } });
   });
 
   it("rejects the whole selection if one copy isn't the customer's vaulted copy, leaving nothing behind", async () => {

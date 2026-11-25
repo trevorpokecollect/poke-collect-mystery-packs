@@ -18,7 +18,7 @@ export function packingSlipHtml(s: SiteShipment & { items: SiteShipmentItem[] })
       return `<tr><td class="n">${n + 1}</td><td class="img">${img}</td><td>${esc(i.title)}</td><td class="loc">${loc}</td><td class="chk">☐</td></tr>`;
     })
     .join("");
-  const fee = s.feeKind === "FREE" ? "Free (over 30 cards)" : s.feeKind === "CARDBITS" ? "600 Cardbits" : "$6.00";
+  const fee = s.feeKind === "FREE" ? "Free" : s.feeKind === "CARDBITS" ? "600 Cardbits" : "$6.00";
   const shipBy = s.processBy.toISOString().slice(0, 16).replace("T", " ");
   const tracking = s.trackingNumber ? ` · ${esc((s.carrier ?? "").toUpperCase())} ${esc(s.trackingNumber)}` : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Packing Slip ${esc(s.id)}</title>

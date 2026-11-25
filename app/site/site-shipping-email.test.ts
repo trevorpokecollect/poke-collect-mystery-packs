@@ -51,6 +51,8 @@ describe("shipping policy", () => {
     expect(shippingFee(1, "CARDBITS")).toEqual({ kind: "CARDBITS", bits: 600, cents: 0 });
     expect(shippingFee(30, "USD")).toEqual({ kind: "USD", bits: 0, cents: 600 });
     expect(shippingFee(31, "CARDBITS")).toEqual({ kind: "FREE", bits: 0, cents: 0 });
+    expect(shippingFee(2, "CARDBITS", 9_999).kind).toBe("CARDBITS");
+    expect(shippingFee(2, "CARDBITS", 10_000)).toEqual({ kind: "FREE", bits: 0, cents: 0 });
     expect(cardsUntilFree(30)).toBe(1);
     expect(cardsUntilFree(31)).toBe(0);
     expect(() => shippingFee(0, "USD")).toThrow();
@@ -127,7 +129,7 @@ describe("email templates", () => {
     expect(r.html).toContain("4,800 Cardbits");
   });
   it("labels shipping fee per policy", () => {
-    expect(renderEmail("shipment_created", { ...samples.shipment_created, feeKind: "FREE" }, {}).html).toContain("Free (over 30 cards)");
+    expect(renderEmail("shipment_created", { ...samples.shipment_created, feeKind: "FREE" }, {}).html).toContain("Free shipping");
   });
 });
 

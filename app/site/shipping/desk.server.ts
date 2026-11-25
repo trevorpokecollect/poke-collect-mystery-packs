@@ -139,7 +139,7 @@ const ct = (d: Date) =>
   d.toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 function feeText(s: SiteShipment) {
-  return s.feeKind === "FREE" ? "Free (31+ cards)" : s.feeKind === "CARDBITS" ? "600 Cardbits" : usd(s.feeCents);
+  return s.feeKind === "FREE" ? "Free" : s.feeKind === "CARDBITS" ? "600 Cardbits" : usd(s.feeCents);
 }
 
 function queueHtml(rows: QueueRow[], selectedId: string | null) {

@@ -212,7 +212,7 @@ export function renderEmail<K extends EmailKind>(kind: K, data: EmailData[K], en
     case "shipment_created": {
       const d = data as EmailData["shipment_created"];
       const n = d.cards.length;
-      const fee = d.feeKind === "FREE" ? "Free (over 30 cards)" : d.feeKind === "CARDBITS" ? "600 Cardbits" : "$6.00";
+      const fee = d.feeKind === "FREE" ? "Free shipping" : d.feeKind === "CARDBITS" ? "600 Cardbits" : "$6.00";
       const preheader = `We'll ship ${n} card${n === 1 ? "" : "s"} by ${fmtDate(d.processBy)}.`;
       return {
         subject: `Shipment Requested: ${n} Card${n === 1 ? "" : "s"}`,

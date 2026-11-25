@@ -12,6 +12,7 @@ import {
   type ShippingFee,
 } from "./policy";
 import type { Address, Rate, ShippingProvider, Tracking } from "./shippo.server";
+import { priceKey } from "../core/stock.server";
 import { CopyLockError, FeePaymentError, type CopyStore, type FeePayer } from "./types";
 
 export type ShipmentStatus =
@@ -80,8 +81,8 @@ export function fromAddressFromEnv(env: NodeJS.ProcessEnv = process.env): Addres
 
 // ---------- quote ----------
 
-export function quoteShipment(cardCount: number, method: FeeMethod) {
-  const fee = shippingFee(cardCount, method);
+export function quoteShipment(cardCount: number, method: FeeMethod, valueBits = 0) {
+  const fee = shippingFee(cardCount, method, valueBits);
   return { fee, cardsUntilFree: cardsUntilFree(cardCount), processWithinHours: 48 };
 }
 
@@ -113,6 +114,21 @@ export function parseAddress(raw: unknown): Address {
 
 // ---------- create ----------
 
+/** Total card value of the customer's copies: copy retail, else Card Broker retail, else buyback (the store's priceBits fallback). */
+export async function shipmentValueBits(db: ShippingDeps["db"], customerId: string, copyIds: string[]) {
+  if (!copyIds.length) return 0;
+  const copies = await db.siteCopy.findMany({
+    where: { id: { in: copyIds }, ownerId: customerId },
+    select: { printingKey: true, condition: true, retailBits: true },
+  });
+  const prices = await db.sitePrice.findMany({ where: { printingKey: { in: [...new Set(copies.map((c) => priceKey(c.printingKey, c.condition)))] } } });
+  const byKey = new Map(prices.map((p) => [p.printingKey, p]));
+  return copies.reduce((sum, c) => {
+    const p = byKey.get(priceKey(c.printingKey, c.condition));
+    return sum + (c.retailBits ?? p?.retailBits ?? p?.buybackBits ?? 0);
+  }, 0);
+}
+
 export type CreateShipmentInput = {
   customerId: string;
   customerEmail: string;
@@ -141,7 +157,7 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
   const copyIds = [...new Set(input.copyIds)];
   if (copyIds.length !== input.copyIds.length)
     throw new ShippingError("A card was picked twice.", "DUPLICATE_COPY");
-  const fee: ShippingFee = shippingFee(copyIds.length, input.method);
+  const fee: ShippingFee = shippingFee(copyIds.length, input.method, await shipmentValueBits(db, input.customerId, copyIds));
 
   const billing = input.billing ?? { country: input.address.country, state: input.address.state };
   await assertAllowedRegion(
