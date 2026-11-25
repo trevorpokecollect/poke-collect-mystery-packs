@@ -1,11 +1,11 @@
 // Published vault shipping policy (Trevor, Nov 24 2026):
-// $6 or 600 Cardbits per shipment, free for shipments over 30 cards, US only,
-// Nov 25: also free when the shipment's card value totals FREE_SHIPPING_VALUE_BITS or more.
+// $6 or 600 Cardbits per shipment, US only. Nov 25 (Trevor): free at 30 or more cards OR
+// FREE_SHIPPING_VALUE_BITS or more of card value.
 // processed within 48 hours. Pure functions so the UI and server quote the same way.
 
 export const SHIPPING_FEE_CENTS = 600;
 export const SHIPPING_FEE_BITS = 600;
-export const FREE_SHIPPING_OVER = 30; // strictly more than 30 cards ships free
+export const FREE_SHIPPING_CARDS = 30; // 30 or more cards ships free
 /** Card value (each copy's retail Cardbits, else buyback, same as the store's priceBits) that ships free. */
 export const FREE_SHIPPING_VALUE_BITS = 10_000;
 export const PROCESS_WITHIN_HOURS = 48;
@@ -20,7 +20,7 @@ export function shippingFee(cardCount: number, method: FeeMethod, valueBits = 0)
   if (!Number.isInteger(cardCount) || cardCount < 1) throw new RangeError("Pick at least one card to ship.");
   if (cardCount > MAX_CARDS_PER_SHIPMENT)
     throw new RangeError(`Ship up to ${MAX_CARDS_PER_SHIPMENT} cards at a time.`);
-  if (cardCount > FREE_SHIPPING_OVER || valueBits >= FREE_SHIPPING_VALUE_BITS) return { kind: "FREE", bits: 0, cents: 0 };
+  if (cardCount >= FREE_SHIPPING_CARDS || valueBits >= FREE_SHIPPING_VALUE_BITS) return { kind: "FREE", bits: 0, cents: 0 };
   return method === "CARDBITS"
     ? { kind: "CARDBITS", bits: SHIPPING_FEE_BITS, cents: 0 }
     : { kind: "USD", bits: 0, cents: SHIPPING_FEE_CENTS };
@@ -32,7 +32,7 @@ export function processBy(createdAt: Date): Date {
 
 /** Cards left to add before the shipment ships free (0 when already free). */
 export function cardsUntilFree(cardCount: number) {
-  return Math.max(0, FREE_SHIPPING_OVER + 1 - cardCount);
+  return Math.max(0, FREE_SHIPPING_CARDS - cardCount);
 }
 
 // ---- Parcel sizing ----

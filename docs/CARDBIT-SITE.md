@@ -73,7 +73,7 @@ Unchanged sources: retail and buyback come from Poke-Collect's per-card buylist 
 
 ## Published policy the site must enforce
 
-- Vault shipping: $6 or 600 Cardbits per shipment, free for shipments over 30 cards. US addresses only.
+- Vault shipping: $6 or 600 Cardbits per shipment, free at 30 or more cards or 10,000 Cardbits of card value (copy retail, else Card Broker retail, else buyback). US addresses only.
 - Excluded states: AL, HI, ID, MN, NV, NY, UT, WA. Block top-ups, pack purchases and shipping
   when either the billing address or the request IP geolocates to one of them. Check on the server
   at each of those three actions, not only at sign-up.
@@ -95,7 +95,7 @@ Tables (fenced block at the end of `schema.prisma`): `SiteShipment`, `SiteShipme
 
 Flow:
 1. `createShipment` — region check (billing + delivery + IP), Shippo address validation (the
-   normalized state is re-checked), fee per `policy.ts` ($6 / 600 Cardbits, free over 30 cards),
+   normalized state is re-checked), fee per `policy.ts` ($6 / 600 Cardbits, free at 30+ cards or 10,000 Cardbits of value),
    then one transaction: shipment row, `CopyStore.lockForShipment` (whole selection or nothing),
    `FeePayer.debitBits`. Same idempotency key = same shipment. Email "shipment_created".
 2. `cancelShipment` — only before a label; releases copies, refunds the Cardbits once.

@@ -49,12 +49,12 @@ describe("region guard", () => {
 describe("shipping policy", () => {
   it("charges $6 or 600 Cardbits up to 30 cards, free over 30", () => {
     expect(shippingFee(1, "CARDBITS")).toEqual({ kind: "CARDBITS", bits: 600, cents: 0 });
-    expect(shippingFee(30, "USD")).toEqual({ kind: "USD", bits: 0, cents: 600 });
-    expect(shippingFee(31, "CARDBITS")).toEqual({ kind: "FREE", bits: 0, cents: 0 });
+    expect(shippingFee(29, "USD")).toEqual({ kind: "USD", bits: 0, cents: 600 });
+    expect(shippingFee(30, "CARDBITS")).toEqual({ kind: "FREE", bits: 0, cents: 0 });
     expect(shippingFee(2, "CARDBITS", 9_999).kind).toBe("CARDBITS");
     expect(shippingFee(2, "CARDBITS", 10_000)).toEqual({ kind: "FREE", bits: 0, cents: 0 });
-    expect(cardsUntilFree(30)).toBe(1);
-    expect(cardsUntilFree(31)).toBe(0);
+    expect(cardsUntilFree(29)).toBe(1);
+    expect(cardsUntilFree(30)).toBe(0);
     expect(() => shippingFee(0, "USD")).toThrow();
     expect(() => shippingFee(1.5, "USD")).toThrow();
   });

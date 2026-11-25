@@ -146,8 +146,8 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     expect(mailer.sent.map((m) => m.subject)).toEqual(["Shipment Requested: 2 Cards"]);
   });
 
-  it("ships over 30 cards free", async () => {
-    const ids = Array.from({ length: 31 }, (_, i) => `c${i + 1}`);
+  it("ships 30 or more cards free", async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => `c${i + 1}`);
     const { shipment } = await createShipment(deps, base({ copyIds: ids }));
     expect(shipment).toMatchObject({ feeKind: "FREE", feeBits: 0 });
     expect(balances.get("u1")).toBe(1000);

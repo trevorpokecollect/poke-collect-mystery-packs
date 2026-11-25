@@ -11,7 +11,7 @@ import { siteShippingDeps } from "../site/shipping/wire.server";
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 
-/** ship / ship-group with a delivery address → real vault shipment (fee in Cardbits, free over 30 cards). */
+/** ship / ship-group with a delivery address → real vault shipment (fee in Cardbits, free at 30+ cards or 10,000 Cardbits of value). */
 async function ship(request: Request, customer: { id: string; email: string; frozenAt: Date | null; closedAt: Date | null }, input: Record<string, unknown>) {
   if (customer.frozenAt || customer.closedAt) return json({ error: "This account is on hold. Contact Support@cardbit.com.", code: "account_frozen" }, 403);
   const requestId = String(input.requestId || "");
