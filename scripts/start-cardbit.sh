@@ -2,6 +2,10 @@
 # This entry point belongs to the Cardbit release. Local development uses npm run dev.
 set -eu
 # The stripe-test environment has its own guarded entry point (test keys, its own database).
+# The standalone site has its own guarded entry point (cardbit-site branch, its own database).
+if [ "${RAILWAY_ENVIRONMENT_NAME:-}" = "site" ]; then
+  exec sh scripts/start-cardbit-site.sh
+fi
 if [ "${RAILWAY_ENVIRONMENT_NAME:-}" = "stripe-test" ]; then
   exec sh scripts/start-cardbit-stripe-test.sh
 fi
