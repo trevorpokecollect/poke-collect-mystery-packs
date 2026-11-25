@@ -1,4 +1,9 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, type MiddlewareFunction } from "react-router";
+import { canonicalRedirect } from "./site/canonical.server";
+
+export const middleware: MiddlewareFunction<Response>[] = [
+  async ({ request }, next) => canonicalRedirect(request) ?? next(),
+];
 
 export default function App() {
   return (
