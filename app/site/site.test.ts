@@ -24,7 +24,9 @@ describe("Cardbit site pages", () => {
     expect(await page.text()).toContain('id="cardbit-store"');
     expect((await splat(args("nope")) as Response).status).toBe(404);
     expect((await policies() as Response).status).toBe(200);
-    expect((await rules() as Response).status).toBe(404); // counsel draft not committed
+    const page2 = (await rules()) as Response;
+    expect(page2.status).toBe(200);
+    expect(await page2.text()).not.toMatch(/Counsel|NOT IN EFFECT/);
   });
 
   it("references only assets that exist, and never the Shopify-only stores", () => {
