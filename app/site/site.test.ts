@@ -26,7 +26,13 @@ describe("Cardbit site pages", () => {
     expect((await policies() as Response).status).toBe(200);
     const page2 = (await rules()) as Response;
     expect(page2.status).toBe(200);
-    expect(await page2.text()).not.toMatch(/Counsel|NOT IN EFFECT/);
+    const rulesHtml = await page2.text();
+    expect(rulesHtml).not.toMatch(/Counsel|NOT IN EFFECT/);
+    // Rules page wears the site header and footer, and uses the support address.
+    expect(rulesHtml).toContain('class="cb-nav"');
+    expect(rulesHtml).toContain('class="cb-footer"');
+    expect(rulesHtml).not.toContain("hello@cardbit.com");
+    for (const path of ["open/cobalt", "welcome"]) expect((await splat(args(path)) as Response).status).toBe(200);
   });
 
   it("references only assets that exist, and never the Shopify-only stores", () => {
@@ -45,7 +51,14 @@ describe("Cardbit site pages", () => {
     expect(js).toContain("window.CardbitSite.topupURL(amount)");
     expect(js).not.toContain("/apps/packs/api/pool");
     expect(js).toContain("navigate('ship-together/select/'+enc(id))");
+    // Audit fixes: no "Back Unverified" wording, 0 wallet when signed out, eager first grid rows.
+    expect(js).toContain("(site() ? '' : '<small>'");
+    expect(js).toContain("site() && state && !account() ? 0");
+    expect(js).toContain("site() && index<15");
+    const how = readFileSync("public/site/assets/cardbit-how-it-works.js", "utf8");
+    expect(how).toContain("/* SITE */ const sweep");
     const tools = readFileSync("public/site/assets/cardbit-collector-tools.js", "utf8");
+    expect(tools).toContain("art(c,/* SITE */ index<15)");
     // Ship Together sends a real address and pays the fee in Cardbits; excluded states can't be picked.
     expect(tools).toContain("action:'ship-group',copyIds:item.copyIds,address:item.address,method:'CARDBITS'");
     expect(tools).toContain("const EXCLUDED = ['AL','HI','ID','MN','NV','NY','UT','WA'];");

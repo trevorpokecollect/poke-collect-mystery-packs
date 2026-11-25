@@ -86,6 +86,10 @@
       if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); }
     }), { rootMargin: '0px 0px -8% 0px' });
     items.forEach(el => { el.setAttribute('data-hiw-in', ''); io.observe(el); });
+    /* SITE */ const sweep = () => items.forEach(el => { if (!el.classList.contains('is-in') && el.getBoundingClientRect().top < innerHeight) { el.classList.add('is-in'); io.unobserve(el); } });
+    /* SITE */ requestAnimationFrame(sweep); addEventListener('scroll', sweep, {passive:true}); addEventListener('resize', sweep); addEventListener('load', sweep);
+    /* SITE */ const tick = setInterval(() => { if (!root.isConnected || [...items].every(el => el.classList.contains('is-in'))) clearInterval(tick); else sweep(); }, 700); // IntersectionObserver can stall (hidden or embedded views); timers still run.
+    /* SITE */ addEventListener('beforeprint', () => items.forEach(el => el.classList.add('is-in')));
   }
 
   // Live prices and pack links from the storefront's pack list. Static copy stays if anything is missing.

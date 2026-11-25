@@ -215,7 +215,7 @@
   }
   function header(route){
     const nav=(to,label)=>link(to,'<span class="cb-nav-icon cb-nav-'+to+'" aria-hidden="true"></span><span>'+label+'</span>','cb-navlink',route===to||route.startsWith(to+'/')?'aria-current="page"':'');
-    const walletBalance=account()?.bits ?? walletBalanceLive ?? (root.hasAttribute('data-member-signed-in') || isDemoShopper() ? null : 0);
+    const walletBalance=account()?.bits ?? walletBalanceLive ?? (/* SITE */ site() && state && !account() ? 0 : root.hasAttribute('data-member-signed-in') || isDemoShopper() ? null : 0);
     const shownBalance=walletBalance == null ? '—' : number(walletBalance);
     const wallet=link('cardbits','<span class="cb-buy-label">Buy Cardbits</span><span class="cb-balance">'+icon('bits',19)+'<span data-wallet-balance>'+shownBalance+'</span></span>',
       'cb-wallet-link','aria-label="Buy Cardbits'+(walletBalance == null ? '' : ', Balance '+shownBalance+' Cardbits')+'"');
@@ -568,7 +568,7 @@
     const reverse=design && (design.url ? safeImage(design.url) : asset(design.file));
     const front = frontScan(card, true);
     const tools = extraControl || valueLine(card);
-    if (!reverse) return '<div class="cb-card-view cb-unverified">'+front+'<div class="cb-scan-actions"><small>'+ (design?.file==='card-back-ja-old.webp'?'Vintage Japanese Back · Scan Pending':'Back Unverified')+'</small>'+tools+'</div></div>';
+    if (!reverse) return '<div class="cb-card-view cb-unverified">'+front+'<div class="cb-scan-actions">'+/* SITE */(site() ? '' : '<small>'+ (design?.file==='card-back-ja-old.webp'?'Vintage Japanese Back · Scan Pending':'Back Unverified')+'</small>')+tools+'</div></div>';
     return '<div class="cb-card-view" data-card-view><div class="cb-inspect-perspective"><div class="cb-inspect-turn">'+
       '<div class="cb-inspect-front">'+front+'</div><div class="cb-inspect-back" aria-hidden="true">'+scanMarkup(reverse,design.label,true,'',card.kind)+'</div>'+
       '</div></div><div class="cb-scan-actions">'+btn('flip-copy','Show Back','cb-ghost','aria-pressed="false"')+tools+'</div></div>';
@@ -708,9 +708,9 @@
       (root.dataset.welcomeShelf !== 'false' ? window.CardbitWelcome?.teaser('home') || '' : '')+featuredSingles()+'</div>';
   }
 
-  function shopTile(card, meta) {
+  function shopTile(card, meta, eager=false) {
     const price = retailAmount(card);
-    return link('shop/'+enc(card.id),frontScan(card,false)+'<div class="cb-card-title"><h3>'+esc(cardName(card))+'</h3></div>'+tierMarkup(card)+
+    return link('shop/'+enc(card.id),frontScan(card,eager)+'<div class="cb-card-title"><h3>'+esc(cardName(card))+'</h3></div>'+tierMarkup(card)+
       '<small>'+esc(meta)+'</small><div class="cb-card-tail"><strong>'+ (price == null?'Price Pending':money(price))+
       '</strong>'+(!card.available?'<span>Sold Out</span>':'')+'</div>','cb-card-tile');
   }
@@ -1286,7 +1286,7 @@
     key:card.id,name:cardName(card),variants:[catalog.listing(card,retailAmount(card),{
       availability:card.available>0?'In stock':'Sold out'
     })]
-  })),({variants})=>shopTile(variants[0].card,pages.metadata(variants[0].card)));
+  })),({variants},index)=>shopTile(variants[0].card,pages.metadata(variants[0].card),/* SITE */ site() && index<15));
   const option=(v,l,current)=>'<option value="'+esc(v)+'" '+(current===v?'selected':'')+'>'+esc(l)+'</option>';
   function shop(){return singlesFilters.page();}
   function single(c) {

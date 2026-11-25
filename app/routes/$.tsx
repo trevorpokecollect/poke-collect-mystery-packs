@@ -22,6 +22,9 @@ const PAGES: Record<string, string> = {
   cardbits: "My Cardbits",
   help: "How It Works",
   demo: "Demo Opening",
+  open: "Demo Opening",
+  welcome: "Welcome Rewards",
+  "collector-profiles": "Collector Profile",
   latch: "Pack Opening",
 };
 

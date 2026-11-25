@@ -64,3 +64,10 @@ Server errors `address_invalid` (fields[]), `region_blocked`, `unavailable`, `in
 
 Rewards and leaderboard pages, daily giveaway entry window (Whatnot + email entry), Welcome Rewards,
 Vault Portfolio chart. Each needs a site API from the lead thread first.
+
+### Audit fixes (Nov 25)
+- Tiers appear only in pools: the store sends `tier: null` for Shop Singles and vault cards (openings keep theirs).
+- How It Works reveals: a scroll/timer sweep shows any tile at or above the viewport bottom, so tiles never stay at opacity 0.
+- Official Rules, Rewards and Leaderboard use the full site header (nav, wallet, account) and footer (`siteHeader`/`siteFooter` in `app/site/pages.server.ts`). Rules contact is Support@cardbit.com.
+- Chase and Shop Singles load the first 15 images eagerly. Singles without a back photo no longer show "Back Unverified".
+- Signed-out wallet reads 0. `/open/*` and `/welcome` return 200.

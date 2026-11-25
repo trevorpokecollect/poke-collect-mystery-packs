@@ -252,12 +252,12 @@
       for(const r of searchRows)r.wanted=saved.has(r.key);
       return searchRows;
     }
-    function chaseTile({row,variants}){
+    function chaseTile({row,variants},index){
       const c=variants[0].card;
       const tiers=new Set(variants.filter(v=>v.values.edition).map(v=>v.values.tier||''));
       const badge=tiers.size===1 ? ctx.tierMarkup({tier:[...tiers][0]}) : '';
       const places=[...new Set(variants.map(v=>v.values.edition || v.values.availability))].join(' · ');
-      return link('chase/'+enc(row.key),art(c)+'<div><strong>'+esc(c.name || c.title)+'</strong>'+badge+
+      return link('chase/'+enc(row.key),art(c,/* SITE */ index<15)+'<div><strong>'+esc(c.name || c.title)+'</strong>'+badge+
         '<small>'+esc([c.set,c.number].filter(Boolean).join(' · '))+'</small><small>'+esc([c.printing,language(c)].filter(Boolean).join(' · '))+'</small>'+
         '<span>'+esc(places)+'</span>'+(row.wanted?'<b class="ct-saved">Saved</b>':'')+'</div>','ct-chase-card');
     }

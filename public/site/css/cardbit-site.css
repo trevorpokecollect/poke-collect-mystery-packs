@@ -44,3 +44,8 @@
   #cardbit-store[data-mode="site"] .cb-wallet-link .cb-balance { padding:0 7px 0 6px; font-size:.82rem; }
   #cardbit-store[data-mode="site"] .cb-wallet-link::after { width:30px; font-size:1.2rem; }
 }
+
+/* Official Rules inside the site header/footer: no card edge around the legal frame. */
+#cardbit-store.cb-standalone .cbp { border:0; border-radius:0; box-shadow:none; margin:0; }
+#cardbit-store.cb-standalone .cbp-crumb a { color:#a5f5ed; font-weight:700; text-decoration:none; }
+#cardbit-store.cb-standalone .cbp-crumb a:hover { text-decoration:underline; }

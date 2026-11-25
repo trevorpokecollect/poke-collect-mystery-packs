@@ -62,6 +62,9 @@ const SHIP_HOME_FROM = readFileSync(join(here, 'patches/ship-home.from.txt'), 'u
 
 const PATCHES = {
   'cardbit-collector-tools.js': [
+    // Chase: the first rows load right away (lazy loading left desktop tiles blank in some browsers).
+    ["    function chaseTile({row,variants}){\n", "    function chaseTile({row,variants},index){\n"],
+    ["      return link('chase/'+enc(row.key),art(c)+'<div><strong>'", "      return link('chase/'+enc(row.key),art(c,/* SITE */ index<15)+'<div><strong>'"],
     // Ship Together: real address form and Cardbits fee on the site (scripts/site/patches/ship-together.js).
     ["    let review=null;\n", SHIP_TOGETHER + "    let review=null;\n"],
     ["Browse Packs','packs')+parcelList()+'</div>';\n", "Browse Packs','packs')+parcelList()+'</div>';\n      /* SITE */ if(siteShip())return siteShipPage(opening,held);\n"],
@@ -81,6 +84,14 @@ const PATCHES = {
     ["esc([p.tracking.company,'Tracking Number '+p.tracking.number]", "esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number]"],
   ],
   'cardbit-storefront.js': [
+    // Shop Singles: same eager first rows as Chase.
+    ["  function shopTile(card, meta) {\n", "  function shopTile(card, meta, eager=false) {\n"],
+    ["    return link('shop/'+enc(card.id),frontScan(card,false)+", "    return link('shop/'+enc(card.id),frontScan(card,eager)+"],
+    ["})),({variants})=>shopTile(variants[0].card,pages.metadata(variants[0].card)));", "})),({variants},index)=>shopTile(variants[0].card,pages.metadata(variants[0].card),/* SITE */ site() && index<15));"],
+    // No "Back Unverified" / "Scan Pending" wording on singles without a back photo.
+    ["'<div class=\"cb-scan-actions\"><small>'+ (design?.file==='card-back-ja-old.webp'?'Vintage Japanese Back · Scan Pending':'Back Unverified')+'</small>'+tools", "'<div class=\"cb-scan-actions\">'+/* SITE */(site() ? '' : '<small>'+ (design?.file==='card-back-ja-old.webp'?'Vintage Japanese Back · Scan Pending':'Back Unverified')+'</small>')+tools"],
+    // Signed out on the site: the wallet reads 0 (like Shopify), not a dash.
+    ["const walletBalance=account()?.bits ?? walletBalanceLive ?? (root.hasAttribute('data-member-signed-in') || isDemoShopper() ? null : 0);", "const walletBalance=account()?.bits ?? walletBalanceLive ?? (/* SITE */ site() && state && !account() ? 0 : root.hasAttribute('data-member-signed-in') || isDemoShopper() ? null : 0);"],
     // The site store reports mode 'shopper-test' (server-held account with per-card retailBits),
     // so the existing server-account code paths apply. These patches cover what differs on the site.
     ["const isDemoShopper = () => window.CardbitStore?.mode === 'shopper-test';",
@@ -137,6 +148,11 @@ const PATCHES = {
     ["const endpoint = new URL(root + 'apps/packs/api/rewards', location.origin).pathname;", "const endpoint = store.dataset.mode === 'site' ? '/api/rewards' : new URL(root + 'apps/packs/api/rewards', location.origin).pathname;"],
     ["  function href() {\n", "  function href() {\n    /* SITE */ if (store.dataset.mode === 'site') return '/rewards';\n"],
     ["      data = d && d.enabled && d.signedIn ? d : START;", "      /* SITE */ if (store.dataset.mode === 'site' && !(d && d.enabled && d.signedIn)) return;\n      data = d && d.enabled && d.signedIn ? d : START;"],
+  ],
+  'cardbit-how-it-works.js': [
+    // Never leave a tile invisible: anything at or above the viewport bottom shows (fast jumps, anchors, find-in-page, print).
+    ["    items.forEach(el => { el.setAttribute('data-hiw-in', ''); io.observe(el); });\n",
+     "    items.forEach(el => { el.setAttribute('data-hiw-in', ''); io.observe(el); });\n    /* SITE */ const sweep = () => items.forEach(el => { if (!el.classList.contains('is-in') && el.getBoundingClientRect().top < innerHeight) { el.classList.add('is-in'); io.unobserve(el); } });\n    /* SITE */ requestAnimationFrame(sweep); addEventListener('scroll', sweep, {passive:true}); addEventListener('resize', sweep); addEventListener('load', sweep);\n    /* SITE */ const tick = setInterval(() => { if (!root.isConnected || [...items].every(el => el.classList.contains('is-in'))) clearInterval(tick); else sweep(); }, 700); // IntersectionObserver can stall (hidden or embedded views); timers still run.\n    /* SITE */ addEventListener('beforeprint', () => items.forEach(el => el.classList.add('is-in')));\n"],
   ],
   'cardbit-flair.js': [
     // Holo shine sits on the pack image's own box and rotation, not the whole stage (pack page).

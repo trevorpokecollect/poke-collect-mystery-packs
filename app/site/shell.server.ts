@@ -22,7 +22,7 @@ const files = manifest as Record<string, string>;
 // Cache-busting versions for the site's own files (not part of the theme port).
 const version = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 10);
 const SITE_STORE_V = version(siteStoreSource);
-const SITE_CSS_V = version(siteCssSource);
+export const SITE_CSS_V = version(siteCssSource);
 const SITE_AUTH_V = version(siteAuthSource);
 const SITE_AUTH_CSS_V = version(siteAuthCssSource);
 
