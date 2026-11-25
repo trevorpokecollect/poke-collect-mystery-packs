@@ -9,10 +9,12 @@
 //      {intent:"restock-unstage", copyIds} | {intent:"restock-publish", packId, note?} (goes live now, new pool version)
 //      {intent:"pack-ev", packId, targetEvPct|null, evBandPct, minTopPer100|null, languages?, eras?} (EV is internal only)
 //      {intent:"auto-restock-run"} runs the hourly automatic buyback restock now
+//      {intent:"remove", copyIds, reason} deletes unsold Draft/Active copies (→ REMOVED, pocket freed, logged)
+//      {intent:"slot", copyId, slot, pocket?} moves one copy to a chosen slot (10001+) and pocket
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
-import { DeskError, listStock, movePool, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
+import { DeskError, listStock, moveToSlot, movePool, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
 import { RestockError, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
 
 const deny = () => Response.json({ error: "Unavailable." }, { status: 403, headers: { "Cache-Control": "no-store" } });
@@ -82,6 +84,10 @@ export async function action({ request }: ActionFunctionArgs) {
         const p = await savePackEv(db, String(b.packId || ""), b);
         return Response.json({ ok: true, pack: { id: p.id, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras } });
       }
+      case "remove":
+        return Response.json({ ok: true, ...(await removeCopies(db, actor, b.copyIds, b.reason)) });
+      case "slot":
+        return Response.json({ ok: true, ...(await moveToSlot(db, actor, b.copyId, b.slot, b.pocket)) });
       case "auto-restock-run":
         return Response.json({ ok: true, ...(await runAutoRestock(db, { force: true })) });
       default:
