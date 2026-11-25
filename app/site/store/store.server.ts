@@ -4,6 +4,7 @@
 import { createHash, randomInt } from "node:crypto";
 import type { Prisma, PrismaClient, SiteCopy, SiteCustomer } from "@prisma/client";
 import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.server";
+import { noteShortfall } from "../marketing/klaviyo.server";
 import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
@@ -243,6 +244,15 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
   const fingerprint = fingerprintOf(a);
   const key = `req:${reqId}`;
 
+  return storeTx(db, customer, a, reqId, fingerprint, key).catch((e) => {
+    // Klaviyo R02 "Not Enough Cardbits" reminder (no-op unless Klaviyo is configured).
+    if (e instanceof StoreError && e.code === "insufficient_bits")
+      void noteShortfall(db, customer, a).catch((err) => console.error("[site-klaviyo] shortfall", (err as Error).message));
+    throw e;
+  });
+}
+
+function storeTx(db: PrismaClient, customer: SiteCustomer, a: StoreAction, reqId: string, fingerprint: string, key: string): Promise<Result> {
   return db.$transaction(
     async (tx) => {
       await lockKey(tx, `site-customer:${customer.id}`);

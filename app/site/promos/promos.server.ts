@@ -124,7 +124,7 @@ export async function confirmSms(db: PrismaClient, customerId: string, phone: st
   return db.$transaction(async (tx) => {
     const m = await tx.siteMarketing.findUnique({ where: { customerId } });
     if (!m?.smsPhone || m.smsPhone !== phone || !m.smsRequestedAt) return { credited: 0 };
-    await tx.siteMarketing.update({ where: { customerId }, data: { smsConfirmedAt: now } });
+    await tx.siteMarketing.update({ where: { customerId }, data: { smsConfirmedAt: now, syncedAt: null } });
     const { replay } = await applyLedger(tx, {
       customerId, delta: WELCOME.sms, kind: "BONUS",
       idempotencyKey: "welcome:sms:" + customerId, ref: "welcome", note: "Welcome Rewards: Text Signup",
