@@ -37,17 +37,24 @@ export function safeReturn(to: string | null | undefined) {
   return to.slice(0, 500);
 }
 
-export async function createSession(db: PrismaClient, customerId: string, request: Request) {
+/** New session; returns the raw token (shown once, only its sha256 is stored). */
+export async function createSessionToken(db: PrismaClient, customerId: string, request: Request, uaPrefix = "") {
   const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
   await db.siteSession.create({
     data: {
       id: sha(token),
       customerId,
       ip: clientIp(request),
-      userAgent: (request.headers.get("user-agent") || "").slice(0, 300),
-      expiresAt: new Date(Date.now() + SESSION_DAYS * 864e5),
+      userAgent: (uaPrefix + (request.headers.get("user-agent") || "")).slice(0, 300),
+      expiresAt,
     },
   });
+  return { token, expiresAt };
+}
+
+export async function createSession(db: PrismaClient, customerId: string, request: Request) {
+  const { token } = await createSessionToken(db, customerId, request);
   return setCookie(SESSION_COOKIE, token, COOKIE_DAYS * 86400);
 }
 
