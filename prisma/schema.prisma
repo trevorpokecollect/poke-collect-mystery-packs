@@ -1401,6 +1401,16 @@ model SiteCopy {
   openingId   String? // pack opening that delivered this copy
   position    Int?
   demo        Boolean  @default(false) // staff-marked demo stock; removed by Wipe Demo before launch
+  // Item kind and product data (Shopify-gap audit, Nov 25): graded slabs and sealed product will be sold later
+  // through mystery products. Raw singles keep kind "card" and leave the slab/sealed fields empty.
+  kind        String   @default("card") // card | slab | sealed
+  rarity      String?
+  grader      String? // slabs: PSA | BGS | CGC | SGC | TAG | ...
+  grade       String? // slabs: "10", "9.5", "Authentic"
+  certNumber  String? // slabs: grading company's certification number
+  sealedType  String? // sealed: Booster Box | Elite Trainer Box | Booster Pack | Collection Box | Tin | ...
+  weightOz    Float? // shipping weight of this one item when it differs from a sleeved card (slabs, sealed)
+  photos      Json? // ["https://…front", "https://…back"] photos of this exact item (stock image stays in `image`)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@unique([slot, pocket])
@@ -1502,6 +1512,9 @@ model SiteOpening {
   sealed     Boolean  @default(false)
   demo       Boolean  @default(false) // given free from the staff Demo panel
   revealedAt DateTime? // set when the cards are shown (immediately, or on reveal of a saved pack)
+  reversedAt DateTime? // staff reversed it from Card Broker: Cardbits returned, cards back in stock
+  reversedBy String?
+  reverseReason String?
   createdAt  DateTime @default(now())
   @@index([customerId, createdAt])
   @@index([revealedAt])
@@ -1739,4 +1752,43 @@ model SitePromoCode {
   createdBy      String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// Staff notes on one order (Card Broker order page), Shopify-style. orderType + orderRef match the Orders feed row.
+model SiteOrderNote {
+  id         String   @id @default(cuid())
+  orderType  String // PACK | SINGLE | BUYBACK | SHIPPING | TOPUP
+  orderRef   String // the Orders feed row id
+  customerId String
+  body       String
+  actor      String
+  createdAt  DateTime @default(now())
+  @@index([orderType, orderRef, createdAt])
+  @@index([customerId, createdAt])
+}
+
+// Audit trail of staff actions taken from Card Broker on customers and orders (adjust, reverse, close, erase...).
+model SiteStaffAction {
+  id         String   @id @default(cuid())
+  action     String // adjust | reverse_pack | reverse_single | close | reopen | export | erase
+  actor      String
+  customerId String?
+  orderType  String?
+  orderRef   String?
+  reason     String?
+  detail     Json?
+  requestId  String?  @unique // Card Broker's request id: a retried click never acts twice
+  createdAt  DateTime @default(now())
+  @@index([customerId, createdAt])
+  @@index([orderType, orderRef])
+  @@index([createdAt])
+}
+
+// Sales tax economic nexus alerts already sent (one per state, band and measuring period).
+model SiteNexusAlert {
+  id        String   @id // state + ":" + band + ":" + period
+  state     String
+  band      Int // 70 | 90 | 100 (% of the state's threshold)
+  period    String
+  createdAt DateTime @default(now())
 }
