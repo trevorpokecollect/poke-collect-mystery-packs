@@ -1,0 +1,7 @@
+-- Per-pack tier ladders = Card Broker's Cardbit pool-builder presets (dollars x 100 = Cardbits).
+-- Only fills packs with no ladder yet, so staff-set rules are never overwritten.
+UPDATE "SitePack" SET "tierRules" = '[{"name": "Common", "min": 0}, {"name": "Uncommon", "min": 500}, {"name": "Rare", "min": 1500}, {"name": "Epic", "min": 4000}, {"name": "Legendary", "min": 7500}]'::jsonb WHERE "id" = 'cobalt' AND "tierRules" IS NULL;
+UPDATE "SitePack" SET "tierRules" = '[{"name": "Common", "min": 0}, {"name": "Uncommon", "min": 150}, {"name": "Rare", "min": 300}, {"name": "Epic", "min": 600}, {"name": "Legendary", "min": 1600}]'::jsonb WHERE "id" = 'prism' AND "tierRules" IS NULL;
+UPDATE "SitePack" SET "tierRules" = '[{"name": "Common", "min": 0}, {"name": "Uncommon", "min": 500}, {"name": "Rare", "min": 1300}, {"name": "Epic", "min": 2800}, {"name": "Legendary", "min": 6300}]'::jsonb WHERE "id" = 'ember' AND "tierRules" IS NULL;
+UPDATE "SitePack" SET "tierRules" = '[{"name": "Common", "min": 0}, {"name": "Uncommon", "min": 3000}, {"name": "Rare", "min": 5300}, {"name": "Epic", "min": 9000}, {"name": "Legendary", "min": 16000}]'::jsonb WHERE "id" = 'gold' AND "tierRules" IS NULL;
+UPDATE "SitePack" SET "tierRules" = '[{"name": "Common", "min": 0}, {"name": "Uncommon", "min": 200}, {"name": "Rare", "min": 450}, {"name": "Epic", "min": 1000}, {"name": "Legendary", "min": 3500}]'::jsonb WHERE "id" = 'amethyst' AND "tierRules" IS NULL;
