@@ -7,6 +7,7 @@ import { clientIp, currentCustomer, safeReturn, siteOrigin } from "../site/core/
 import { esc, htmlResponse, simplePage } from "../site/core/simple-page";
 import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, defaultGeoLookup } from "../site/region.server";
 import { CoinflowError, coinflowConfigured, createCheckoutLink, topupPackage } from "../site/payments/coinflow.server";
+import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits } from "../site/play/limits.server";
 import { createStripeCheckout, siteStripe, siteStripeConfig, topupProvider } from "../site/payments/stripe-site.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
@@ -55,6 +56,14 @@ async function guard(request: Request, amountRaw: string | null, returnTo: strin
   const amount = Number(amountRaw);
   if (!topupPackage(amount)) return fail("Choose a Cardbits package.");
   if (customer.frozenAt || customer.closedAt) return fail("This account can't buy Cardbits right now. Contact hello@cardbit.com.", 403);
+  try {
+    await assertNotPaused(db, customer.id);
+    await assertWithinLimits(db, customer.id, "topup", topupPackage(amount)!.cents);
+  } catch (e) {
+    if (e instanceof PlayPaused || e instanceof LimitReached)
+      return { res: blocked(`${e.message} Manage them on the Limits & Breaks page (/account/limits).`, returnTo, 403), problem: { error: e.message, status: 403, code: e.code } };
+    throw e;
+  }
   if (topupProvider() === "coinflow" && !coinflowConfigured()) return fail("Card checkout isn't open yet.", 503);
   return { customer, amount };
 }
@@ -98,9 +107,21 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!ip) return again("We couldn't confirm your connection. Please try again.");
   const p = topupPackage(g.amount)!;
   const provider = topupProvider();
-  const topup = await db.siteTopup.create({
-    data: { customerId: g.customer.id, ...p, provider, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion },
-  });
+  // Recheck the Top-Up Limit under a per-customer lock so two tabs can't both slip under it.
+  let topup;
+  try {
+    topup = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`site-topup:${g.customer.id}`}, 0))::text`;
+      await assertNotPaused(tx, g.customer.id);
+      await assertWithinLimits(tx, g.customer.id, "topup", p.cents);
+      return tx.siteTopup.create({
+        data: { customerId: g.customer.id, ...p, provider, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion },
+      });
+    });
+  } catch (e) {
+    if (e instanceof PlayPaused || e instanceof LimitReached) return again(e.message, 403);
+    throw e;
+  }
   const callbackUrl = `${siteOrigin()}/checkout/cardbits/return?topup=${encodeURIComponent(topup.id)}&return_to=${encodeURIComponent(returnTo)}`;
   if (provider === "stripe") {
     try {

@@ -1485,4 +1485,24 @@ model SiteAppHandoff {
   @@index([customerId])
 }
 
+// Responsible-play controls (Top-Up / Pack Spend Limits, Cool-Off, Self-Exclusion). app/site/play/limits.server.ts
+model SitePlayControl {
+  customerId    String    @id
+  limits        Json      @default("{}") // {"topup:day": cents, "spend:week": Cardbits, ...}
+  pending       Json      @default("[]") // raised/removed limits waiting 24h: [{key, value|null, at}]
+  coolOffUntil  DateTime?
+  excludedUntil DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model SitePlayEvent {
+  id         String   @id @default(cuid())
+  customerId String
+  kind       String // limit_set | limit_raise_requested | limit_raise_canceled | limit_applied | cool_off | self_exclusion
+  detail     Json
+  createdAt  DateTime @default(now())
+  @@index([customerId, createdAt])
+}
+
 // ---- end Cardbit standalone site: core ------------------------------------------------------

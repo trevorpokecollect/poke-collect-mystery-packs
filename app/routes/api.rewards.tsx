@@ -8,6 +8,7 @@ import { json, sameOriginJson, siteOn } from "../site/store/http.server";
 import { LevelError, dailyCheckIn, rewardsView, setAvatar } from "../lib/cardbit-levels.server";
 import { SpinError, dailySpin } from "../lib/cardbit-spinner.server";
 import { AGE_REQUIRED, ageConfirmed, confirmAge } from "../lib/cardbit-age.server";
+import { PlayPaused, assertNotPaused } from "../site/play/limits.server";
 import { SITE_SHOP, siteLeaderboardOn, siteLevelsOn, siteWeeklyStandings } from "../site/rewards/rewards.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -40,6 +41,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     if (input?.action === "spin") {
       if (!(await ageConfirmed(db, SITE_SHOP, customer.id))) return json(AGE_REQUIRED, 403);
+      await assertNotPaused(db, customer.id);
       const spin = await dailySpin(db, SITE_SHOP, customer.id, input.tier);
       return json({
         result: { tier: spin.tier, prizeKind: spin.prizeKind, amount: spin.amount, card: spin.card, replay: spin.replay },
@@ -52,6 +54,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
     return json({ error: "Unknown action." }, 400);
   } catch (error) {
+    if (error instanceof PlayPaused) return json({ error: error.message, code: error.code }, 403);
     if (error instanceof LevelError || error instanceof SpinError) return json({ error: error.message }, 409);
     throw error;
   }

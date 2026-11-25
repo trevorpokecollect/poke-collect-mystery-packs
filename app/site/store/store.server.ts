@@ -7,6 +7,7 @@ import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.ser
 import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
 import { siteRewardsForOpening } from "../rewards/rewards.server";
+import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
 
 /** Shop key for site rows in shared Cardbit* tables (age, rewards, vault marks). */
 export const SITE_SHOP_KEY = "cardbit-site";
@@ -159,7 +160,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
 
   return {
     site: true,
-    account: { id: customer.id, name: customer.name || customer.email.split("@")[0], email: customer.email, bits: balance, frozen: Boolean(customer.frozenAt) },
+    account: { id: customer.id, name: customer.name || customer.email.split("@")[0], email: customer.email, bits: balance, frozen: Boolean(customer.frozenAt), play: await playStateFor(db, customer.id) },
     packs: packViews,
     singles,
     binder: owned.filter((c) => !c.openingId || !sealed.has(c.openingId)).map((c) => ({ ...copyView(c, prices), tier: null })),
@@ -222,6 +223,15 @@ export function drawCopies<T>(pool: T[], count: number, rand: (n: number) => num
   return out;
 }
 
+async function playGuard(fn: () => Promise<void>) {
+  try {
+    await fn();
+  } catch (e) {
+    if (e instanceof PlayPaused || e instanceof LimitReached) throw new StoreError(e.code, e.message, 403);
+    throw e;
+  }
+}
+
 async function lockKey(tx: Tx, key: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text`;
 }
@@ -249,6 +259,8 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         return prior.result as Result;
       }
       let result: Result = {};
+      // Responsible play: no pack or single purchases during a cool-off or self-exclusion.
+      if (a.action === "open" || a.action === "buy") await playGuard(() => assertNotPaused(tx, customer.id));
       const debit = async (bits: number, kind: "PACK" | "SINGLE", ref: string, note: string) => {
         try {
           await applyLedger(tx, { customerId: customer.id, delta: -bits, kind, idempotencyKey: key, ref, note });
@@ -261,6 +273,7 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
       if (a.action === "open") {
         const pack = await tx.sitePack.findFirst({ where: { id: a.id || "", active: true } });
         if (!pack) throw new StoreError("not_found", "This edition is unavailable.", 404);
+        await playGuard(() => assertWithinLimits(tx, customer.id, "spend", pack.priceBits));
         await lockKey(tx, `site-pack:${pack.id}`);
         const pool = await tx.siteCopy.findMany({ where: { packId: pack.id, status: "POOLED" }, orderBy: { id: "asc" } });
         if (pool.length < pack.cardsPerPack) throw new StoreError("sold_out", "This pack has sold out.");

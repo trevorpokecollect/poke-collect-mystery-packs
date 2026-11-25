@@ -16,6 +16,8 @@ import siteStoreSource from "../../public/site/js/cardbit-site-store.js?raw";
 import siteCssSource from "../../public/site/css/cardbit-site.css?raw";
 import siteAuthSource from "../../public/site/js/cardbit-site-auth.js?raw";
 import siteAuthCssSource from "../../public/site/css/cardbit-site-auth.css?raw";
+import sitePlaySource from "../../public/site/js/cardbit-site-play.js?raw";
+import sitePlayCssSource from "../../public/site/css/cardbit-site-play.css?raw";
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
 
@@ -26,6 +28,8 @@ const SITE_STORE_V = version(siteStoreSource);
 export const SITE_CSS_V = version(siteCssSource);
 const SITE_AUTH_V = version(siteAuthSource);
 const SITE_AUTH_CSS_V = version(siteAuthCssSource);
+const SITE_PLAY_V = version(sitePlaySource);
+const SITE_PLAY_CSS_V = version(sitePlayCssSource);
 
 export const SITE_ENABLED = () => process.env.CARDBIT_SITE === "on";
 
@@ -123,6 +127,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     ...STYLES.map((name) => `<link rel="stylesheet" href="${assetUrl(name)}">`),
     `<link rel="stylesheet" href="/site/css/cardbit-site.css?v=${SITE_CSS_V}">`,
     `<link rel="stylesheet" href="/site/css/cardbit-site-auth.css?v=${SITE_AUTH_CSS_V}">`,
+    `<link rel="stylesheet" href="/site/css/cardbit-site-play.css?v=${SITE_PLAY_CSS_V}">`,
   ].join("\n    ");
   const scripts = SCRIPTS.map((name) =>
     name === "SITE_STORE"
@@ -132,7 +137,8 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
         : name === "PORTFOLIO"
         ? `<script src="${assetUrl("cardbit-portfolio.js")}" data-portfolio-endpoint="/api/portfolio" defer></script>`
         : `<script src="${assetUrl(name)}" defer></script>`,
-  ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>`;
+  ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>` +
+    `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>`;
 
   return `<!doctype html>
 <html lang="en">

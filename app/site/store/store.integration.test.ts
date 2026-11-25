@@ -6,6 +6,7 @@ import { balanceOf, postLedger } from "../core/ledger.server";
 import { priceKey, receiveSiteIntake } from "../core/stock.server";
 import { sitePortfolio } from "./portfolio.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
+import { setLimit, startCoolOff } from "../play/limits.server";
 import { DEFAULT_TIERS, drawCopies, recentPulls, singleKey, storeAction, storeState, StoreError, tierFor, tierRules } from "./store.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -16,6 +17,8 @@ const card = (eventKey: string, quantity: number, name: string) => ({
 });
 const wipe = async () => {
   await db.siteRequest.deleteMany();
+  await db.sitePlayEvent.deleteMany();
+  await db.sitePlayControl.deleteMany();
   await db.siteWant.deleteMany();
   await db.siteOpening.deleteMany();
   await db.sitePrice.deleteMany();
@@ -90,6 +93,22 @@ describe.skipIf(!url)("site store", () => {
     state = await storeState(db, customer);
     expect(state.singles[0].available).toBe(2);
     expect(state.binder).toHaveLength(0);
+  });
+
+  it("enforces Pack Spend Limits and cool-offs on open and buy, but not on buyback", async () => {
+    await receiveSiteIntake(db, card("st:pl", 3, "Snorlax"));
+    await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
+    await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 1000, cardsPerPack: 1 } });
+    await setLimit(db, customer.id, "spend:day", 1500);
+    await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+    await expect(storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" })).rejects.toMatchObject({ code: "limit_reached", status: 403 });
+    expect(await balanceOf(db, customer.id)).toBe(4000);
+    const done = randomUUID();
+    await setLimit(db, customer.id, "spend:day", 1_000_000).catch(() => undefined);
+    await startCoolOff(db, customer.id, 24);
+    await expect(storeAction(db, customer, { action: "buy", requestId: done, id: "s_x" })).rejects.toMatchObject({ code: "play_paused" });
+    const state = await storeState(db, customer);
+    expect(state.account?.play.paused?.kind).toBe("cool_off");
   });
 
   it("opens packs from the pool without double-selling, sealed until revealed", async () => {

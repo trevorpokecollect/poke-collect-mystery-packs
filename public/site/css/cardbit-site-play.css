@@ -1,0 +1,4 @@
+/* Cardbit standalone site: safer-play extras + floating rewards launcher (site-only). */
+.cb-play-link{display:inline-flex;align-items:center;margin-right:.5rem;text-decoration:none}
+.cb-play-banner{position:relative;z-index:50;padding:.6rem 1rem;background:#FFB65C;color:#17213B;font:600 .95rem/1.4 "Atkinson Hyperlegible Next",system-ui,sans-serif;text-align:center}
+.cb-play-banner a{color:#17213B;font-weight:800;text-decoration:underline}

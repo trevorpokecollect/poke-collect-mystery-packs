@@ -7,6 +7,12 @@ const auth = vi.hoisted(() => ({ customer: null as null | Record<string, unknown
 vi.mock("../db.server", () => ({ default: {} }));
 vi.mock("./email/outbox.server", () => ({ sendEmail: vi.fn(async () => undefined) }));
 vi.mock("./email/mailer.server", () => ({ mailerFromEnv: () => ({}) }));
+// Limits & breaks have their own integration tests; here the db is a stub, so treat them as unset.
+vi.mock("./play/limits.server", async (orig) => ({
+  ...(await orig<typeof import("./play/limits.server")>()),
+  assertNotPaused: vi.fn(async () => undefined),
+  assertWithinLimits: vi.fn(async () => undefined),
+}));
 vi.mock("./core/auth.server", async (orig) => {
   const real = await orig<typeof import("./core/auth.server")>();
   return {
