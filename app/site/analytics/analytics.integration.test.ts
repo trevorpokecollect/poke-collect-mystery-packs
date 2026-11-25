@@ -48,9 +48,11 @@ describe.skipIf(!url)("analytics", () => {
   beforeEach(async () => {
     await db.sitePageView.deleteMany();
     await db.siteVisit.deleteMany();
-    await db.siteTopup.deleteMany({ where: { paymentId: { startsWith: "an:" } } });
-    await db.siteOpening.deleteMany({ where: { priceBits: 1234 } });
-    await db.siteLedger.deleteMany({ where: { idempotencyKey: { startsWith: "an:" } } });
+    // Reports read whole tables, so start from empty ones (test files run one at a time).
+    await db.siteOpeningFair.deleteMany();
+    await db.siteTopup.deleteMany();
+    await db.siteOpening.deleteMany();
+    await db.siteLedger.deleteMany();
     await db.siteSession.deleteMany({ where: { id: { startsWith: "an-" } } });
     await db.siteCustomer.deleteMany({ where: { email: { endsWith: "-an@example.com" } } });
     staffId = (await db.siteCustomer.create({ data: { email: "staff-an@example.com" } })).id;
