@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { classifySource, cleanPath, parseUserAgent, recordPulse } from "./track.server";
-import { customers, funnel, live, metrics, overview, parseRange, sales, traffic, zonedMidnight } from "./report.server";
+import { customers, funnel, live, marketing, metrics, overview, parseRange, sales, traffic, zonedMidnight } from "./report.server";
 import { assertAllowedRegion, geoLookupFor, isAnonymous } from "../region.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -82,6 +82,8 @@ describe.skipIf(!url)("analytics", () => {
     await db.siteTopup.deleteMany();
     await db.siteOpening.deleteMany();
     await db.siteLedger.deleteMany();
+    await db.siteShipment.deleteMany({ where: { idempotencyKey: { startsWith: "an-" } } });
+    await db.siteCopy.deleteMany({ where: { receiptKey: { startsWith: "an-" } } });
     await db.siteSession.deleteMany({ where: { id: { startsWith: "an-" } } });
     await db.siteCustomer.deleteMany({ where: { email: { endsWith: "-an@example.com" } } });
     // Accounts other test files left behind are moved out of the report window.
@@ -193,8 +195,6 @@ describe.skipIf(!url)("analytics", () => {
   });
   it("reports pack return, pool health, vault, shipping and rewards cost", async () => {
     const now = new Date();
-    await db.siteShipment.deleteMany({ where: { idempotencyKey: { startsWith: "an-" } } });
-    await db.siteCopy.deleteMany({ where: { receiptKey: { startsWith: "an-" } } });
     await db.sitePack.upsert({ where: { id: "cobalt" }, create: { id: "cobalt", title: "Mystery Pack", priceBits: 1000, active: true, targetEvPct: 110 }, update: { title: "Mystery Pack", priceBits: 1000, cardsPerPack: 1, active: true, targetEvPct: 110 } });
     const card = (k: string, extra: Record<string, unknown>) => ({
       receiptKey: "an-" + k, printingKey: "an-p-" + k, title: "Card " + k, game: "Pokemon", setName: "Base", number: k, name: "Card", finish: "Holo",
@@ -221,5 +221,20 @@ describe.skipIf(!url)("analytics", () => {
     expect(m.vault).toMatchObject({ cards: 1, valueBits: 1500, holders: 1 });
     expect(m.shipping).toMatchObject({ requests: 2, cards: 4, feeCents: 600, feeBits: 600, postageCents: 450, shipped: 1, delivered: 1, avgHoursToShip: 0.5, netCents: 750, late: 1 });
     expect(m.rewards).toEqual({ bits: 200, rows: [{ kind: "REWARD", source: "welcome", n: 1, bits: 200 }] });
+  });
+  it("credits signups and top-ups to the first visit's channel and reports consent", async () => {
+    const now = new Date();
+    await db.siteMarketing.deleteMany({ where: { customerId: { in: [buyerId, staffId] } } });
+    await db.siteVisit.create({ data: { visitorId: "visitor-mk-000000001", customerId: buyerId, landingPath: "/", exitPath: "/", source: "social", sourceName: "TikTok", utmSource: "tiktok", utmCampaign: "launch", device: "mobile", startedAt: new Date(now.getTime() - 3 * 864e5), lastSeenAt: new Date(now.getTime() - 3 * 864e5) } });
+    await db.siteVisit.create({ data: { visitorId: "visitor-mk-000000001", customerId: buyerId, landingPath: "/", exitPath: "/", source: "direct", device: "mobile", startedAt: new Date(now.getTime() - 864e5), lastSeenAt: new Date(now.getTime() - 864e5) } });
+    await db.siteTopup.create({ data: { customerId: buyerId, baseBits: 5000, bonusBits: 0, cents: 5000, status: "CREDITED", paymentId: "an:mk1", billingState: "TX", billingZip: "75001" } });
+    await db.siteTopup.create({ data: { customerId: staffId, baseBits: 5000, bonusBits: 0, cents: 5000, status: "CREDITED", paymentId: "an:mk2", billingState: "TX", billingZip: "75001" } });
+    await db.siteMarketing.create({ data: { customerId: buyerId, emailOptInAt: now, smsRequestedAt: now } });
+    await db.siteMarketing.create({ data: { customerId: staffId, emailOptInAt: now, smsRequestedAt: now, smsConfirmedAt: now } });
+    const m = await marketing(db, {}, { env, now });
+    expect(m.channels.find((c) => c.key === "social")).toMatchObject({ signups: 1, buyers: 1, cents: 5000, sessions: 1, signupRate: 1 });
+    expect(m.channels.find((c) => c.key === "direct")).toBeUndefined();
+    expect(m.campaigns).toEqual([{ key: "tiktok / launch", signups: 1, buyers: 1, cents: 5000 }]);
+    expect(m.consent).toMatchObject({ accounts: 1, email: 1, emailRate: 1, smsAsked: 1, sms: 0, emailList: 1, smsList: 0 });
   });
 });

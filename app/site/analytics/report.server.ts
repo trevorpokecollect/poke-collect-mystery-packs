@@ -770,3 +770,67 @@ export async function metrics(db: PrismaClient, input: { from?: unknown; to?: un
     rewards: { bits: rewardRows.reduce((a, x) => a + x.bits, 0), rows: rewardRows },
   };
 }
+
+// ---------- Marketing (stage 4) ----------
+
+/**
+ * Which channels bring accounts and money (first-touch: the source of the customer's first recorded visit),
+ * plus email and text consent rates. Revenue = paid top-up dollars in the range.
+ */
+export async function marketing(db: PrismaClient, input: { from?: unknown; to?: unknown }, deps: AnalyticsDeps = {}) {
+  const tz = deps.tz ?? TZ;
+  const r = parseRange(input.from, input.to, deps.now, tz);
+  const ids = await staffIds(db, deps.env ?? process.env);
+  const firstTouch = Prisma.sql`
+    SELECT DISTINCT ON ("customerId") "customerId", source, "sourceName",
+           CASE WHEN "utmSource" IS NULL AND "utmCampaign" IS NULL THEN NULL
+                ELSE concat_ws(' / ', coalesce("utmSource", '—'), coalesce("utmCampaign", '—')) END campaign
+    FROM "SiteVisit" WHERE "customerId" IS NOT NULL ORDER BY "customerId", "startedAt"`;
+  const byKey = (key: string) => db.$queryRaw<{ key: string | null; signups: bigint; buyers: bigint; cents: bigint }[]>`
+    WITH f AS (${firstTouch}),
+    c AS (SELECT id, "createdAt" FROM "SiteCustomer" WHERE ${notStaff(Prisma.sql`id`, ids)}),
+    t AS (SELECT "customerId", sum(cents) cents FROM "SiteTopup" WHERE status = ANY(${PAID_TOPUP}::text[]) AND "createdAt" >= ${r.start} AND "createdAt" < ${r.end} GROUP BY 1)
+    SELECT ${Prisma.raw(key)} key,
+           count(*) FILTER (WHERE c."createdAt" >= ${r.start} AND c."createdAt" < ${r.end}) signups,
+           count(t."customerId") buyers, coalesce(sum(t.cents), 0) cents
+    FROM c LEFT JOIN f ON f."customerId" = c.id LEFT JOIN t ON t."customerId" = c.id
+    GROUP BY 1 HAVING count(*) FILTER (WHERE c."createdAt" >= ${r.start} AND c."createdAt" < ${r.end}) > 0 OR count(t."customerId") > 0
+    ORDER BY cents DESC, signups DESC LIMIT 25`;
+  const [channels, campaigns, sessions, consent] = await Promise.all([
+    byKey(`coalesce(f.source, 'unknown')`),
+    byKey(`f.campaign`),
+    db.$queryRaw<{ key: string; n: bigint }[]>`
+      SELECT source key, count(*) n FROM "SiteVisit"
+      WHERE NOT staff AND "startedAt" >= ${r.start} AND "startedAt" < ${r.end} AND ${notStaff(Prisma.sql`"customerId"`, ids)} GROUP BY 1`,
+    db.$queryRaw<{ accounts: bigint; email: bigint; sms_asked: bigint; sms: bigint; email_out: bigint; sms_out: bigint; email_all: bigint; sms_all: bigint; customers: bigint }[]>`
+      SELECT count(*) FILTER (WHERE c."createdAt" >= ${r.start} AND c."createdAt" < ${r.end}) accounts,
+             count(*) FILTER (WHERE c."createdAt" >= ${r.start} AND c."createdAt" < ${r.end} AND m."emailOptInAt" IS NOT NULL) email,
+             count(*) FILTER (WHERE c."createdAt" >= ${r.start} AND c."createdAt" < ${r.end} AND m."smsRequestedAt" IS NOT NULL) sms_asked,
+             count(*) FILTER (WHERE c."createdAt" >= ${r.start} AND c."createdAt" < ${r.end} AND m."smsConfirmedAt" IS NOT NULL) sms,
+             count(*) FILTER (WHERE m."emailOptOutAt" >= ${r.start} AND m."emailOptOutAt" < ${r.end}) email_out,
+             count(*) FILTER (WHERE m."smsOptOutAt" >= ${r.start} AND m."smsOptOutAt" < ${r.end}) sms_out,
+             count(*) FILTER (WHERE m."emailOptInAt" IS NOT NULL AND (m."emailOptOutAt" IS NULL OR m."emailOptOutAt" < m."emailOptInAt")) email_all,
+             count(*) FILTER (WHERE m."smsConfirmedAt" IS NOT NULL AND (m."smsOptOutAt" IS NULL OR m."smsOptOutAt" < m."smsConfirmedAt")) sms_all,
+             count(*) customers
+      FROM "SiteCustomer" c LEFT JOIN "SiteMarketing" m ON m."customerId" = c.id WHERE ${notStaff(Prisma.sql`c.id`, ids)}`,
+  ]);
+  const sess = new Map(sessions.map((s) => [s.key, num(s.n)]));
+  const row = (x: (typeof channels)[number]) => ({ key: x.key ?? "none", signups: num(x.signups), buyers: num(x.buyers), cents: num(x.cents) });
+  const k = consent[0];
+  const accounts = num(k.accounts);
+  return {
+    range: { from: r.from, to: r.to, days: r.days, hourly: false, tz },
+    channels: channels.map((x) => {
+      const v = row(x), s = sess.get(v.key) ?? 0;
+      return { ...v, sessions: s, signupRate: s ? v.signups / s : 0 };
+    }),
+    campaigns: campaigns.filter((x) => x.key).map(row),
+    consent: {
+      accounts,
+      email: num(k.email), emailRate: accounts ? num(k.email) / accounts : 0,
+      smsAsked: num(k.sms_asked), sms: num(k.sms), smsRate: accounts ? num(k.sms) / accounts : 0,
+      emailOptOuts: num(k.email_out), smsOptOuts: num(k.sms_out),
+      emailList: num(k.email_all), smsList: num(k.sms_all), customers: num(k.customers),
+    },
+  };
+}
