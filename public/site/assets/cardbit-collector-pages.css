@@ -148,3 +148,11 @@
   #cardbit-store .cg-compare-top { padding: 7px 6px 0; }
   #cardbit-store .cg-compare-top select { font-size: 13px; }
 }
+/* Verified restocks: pack page Restock History */
+#cardbit-store .cb-restock-list{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:10px}
+#cardbit-store .cb-restock-list li{display:grid;grid-template-columns:minmax(120px,170px) 1fr auto;gap:6px 16px;align-items:center;padding:12px 14px;border:1px solid var(--cb-line,rgba(255,255,255,.12));border-radius:12px}
+#cardbit-store .cb-restock-list li div{display:flex;flex-direction:column}
+#cardbit-store .cb-restock-list li div span,#cardbit-store .cb-restock-list small{color:var(--cb-muted)}
+#cardbit-store .cb-restock-list p{margin:0}
+#cardbit-store .cb-restock-list code{grid-column:1/-1;font-size:12px;color:var(--cb-muted);overflow-wrap:anywhere}
+@media (max-width:640px){#cardbit-store .cb-restock-list li{grid-template-columns:1fr}}

@@ -1360,6 +1360,9 @@ model SiteCopy {
   poolSlotId  String?  @unique
   orderId     String?
   packId      String? // set while POOLED in a SitePack pool
+  autoRestock Boolean  @default(false) // sold back, waiting for the hourly automatic restock to route it
+  era         String? // "Modern" | "Vintage" from Card Broker; null = worked out from the set name
+  restockId   String? // staged in a pack's pending restock (add while DRAFT, remove while POOLED); locked meanwhile
   openingId   String? // pack opening that delivered this copy
   position    Int?
   demo        Boolean  @default(false) // staff-marked demo stock; removed by Wipe Demo before launch
@@ -1367,6 +1370,7 @@ model SiteCopy {
   updatedAt   DateTime @updatedAt
   @@unique([slot, pocket])
   @@unique([slot, lookKey])
+  @@index([restockId])
   @@unique([slot, faceKey])
   @@index([status, printingKey])
   @@index([ownerId, status])
@@ -1432,6 +1436,12 @@ model SitePack {
   active       Boolean  @default(false)
   sortOrder    Int      @default(0)
   tierRules    Json? // [{name, min}] in Cardbits of card value, lowest first; null = default ladder
+  // EV (internal only, Trevor Nov 25): pool's Poke-Collect retail ÷ (packs left × pack price), in %.
+  targetEvPct  Int? // e.g. 110; null = automatic buyback routing off for this pack
+  evBandPct    Int      @default(5) // allowed ± around the target
+  minTopPer100 Int? // minimum top-tier cards per 100 in the pool (routing favours packs below it)
+  languages    Json? // ["English","Japanese"] eligible card languages; null = any
+  eras         Json? // ["Modern","Vintage"] eligible eras; null = any
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -1530,6 +1540,7 @@ model SiteOpeningFair {
   nonce          Int
   poolIds        Json // pack's remaining copy ids, ascending, at draw time
   pickIds        Json // drawn copy ids in pick order
+  poolVersion    Int? // pack pool version (SiteRestock.version) in force at draw time
   createdAt      DateTime     @default(now())
   @@index([seedId])
 }
@@ -1597,3 +1608,28 @@ model SiteChatMute {
 }
 
 // ---- end Cardbit standalone site: core ------------------------------------------------------
+
+// Verified restocks (Trevor, Nov 25): a pack pool changes only when staff publish a restock. Each
+// publish is a numbered pool version with its full copy list and SHA-256 hash, shown on the pack page.
+// Restocks go live the moment staff press Publish (Trevor chose "Instant, logged").
+model SiteRestock {
+  id        String    @id @default(cuid())
+  packId    String
+  status    String    @default("STAGED") // STAGED (one per pack, collects cards) | LIVE
+  version   Int? // 1, 2, 3… per pack once LIVE
+  addIds    Json      @default("[]") // copy ids added to the pool by this version
+  removeIds Json      @default("[]") // copy ids taken out of the pool by this version
+  poolIds   Json? // every copy id in the pool right after publish, ascending
+  poolHash  String? // sha256(poolIds joined by "\n")
+  poolSize  Int?
+  tiers     Json? // {Common: n, …} of the cards added
+  note      String?
+  actor     String?
+  auto      Boolean   @default(false) // hourly automatic buyback restock
+  evPct     Float? // internal: pool EV right after publish (Poke-Collect retail basis)
+  liveAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  @@unique([packId, version])
+  @@index([packId, status])
+}

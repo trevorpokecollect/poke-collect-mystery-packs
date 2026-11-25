@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { receiveSiteIntake } from "./stock.server";
 import { DeskError, listStock, movePool, setListing, setPrice } from "./stock-desk.server";
+import { publishRestock } from "./restock.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -18,6 +19,7 @@ describe.skipIf(!url)("stock desk", () => {
   beforeEach(async () => {
     await db.sitePrice.deleteMany();
     await db.siteCopyEvent.deleteMany();
+    await db.siteRestock.deleteMany();
     await db.siteCopy.deleteMany();
     await db.siteIntakeReceipt.deleteMany();
   });
@@ -40,12 +42,18 @@ describe.skipIf(!url)("stock desk", () => {
     expect((await listStock(db, {})).copies.every((c) => c.retailBits === 300 && c.buybackBits === 150)).toBe(true);
 
     const ids = first.copies.map((c) => c.id);
-    expect(await movePool(db, "t", ids, "cobalt")).toEqual({ moved: 2, skipped: 0 });
+    // Pools change only through published restocks: "pool" stages, publish applies.
+    expect(await movePool(db, "t", ids, "cobalt")).toMatchObject({ moved: 2, skipped: 0 });
+    expect((await listStock(db, { status: "POOLED" })).total).toBe(0);
+    expect(await setListing(db, "t", ids, true)).toEqual({ moved: 0, skipped: 2 }); // staged copies are locked
+    await publishRestock(db, "t", "cobalt");
     expect((await listStock(db, { status: "POOLED" })).total).toBe(2);
-    expect(await movePool(db, "t", ids, null)).toEqual({ moved: 2, skipped: 0 });
+    expect(await movePool(db, "t", ids, null)).toMatchObject({ moved: 2, skipped: 0 });
+    expect((await listStock(db, { status: "POOLED" })).total).toBe(2); // still in the pool until publish
+    await publishRestock(db, "t", "cobalt");
     expect((await listStock(db, { q: "oddish", status: "DRAFT" })).total).toBe(3);
     expect(await setListing(db, "t", ids, true)).toEqual({ moved: 2, skipped: 0 });
-    expect(await movePool(db, "t", ids, "cobalt")).toEqual({ moved: 0, skipped: 2 }); // pools fill from Draft only
+    expect(await movePool(db, "t", ids, "cobalt")).toMatchObject({ moved: 0, skipped: 2 }); // pools fill from Draft only
     expect((await listStock(db, { status: "FOR_SALE" })).total).toBe(2);
     expect(await setListing(db, "t", ids, false)).toEqual({ moved: 2, skipped: 0 });
   });

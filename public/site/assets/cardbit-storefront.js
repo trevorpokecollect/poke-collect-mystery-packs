@@ -1260,7 +1260,25 @@
     return '<div class="cb-wrap cb-page" data-fixture-odds>' + bread('packs', 'All Packs') + '<div class="cb-detail cb-detail-with-odds">' + portrait + intro +
       '</div><section class="cb-pool"><div class="cb-section-head"><div>' +
       '<h2>Inside This Edition</h2></div><span>' + plural(remaining, 'eligible copy') + '</span></div>' +
-      poolNote + tiles + fullList + '</section>' + pages.detailsForPack(pack,pack,odds,path+'/pool') + '</div>';
+      poolNote + tiles + fullList + '</section>' + (/* SITE */ site() ? restockHistory(pack) : '') + pages.detailsForPack(pack,pack,odds,path+'/pool') + '</div>';
+  }
+  /* SITE */ // Verified restocks: every published pool version, newest first. Odds above already use what's left now.
+  function restockHistory(pack){
+    const list = Array.isArray(pack.restocks) ? pack.restocks : [];
+    if (!list.length) return '';
+    const day = iso => { try { return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); } catch { return ''; } };
+    const tierLine = t => Object.entries(t || {}).filter(([k,n]) => k !== 'Unpriced' && n > 0).map(([k,n]) => number(n) + ' ' + esc(k)).join(', ');
+    const rows = list.slice(0,8).map(r => {
+      const changes = r.starting ? 'Starting Pool' : [r.added ? '+' + plural(r.added,'card') : '', r.removed ? '−' + plural(r.removed,'card') : ''].filter(Boolean).join(' · ');
+      const tiers = !r.starting && r.added ? tierLine(r.addedTiers) : '';
+      return '<li><div><b>Version ' + number(r.version) + '</b><span>' + esc(day(r.at)) + '</span></div><p>' + esc(changes) + ' · ' + plural(r.poolSize,'card') + ' in Pool' +
+        (tiers ? '<br><small>Added: ' + tiers + '</small>' : '') + (r.note ? '<br><small>' + esc(r.note) + '</small>' : '') + '</p>' +
+        '<a class="cb-textlink" href="/api/pool-version?pack=' + enc(pack.id) + '&amp;v=' + enc(r.version) + '" target="_blank" rel="noopener">Card List</a>' +
+        '<code title="SHA-256 of every card ID in this version">' + esc(String(r.poolHash || '').slice(0,16)) + '…</code></li>';
+    }).join('');
+    return '<section class="cb-pool cb-restocks"><div class="cb-section-head"><div><h2>Restock History</h2></div><span>Pool Version ' + number(list[0].version) + '</span></div>' +
+      '<p class="cb-sub">Cards Join or Leave This Pool Only in a Published Restock. Each Version Lists Every Card With a SHA-256 Hash, and Verified Shuffle Shows Which Version Each Opening Drew From.</p>' +
+      '<ol class="cb-restock-list">' + rows + '</ol></section>';
   }
   function purchaseControl(action,id,price,available,label){
     if(!available && !readRequest(action,id))return '<button class="cb-primary" type="button" disabled>Sold Out</button>';

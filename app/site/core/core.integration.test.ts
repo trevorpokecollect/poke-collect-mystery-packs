@@ -13,6 +13,7 @@ const card = (eventKey: string, quantity = 1, extra: Record<string, unknown> = {
 });
 const wipe = async () => {
   await db.siteCopyEvent.deleteMany();
+  await db.siteRestock.deleteMany();
   await db.siteCopy.deleteMany();
   await db.siteIntakeReceipt.deleteMany();
   await db.siteLedger.deleteMany();

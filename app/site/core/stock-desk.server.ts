@@ -1,6 +1,7 @@
 // Stock desk operations shared by /staff/stock (site staff) and /internal/site-stock (Card Broker).
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { priceKey, shelfAddress } from "./stock.server";
+import { RestockError, stageRestock } from "./restock.server";
 
 export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
 
@@ -30,10 +31,26 @@ export async function setPrice(db: PrismaClient, actor: string, printingKey: str
   });
 }
 
-/** Move DRAFT copies into a pack pool, or POOLED copies back to Draft. Pools fill only from Draft (Trevor, Nov 24). */
+/**
+ * Pools fill only from Draft (Trevor, Nov 24) and change only through published restocks (Trevor, Nov 25):
+ * "pool" stages DRAFT copies to add to the pack's next restock; "unpool" stages POOLED copies to come out.
+ * Nothing changes in a live pool until staff publish the restock (restock.server.ts).
+ */
 export async function movePool(db: PrismaClient, actor: string, copyIds: string[], packId: string | null) {
-  if (packId && !(await db.sitePack.findUnique({ where: { id: packId } }))) throw new DeskError("Choose a pack.");
-  return moveCopies(db, actor, copyIds, packId ? "DRAFT" : "POOLED", packId ? "POOLED" : "DRAFT", packId, packId ? `added to ${packId} pool` : "returned to drafts");
+  try {
+    if (packId) return await stageRestock(db, actor, packId, copyIds, "add");
+    const ids = [...new Set((Array.isArray(copyIds) ? copyIds : []).filter((x) => typeof x === "string" && x.length <= 60))].slice(0, 500);
+    if (!ids.length) throw new DeskError("Select cards first.");
+    const rows = await db.siteCopy.findMany({ where: { id: { in: ids }, status: "POOLED", packId: { not: null } }, select: { id: true, packId: true } });
+    let staged = 0;
+    for (const pack of new Set(rows.map((r) => r.packId!))) {
+      staged += (await stageRestock(db, actor, pack, rows.filter((r) => r.packId === pack).map((r) => r.id), "remove")).staged;
+    }
+    return { staged, moved: staged, skipped: ids.length - staged };
+  } catch (e) {
+    if (e instanceof RestockError) throw new DeskError(e.message);
+    throw e;
+  }
 }
 
 /** Make Draft copies Active (FOR_SALE singles), or take unsold Active copies back to Draft. */
@@ -45,10 +62,11 @@ async function moveCopies(db: PrismaClient, actor: string, copyIds: string[], fr
   const ids = [...new Set((Array.isArray(copyIds) ? copyIds : []).filter((x) => typeof x === "string" && x.length <= 60))].slice(0, 500);
   if (!ids.length) throw new DeskError("Select cards first.");
   return db.$transaction(async (tx) => {
-    const rows = await tx.siteCopy.findMany({ where: { id: { in: ids }, status: from, ownerId: null }, select: { id: true } });
+    // Copies staged in a restock are locked to it until they're unstaged or published.
+    const rows = await tx.siteCopy.findMany({ where: { id: { in: ids }, status: from, ownerId: null, restockId: null }, select: { id: true } });
     let moved = 0;
     for (const r of rows) {
-      const n = await tx.siteCopy.updateMany({ where: { id: r.id, status: from, ownerId: null }, data: { status: to, packId } });
+      const n = await tx.siteCopy.updateMany({ where: { id: r.id, status: from, ownerId: null, restockId: null }, data: { status: to, packId, autoRestock: false } });
       if (!n.count) continue;
       moved++;
       await tx.siteCopyEvent.create({ data: { copyId: r.id, fromStatus: from, toStatus: to, actor, reason } });

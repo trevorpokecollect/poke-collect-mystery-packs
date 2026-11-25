@@ -19,6 +19,7 @@ describe.skipIf(!url)("orders desk", () => {
   beforeEach(async () => {
     await db.sitePrice.deleteMany();
     await db.siteCopyEvent.deleteMany();
+    await db.siteRestock.deleteMany();
     await db.siteCopy.deleteMany();
     await db.siteIntakeReceipt.deleteMany();
     await db.siteLedger.deleteMany({ where: { idempotencyKey: { startsWith: "od:" } } });

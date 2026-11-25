@@ -27,6 +27,7 @@ const wipe = async () => {
   await db.siteOpening.deleteMany();
   await db.sitePrice.deleteMany();
   await db.siteCopyEvent.deleteMany();
+  await db.siteRestock.deleteMany();
   await db.siteCopy.deleteMany();
   await db.siteIntakeReceipt.deleteMany();
   await db.siteLedger.deleteMany();
@@ -92,12 +93,13 @@ describe.skipIf(!url)("site store", () => {
     expect(state.binder).toHaveLength(1);
     expect(state.binder[0]).toMatchObject({ status: "held", tier: null, buybackBits: 200 });
 
-    // buyback must match the shown offer, then the copy goes back on sale
+    // buyback must match the shown offer, then the copy goes to Draft for the hourly automatic restock
     await expect(storeAction(db, customer, { action: "buyback", requestId: randomUUID(), id: String(r.copyId), amount: 150 })).rejects.toThrow(StoreError);
     await storeAction(db, customer, { action: "buyback", requestId: randomUUID(), id: String(r.copyId), amount: 200 });
     expect(await balanceOf(db, customer.id)).toBe(4900);
     state = await storeState(db, customer);
-    expect(state.singles[0].available).toBe(2);
+    expect(state.singles[0].available).toBe(1);
+    expect(await db.siteCopy.findUniqueOrThrow({ where: { id: String(r.copyId) } })).toMatchObject({ status: "DRAFT", ownerId: null, autoRestock: true });
     expect(state.binder).toHaveLength(0);
   });
 

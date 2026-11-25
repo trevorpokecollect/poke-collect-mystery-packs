@@ -4,10 +4,16 @@
 //      {intent:"pool", copyIds, packId} | {intent:"unpool", copyIds}   (pools fill from DRAFT; unpool → DRAFT)
 //      {intent:"activate", copyIds} (DRAFT → FOR_SALE) | {intent:"draft", copyIds} (FOR_SALE → DRAFT)
 //      {intent:"pack", packId, priceBits, cardsPerPack, active}
+//      Restocks (pools change only when published): "pool"/"unpool" STAGE copies for the pack's next restock;
+//      {intent:"restocks"} → staged restock + odds now/after + history per pack
+//      {intent:"restock-unstage", copyIds} | {intent:"restock-publish", packId, note?} (goes live now, new pool version)
+//      {intent:"pack-ev", packId, targetEvPct|null, evBandPct, minTopPer100|null, languages?, eras?} (EV is internal only)
+//      {intent:"auto-restock-run"} runs the hourly automatic buyback restock now
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
 import { DeskError, listStock, movePool, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
+import { RestockError, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
 
 const deny = () => Response.json({ error: "Unavailable." }, { status: 403, headers: { "Cache-Control": "no-store" } });
 
@@ -64,11 +70,25 @@ export async function action({ request }: ActionFunctionArgs) {
         const p = await savePack(db, String(b.packId || ""), b.priceBits, b.cardsPerPack, b.active === true);
         return Response.json({ ok: true, pack: { id: p.id, priceBits: p.priceBits, cardsPerPack: p.cardsPerPack, active: p.active } });
       }
+      case "restocks":
+        return Response.json({ ok: true, packs: await stagedRestocks(db) }, { headers: { "Cache-Control": "no-store" } });
+      case "restock-unstage":
+        return Response.json({ ok: true, ...(await unstageRestock(db, actor, b.copyIds)) });
+      case "restock-publish": {
+        const r = await publishRestock(db, actor, String(b.packId || ""), b.note);
+        return Response.json({ ok: true, restock: { packId: r.packId, version: r.version, poolHash: r.poolHash, poolSize: r.poolSize, added: (r.addIds as string[]).length, removed: (r.removeIds as string[]).length } });
+      }
+      case "pack-ev": {
+        const p = await savePackEv(db, String(b.packId || ""), b);
+        return Response.json({ ok: true, pack: { id: p.id, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras } });
+      }
+      case "auto-restock-run":
+        return Response.json({ ok: true, ...(await runAutoRestock(db, { force: true })) });
       default:
         return Response.json({ error: "Unknown intent." }, { status: 422 });
     }
   } catch (e) {
-    if (e instanceof DeskError) return Response.json({ error: e.message }, { status: 422 });
+    if (e instanceof DeskError || e instanceof RestockError) return Response.json({ error: e.message }, { status: 422 });
     throw e;
   }
 }

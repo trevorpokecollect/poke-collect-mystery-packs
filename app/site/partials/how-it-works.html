@@ -73,9 +73,11 @@
       <p>Cardbit has five packs. Each one pulls from its own pool of real Pokémon cards, and <strong>every pack guarantees at least one physical card</strong>. A Booster gives you five cards. Mystery, Gold, Japanese and Wildcard packs give you one card each.</p>
       <p>Open any pack's page before you buy to see everything in it: every card in the pool, the rarity tiers, the pull odds for each tier, and the range of Cardbits value inside each tier. Nothing is hidden.</p>
       <h3>How Pack Odds Work</h3>
-      <p>Each pack belongs to a series, a fixed set of packs that have already been filled with specific cards. The odds you see are calculated from the packs in that series that <strong>haven't been opened yet</strong>. When someone pulls a big card, it leaves the series and the odds update for everyone. The <strong>Odds Left</strong> meter on each pack shows how many cards of each tier are still waiting to be pulled.</p>
+      <p>Each pack draws from its own pool of specific physical cards. The odds you see are calculated from the cards in that pool that <strong>haven't been pulled yet</strong>. When someone pulls a big card, it leaves the pool and the odds update for everyone. The <strong>Odds Left</strong> meter on each pack shows how many cards of each tier are still waiting to be pulled.</p>
+      <h3>Verified Restocks</h3>
+      <p>Pools grow over time. New cards, and cards collectors sold back, join a pool only in a <strong>published restock</strong>, never in the middle of a draw. Each restock saves a numbered pool version with every card in it and a SHA-256 fingerprint, and the pack page shows its <strong>Restock History</strong>. The odds always reflect the pool as it stands right now.</p>
       <h3>Verified Shuffle</h3>
-      <p>Every paid opening is drawn with a locked secret seed whose fingerprint you can see before you open, plus a client seed you can set yourself. Reveal the seed any time on the <a href="/verified-shuffle">Verified Shuffle</a> page and check that it picked exactly your cards.</p>
+      <p>Every paid opening is drawn with a locked secret seed whose fingerprint you can see before you open, plus a client seed you can set yourself. Reveal the seed any time on the <a href="/verified-shuffle">Verified Shuffle</a> page and check that it picked exactly your cards, from the published pool version it names.</p>
     </div>
     <div class="hiw-art">
       <ul class="hiw-packs" data-hiw-packs><li class="hiw-pack hiw-pack-mystery" data-hiw-pack="mystery">
@@ -216,7 +218,7 @@
         </div>
         <ul class="hiw-fine">
           <li>Offers follow card market prices and Cardbit's buyback rates, so they can change daily. You always get the offer shown when you confirm. If it changes while you're deciding, you'll see the new number and confirm again.</li>
-          <li>Once sold back, the card returns to Cardbit's inventory.</li>
+          <li>Once sold back, the card returns to Cardbit's inventory, and it may join a pack pool in a future published restock.</li>
           <li>Cards you've requested to ship can't be sold back.</li>
         </ul>
       </article>

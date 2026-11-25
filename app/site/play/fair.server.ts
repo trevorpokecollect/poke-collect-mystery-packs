@@ -51,7 +51,7 @@ export async function activeSeed(db: Db, customerId: string) {
  * Draw for an opening inside the caller's transaction (which already holds the customer lock),
  * advance the nonce and record everything needed to verify it later.
  */
-export async function drawForOpening<T extends { id: string }>(tx: Prisma.TransactionClient, customerId: string, openingId: string, pool: readonly T[], count: number) {
+export async function drawForOpening<T extends { id: string }>(tx: Prisma.TransactionClient, customerId: string, openingId: string, pool: readonly T[], count: number, poolVersion: number | null = null) {
   const seed = await activeSeed(tx, customerId);
   const ordered = [...pool].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const picks = fairDraw(ordered, count, seed.serverSeed, seed.clientSeed, seed.nonce);
@@ -65,6 +65,7 @@ export async function drawForOpening<T extends { id: string }>(tx: Prisma.Transa
       nonce: seed.nonce,
       poolIds: ordered.map((c) => c.id),
       pickIds: picks.map((c) => c.id),
+      poolVersion,
     },
   });
   return picks;
@@ -114,6 +115,7 @@ export async function fairView(db: Db, customerId: string, take = 50) {
       serverSeed: r.seed.revealedAt ? r.seed.serverSeed : null,
       clientSeed: r.clientSeed,
       nonce: r.nonce,
+      poolVersion: r.poolVersion,
       poolIds: r.opening.sealed ? [] : (r.poolIds as string[]),
       pickIds: r.opening.sealed ? [] : (r.pickIds as string[]),
       picks: r.opening.sealed ? [] : (r.pickIds as string[]).map((id) => title.get(id) ?? "Card"),

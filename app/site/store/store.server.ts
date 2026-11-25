@@ -8,6 +8,7 @@ import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
 import { drawForOpening } from "../play/fair.server";
+import { currentPoolVersion, restockHistory } from "../core/restock.server";
 import { subscriberBonusForOpening } from "../play/subscriptions.server";
 import { SITE_SHOP as SITE_REWARDS_SHOP_KEY } from "../rewards/rewards.server";
 import { awardXp } from "../../lib/cardbit-levels.server";
@@ -40,26 +41,8 @@ async function pricesFor(db: PrismaClient | Tx, keys: string[]): Promise<Prices>
   return new Map(rows.map((r) => [r.printingKey, { retailBits: r.retailBits, buybackBits: r.buybackBits }]));
 }
 
-export type TierRule = { name: string; min: number };
-/** Default ladder (Cardbits of card value; 100 = $1) until staff set per-pack rules. */
-export const DEFAULT_TIERS: TierRule[] = [
-  { name: "Common", min: 0 },
-  { name: "Uncommon", min: 500 },
-  { name: "Rare", min: 1500 },
-  { name: "Epic", min: 5000 },
-  { name: "Legendary", min: 15000 },
-];
-export function tierRules(raw: unknown): TierRule[] {
-  if (!Array.isArray(raw)) return DEFAULT_TIERS;
-  const rules = raw.filter((r): r is TierRule => typeof r?.name === "string" && Number.isFinite(r?.min)).sort((a, b) => a.min - b.min);
-  return rules.length ? rules : DEFAULT_TIERS;
-}
-export function tierFor(valueBits: number | null, rules: TierRule[] = DEFAULT_TIERS): string | null {
-  if (valueBits == null) return null;
-  let tier: string | null = null;
-  for (const r of rules) if (valueBits >= r.min) tier = r.name;
-  return tier;
-}
+export { DEFAULT_TIERS, tierFor, tierRules, type TierRule } from "./tiers";
+import { DEFAULT_TIERS, tierFor, tierRules, type TierRule } from "./tiers";
 
 /** Card fields the storefront reads (same names as the theme catalog). */
 function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule[] = DEFAULT_TIERS) {
@@ -99,6 +82,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
     ? await db.siteCopy.findMany({ where: { ownerId: customer.id, status: { in: ["VAULTED", "SHIP_LOCKED", "SHIPPED"] } }, orderBy: { updatedAt: "desc" } })
     : [];
   const prices = await pricesFor(db, [...pooled, ...forSale, ...owned].map(pk));
+  const restocks = await restockHistory(db, packs.map((p) => p.id));
 
   const packViews = packs.map((p) => {
     const pool = pooled.filter((c) => c.packId === p.id);
@@ -112,6 +96,8 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
       remaining: Math.floor(n / p.cardsPerPack),
       remainingCards: n,
       drawModel: "uniform-without-replacement",
+      // Verified restocks: published pool versions, newest first (version 1 = starting pool).
+      restocks: restocks.get(p.id) ?? [],
       cards: pool.map((c) => ({ ...cardView(c, prices.get(pk(c)), c.id, tierRules(p.tierRules)), remaining: 1, chanceInPack: n >= p.cardsPerPack ? p.cardsPerPack / n : 0 })),
     };
   });
@@ -289,11 +275,13 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         await debit(pack.priceBits, "PACK", opening.id, `${pack.title}`);
         const prices = await pricesFor(tx, pool.map(pk));
         const value = (c: SiteCopy) => c.retailBits ?? prices.get(pk(c))?.retailBits ?? 0;
-        const drawn = (await drawForOpening(tx, customer.id, opening.id, pool, pack.cardsPerPack)).sort((x, y) => value(x) - value(y));
+        // The published pool version this draw comes from (records the starting pool on first use).
+        const poolVersion = await currentPoolVersion(tx, pack.id);
+        const drawn = (await drawForOpening(tx, customer.id, opening.id, pool, pack.cardsPerPack, poolVersion)).sort((x, y) => value(x) - value(y));
         for (const [i, c] of drawn.entries()) {
           const n = await tx.siteCopy.updateMany({
             where: { id: c.id, status: "POOLED", packId: pack.id },
-            data: { status: "VAULTED", ownerId: customer.id, packId: null, openingId: opening.id, position: i + 1, orderId: opening.id },
+            data: { status: "VAULTED", ownerId: customer.id, packId: null, restockId: null, openingId: opening.id, position: i + 1, orderId: opening.id },
           });
           if (n.count !== 1) throw new StoreError("retry", "Packs are busy. Try again.");
           await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: "POOLED", toStatus: "VAULTED", actor: `customer:${customer.id}`, reason: `pack opening ${opening.id}` } });
@@ -345,9 +333,10 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         if (!offer || offer <= 0) throw new StoreError("no_offer", "No current buyback offer for this copy.");
         if (a.amount !== offer) throw new StoreError("catalog_changed", "The Cardbits offer changed. Review the current price.");
         await applyLedger(tx, { customerId: customer.id, delta: offer, kind: "BUYBACK", idempotencyKey: key, ref: c.id, note: `Sold back ${c.title}` });
-        // The card goes back on the shelf for sale, in the same slot.
-        await tx.siteCopy.update({ where: { id: c.id }, data: { status: "FOR_SALE", ownerId: null, orderId: null } });
-        await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: "VAULTED", toStatus: "FOR_SALE", actor: `customer:${customer.id}`, reason: `buyback ${offer} Cardbits` } });
+        // Verified restocks (Trevor, Nov 25): the card goes to Draft, same slot, marked for the hourly automatic
+        // restock, which routes it to the pool that needs it (or leaves it in Draft for staff).
+        await tx.siteCopy.update({ where: { id: c.id }, data: { status: "DRAFT", ownerId: null, orderId: null, autoRestock: true } });
+        await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: "VAULTED", toStatus: "DRAFT", actor: `customer:${customer.id}`, reason: `buyback ${offer} Cardbits` } });
         result = { copyId: c.id };
       } else if (a.action === "want-add" || a.action === "want-remove") {
         if (!a.id) throw new StoreError("invalid", "Choose a printing.", 400);

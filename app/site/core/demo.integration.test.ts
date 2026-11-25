@@ -7,6 +7,7 @@ import { DemoError, demoSummary, giveDemoPacks, giveDemoVaultCards, grantDemoCar
 import { balanceOf, postLedger } from "./ledger.server";
 import { receiveSiteIntake } from "./stock.server";
 import { movePool, setPrice } from "./stock-desk.server";
+import { publishRestock } from "./restock.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -21,6 +22,7 @@ const clean = async () => {
   await db.siteOpening.deleteMany();
   await db.sitePrice.deleteMany();
   await db.siteCopyEvent.deleteMany();
+  await db.siteRestock.deleteMany();
   await db.siteCopy.deleteMany();
   await db.siteIntakeReceipt.deleteMany();
   await db.siteLedger.deleteMany();
@@ -51,6 +53,7 @@ describe.skipIf(!url)("demo panel", () => {
     expect(await markDemo(db, "t", demo.map((c) => c.id), true)).toEqual({ changed: 16 });
     for (const c of demo) await setPrice(db, "t", c.printingKey, c.condition, 300, 240);
     await movePool(db, "t", demo.slice(0, 10).map((c) => c.id), "prism"); // 2 Booster packs of demo cards
+    await publishRestock(db, "t", "prism");
 
     const rid = randomUUID();
     const credit = await grantDemoCardbits(db, "t", EMAIL, "50,000", rid);

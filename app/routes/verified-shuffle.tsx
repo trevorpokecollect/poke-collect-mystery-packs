@@ -26,6 +26,7 @@ const HOW = `<h2>How It Works</h2>
   <li><b>Before you open,</b> we lock in a secret <em>server seed</em> and show you its fingerprint (SHA-256 hash). Once shown, it can't change.</li>
   <li><b>You can add your own</b> <em>client seed</em>, so we can't know the full input in advance.</li>
   <li><b>Each opening</b> lists the pack's remaining cards in a fixed order and picks from them with your seeds and an opening number (<em>nonce</em>). Each card is drawn once.</li>
+  <li><b>Pools change only at a published restock.</b> Each restock saves a numbered pool version with every card ID and a SHA-256 hash, listed on the pack page. Each opening records the version it drew from, and its pool must be that version minus cards already pulled.</li>
   <li><b>Reveal any time.</b> Press Reveal &amp; New Seed and we show the old secret seed. Then Verify recomputes every opening right here in your browser.</li>
 </ol>
 <p class="fine">Formula: pick <i>i</i> = HMAC-SHA256(server seed, "client seed:nonce:i"), first 13 hex digits as a number, mod the cards left. The card at that spot is removed before the next pick. Card values never change the draw.</p>`;
@@ -46,7 +47,17 @@ function verifierScript() {
       var left=d.poolIds.slice(),picks=[];
       for(var i=0;i<d.pickIds.length;i++){var h=await hmac(d.serverSeed,d.clientSeed+':'+d.nonce+':'+i);picks.push(left.splice(parseInt(h.slice(0,13),16)%left.length,1)[0])}
       var ok=picks.join()===d.pickIds.join();
-      out.textContent=ok?'✓ Verified: the seeds pick exactly these cards.':'✗ Picks do not match.';out.className='vr '+(ok?'note':'err');
+      if(!ok){out.textContent='✗ Picks do not match.';out.className='vr err';return}
+      var extra='';
+      if(d.poolVersion&&d.packId){
+        var v=await (await fetch('/api/pool-version?pack='+encodeURIComponent(d.packId)+'&v='+d.poolVersion)).json();
+        var ids=(v.poolIds||[]).slice().sort();
+        if(await sha(ids.join(String.fromCharCode(10)))!==v.poolHash){out.textContent='✗ Pool version '+d.poolVersion+' does not match its hash.';out.className='vr err';return}
+        var inVersion=new Set(ids);
+        if(!d.poolIds.every(function(id){return inVersion.has(id)})){out.textContent='✗ This pool has cards that are not in version '+d.poolVersion+'.';out.className='vr err';return}
+        extra=' The pool came from published version '+d.poolVersion+'.';
+      }
+      out.textContent='✓ Verified: the seeds pick exactly these cards.'+extra;out.className='vr note';
     }catch(x){out.textContent='Your browser could not run the check.';out.className='vr err'}
   });
 })();
@@ -72,9 +83,9 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
     ? v.openings
         .map((o) => {
           const when = new Date(o.at).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-          const data = o.serverSeed && !o.sealed ? esc(JSON.stringify({ serverSeed: o.serverSeed, serverSeedHash: o.serverSeedHash, clientSeed: o.clientSeed, nonce: o.nonce, poolIds: o.poolIds, pickIds: o.pickIds })) : "";
+          const data = o.serverSeed && !o.sealed ? esc(JSON.stringify({ serverSeed: o.serverSeed, serverSeedHash: o.serverSeedHash, clientSeed: o.clientSeed, nonce: o.nonce, poolIds: o.poolIds, pickIds: o.pickIds, packId: o.packId, poolVersion: o.poolVersion })) : "";
           return `<div class="op"><h3>${esc(o.packTitle)} · ${esc(when)} CT</h3>
-            <div class="fine">Nonce ${o.nonce} · Client seed <span class="mono">${esc(o.clientSeed)}</span></div>
+            <div class="fine">${o.poolVersion ? `Pool version <a href="/api/pool-version?pack=${encodeURIComponent(o.packId)}&amp;v=${o.poolVersion}">${o.poolVersion}</a> · ` : ""}Nonce ${o.nonce} · Client seed <span class="mono">${esc(o.clientSeed)}</span></div>
             <div class="fine">Fingerprint <span class="mono">${esc(o.serverSeedHash)}</span></div>
             ${o.sealed ? `<div class="fine">Open this pack to see its cards.</div>` : `<div class="fine">Cards: ${esc(o.picks.join(", "))} (from ${o.poolIds.length} left in the pack)</div>`}
             ${o.serverSeed ? `<div class="fine">Server seed <span class="mono">${esc(o.serverSeed)}</span></div>` : `<div class="fine">Server seed hidden until you reveal it.</div>`}

@@ -134,6 +134,10 @@ export async function receiveSiteIntake(db: PrismaClient, raw: unknown): Promise
   const body = digest(row);
   const reply = await receiveRow(db, row, body);
   if (price) await applyBrokerPrice(db, priceKey(printingKey(row), row.condition), price);
+  // Optional era ("Modern" | "Vintage") for pack eligibility; not part of the receipt digest.
+  const era = (raw as Record<string, unknown>)?.era;
+  if ((era === "Modern" || era === "Vintage") && reply.copies.length)
+    await db.siteCopy.updateMany({ where: { id: { in: reply.copies.map((c) => c.id) } }, data: { era } });
   return reply;
 }
 

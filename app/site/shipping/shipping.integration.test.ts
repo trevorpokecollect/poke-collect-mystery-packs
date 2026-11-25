@@ -89,6 +89,7 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     await db.siteShipment.deleteMany();
     await db.siteEmail.deleteMany();
     await db.siteCopyEvent.deleteMany();
+    await db.siteRestock.deleteMany();
     await db.siteCopy.deleteMany();
     const copy = (id: string, status: string, owner: string | null, slot: number | null, pocket: number | null, printing: string) =>
       db.siteCopy.create({

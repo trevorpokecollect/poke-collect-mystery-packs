@@ -8,6 +8,7 @@ import { currentCustomer } from "../site/core/auth.server";
 import { esc } from "../site/core/simple-page";
 import { priceKey, shelfAddress } from "../site/core/stock.server";
 import { DeskError, movePool, setListing, setPrice } from "../site/core/stock-desk.server";
+import { RestockError, publishRestock, unstageRestock } from "../site/core/restock.server";
 import { DemoError, demoSummary, giveDemoPacks, giveDemoVaultCards, grantDemoCardbits, markDemo, wipeDemo } from "../site/core/demo.server";
 import { notFound, sameOrigin, staffUser } from "../site/shipping/staff.server";
 
@@ -61,9 +62,23 @@ export async function action({ request }: ActionFunctionArgs) {
         intent === "pool" || intent === "unpool"
           ? await movePool(prisma, actor, ids, intent === "pool" ? String(fd.get("packId") || "") || "missing" : null)
           : await setListing(prisma, actor, ids, intent === "activate");
-      note = `${r.moved} card${r.moved === 1 ? "" : "s"} moved${r.skipped ? ` (${r.skipped} skipped: not in the right status)` : ""}.`;
+      const verb = intent === "pool" ? "staged for the next restock" : intent === "unpool" ? "staged to come out at the next restock" : "moved";
+      note = `${r.moved} card${r.moved === 1 ? "" : "s"} ${verb}${r.skipped ? ` (${r.skipped} skipped: not in the right status or already staged)` : ""}.${intent === "pool" || intent === "unpool" ? " Publish the restock to change the pool." : ""}`;
     } catch (e) {
       if (!(e instanceof DeskError)) throw e;
+      note = e.message;
+    }
+  } else if (intent === "restock-publish" || intent === "restock-unstage") {
+    try {
+      if (intent === "restock-publish") {
+        const v = await publishRestock(prisma, actor, String(fd.get("packId") || ""), fd.get("note"));
+        note = `Restock published: ${v.packId} pool version ${v.version}, ${v.poolSize} cards.`;
+      } else {
+        const u = await unstageRestock(prisma, actor, fd.getAll("copyId").map(String));
+        note = `${u.unstaged} card${u.unstaged === 1 ? "" : "s"} unstaged.`;
+      }
+    } catch (e) {
+      if (!(e instanceof RestockError)) throw e;
       note = e.message;
     }
   } else if (intent === "pack") {
@@ -136,6 +151,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prisma.siteCopy.groupBy({ by: ["packId"], where: { status: "POOLED" }, _count: { _all: true } }),
     demoSummary(prisma),
   ]);
+  const stagedRows = await prisma.siteRestock.findMany({ where: { status: "STAGED" }, select: { id: true, packId: true } });
+  const stagedCounts = stagedRows.length
+    ? await prisma.siteCopy.groupBy({ by: ["restockId", "status"], where: { restockId: { in: stagedRows.map((r) => r.id) } }, _count: { _all: true } })
+    : [];
+  const staged = (packId: string, st: string) => {
+    const r = stagedRows.find((x) => x.packId === packId);
+    return r ? stagedCounts.find((c) => c.restockId === r.id && c.status === st)?._count._all ?? 0 : 0;
+  };
   const prices = new Map(
     (await prisma.sitePrice.findMany({ where: { printingKey: { in: [...new Set(rows.map((r) => priceKey(r.printingKey, r.condition)))] } } })).map((p) => [p.printingKey, p]),
   );
@@ -151,7 +174,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 <b>${esc(p.title)}</b><span class="m">${n} in pool · ${Math.floor(n / p.cardsPerPack)} packs</span>
 <label>Price <input name="priceBits" value="${p.priceBits}" inputmode="numeric" size="6"></label>
 <label>Cards <input name="cardsPerPack" value="${p.cardsPerPack}" inputmode="numeric" size="2"></label>
-<label><input type="checkbox" name="active"${p.active ? " checked" : ""}> On sale</label><button>Save</button></form>`;
+<label><input type="checkbox" name="active"${p.active ? " checked" : ""}> On sale</label><button>Save</button></form>
+<form method="post" class="pk"><input type="hidden" name="intent" value="restock-publish"><input type="hidden" name="packId" value="${esc(p.id)}"><input type="hidden" name="back" value="${back}">
+<span class="m">Next restock: +${staged(p.id, "DRAFT")} / −${staged(p.id, "POOLED")}</span><input name="note" placeholder="Note (optional, public)" aria-label="Restock note" size="22" maxlength="200"><button${staged(p.id, "DRAFT") + staged(p.id, "POOLED") ? "" : " disabled"}>Publish Restock</button></form>`;
     })
     .join("");
   const packOpts = packs.map((p) => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("");
@@ -178,7 +203,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           return `<tr><td><input type="checkbox" name="copyId" value="${esc(r.id)}" form="bulk" aria-label="Select ${esc(r.title)}"></td>
 <td>${r.image ? `<img src="${esc(r.image)}" alt="" width="40" loading="lazy">` : ""}</td>
 <td><b>${esc(r.title)}</b><br><span class="m">${esc([r.setName, r.number, r.finish, r.language, r.condition].filter(Boolean).join(" · "))}</span></td>
-<td>${esc(loc(r.slot, r.pocket))}</td><td>${esc(r.status)}${r.demo ? ` <span class="demo">Demo</span>` : ""}${r.packId ? `<br><span class="m">${esc(r.packId)}</span>` : ""}</td>
+<td>${esc(loc(r.slot, r.pocket))}</td><td>${esc(r.status)}${r.demo ? ` <span class="demo">Demo</span>` : ""}${r.packId ? `<br><span class="m">${esc(r.packId)}</span>` : ""}${r.restockId ? `<br><span class="m">Staged for restock</span>` : ""}</td>
 <td><form method="post" class="pr"><input type="hidden" name="intent" value="price"><input type="hidden" name="printingKey" value="${esc(r.printingKey)}"><input type="hidden" name="condition" value="${esc(r.condition)}"><input type="hidden" name="back" value="${back}">
 <input name="retailBits" value="${p?.retailBits ?? ""}" placeholder="Price" inputmode="numeric" size="6" aria-label="Price in Cardbits">
 <input name="buybackBits" value="${p?.buybackBits ?? ""}" placeholder="Buyback" inputmode="numeric" size="6" aria-label="Buyback in Cardbits"><button>Save</button></form></td>
@@ -206,8 +231,8 @@ ${demoPanel}
 <h2>Cards</h2><form class="search"><input name="q" value="${esc(q)}" placeholder="Search name, set or number" aria-label="Search"><input type="hidden" name="status" value="${esc(status)}"><button>Search</button></form>
 <div>${chips}</div><p class="m">${total.toLocaleString("en-US")} card${total === 1 ? "" : "s"}${total > rows.length ? `, newest ${rows.length} shown` : ""}. Singles show in the shop once their printing has a price. Card Broker sets prices per printing and condition; a price saved here lasts until its next update.</p>
 <form method="post" id="bulk" class="bulk"><input type="hidden" name="back" value="${back}">
-<select name="packId" aria-label="Pack">${packOpts}</select><button name="intent" value="pool">Add Selected to Pack Pool</button>
-<button name="intent" value="unpool">Return Selected to Drafts</button>
+<select name="packId" aria-label="Pack">${packOpts}</select><button name="intent" value="pool">Stage Selected for Restock</button>
+<button name="intent" value="unpool">Stage Selected to Leave Pool</button><button name="intent" value="restock-unstage" class="alt">Unstage Selected</button>
 <button name="intent" value="activate">Make Selected Active</button><button name="intent" value="draft" class="alt">Move Selected to Drafts</button>
 <button name="intent" value="demo-mark" class="alt">Mark Selected Demo</button><button name="intent" value="demo-unmark" class="alt">Unmark Demo</button></form>
 <div class="wrap"><table><thead><tr><th></th><th></th><th>Card</th><th>Location</th><th>Status</th><th>Price / Buyback (Cardbits)</th><th>Received</th></tr></thead><tbody>${body}</tbody></table></div></main></body></html>`;
