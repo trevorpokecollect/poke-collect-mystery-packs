@@ -2,6 +2,8 @@
 // Published policy: US only, never AL, HI, ID, MN, NV, NY, UT or WA. The billing address, the
 // delivery address (when there is one) and the request IP must all pass, checked on the server.
 
+import { staffEmails } from "./shipping/staff.server";
+
 export const EXCLUDED_STATES = ["AL", "HI", "ID", "MN", "NV", "NY", "UT", "WA"] as const;
 
 export const US_STATES = new Set([
@@ -157,4 +159,14 @@ export function stateCode(name?: string | null): string | null {
   const n = name.trim();
   if (/^[A-Za-z]{2}$/.test(n)) return n.toUpperCase();
   return STATE_NAMES[n.toLowerCase()] ?? null;
+}
+
+/**
+ * The IP lookup for a paid action by this customer. Staff test accounts (SITE_STAFF_EMAILS) skip only
+ * the connection check, so the team can test from the Madison, AL office; billing and delivery
+ * addresses are still checked for everyone.
+ */
+export function geoLookupFor(email: string | null | undefined, env: NodeJS.ProcessEnv = process.env): GeoLookup | null {
+  if (email && staffEmails(env).has(email.trim().toLowerCase())) return null;
+  return defaultGeoLookup(env);
 }
