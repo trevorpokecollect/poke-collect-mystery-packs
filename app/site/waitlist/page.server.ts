@@ -63,7 +63,7 @@ function form(id: string, compact = false) {
     </label>
     <label class="wl-check wl-check--sms" data-wl-sms>
       <input type="checkbox" name="smsConsent">
-      <span>I Agree to Recurring Automated Marketing Texts from Cardbit at This Number. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. US numbers only. <a href="/policies#sms-terms" target="_blank" rel="noopener">Text Message Terms</a> and <a href="/policies#privacy-policy" target="_blank" rel="noopener">Privacy</a>.</span>
+      <span>I Agree to Recurring Automated Marketing Texts from Cardbit at This Number. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of purchase. US numbers only. See our <a href="/policies#sms-terms" target="_blank" rel="noopener">Text Message Terms</a> and <a href="/policies#privacy-policy" target="_blank" rel="noopener">Privacy Policy</a>.</span>
     </label>
     <div class="wl-hp" aria-hidden="true"><label>Company <input name="company" tabindex="-1" autocomplete="off"></label></div>
     <button class="wl-btn wl-btn--primary" type="submit"><span>Claim My Founding Spot</span></button>
