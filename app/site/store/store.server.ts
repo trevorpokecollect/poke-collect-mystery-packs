@@ -6,12 +6,12 @@ import type { Prisma, PrismaClient, SiteCopy, SiteCustomer } from "@prisma/clien
 import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.server";
 import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
-import { siteRewardsForOpening } from "../rewards/rewards.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
 import { drawForOpening } from "../play/fair.server";
 import { subscriberBonusForOpening } from "../play/subscriptions.server";
 import { SITE_SHOP as SITE_REWARDS_SHOP_KEY } from "../rewards/rewards.server";
 import { awardXp } from "../../lib/cardbit-levels.server";
+import { openingRewards, siteProgress, siteRewardsForOpening } from "../rewards/rewards.server";
 
 /** Shop key for site rows in shared Cardbit* tables (age, rewards, vault marks). */
 export const SITE_SHOP_KEY = "cardbit-site";
@@ -145,6 +145,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
   // Copies from pack openings may have been sold back since; keep the opening record intact.
   const openingCopies = await db.siteCopy.findMany({ where: { openingId: { in: openings.map((o) => o.id) } }, orderBy: { position: "asc" } });
   const openingPrices = await pricesFor(db, openingCopies.map(pk));
+  const [earned, progress] = await Promise.all([openingRewards(db, customer.id, openings.map((o) => o.id)), siteProgress(db, customer.id)]);
   // Tier ladder per opening = its pack's rules (inactive packs too, so old pulls keep their tier).
   const allPacks = await db.sitePack.findMany({ select: { id: true, tierRules: true } });
   const packRules = new Map(allPacks.map((p) => [p.id, tierRules(p.tierRules)]));
@@ -164,7 +165,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
 
   return {
     site: true,
-    account: { id: customer.id, name: customer.name || customer.email.split("@")[0], email: customer.email, bits: balance, frozen: Boolean(customer.frozenAt), play: await playStateFor(db, customer.id) },
+    account: { id: customer.id, name: customer.name || customer.email.split("@")[0], email: customer.email, bits: balance, frozen: Boolean(customer.frozenAt), level: progress.level, sparks: progress.sparks, play: await playStateFor(db, customer.id) },
     packs: packViews,
     singles,
     binder: owned.filter((c) => !c.openingId || !sealed.has(c.openingId)).map((c) => ({ ...copyView(c, prices), tier: null })),
@@ -178,6 +179,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
         sealed: o.sealed,
         cardCount: cards.length,
         cards: o.sealed ? [] : cards.map((c) => copyView(c, openingPrices)),
+        rewards: o.sealed ? null : earned.get(o.id) ?? null,
       };
     }),
     wants: wants.map((w) => w.cardKey),
@@ -300,13 +302,22 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         const pulledBuyback = drawn.reduce((sum, c) => sum + (prices.get(pk(c))?.buybackBits ?? 0), 0);
         const rewards = await siteRewardsForOpening(tx, customer.id, opening.id, pack.priceBits, pulledBuyback);
         // Cardbit Club: +XP% and +Sparks% on top (no-op unless SITE_SUBSCRIPTIONS=on and the plan is paid up).
-        await subscriberBonusForOpening(tx, SITE_REWARDS_SHOP_KEY, customer.id, opening.id, rewards, { xp: (i) => awardXp(tx, i) });
-        result = { openingId: opening.id, sealed: opening.sealed };
+        const club = await subscriberBonusForOpening(tx, SITE_REWARDS_SHOP_KEY, customer.id, opening.id, rewards, { xp: (i) => awardXp(tx, i) });
+        result = { openingId: opening.id, sealed: opening.sealed, rewards: { xp: rewards.xp + club.xp, sparks: rewards.sparks + club.sparks } };
       } else if (a.action === "reveal") {
         const o = await tx.siteOpening.findFirst({ where: { id: a.id || "", customerId: customer.id } });
         if (!o) throw new StoreError("not_found", "This pack is unavailable.", 404);
         if (o.sealed) await tx.siteOpening.update({ where: { id: o.id }, data: { sealed: false, revealedAt: new Date() } });
-        result = { openingId: o.id };
+        // Demo packs (staff test accounts only) earn XP and Sparks at the pack's list price when revealed, so the
+        // full reveal can be tested. Wipe Demo takes them back. Paid packs already earned theirs at purchase.
+        if (o.demo) {
+          const pack = await tx.sitePack.findUnique({ where: { id: o.packId }, select: { priceBits: true } });
+          const cards = await tx.siteCopy.findMany({ where: { openingId: o.id } });
+          const prices = await pricesFor(tx, cards.map(pk));
+          const pulled = cards.reduce((sum, c) => sum + (prices.get(pk(c))?.buybackBits ?? 0), 0);
+          if (pack) await siteRewardsForOpening(tx, customer.id, o.id, pack.priceBits, pulled);
+        }
+        result = { openingId: o.id, rewards: (await openingRewards(tx, customer.id, [o.id])).get(o.id) ?? { xp: 0, sparks: 0 } };
       } else if (a.action === "buy") {
         const forSale = await tx.siteCopy.findMany({ where: { status: "FOR_SALE" }, orderBy: [{ slot: "asc" }, { pocket: "asc" }] });
         const group = forSale.filter((c) => singleKey(c) === a.id);

@@ -49,3 +49,40 @@
 #cardbit-store.cb-standalone .cbp { border:0; border-radius:0; box-shadow:none; margin:0; }
 #cardbit-store.cb-standalone .cbp-crumb a { color:#a5f5ed; font-weight:700; text-decoration:none; }
 #cardbit-store.cb-standalone .cbp-crumb a:hover { text-decoration:underline; }
+
+/* Sparks balance beside the Cardbits wallet (signed in, Sparks on). */
+#cardbit-store .cb-sparks-link { display:inline-flex; align-items:center; gap:6px; min-height:37px; padding:8px 11px; border:1px solid #4a3a26; border-radius:8px; background:#21190f; color:#ffd59a; font:800 13px/1 'Cardbit Outfit',var(--cb-sans); text-decoration:none; font-variant-numeric:tabular-nums; }
+#cardbit-store .cb-sparks-link:hover { background:#2c2114; border-color:#7a5a32; }
+#cardbit-store .cb-sparks-link:focus-visible { outline:2px solid var(--cb-accent); outline-offset:2px; }
+#cardbit-store .cb-sparks-link img { width:20px; height:20px; flex:none; }
+#cardbit-store .cb-sparks-link[hidden] { display:none; }
+@media (max-width: 720px) { #cardbit-store .cb-sparks-link { min-height:39px; padding:7px 8px; font-size:12px; gap:4px; } #cardbit-store .cb-sparks-link img { width:17px; height:17px; } }
+
+/* Pack rewards on the reveal: XP bar and Sparks. */
+.cbx-rewards { margin:6px 0 20px; padding:16px 18px; border:1px solid #2d4a4c; border-radius:14px; background:linear-gradient(135deg,#132326,#171d2a); color:#f6faf9; }
+.cbx-rewards .cbx-kicker { margin:0 0 10px; font:800 12px/1 'Cardbit Outfit',system-ui,sans-serif; letter-spacing:.08em; text-transform:uppercase; color:#73e6dc; }
+.cbx-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+.cbx-xp-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.cbx-xp-gain { font:800 26px/1 'Cardbit Outfit',system-ui,sans-serif; color:#7df3ea; font-variant-numeric:tabular-nums; }
+.cbx-level { font:800 14px/1 'Cardbit Outfit',system-ui,sans-serif; color:#d9e6e6; }
+.cbx-level-up { padding:4px 9px; border-radius:999px; background:#ffcf6b; color:#2b1d05; font:800 12px/1 'Cardbit Outfit',system-ui,sans-serif; text-transform:uppercase; letter-spacing:.05em; animation:cbx-pop .5s cubic-bezier(.2,1.6,.4,1); }
+.cbx-bar { height:12px; border-radius:999px; background:#0b1214; border:1px solid #2b3d40; overflow:hidden; }
+.cbx-bar i { display:block; height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg,#00e6e1,#8ff7b6); box-shadow:0 0 12px rgba(0,230,225,.55); transition:width .75s cubic-bezier(.3,.8,.3,1); }
+.cbx-note { display:block; margin-top:6px; color:#b6c4c5; font-size:13px; font-variant-numeric:tabular-nums; }
+.cbx-sparks { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:#21190f; border:1px solid #4a3a26; }
+.cbx-sparks b { display:block; font:800 22px/1.1 'Cardbit Outfit',system-ui,sans-serif; color:#ffd59a; }
+.cbx-sparks small { display:block; margin-top:3px; color:#d8c3a5; font-size:13px; }
+.cbx-sparks.is-none { background:#171d22; border-color:#2f3b40; }
+.cbx-sparks.is-none b { color:#d9e6e6; font-size:17px; }
+.cbx-sparks.is-none img { opacity:.55; }
+.cbx-rewards.is-fresh .cbx-sparks:not(.is-none) { animation:cbx-pop .6s .9s both cubic-bezier(.2,1.5,.4,1); }
+.cbx-rewards.is-level-up { border-color:#8a6a2a; box-shadow:0 0 0 1px rgba(255,207,107,.25),0 0 28px rgba(255,207,107,.18); }
+@keyframes cbx-pop { from { transform:scale(.7); opacity:0; } to { transform:none; opacity:1; } }
+@media (prefers-reduced-motion: reduce) { .cbx-bar i { transition:none; } .cbx-level-up, .cbx-rewards.is-fresh .cbx-sparks { animation:none; } }
+@media (max-width: 560px) { .cbx-row { grid-template-columns:1fr; } .cbx-rewards { padding:14px; } }
+
+/* Footer: community Discord. */
+#cardbit-store .cb-foot-social { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border:1px solid #3b4470; border-radius:999px; background:#1a1f3a; color:#c9cffd; font:800 13px/1 'Cardbit Outfit',var(--cb-sans); text-decoration:none; }
+#cardbit-store .cb-foot-social:hover { background:#252c55; border-color:#5865f2; color:#fff; }
+#cardbit-store .cb-foot-social:focus-visible { outline:2px solid var(--cb-accent); outline-offset:2px; }
+#cardbit-store .cb-foot-end { align-items:center; }

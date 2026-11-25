@@ -86,3 +86,30 @@ describe("Cardbit site pages", () => {
     for (const f of ["how-it-works.html", "policies.html"]) expect(readFileSync("app/site/partials/" + f, "utf8")).not.toMatch(/more than 30 cards|over 30 cards/i);
   });
 });
+
+describe("link previews and reveal rewards", () => {
+  it("puts a 1200x630 Open Graph and X card banner on every storefront page", () => {
+    const html = storefrontShell({ title: "cardbit · Digital Packs, Real Cards" });
+    expect(html).toContain('<meta property="og:image" content="https://cardbit.com/site/share/cardbit-share.png">');
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+    expect(html).toContain('<meta property="og:url" content="https://cardbit.com/">');
+    for (const f of ["cardbit-share.png", "cardbit-share-cobalt.png", "cardbit-share-prism.png", "cardbit-share-gold.png", "cardbit-share-ember.png", "cardbit-share-amethyst.png"])
+      expect(readFileSync(new URL("../../public/site/share/" + f, import.meta.url)).subarray(1, 4).toString()).toBe("PNG");
+  });
+  it("gives each pack its own preview", async () => {
+    const { shareFor } = await import("./share.server");
+    expect(shareFor("packs/cobalt", "x")).toMatchObject({ title: "Mystery Edition Pack · cardbit", image: "cardbit-share-cobalt.png", path: "/packs/cobalt" });
+    expect(shareFor("packs/japanese-edition", "x")).toMatchObject({ image: "cardbit-share-ember.png" });
+    expect(shareFor("shop", "Shop Singles · cardbit")).toMatchObject({ title: "Shop Singles · cardbit", image: "cardbit-share.png" });
+  });
+  it("shows XP and Sparks on the reveal, the Sparks pill, and modern backs for Japanese cards", () => {
+    const opening = readFileSync(new URL("../../public/site/assets/cardbit-opening.js", import.meta.url), "utf8");
+    const store = readFileSync(new URL("../../public/site/assets/cardbit-storefront.js", import.meta.url), "utf8");
+    const media = readFileSync(new URL("../../public/site/assets/cardbit-card-media.js", import.meta.url), "utf8");
+    expect(opening).toContain("options.onSpread");
+    expect(store).toContain("window.CardbitRevealRewards?.node(o)");
+    expect(store).toContain("sparksPill()");
+    expect(media).toContain("if (root.CardbitStore?.site) return backs['ja-modern'];");
+    expect(store).toContain("https://discord.gg/F9Z6jbgj4Y");
+  });
+});

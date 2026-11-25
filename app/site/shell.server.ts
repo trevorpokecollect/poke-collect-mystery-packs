@@ -104,13 +104,46 @@ function rewardIcons(): string {
   return JSON.stringify(map).replace(/</g, "\\u003c");
 }
 
+/** Link previews (Open Graph / X cards). Banners: public/site/share/, made by scripts/site/share-banners.mjs. */
+export type Share = { title: string; description: string; image?: string; path?: string };
+export const HOME_SHARE: Share = {
+  title: "cardbit · Digital Packs, Real Pokémon Cards",
+  description: "Open Pokémon packs online. Every pull is a real card you can keep in your vault, ship to your door or sell back for Cardbits.",
+  image: "cardbit-share.png",
+  path: "/",
+};
+export function shareMeta(share: Share, env: NodeJS.ProcessEnv = process.env): string {
+  let origin = "https://cardbit.com";
+  try { if (env.SITE_ORIGIN) origin = new URL(env.SITE_ORIGIN).origin; } catch { /* keep default */ }
+  const image = `${origin}/site/share/${share.image || HOME_SHARE.image}`;
+  const tags: [string, string, string][] = [
+    ["name", "description", share.description],
+    ["property", "og:type", "website"],
+    ["property", "og:site_name", "cardbit"],
+    ["property", "og:title", share.title],
+    ["property", "og:description", share.description],
+    ["property", "og:image", image],
+    ["property", "og:image:width", "1200"],
+    ["property", "og:image:height", "630"],
+    ["property", "og:image:alt", "Cardbit packs and Latch, the Cardbit mascot"],
+    ["name", "twitter:card", "summary_large_image"],
+    ["name", "twitter:title", share.title],
+    ["name", "twitter:description", share.description],
+    ["name", "twitter:image", image],
+  ];
+  if (share.path) tags.splice(5, 0, ["property", "og:url", origin + share.path]);
+  return tags.map(([k, n, v]) => `<meta ${k}="${n}" content="${escapeAttr(v)}">`).join("\n    ");
+}
+
 export interface ShellOptions {
   title?: string;
+  /** Link preview for this page; the home banner when left out. */
+  share?: Share;
   /** Extra data-* attributes on #cardbit-store. */
   data?: Record<string, string>;
 }
 
-export function storefrontShell({ title = "cardbit · Packs and Singles", data = {} }: ShellOptions = {}): string {
+export function storefrontShell({ title = "cardbit · Packs and Singles", data = {}, share }: ShellOptions = {}): string {
   const attrs: Record<string, string> = {
     id: "cardbit-store",
     "data-routing": "path",
@@ -158,6 +191,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     <meta name="robots" content="noindex, nofollow">
     <meta name="referrer" content="same-origin">
     <title>${escapeAttr(title)}</title>
+    ${shareMeta(share ?? { ...HOME_SHARE, title })}
     <link rel="icon" type="image/png" href="${assetUrl("cardbit-brand-emblem.png")}">
     ${styles}
     <style>

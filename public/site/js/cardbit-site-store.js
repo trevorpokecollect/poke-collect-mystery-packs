@@ -57,6 +57,7 @@
 
   function shape(state) {
     if (!state || typeof state !== 'object') throw codeError('CONNECTION', 'Cardbit could not load your account. Try again.');
+    lastAccount = state.account || null;
     // For the Sign In / Buy Cardbits dialogs (cardbit-site-auth.js).
     window.CardbitSiteSession = Object.freeze({ signedIn: !!state.account, id: state.account ? String(state.account.id) : undefined, bits: state.account ? Number(state.account.bits) : undefined });
     // Initials for the header Rewards badge (cardbit-rewards-nav.js).
@@ -96,6 +97,95 @@
     return body;
   }
 
+  /* Pack rewards on the reveal: XP (with an animated level bar the first time) and Sparks.
+     The server already credited both when the pack was bought (or, for staff demo packs, revealed);
+     this only shows them. A replay shows the same numbers without animating or adding anything. */
+  let lastAccount = null;
+  const fresh = new Map();
+  const fmt = n => Number(n || 0).toLocaleString('en-US');
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const pct = lv => (lv && lv.nextLevelXp ? Math.max(0, Math.min(100, (lv.levelXp / lv.nextLevelXp) * 100)) : 100);
+  function rewardsNode(openingId, rewards, level, sparksOn) {
+    const earnedXp = rewards?.xp || 0, earnedSparks = rewards?.sparks || 0;
+    if (!earnedXp && !earnedSparks && !level && !sparksOn) return null;
+    const first = fresh.get(openingId);
+    fresh.delete(openingId);
+    const box = el('section', 'cbx-rewards' + (first ? ' is-fresh' : ''));
+    box.setAttribute('aria-label', 'Pack Rewards');
+    box.append(el('p', 'cbx-kicker', first ? 'Pack Rewards' : 'Earned From This Pack'));
+    const row = el('div', 'cbx-row');
+    if (level && earnedXp) {
+      const xp = el('div', 'cbx-xp');
+      const head = el('div', 'cbx-xp-head');
+      const gain = el('b', 'cbx-xp-gain', '+' + fmt(earnedXp) + ' XP');
+      const lvl = el('span', 'cbx-level', 'Level ' + level.level);
+      head.append(gain, lvl);
+      const bar = el('div', 'cbx-bar'); const fill = el('i'); bar.append(fill);
+      bar.setAttribute('role', 'progressbar'); bar.setAttribute('aria-label', 'Level Progress');
+      bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', String(level.nextLevelXp || 1)); bar.setAttribute('aria-valuenow', String(level.nextLevelXp ? level.levelXp : 1));
+      const note = el('small', 'cbx-note', level.nextLevelXp ? fmt(level.levelXp) + ' / ' + fmt(level.nextLevelXp) + ' XP to Level ' + (level.level + 1) : 'Max Level');
+      xp.append(head, bar, note);
+      row.append(xp);
+      const before = first?.level;
+      if (first && before && !reduced()) {
+        const ups = Math.max(0, level.level - before.level);
+        fill.style.width = pct(before) + '%';
+        gain.textContent = '+0 XP';
+        lvl.textContent = 'Level ' + before.level;
+        const t0 = performance.now(), dur = 1400;
+        const tick = now => {
+          const k = Math.min(1, (now - t0) / dur);
+          gain.textContent = '+' + fmt(Math.round(earnedXp * (1 - Math.pow(1 - k, 3)))) + ' XP';
+          if (k < 1) requestAnimationFrame(tick);
+        };
+        setTimeout(() => {
+          requestAnimationFrame(tick);
+          if (!ups) { fill.style.width = pct(level) + '%'; return; }
+          fill.style.width = '100%';
+          setTimeout(() => {
+            fill.style.transition = 'none'; fill.style.width = '0%';
+            lvl.textContent = 'Level ' + level.level;
+            box.classList.add('is-level-up');
+            const badge = el('span', 'cbx-level-up', 'Level Up!'); head.append(badge);
+            void fill.offsetWidth; fill.style.transition = ''; fill.style.width = pct(level) + '%';
+          }, 760);
+        }, 350);
+      } else fill.style.width = pct(level) + '%';
+    }
+    if (sparksOn || earnedSparks) {
+      const sp = el('div', 'cbx-sparks' + (earnedSparks ? '' : ' is-none'));
+      const icon = el('img'); icon.alt = ''; icon.width = 34; icon.height = 34; icon.src = sparksIcon();
+      const text = el('div');
+      text.append(el('b', '', earnedSparks ? '+' + fmt(earnedSparks) + ' Sparks' : 'No Sparks This Time'),
+        el('small', '', earnedSparks ? 'Added to Your Sparks. Spend Them in the Spark Shop.' : 'Sparks Are Earned When Your Pulls Come In Under the Pack Price.'));
+      sp.append(icon, text);
+      row.append(sp);
+    }
+    if (!row.children.length) return null;
+    box.append(row);
+    return box;
+  }
+  function sparksIcon() { return window.cardbitAssets?.['sparks.svg'] || '/site/assets/cardbit-sparks.svg'; }
+  // While a just-opened pack is still face down, the header keeps the old Sparks balance so it can't
+  // hint at the pull (Sparks only come when the pull is under the pack price).
+  let heldSparks = null;
+  window.CardbitRevealRewards = Object.freeze({
+    node(opening) {
+      const acct = lastAccount;
+      if (!opening || !acct) return null;
+      const box = rewardsNode(opening.id, opening.rewards, acct.level || null, acct.sparks != null);
+      if (!fresh.size && heldSparks != null) {
+        heldSparks = null;
+        const v = fmt(acct.sparks);
+        for (const n of document.querySelectorAll('[data-sparks-balance]')) n.textContent = v;
+        for (const a of document.querySelectorAll('.cb-sparks-link')) a.setAttribute('aria-label', 'Sparks, Balance ' + v);
+      }
+      return box;
+    },
+    shownSparks: n => (heldSparks != null && fresh.size ? heldSparks : n),
+  });
+
   // Keep the original request if a response is lost, so a retry returns the saved result.
   const inFlight = new Map();
   async function action(input) {
@@ -109,8 +199,11 @@
     }
     const forget = () => { inFlight.delete(key); try { sessionStorage.removeItem(key); } catch {} };
     try {
+      const before = lastAccount;
       const body = await call('action', original);
       forget();
+      if ((input.action === 'open' || input.action === 'reveal') && body.openingId && body.rewards && (body.rewards.xp || body.rewards.sparks))
+      { fresh.set(body.openingId, { level: before?.level || null }); if (before?.sparks != null) heldSparks = before.sparks; }
       return { ...body, state: shape(body.state) };
     } catch (error) {
       if (error.code !== 'CONNECTION') forget();

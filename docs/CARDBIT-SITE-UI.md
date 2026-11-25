@@ -86,3 +86,12 @@ cookie; the token is an ordinary `SiteSession` (90 days). Table `SiteAppHandoff`
 - `/welcome` page and the home band come from `scripts/site/overrides/cardbit-welcome.js` (replaces the theme's on-device preview).
 - `/api/giveaway`: the Shopify giveaway engine with shop key `cardbit-site` (the site runs its own daily drawing). Requires Cardbit email news on, one Whatnot visit, and an unfrozen account. 1 entry per 100 paid Cardbits on Coinflow top-ups (voided on refund or chargeback). Elapsed rounds settle lazily on GET and pay the winner's site wallet (REWARD, `giveaway:<day>`). Closed until staff send `POST /internal/site-promos {action:"giveaway-settings", enabled:true, rulesUrl, freeInstructions}`.
 - Not on the site yet: referral entries (the method card is removed) and a winner email.
+
+## Pack reveal rewards, share banners, Discord (Nov 25)
+- Reveal: `storeAction` open/reveal return `rewards {xp, sparks}`; state carries `openings[].rewards` and `account.level`/`account.sparks`. The reveal spread shows a Pack Rewards panel (`window.CardbitRevealRewards` in public/site/js/cardbit-site-store.js): XP count-up and level bar (Level Up badge) the first time, a static "Earned From This Pack" on replay. Nothing is awarded on replay.
+- Staff demo packs earn XP/Sparks at the pack's list price when revealed (so the full reveal can be tested); Wipe Demo reverses them (`reverseOpeningRewards`).
+- Header Sparks pill beside the wallet (storefront `sparksPill()` patch, standalone pages via `siteHeader()` + walletScript). It keeps the old balance until the face-down card is revealed.
+- Japanese copies the set lists can't place get the modern Japanese back on the site (card-media patch).
+- Link previews: `shareMeta()` in shell.server.ts; per-page text and per-pack banners in app/site/share.server.ts; 1200x630 PNGs in public/site/share/ made by `node scripts/site/share-banners.mjs` (needs the global Playwright: `NODE_PATH=$(npm root -g)`).
+- Footer "Join Our Discord" (https://discord.gg/F9Z6jbgj4Y) on storefront and standalone pages.
+- port-theme.mjs now keeps site-only subfolders of public/site/assets (email/) instead of wiping them.

@@ -105,7 +105,7 @@ describe.skipIf(!url)("Cardbit Club subscriptions", () => {
     await settled("pay_1");
     const xpCalls: unknown[] = [];
     const run = () =>
-      db.$transaction((tx) => subscriberBonusForOpening(tx, "sub-test", customerId, "open1", { xp: { xp: 100 }, sparks: 40 }, { xp: async (i) => void xpCalls.push(i) }));
+      db.$transaction((tx) => subscriberBonusForOpening(tx, "sub-test", customerId, "open1", { xp: 100, sparks: 40 }, { xp: async (i) => void xpCalls.push(i) }));
     expect(await run()).toEqual({ xp: 25, sparks: 4 });
     expect(await run()).toEqual({ xp: 25, sparks: 4 });
     expect(await db.cardbitSparkTxn.count({ where: { shop: "sub-test" } })).toBe(1);

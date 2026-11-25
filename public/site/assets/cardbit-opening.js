@@ -784,6 +784,7 @@
         if(details)wrapper.append(make('small','',details));
         li.append(wrapper);list.append(li);
       });
+      /* SITE */ if(typeof options.onSpread==='function'){const extra=options.onSpread();if(extra)player.append(extra);}
       player.append(list);
       const actions=make('div','cbop-result-actions');
       if(typeof options.onShare==='function')actions.append(button('Share This Pull',options.onShare,'cbop-utility'));

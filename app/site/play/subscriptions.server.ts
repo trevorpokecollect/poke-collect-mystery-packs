@@ -179,12 +179,12 @@ export async function subscriberBonusForOpening(
   shop: string,
   customerId: string,
   openingId: string,
-  base: { xp: { xp: number } | null; sparks: number },
+  base: { xp: number; sparks: number },
   award: { xp: (input: { shop: string; customerId: string; eventKey: string; kind: string; xp: number; source?: string }) => Promise<unknown> },
 ) {
   const tier = await activeTier(tx, customerId);
   if (!tier) return { xp: 0, sparks: 0 };
-  const xp = base.xp ? Math.floor((base.xp.xp * tier.xpBonusPct) / 100) : 0;
+  const xp = Math.floor((base.xp * tier.xpBonusPct) / 100);
   if (xp > 0) await award.xp({ shop, customerId, eventKey: `sub-xp:site-open:${openingId}`, kind: "subscriber_bonus", xp, source: openingId });
   let sparks = Math.floor((base.sparks * tier.sparksBonusPct) / 100);
   if (sparks > 0) {
