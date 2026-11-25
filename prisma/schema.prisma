@@ -1354,7 +1354,7 @@ model SiteCopy {
   pocket      Int?
   lookKey     String
   faceKey     String
-  status      String   @default("FOR_SALE") // FOR_SALE | POOLED | VAULTED | SHIP_LOCKED | SHIPPED | REMOVED
+  status      String   @default("DRAFT") // DRAFT | FOR_SALE | POOLED | VAULTED | SHIP_LOCKED | SHIPPED | REMOVED
   retailBits  Int?
   ownerId     String?
   poolSlotId  String?  @unique

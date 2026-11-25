@@ -1,12 +1,13 @@
 // Card Broker "Inventory" tab ↔ site stock. Server-to-server only (pairing secret).
 // GET  ?status=&q=&cursor=&limit=  or POST {status?, q?, slot?, after?, limit?} (no intent) → listStock()
 // POST {intent:"price", printingKey, condition, priceBits|null, buybackBits|null}
-//      {intent:"pool", copyIds, packId} | {intent:"unpool", copyIds}
+//      {intent:"pool", copyIds, packId} | {intent:"unpool", copyIds}   (pools fill from DRAFT; unpool → DRAFT)
+//      {intent:"activate", copyIds} (DRAFT → FOR_SALE) | {intent:"draft", copyIds} (FOR_SALE → DRAFT)
 //      {intent:"pack", packId, priceBits, cardsPerPack, active}
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
-import { DeskError, listStock, movePool, savePack, setPrice } from "../site/core/stock-desk.server";
+import { DeskError, listStock, movePool, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
 
 const deny = () => Response.json({ error: "Unavailable." }, { status: 403, headers: { "Cache-Control": "no-store" } });
 
@@ -56,6 +57,9 @@ export async function action({ request }: ActionFunctionArgs) {
         return Response.json({ ok: true, ...(await movePool(db, actor, (b.copyIds as string[]) || [], String(b.packId || "") || "missing")) });
       case "unpool":
         return Response.json({ ok: true, ...(await movePool(db, actor, (b.copyIds as string[]) || [], null)) });
+      case "activate":
+      case "draft":
+        return Response.json({ ok: true, ...(await setListing(db, actor, (b.copyIds as string[]) || [], b.intent === "activate")) });
       case "pack": {
         const p = await savePack(db, String(b.packId || ""), b.priceBits, b.cardsPerPack, b.active === true);
         return Response.json({ ok: true, pack: { id: p.id, priceBits: p.priceBits, cardsPerPack: p.cardsPerPack, active: p.active } });

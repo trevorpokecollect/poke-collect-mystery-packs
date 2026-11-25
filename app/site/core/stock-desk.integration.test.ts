@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { receiveSiteIntake } from "./stock.server";
-import { DeskError, listStock, movePool, setPrice } from "./stock-desk.server";
+import { DeskError, listStock, movePool, setListing, setPrice } from "./stock-desk.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -28,7 +28,7 @@ describe.skipIf(!url)("stock desk", () => {
     const first = await listStock(db, { limit: 2 });
     expect(first.copies).toHaveLength(2);
     expect(first.next).toBeTruthy();
-    expect(first.totals).toMatchObject({ all: 3, FOR_SALE: 3 });
+    expect(first.totals).toMatchObject({ all: 3, DRAFT: 3 });
     const rest = await listStock(db, { limit: 2, cursor: first.next! });
     expect(rest.copies).toHaveLength(1);
     expect(rest.next).toBeNull();
@@ -43,6 +43,10 @@ describe.skipIf(!url)("stock desk", () => {
     expect(await movePool(db, "t", ids, "cobalt")).toEqual({ moved: 2, skipped: 0 });
     expect((await listStock(db, { status: "POOLED" })).total).toBe(2);
     expect(await movePool(db, "t", ids, null)).toEqual({ moved: 2, skipped: 0 });
-    expect((await listStock(db, { q: "oddish", status: "FOR_SALE" })).total).toBe(3);
+    expect((await listStock(db, { q: "oddish", status: "DRAFT" })).total).toBe(3);
+    expect(await setListing(db, "t", ids, true)).toEqual({ moved: 2, skipped: 0 });
+    expect(await movePool(db, "t", ids, "cobalt")).toEqual({ moved: 0, skipped: 2 }); // pools fill from Draft only
+    expect((await listStock(db, { status: "FOR_SALE" })).total).toBe(2);
+    expect(await setListing(db, "t", ids, false)).toEqual({ moved: 2, skipped: 0 });
   });
 });

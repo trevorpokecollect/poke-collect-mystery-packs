@@ -61,14 +61,15 @@ export function sqlCopyStore(table = "SiteCopy", eventTable = "SiteCopyEvent"): 
       );
       if (!old.length) throw new CopyLockError("That card is no longer on this shipment.", [oldCopyId]);
       // Take the lowest filed spare; SKIP LOCKED so two desks swapping at once get different copies.
-      const next = await tx.$queryRawUnsafe<LockedCopy[]>(
-        `UPDATE ${t} SET status = 'SHIP_LOCKED', "ownerId" = $3, "orderId" = $4, "updatedAt" = now()
-         WHERE id = (
-           SELECT id FROM ${t}
-           WHERE "printingKey" = $1 AND condition = $2 AND status = 'FOR_SALE' AND slot IS NOT NULL AND id <> $5
-           ORDER BY slot, pocket, id LIMIT 1 FOR UPDATE SKIP LOCKED
-         ) AND status = 'FOR_SALE'
-         RETURNING id, title, slot, pocket, image`,
+      const next = await tx.$queryRawUnsafe<(LockedCopy & { fromStatus: string })[]>(
+        `WITH pick AS (
+           SELECT id, status FROM ${t}
+           WHERE "printingKey" = $1 AND condition = $2 AND status IN ('FOR_SALE', 'DRAFT') AND "ownerId" IS NULL AND slot IS NOT NULL AND id <> $5
+           ORDER BY status = 'DRAFT', slot, pocket, id LIMIT 1 FOR UPDATE SKIP LOCKED
+         )
+         UPDATE ${t} c SET status = 'SHIP_LOCKED', "ownerId" = $3, "orderId" = $4, "updatedAt" = now()
+         FROM pick WHERE c.id = pick.id
+         RETURNING c.id, c.title, c.slot, c.pocket, c.image, pick.status AS "fromStatus"`,
         old[0].printingKey,
         old[0].condition,
         customerId,
@@ -78,13 +79,14 @@ export function sqlCopyStore(table = "SiteCopy", eventTable = "SiteCopyEvent"): 
       if (!next.length)
         throw new CopyLockError("No other filed copy of this card is available. Remove it from the shipment instead.", [oldCopyId]);
       await tx.$executeRawUnsafe(
-        `UPDATE ${t} SET status = 'FOR_SALE', "ownerId" = NULL, "orderId" = NULL, slot = NULL, pocket = NULL, "updatedAt" = now()
+        `UPDATE ${t} SET status = 'DRAFT', "ownerId" = NULL, "orderId" = NULL, slot = NULL, pocket = NULL, "updatedAt" = now()
          WHERE id = $1`,
         oldCopyId,
       );
-      await log(tx, [next[0].id], "FOR_SALE", "SHIP_LOCKED", actor, `swap in for ${oldCopyId} on shipment ${shipmentId}`);
-      await log(tx, [oldCopyId], "SHIP_LOCKED", "FOR_SALE", actor, `swapped out of shipment ${shipmentId}; unfiled for inspection`);
-      return next[0];
+      await log(tx, [next[0].id], next[0].fromStatus, "SHIP_LOCKED", actor, `swap in for ${oldCopyId} on shipment ${shipmentId}`);
+      await log(tx, [oldCopyId], "SHIP_LOCKED", "DRAFT", actor, `swapped out of shipment ${shipmentId}; unfiled for inspection`);
+      const { fromStatus: _from, ...picked } = next[0];
+      return picked;
     },
 
     async markShipped(tx, shipmentId, copyIds) {

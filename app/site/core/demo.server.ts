@@ -103,14 +103,14 @@ export async function giveDemoVaultCards(db: PrismaClient, actor: string, email:
   if (!Number.isInteger(n) || n < 1 || n > 50) throw new DemoError("Give 1 to 50 cards at a time.");
   const customer = await customerFor(db, email);
   return db.$transaction(async (tx) => {
-    const shop = await tx.siteCopy.findMany({ where: { status: "FOR_SALE", demo: true, ownerId: null }, orderBy: { id: "asc" } });
+    const shop = await tx.siteCopy.findMany({ where: { status: { in: ["FOR_SALE", "DRAFT"] }, demo: true, ownerId: null }, orderBy: { id: "asc" } });
     if (shop.length < n) throw new DemoError(`Only ${shop.length} demo card${shop.length === 1 ? " is" : "s are"} in the shop.`);
     const moved: string[] = [];
     for (let i = 0; i < n; i++) {
       const c = shop.splice(rand(shop.length), 1)[0];
-      const r = await tx.siteCopy.updateMany({ where: { id: c.id, status: "FOR_SALE", ownerId: null }, data: { status: "VAULTED", ownerId: customer.id, orderId: "demo" } });
+      const r = await tx.siteCopy.updateMany({ where: { id: c.id, status: c.status, ownerId: null }, data: { status: "VAULTED", ownerId: customer.id, orderId: "demo" } });
       if (r.count !== 1) throw new DemoError("The shop changed. Try again.");
-      await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: "FOR_SALE", toStatus: "VAULTED", actor, reason: "demo vault card" } });
+      await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: c.status, toStatus: "VAULTED", actor, reason: "demo vault card" } });
       moved.push(c.id);
     }
     return { email: customer.email, copies: moved };

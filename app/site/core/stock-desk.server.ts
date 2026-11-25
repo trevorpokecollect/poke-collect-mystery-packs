@@ -2,7 +2,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { priceKey, shelfAddress } from "./stock.server";
 
-export const STOCK_STATUSES = ["FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
+export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
 
 export class DeskError extends Error {}
 
@@ -30,22 +30,30 @@ export async function setPrice(db: PrismaClient, actor: string, printingKey: str
   });
 }
 
-/** Move FOR_SALE copies into a pack pool, or POOLED copies back to the shop. Returns how many moved. */
+/** Move DRAFT copies into a pack pool, or POOLED copies back to Draft. Pools fill only from Draft (Trevor, Nov 24). */
 export async function movePool(db: PrismaClient, actor: string, copyIds: string[], packId: string | null) {
-  const ids = [...new Set(copyIds.filter((x) => typeof x === "string" && x.length <= 60))].slice(0, 500);
-  if (!ids.length) throw new DeskError("Select cards first.");
   if (packId && !(await db.sitePack.findUnique({ where: { id: packId } }))) throw new DeskError("Choose a pack.");
-  const from = packId ? "FOR_SALE" : "POOLED";
-  const to = packId ? "POOLED" : "FOR_SALE";
+  return moveCopies(db, actor, copyIds, packId ? "DRAFT" : "POOLED", packId ? "POOLED" : "DRAFT", packId, packId ? `added to ${packId} pool` : "returned to drafts");
+}
+
+/** Make Draft copies Active (FOR_SALE singles), or take unsold Active copies back to Draft. */
+export async function setListing(db: PrismaClient, actor: string, copyIds: string[], active: boolean) {
+  return moveCopies(db, actor, copyIds, active ? "DRAFT" : "FOR_SALE", active ? "FOR_SALE" : "DRAFT", null, active ? "made active" : "moved to drafts");
+}
+
+async function moveCopies(db: PrismaClient, actor: string, copyIds: string[], from: string, to: string, packId: string | null, reason: string) {
+  const ids = [...new Set((Array.isArray(copyIds) ? copyIds : []).filter((x) => typeof x === "string" && x.length <= 60))].slice(0, 500);
+  if (!ids.length) throw new DeskError("Select cards first.");
   return db.$transaction(async (tx) => {
-    const rows = await tx.siteCopy.findMany({ where: { id: { in: ids }, status: from, ownerId: null } });
+    const rows = await tx.siteCopy.findMany({ where: { id: { in: ids }, status: from, ownerId: null }, select: { id: true } });
+    let moved = 0;
     for (const r of rows) {
-      await tx.siteCopy.update({ where: { id: r.id }, data: { status: to, packId } });
-      await tx.siteCopyEvent.create({
-        data: { copyId: r.id, fromStatus: from, toStatus: to, actor, reason: packId ? `added to ${packId} pool` : "returned to shop" },
-      });
+      const n = await tx.siteCopy.updateMany({ where: { id: r.id, status: from, ownerId: null }, data: { status: to, packId } });
+      if (!n.count) continue;
+      moved++;
+      await tx.siteCopyEvent.create({ data: { copyId: r.id, fromStatus: from, toStatus: to, actor, reason } });
     }
-    return { moved: rows.length, skipped: ids.length - rows.length };
+    return { moved, skipped: ids.length - moved };
   });
 }
 
@@ -92,6 +100,7 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
     totals: { all: Object.values(byStatus).reduce((a, b) => a + b, 0), ...byStatus }, // ignore filters
     nextCursor: next,
     next,
+    value: await stockValue(db), // ignores filters
     packs: packs.map((p) => {
       const pooled = poolCounts.find((c) => c.packId === p.id)?._count._all ?? 0;
       return { id: p.id, title: p.title, priceBits: p.priceBits, cardsPerPack: p.cardsPerPack, active: p.active, pooled, packsAvailable: Math.floor(pooled / p.cardsPerPack) };
@@ -131,4 +140,30 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
       };
     }),
   };
+}
+
+type Value = { copies: number; demo: number; retailBits: number; buybackBits: number; unpriced: number };
+/** Cardbits value of all stock by status: price = copy override, else the printing+condition price. */
+export async function stockValue(db: PrismaClient) {
+  const groups = await db.siteCopy.groupBy({
+    by: ["status", "printingKey", "condition", "demo"],
+    _count: { _all: true, retailBits: true },
+    _sum: { retailBits: true },
+  });
+  const prices = new Map(
+    (await db.sitePrice.findMany({ where: { printingKey: { in: [...new Set(groups.map((g) => priceKey(g.printingKey, g.condition)))] } } })).map((p) => [p.printingKey, p]),
+  );
+  const out: Record<string, Value> = {};
+  for (const g of groups) {
+    const v = (out[g.status] ??= { copies: 0, demo: 0, retailBits: 0, buybackBits: 0, unpriced: 0 });
+    const p = prices.get(priceKey(g.printingKey, g.condition));
+    const n = g._count._all,
+      own = g._count.retailBits;
+    v.copies += n;
+    if (g.demo) v.demo += n;
+    v.retailBits += (g._sum.retailBits ?? 0) + (p?.retailBits != null ? p.retailBits * (n - own) : 0);
+    if (p?.retailBits == null) v.unpriced += n - own;
+    v.buybackBits += (p?.buybackBits ?? 0) * n;
+  }
+  return out;
 }

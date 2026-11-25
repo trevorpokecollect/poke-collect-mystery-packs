@@ -7,11 +7,11 @@ import prisma from "../db.server";
 import { currentCustomer } from "../site/core/auth.server";
 import { esc } from "../site/core/simple-page";
 import { priceKey, shelfAddress } from "../site/core/stock.server";
-import { DeskError, setPrice } from "../site/core/stock-desk.server";
+import { DeskError, movePool, setListing, setPrice } from "../site/core/stock-desk.server";
 import { DemoError, demoSummary, giveDemoPacks, giveDemoVaultCards, grantDemoCardbits, markDemo, wipeDemo } from "../site/core/demo.server";
 import { notFound, sameOrigin, staffUser } from "../site/shipping/staff.server";
 
-const STATUSES = ["FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"];
+const STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"];
 const resolve = (r: Request) => currentCustomer(prisma, r);
 const loc = (slot: number | null, pocket: number | null) => {
   if (slot == null) return "Unfiled";
@@ -54,25 +54,17 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!(e instanceof DeskError)) throw e;
       note = e.message;
     }
-  } else if (intent === "pool" || intent === "unpool") {
+  } else if (intent === "pool" || intent === "unpool" || intent === "activate" || intent === "draft") {
     const ids = fd.getAll("copyId").map(String).filter(Boolean).slice(0, 500);
-    const packId = String(fd.get("packId") || "");
-    if (!ids.length) note = "Select cards first.";
-    else if (intent === "pool" && !(await prisma.sitePack.findUnique({ where: { id: packId } }))) note = "Choose a pack.";
-    else {
-      const from = intent === "pool" ? "FOR_SALE" : "POOLED";
-      const to = intent === "pool" ? "POOLED" : "FOR_SALE";
-      const moved = await prisma.$transaction(async (tx) => {
-        const rows = await tx.siteCopy.findMany({ where: { id: { in: ids }, status: from, ownerId: null } });
-        for (const r of rows) {
-          await tx.siteCopy.update({ where: { id: r.id }, data: { status: to, packId: intent === "pool" ? packId : null } });
-          await tx.siteCopyEvent.create({
-            data: { copyId: r.id, fromStatus: from, toStatus: to, actor: `staff:${staff.email}`, reason: intent === "pool" ? `added to ${packId} pool` : "returned to shop" },
-          });
-        }
-        return rows.length;
-      });
-      note = `${moved} card${moved === 1 ? "" : "s"} moved${moved < ids.length ? ` (${ids.length - moved} skipped: not in the right status)` : ""}.`;
+    try {
+      const r =
+        intent === "pool" || intent === "unpool"
+          ? await movePool(prisma, actor, ids, intent === "pool" ? String(fd.get("packId") || "") || "missing" : null)
+          : await setListing(prisma, actor, ids, intent === "activate");
+      note = `${r.moved} card${r.moved === 1 ? "" : "s"} moved${r.skipped ? ` (${r.skipped} skipped: not in the right status)` : ""}.`;
+    } catch (e) {
+      if (!(e instanceof DeskError)) throw e;
+      note = e.message;
     }
   } else if (intent === "pack") {
     const id = String(fd.get("packId") || "");
@@ -215,7 +207,8 @@ ${demoPanel}
 <div>${chips}</div><p class="m">${total.toLocaleString("en-US")} card${total === 1 ? "" : "s"}${total > rows.length ? `, newest ${rows.length} shown` : ""}. Singles show in the shop once their printing has a price. Card Broker sets prices per printing and condition; a price saved here lasts until its next update.</p>
 <form method="post" id="bulk" class="bulk"><input type="hidden" name="back" value="${back}">
 <select name="packId" aria-label="Pack">${packOpts}</select><button name="intent" value="pool">Add Selected to Pack Pool</button>
-<button name="intent" value="unpool">Return Selected to Shop</button>
+<button name="intent" value="unpool">Return Selected to Drafts</button>
+<button name="intent" value="activate">Make Selected Active</button><button name="intent" value="draft" class="alt">Move Selected to Drafts</button>
 <button name="intent" value="demo-mark" class="alt">Mark Selected Demo</button><button name="intent" value="demo-unmark" class="alt">Unmark Demo</button></form>
 <div class="wrap"><table><thead><tr><th></th><th></th><th>Card</th><th>Location</th><th>Status</th><th>Price / Buyback (Cardbits)</th><th>Received</th></tr></thead><tbody>${body}</tbody></table></div></main></body></html>`;
   return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Frame-Options": "DENY" } });

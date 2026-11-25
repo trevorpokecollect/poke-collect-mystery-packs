@@ -252,7 +252,7 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     expect(fixed.items.map((i) => i.copyId).sort()).toEqual(["c2", "spare-b"]);
     expect(fixed.items.find((i) => i.copyId === "spare-b")).toMatchObject({ slot: 10005, pocket: 1, image: "https://img.test/spare-b.webp" });
     const old = await db.siteCopy.findUniqueOrThrow({ where: { id: "c1" } });
-    expect(old).toMatchObject({ status: "FOR_SALE", ownerId: null, orderId: null, slot: null, pocket: null });
+    expect(old).toMatchObject({ status: "DRAFT", ownerId: null, orderId: null, slot: null, pocket: null });
     expect(await db.siteCopy.findUniqueOrThrow({ where: { id: "spare-b" } })).toMatchObject({ status: "SHIP_LOCKED", ownerId: "u1", orderId: shipment.id });
     expect(await db.siteCopyEvent.count({ where: { copyId: { in: ["c1", "spare-b"] } } })).toBeGreaterThanOrEqual(3);
     // Stale revision from the desk is refused.

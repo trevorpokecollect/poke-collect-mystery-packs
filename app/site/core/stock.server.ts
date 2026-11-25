@@ -189,12 +189,12 @@ async function receiveRow(db: PrismaClient, row: SiteIntake, body: string): Prom
             pocket,
             lookKey: look,
             faceKey: face,
-            status: "FOR_SALE",
+            status: "DRAFT", // Trevor Nov 24: new stock lands in Draft (hidden; feeds pack pools)
           },
           select: { id: true },
         });
         await tx.siteCopyEvent.create({
-          data: { copyId: copy.id, toStatus: "FOR_SALE", actor: "card-broker", reason: `intake ${row.eventKey}` },
+          data: { copyId: copy.id, toStatus: "DRAFT", actor: "card-broker", reason: `intake ${row.eventKey}` },
         });
         copies.push({ id: copy.id, slot, pocket });
         bySlot.set(slot, { n: (bySlot.get(slot)?.n ?? 0) + 1, clash: true });

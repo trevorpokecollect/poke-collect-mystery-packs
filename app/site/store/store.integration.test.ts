@@ -73,6 +73,8 @@ describe.skipIf(!url)("site store", () => {
 
   it("sells a priced single once, lists stock grouped by printing", async () => {
     await receiveSiteIntake(db, card("st:1", 2, "Pikachu"));
+    expect(await db.siteCopy.count({ where: { status: "DRAFT" } })).toBe(2); // new stock lands in Draft
+    await db.siteCopy.updateMany({ where: { status: "DRAFT" }, data: { status: "FOR_SALE" } }); // Make Active
     const first = await db.siteCopy.findFirstOrThrow();
     const copy = priceKey(first.printingKey, first.condition);
     let state = await storeState(db, null);
@@ -109,6 +111,7 @@ describe.skipIf(!url)("site store", () => {
     expect(await balanceOf(db, customer.id)).toBe(4000);
     // Singles count toward the same Spend Limit (1,000 used of 1,500).
     await receiveSiteIntake(db, card("st:ps", 1, "Eevee"));
+    await db.siteCopy.updateMany({ where: { status: "DRAFT" }, data: { status: "FOR_SALE" } }); // Make Active
     const single = await db.siteCopy.findFirstOrThrow({ where: { status: "FOR_SALE" } });
     await db.sitePrice.create({ data: { printingKey: priceKey(single.printingKey, single.condition), retailBits: 600 } });
     await expect(storeAction(db, customer, { action: "buy", requestId: randomUUID(), id: singleKey(single) })).rejects.toMatchObject({ code: "limit_reached" });
@@ -169,6 +172,7 @@ describe.skipIf(!url)("site store", () => {
   it("takes Card Broker's price from the receipt, per condition", async () => {
     await receiveSiteIntake(db, { ...card("st:4", 1, "Abra"), priceBits: 250, buybackBits: 200 });
     await receiveSiteIntake(db, { ...card("st:5", 1, "Abra"), condition: "Lightly Played", priceBits: 180, buybackBits: 144 });
+    await db.siteCopy.updateMany({ where: { status: "DRAFT" }, data: { status: "FOR_SALE" } }); // Make Active
     const s = await storeState(db, null);
     expect(s.singles.map((x) => [x.condition, x.priceBits, x.buybackBits]).sort()).toEqual([["Lightly Played", 180, 144], ["Near Mint", 250, 200]]);
     await expect(receiveSiteIntake(db, { ...card("st:6", 1, "Abra"), priceBits: 100, buybackBits: 200 })).rejects.toThrow();
@@ -176,6 +180,7 @@ describe.skipIf(!url)("site store", () => {
 
   it("rejects spending without enough Cardbits and on frozen accounts", async () => {
     await receiveSiteIntake(db, card("st:3", 1, "Mew"));
+    await db.siteCopy.updateMany({ where: { status: "DRAFT" }, data: { status: "FOR_SALE" } }); // Make Active
     const c = await db.siteCopy.findFirstOrThrow();
     await db.sitePrice.create({ data: { printingKey: priceKey(c.printingKey, c.condition), retailBits: 9000 } });
     await expect(storeAction(db, customer, { action: "buy", requestId: randomUUID(), id: singleKey(c) })).rejects.toMatchObject({ code: "insufficient_bits" });
