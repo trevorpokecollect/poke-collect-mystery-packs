@@ -1519,6 +1519,7 @@ model SitePack {
   tierMix      Json? // [{name, pct}] lowest first; null = pyramid 50/25/15/8/2
   topTierMin   Int? // minimum value for the top tier (else the pool is flagged Needs Restock)
   tiersAt      DateTime? // last automatic tier recompute
+  autoDrafts   Boolean  @default(false) // hourly auto-restock may also pool listed Draft cards (needs a Target EV)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

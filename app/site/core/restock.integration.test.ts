@@ -33,7 +33,7 @@ const wipe = async () => {
   await db.cardbitAgeConfirmation.deleteMany({ where: { shop: "cardbit-site" } });
   await db.siteCustomer.deleteMany({ where: { email: { endsWith: "@restock.test" } } });
   await db.sitePack.updateMany({
-    data: { active: false, targetEvPct: null, evBandPct: 5, minTopPer100: null, minValueBits: null, maxValueBits: null, typeCaps: Prisma.DbNull, tierMix: Prisma.DbNull, topTierMin: null, tiersAt: null },
+    data: { active: false, targetEvPct: null, evBandPct: 5, minTopPer100: null, minValueBits: null, maxValueBits: null, typeCaps: Prisma.DbNull, tierMix: Prisma.DbNull, topTierMin: null, tiersAt: null, autoDrafts: false },
   });
   // Put back the seeded tier ladders (auto tiers rewrite them) so other suites see the same packs.
   for (const [id, rules, languages, eras, cardsPerPack] of ladders)
@@ -236,6 +236,50 @@ describe.skipIf(!url)("verified restocks", () => {
     const later = await runAutoRestock(db, { now: new Date(Date.now() + 61 * 60_000) });
     expect(later.versions.map((v) => v.packId)).toEqual(["gold"]);
     expect((await db.siteCopy.findUniqueOrThrow({ where: { id: old[0].id } })).packId).toBe("gold");
+  });
+
+  it("Auto-Fill From Drafts pools listed Drafts only for switched-on packs, after the hold, one pool per card", async () => {
+    // Needs a Target EV; off by default; clearing the target turns it off.
+    await expect(savePackEv(db, "cobalt", { autoDrafts: true })).rejects.toThrow(RestockError);
+    await savePackEv(db, "cobalt", { targetEvPct: 100, evBandPct: 10 });
+    await savePackEv(db, "gold", { targetEvPct: 100, evBandPct: 10 });
+    const base = await stock("FillBase", 10, 1000);
+    await stageRestock(db, "t", "cobalt", base.map((c) => c.id), "add");
+    await publishRestock(db, "t", "cobalt");
+    const old = new Date(Date.now() - 3 * 60 * 60_000);
+    const fit = await stock("FillFit", 2, 1000);
+    const fresh = await stock("FillFresh", 1, 1000); // listed just now: inside the hold
+    const demo = await stock("FillDemo", 1, 1000);
+    const jp = await stock("FillJp", 1, 3899, { language: "Japanese" }); // Mystery is English only
+    const active = await stock("FillActive", 1, 1000);
+    await db.siteCopy.updateMany({ where: { id: { in: [...fit, ...demo, ...jp, ...active].map((c) => c.id) } }, data: { createdAt: old } });
+    await db.siteCopy.update({ where: { id: demo[0].id }, data: { demo: true } });
+    await setListing(db, "t", [active[0].id], true);
+    // Switch off everywhere: nothing listed moves.
+    expect(await runAutoRestock(db)).toMatchObject({ ran: true, routed: 0, versions: [] });
+    expect(await db.siteCopy.count({ where: { status: "POOLED", packId: "cobalt" } })).toBe(10);
+
+    await savePackEv(db, "cobalt", { autoDrafts: true });
+    expect((await stagedRestocks(db)).find((r) => r.packId === "cobalt")!.ev.autoDrafts).toBe(true);
+    const run = await runAutoRestock(db, { now: new Date(Date.now() + 61 * 60_000) });
+    expect(run).toMatchObject({ ran: true, routed: 2, drafts: 2, held: 0, versions: [{ packId: "cobalt", version: 3 }] });
+    const v3 = await db.siteRestock.findFirstOrThrow({ where: { packId: "cobalt", version: 3 } });
+    expect(v3).toMatchObject({ auto: true, actor: "auto-restock", note: "Auto Restock" });
+    expect([...(v3.addIds as string[])].sort()).toEqual(fit.map((c) => c.id).sort());
+    // Gold has a target but its switch is off, so the Japanese card stays in Draft; so do the fresh, demo and Active cards.
+    for (const c of [...fresh, ...demo, ...jp]) expect((await db.siteCopy.findUniqueOrThrow({ where: { id: c.id } })).status).toBe("DRAFT");
+    expect((await db.siteCopy.findUniqueOrThrow({ where: { id: active[0].id } })).status).toBe("FOR_SALE");
+    // Both switched on: the Japanese card can only go to Gold (Mystery is English only).
+    await savePackEv(db, "gold", { autoDrafts: true });
+    // Two hours on, the fresh card is past its hold too. Each card lands in the one pool whose EV it fits.
+    const run2 = await runAutoRestock(db, { now: new Date(Date.now() + 122 * 60_000) });
+    expect(run2).toMatchObject({ routed: 2, drafts: 2 });
+    expect((await db.siteCopy.findUniqueOrThrow({ where: { id: jp[0].id } })).packId).toBe("gold");
+    expect((await db.siteCopy.findUniqueOrThrow({ where: { id: fresh[0].id } })).packId).toBe("cobalt");
+    expect((await db.siteCopy.findUniqueOrThrow({ where: { id: demo[0].id } })).status).toBe("DRAFT");
+    // Clearing the target turns the switch off.
+    await savePackEv(db, "gold", { targetEvPct: null });
+    expect((await db.sitePack.findUniqueOrThrow({ where: { id: "gold" } })).autoDrafts).toBe(false);
   });
 
   it("enforces pool rules at staging and re-ranks tiers at each restock; a pull keeps its tier", async () => {

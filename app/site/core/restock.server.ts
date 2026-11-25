@@ -407,11 +407,16 @@ export function routeCard(value: number, card: Pick<SiteCopy, "language" | "era"
 }
 
 const AUTO_KEY = "cardbit-site:auto-restock";
+/** A newly listed Draft card waits this long before the hourly auto-restock may pool it, so staff can Make Active first. */
+export const DRAFT_HOLD_MIN = 120;
 
 /**
- * Hourly automatic buyback restock (Trevor, Nov 25). Routes every sold-back Draft card still marked for auto
- * restock to the pool that needs it, then publishes one logged restock per pack it touched. Cards no pool
- * can take (no price, no eligible pack with a target, or every pool would leave its EV band) stay in Draft.
+ * Hourly automatic restock (Trevor, Nov 25).
+ * - Buybacks: every sold-back Draft card still marked for auto restock may go to any pack with a Target EV.
+ * - Listed Drafts: any other non-demo Draft card listed at least DRAFT_HOLD_MIN minutes ago may go only to
+ *   packs with "Auto-Fill From Drafts" switched on (SitePack.autoDrafts, off by default).
+ * Each card goes to the one pool it fits best (pool rules, mix caps, EV band, top-tier need); then one
+ * logged restock is published per pack touched. Cards no pool can take stay in Draft.
  */
 export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; now?: Date } = {}) {
   const now = opts.now ?? new Date();
@@ -422,20 +427,31 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
     ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value", "updatedAt" = EXCLUDED."updatedAt"
     WHERE "AppValue"."updatedAt" <= ${since}
     RETURNING "key"`;
-  if (!claimed.length) return { ran: false, routed: 0, held: 0, versions: [] as { packId: string; version: number }[], retiered: 0 };
+  const none = { routed: 0, held: 0, drafts: 0, versions: [] as { packId: string; version: number }[] };
+  if (!claimed.length) return { ran: false, ...none, retiered: 0 };
   const retiered = await dailyTiers(db, now);
-  const waiting = await db.siteCopy.findMany({ where: { autoRestock: true, status: "DRAFT", ownerId: null, restockId: null }, orderBy: { updatedAt: "asc" }, take: 2000 });
-  if (!waiting.length) return { ran: true, routed: 0, held: 0, versions: [], retiered };
+  const draftPacks = await db.sitePack.count({ where: { autoDrafts: true, targetEvPct: { not: null } } });
+  const listedBefore = new Date(now.getTime() - DRAFT_HOLD_MIN * 60_000);
+  const free = { status: "DRAFT", ownerId: null, restockId: null } as const;
+  const waiting = await db.siteCopy.findMany({
+    where: draftPacks
+      ? { ...free, OR: [{ autoRestock: true }, { autoRestock: false, demo: false, createdAt: { lte: listedBefore } }] }
+      : { ...free, autoRestock: true },
+    orderBy: { updatedAt: "asc" },
+    take: 3000,
+  });
+  if (!waiting.length) return { ran: true, ...none, retiered };
   const values = await retailOf(db, waiting);
   const states = await poolStates(db);
+  const draftStates = [...states.values()].filter((st) => st.pack.autoDrafts);
   const plan = new Map<string, SiteCopy[]>();
   // Highest value first, so scarce chase cards go where they're needed most.
   const order = waiting.map((c, i) => ({ c, v: values[i] })).sort((a, b) => (b.v ?? 0) - (a.v ?? 0));
   let held = 0;
   for (const { c, v } of order) {
-    const st = v && v > 0 ? routeCard(v, c, states.values()) : null;
+    const st = v && v > 0 ? routeCard(v, c, c.autoRestock ? states.values() : draftStates) : null;
     if (!st) {
-      held++;
+      if (c.autoRestock) held++; // listed Drafts no pool needs are not "held": they're ordinary Drafts
       continue;
     }
     st.cards++;
@@ -445,25 +461,41 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
     plan.set(st.pack.id, [...(plan.get(st.pack.id) ?? []), c]);
   }
   const versions: { packId: string; version: number }[] = [];
-  let routed = 0;
+  let routed = 0,
+    drafts = 0;
   for (const [packId, cards] of plan) {
     const st = states.get(packId)!;
     const out = await db.$transaction(
       async (tx) => {
         await lockPack(tx, packId);
         const prev = await ensureBaseline(tx, packId, "auto-restock");
-        // Only cards still waiting (staff may have listed or staged one meanwhile).
-        const fresh = await tx.siteCopy.findMany({ where: { id: { in: cards.map((c) => c.id) }, autoRestock: true, status: "DRAFT", ownerId: null, restockId: null } });
-        return applyRestock(tx, st.pack, prev, fresh, null, { actor: "auto-restock", note: "Buyback Restock", auto: true });
+        // Only cards still free and unchanged (staff may have listed, staged, made Active or deleted one meanwhile).
+        const fresh = await tx.siteCopy.findMany({
+          where: {
+            ...free,
+            OR: [
+              { id: { in: cards.filter((c) => c.autoRestock).map((c) => c.id) }, autoRestock: true },
+              { id: { in: cards.filter((c) => !c.autoRestock).map((c) => c.id) }, autoRestock: false, demo: false },
+            ],
+          },
+        });
+        if (!fresh.length) return null;
+        const fromDrafts = fresh.filter((c) => !c.autoRestock).length;
+        const note = !fromDrafts ? "Buyback Restock" : fromDrafts === fresh.length ? "Auto Restock" : "Auto Restock (Drafts + Buybacks)";
+        const v = await applyRestock(tx, st.pack, prev, fresh, null, { actor: "auto-restock", note, auto: true });
+        if (!v) return null;
+        const added = new Set(v.addIds as string[]);
+        return { v, fromDrafts: fresh.filter((c) => !c.autoRestock && added.has(c.id)).length };
       },
       { timeout: 20_000 },
     );
     if (out) {
-      versions.push({ packId, version: out.version! });
-      routed += (out.addIds as string[]).length;
+      versions.push({ packId, version: out.v.version! });
+      routed += (out.v.addIds as string[]).length;
+      drafts += out.fromDrafts;
     }
   }
-  return { ran: true, routed, held, versions, retiered };
+  return { ran: true, routed, held, drafts, versions, retiered };
 }
 
 /** Once a day (after price refreshes) re-rank each pool's tiers so cutoffs follow current prices. */
@@ -599,7 +631,7 @@ export async function stagedRestocks(db: PrismaClient) {
         title: p.title,
         cardsPerPack: p.cardsPerPack,
         priceBits: p.priceBits,
-        ev: { targetPct: p.targetEvPct, bandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, needsRestock },
+        ev: { targetPct: p.targetEvPct, bandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, needsRestock, autoDrafts: p.autoDrafts },
         restockId: r?.id ?? null,
         adds: adds.map((c) => ({ id: c.id, title: c.title, condition: c.condition, slot: c.slot, pocket: c.pocket })),
         removes: removes.map((c) => ({ id: c.id, title: c.title, condition: c.condition, slot: c.slot, pocket: c.pocket })),
@@ -621,6 +653,9 @@ export async function stagedRestocks(db: PrismaClient) {
         suggestions,
         history: (history.get(p.id) ?? []).map((h) => ({ ...h, evPct: evRows.find((e) => e.packId === p.id && e.version === h.version)?.evPct ?? null })),
         autoWaiting: waiting,
+        // Listed Drafts this pack's rules accept (what Auto-Fill From Drafts may pick from, before the EV band check).
+        draftsFit: drafts.filter((c, i) => !c.autoRestock && !c.demo && (draftValues[i] ?? 0) > 0 && !ruleBreak(p, c, draftValues[i])).length,
+        draftHoldMin: DRAFT_HOLD_MIN,
       };
     }),
   );
@@ -647,6 +682,8 @@ export async function savePackEv(db: PrismaClient, packId: string, b: Record<str
     data.evBandPct = int(b.evBandPct, 1, 50, "EV band") ?? 5;
     data.minTopPer100 = int(b.minTopPer100, 0, 100, "Top-tier minimum");
   }
+  // Auto-Fill From Drafts (Trevor, Nov 25): the hourly auto-restock may also pool listed Draft cards. Off by default.
+  if ("autoDrafts" in b) data.autoDrafts = b.autoDrafts === true;
   if ("languages" in b) data.languages = names(b.languages, ["English", "Japanese"], "Languages") ?? Prisma_DbNull;
   if ("eras" in b) data.eras = names(b.eras, ["Modern", "Vintage"], "Eras") ?? Prisma_DbNull;
   // Pool rules (Trevor, Nov 25): value range, max % per card type, tier mix and top-tier minimum value.
@@ -675,6 +712,12 @@ export async function savePackEv(db: PrismaClient, packId: string, b: Record<str
     }
   }
   if ("topTierMin" in b) data.topTierMin = int(b.topTierMin, 1, 100_000_000, "Top-tier minimum value");
+  if (data.autoDrafts === true) {
+    const target = "targetEvPct" in b ? data.targetEvPct : (await packOrThrow(db, packId)).targetEvPct;
+    if (target == null) throw new RestockError("Set a Target EV before turning on Auto-Fill From Drafts.");
+  }
+  // Clearing the Target EV also turns Auto-Fill From Drafts off (it can't run without one).
+  if ("targetEvPct" in b && data.targetEvPct == null) data.autoDrafts = false;
   const saved = await db.sitePack.update({ where: { id: packId }, data });
   // New mix or top-tier minimum: re-rank the pool now so staff see the effect.
   if ("tierMix" in b || "topTierMin" in b)
