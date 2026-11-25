@@ -52,7 +52,12 @@ function patch(file, text, pairs) {
   return text;
 }
 
-const SHIP_TOGETHER = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'patches/ship-together.js'), 'utf8');
+const here = dirname(fileURLToPath(import.meta.url));
+const SHIP_TOGETHER = readFileSync(join(here, 'patches/ship-together.js'), 'utf8');
+const LIVE_PULLS = readFileSync(join(here, 'patches/live-pulls.js'), 'utf8');
+const SHIP_HOME = readFileSync(join(here, 'patches/ship-home.js'), 'utf8');
+// The theme's Ship Home step, replaced whole by patches/ship-home.js.
+const SHIP_HOME_FROM = readFileSync(join(here, 'patches/ship-home.from.txt'), 'utf8');
 
 const PATCHES = {
   'cardbit-collector-tools.js': [
@@ -87,6 +92,36 @@ const PATCHES = {
     ['<a href="/pages/official-rules">Official Rules</a>', '<a href="/official-rules">Official Rules</a>'],
     // A single-card ship request goes to Ship Together, which collects the delivery address.
     ["    /* SITE */ if (site() && action==='topup')", "    /* SITE */ if (site() && action==='ship') { navigate('ship-together/select/'+enc(id)); return; }\n    /* SITE */ if (site() && action==='topup')"],
+    // Footer Policies is a plain link like the others (policyLink adds the blue cb-textlink style).
+    ["+welcomeLink+policyLink('Policies')+", "+welcomeLink+/* SITE */(site() ? '<a href=\"'+esc(root.dataset.policyView || '/policies')+'\">Policies</a>' : policyLink('Policies'))+"],
+    // Live Pulls card feed on the home page, without the text ticker (Trevor, Nov 24).
+    ["    return heroCarousel()+'<div class=\"cb-wrap cb-stack cb-home-stack\">'+\n", "    return heroCarousel()+'<div class=\"cb-wrap cb-stack cb-home-stack\">'+/* SITE */(site() ? pullFeed() : '')+\n"],
+    ["    if (root.dataset.mode !== 'demo' || !(inBrowser() || isDemoShopper())) return '';\n", "    if (!site() && (root.dataset.mode !== 'demo' || !(inBrowser() || isDemoShopper()))) return '';\n"],
+    ["      '<div class=\"cbf-ticker\" data-pull-ticker hidden>", "      /* SITE */(site() ? '' : '<div class=\"cbf-ticker\" data-pull-ticker hidden>"],
+    ["<div class=\"cbf-ticker-track\" data-ticker-track aria-live=\"polite\"></div></div>'+\n", "<div class=\"cbf-ticker-track\" data-ticker-track aria-live=\"polite\"></div></div>')+\n"],
+    ["    let paused = motion.matches, hover = false, available = true;\n", "    let paused = motion.matches, hover = false, available = true;\n    /* SITE */ let live = null;\n"],
+    ["    function draw() {\n      const markup = visible.map(", "    function draw() {\n      /* SITE */ if (live) return drawLive();\n      const markup = visible.map("],
+    ["        toggle.hidden = printings.size <= 5;", "        toggle.hidden = live ? true : printings.size <= 5;"],
+    ["    toggle.addEventListener('click',()=>{paused=!paused;syncControl();},{signal});\n", LIVE_PULLS + "    toggle.addEventListener('click',()=>{paused=!paused;syncControl();},{signal});\n"],
+  ],
+  'cardbit-hero-scenes.js': [
+    // Conveyor: whole number of evenly spaced packs, so the wrap never stacks two packs (Trevor, Nov 24).
+    ["const ph = H * (mobile ? .34 : .42), gap = ph * .82, speed = W * .06;\n      const span = W + gap * 2, count = Math.ceil(span / gap) + 1;",
+     "const ph = H * (mobile ? .34 : .42), speed = W * .06;\n      /* SITE */ const count = Math.max(2, Math.floor((W + ph * 1.64) / (ph * .82))), gap = (W + ph * 1.64) / count, span = gap * count;"],
+    // Desktop: banners 2 and 3 keep Latch inside the page's content column (mobile unchanged, Trevor).
+    ["try { scene(g, W, H, T, { first, resized, pointer, rect }); }",
+     "/* SITE */ const inner = slide.querySelector('.cbh-inner')?.getBoundingClientRect(); const colL = inner?.width ? inner.left - rect.left : 0, colR = inner?.width ? inner.right - rect.left : W;\n      try { scene(g, W, H, T, { first, resized, pointer, rect, colL, colR }); }"],
+    ["      const minX = W * (mobile ? .66 : .56), maxX = W * .92;\n      if (lx == null || ctx.resized) lx = W * .78;",
+     "      /* SITE */ const cL = mobile ? 0 : ctx.colL ?? 0, cW = mobile ? W : (ctx.colR ?? W) - cL;\n      const minX = cL + cW * (mobile ? .66 : .56), maxX = mobile ? W * .92 : Math.min(cL + cW * .92, cL + cW - lh * .3);\n      if (lx == null || ctx.resized) lx = cL + cW * .78;"],
+    ["const goalX = target ? target.x : W * .78 + Math.sin(T * .6) * W * .06;", "const goalX = target ? target.x : cL + cW * .78 + Math.sin(T * .6) * cW * .06;"],
+    ["      const x0 = W * (mobile ? .1 : .5), x1 = W * (mobile ? .9 : .94);",
+     "      /* SITE */ const cL = mobile ? 0 : ctx.colL ?? 0, cW = mobile ? W : (ctx.colR ?? W) - cL;\n      const x0 = cL + cW * (mobile ? .1 : .5), x1 = cL + cW * (mobile ? .9 : .94);"],
+    // Ship Home: the card no longer shows through the box (Trevor, Nov 24).
+    [SHIP_HOME_FROM, SHIP_HOME],
+  ],
+  'cardbit-flair.js': [
+    // Holo shine sits on the pack image's own box and rotation, not the whole stage (pack page).
+    ["    img.after(holo);\n  }\n", "    img.after(holo);\n    /* SITE */ fitHolo(img, holo);\n  }\n  /* SITE */ function fitHolo(img, holo) {\n    const sync = () => {\n      const host = img.parentElement;\n      if (!host || !holo.isConnected || !img.offsetWidth) return;\n      const t = getComputedStyle(img).transform;\n      const turned = t && t !== 'none';\n      if (!turned && img.offsetWidth >= host.clientWidth - 2 && img.offsetHeight >= host.clientHeight - 2) return;\n      Object.assign(holo.style, {inset:'auto', left:img.offsetLeft+'px', top:img.offsetTop+'px', width:img.offsetWidth+'px', height:img.offsetHeight+'px', transform:turned ? t : ''});\n    };\n    sync();\n    if (!img.complete) img.addEventListener('load', sync, {once:true});\n    if (window.ResizeObserver) new ResizeObserver(sync).observe(img);\n  }\n"],
   ],
 };
 
@@ -116,6 +151,11 @@ for (const name of readdirSync(join(theme, 'assets'))) {
   copied++;
 }
 for (const name of Object.keys(PATCHES)) if (!existsSync(join(outAssets, name))) throw new Error(`missing ${name}`);
+// Site-only replacements for theme files (for example a cleaned image); each must replace a theme file.
+for (const name of readdirSync(join(here, 'overrides'))) {
+  if (!existsSync(join(outAssets, name))) throw new Error(`override ${name} has no theme file to replace`);
+  copyFileSync(join(here, 'overrides', name), join(outAssets, name));
+}
 // Manifest: file -> short content hash, used for cache-busting URLs and window.cardbitAssets.
 const manifest = {};
 for (const name of readdirSync(outAssets).sort()) {

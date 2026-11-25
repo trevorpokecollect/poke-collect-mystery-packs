@@ -227,8 +227,8 @@
       floorGrid(g, W, H, floor, T);
       glow(g, lx, H * .55, H * .7, '#00e6e1', .12);
       // Conveyor: packs glide left to right across the whole bar.
-      const ph = H * (mobile ? .34 : .42), gap = ph * .82, speed = W * .06;
-      const span = W + gap * 2, count = Math.ceil(span / gap) + 1;
+      const ph = H * (mobile ? .34 : .42), speed = W * .06;
+      /* SITE */ const count = Math.max(2, Math.floor((W + ph * 1.64) / (ph * .82))), gap = (W + ph * 1.64) / count, span = gap * count;
       const beltY = floor - ph / 2 - 6;
       const reachAt = 2.2, liftAt = 3.0, tearAt = 4.4;
       if (grabCycle !== cyc && t > reachAt) {
@@ -316,8 +316,9 @@
     return (g, W, H, T, ctx) => {
       const dt = clamp(T - last, 0, .05); last = T;
       const floor = H * .9, mobile = W < 640, lh = H * (mobile ? .46 : .6);
-      const minX = W * (mobile ? .66 : .56), maxX = W * .92;
-      if (lx == null || ctx.resized) lx = W * .78;
+      /* SITE */ const cL = mobile ? 0 : ctx.colL ?? 0, cW = mobile ? W : (ctx.colR ?? W) - cL;
+      const minX = cL + cW * (mobile ? .66 : .56), maxX = mobile ? W * .92 : Math.min(cL + cW * .92, cL + cW - lh * .3);
+      if (lx == null || ctx.resized) lx = cL + cW * .78;
       floorGrid(g, W, H, floor, T, '#ffb65c');
       glow(g, W * .7, H * .2, H * .9, '#ffb65c', .1);
       // Spawn coins across the full width.
@@ -330,7 +331,7 @@
       // Latch heads for the coin that will reach the bucket soonest within his range.
       let target = null, best = 1e9;
       for (const c of coins) { if (c.x < minX || c.x > maxX || c.y > bucketY) continue; const time = (bucketY - c.y) / c.v; if (time < best && Math.abs(c.x - lx) / (W * .5) < time + .4) { best = time; target = c; } }
-      const goalX = target ? target.x : W * .78 + Math.sin(T * .6) * W * .06;
+      const goalX = target ? target.x : cL + cW * .78 + Math.sin(T * .6) * cW * .06;
       const want = clamp((goalX - lx) * 4, -W * .45, W * .45);
       vx = mix(vx, want, clamp(dt * 8, 0, 1)); lx = clamp(lx + vx * dt, minX, maxX);
       const moving = Math.abs(vx) / (W * .45);
@@ -384,7 +385,8 @@
       if (ctx.first) read();
       const t = T % CYCLE, mobile = W < 640;
       const n = TIERS.length;
-      const x0 = W * (mobile ? .1 : .5), x1 = W * (mobile ? .9 : .94);
+      /* SITE */ const cL = mobile ? 0 : ctx.colL ?? 0, cW = mobile ? W : (ctx.colR ?? W) - cL;
+      const x0 = cL + cW * (mobile ? .1 : .5), x1 = cL + cW * (mobile ? .9 : .94);
       const yLow = H * .88, yHigh = H * (mobile ? .66 : .64);
       const stops = TIERS.map((_, i) => ({ x: mix(x0, x1, i / (n - 1)), y: mix(yLow, yHigh, Math.pow(i / (n - 1), .9)) }));
       const lh = H * (mobile ? .22 : .3);
@@ -557,19 +559,36 @@
           g.fillText(Math.round(smooth(.4, .85, c) * 350) + ' Cardbits', vaultX, vy);
         }
       } else {
-        // Card drops into a box, the box closes and drives away.
+        // SITE: the card sinks into an open box (hidden behind its front), the flaps close and tape on,
+        // a truck rolls in, the box hops onto it and it drives away.
         const k = st / STEP;
-        const drive = smooth(.62, 1, k), bx = ox + drive * W * .6, by = floor - 30 * u;
-        const flap = smooth(.32, .48, k);
-        if (k < .35) card(g, art.cards['latch-slowking-014.webp'], ox, mix(oy - 60 * u, by - 10 * u, smooth(.05, .3, k)), 80 * u, 0, {});
-        g.save(); g.translate(bx, by);
-        if (drive > 0) { g.fillStyle = '#e8eef2'; g.beginPath(); g.roundRect(-62 * u, -46 * u, 124 * u, 50 * u, 8 * u); g.fill(); g.fillStyle = '#0b1416'; [[-38, 8], [38, 8]].forEach(([x, y]) => { g.beginPath(); g.arc(x * u, y * u, 11 * u, 0, TAU); g.fill(); }); g.fillStyle = '#00e6e1'; g.fillRect(-62 * u, -14 * u, 124 * u, 5 * u); }
-        g.fillStyle = '#c99a5b'; g.fillRect(-34 * u, -44 * u + (drive ? -40 * u : 0), 68 * u, 48 * u);
-        g.fillStyle = '#b5874a'; g.save(); g.translate(-34 * u, -44 * u + (drive ? -40 * u : 0)); g.rotate(-Math.PI * .85 * (1 - flap)); g.fillRect(0, 0, 34 * u, 6 * u); g.restore();
-        g.save(); g.translate(34 * u, -44 * u + (drive ? -40 * u : 0)); g.rotate(Math.PI * .85 * (1 - flap)); g.fillRect(-34 * u, 0, 34 * u, 6 * u); g.restore();
-        if (flap >= 1) { g.fillStyle = '#00e6e1'; g.fillRect(-4 * u, -46 * u + (drive ? -40 * u : 0), 8 * u, 50 * u); }
+        const drop = smooth(.04, .3, k), flap = smooth(.34, .48, k), arrive = smooth(.46, .6, k), load = smooth(.5, .64, k), drive = smooth(.7, 1, k);
+        const by = floor - 30 * u, top = -44 * u;
+        const away = drive * W * .6;
+        const tx = mix(ox + W * .35, ox, arrive) + away; // backs in from the right, clear of Latch
+        const bx = ox + away, lift = -40 * u * load - Math.sin(load * Math.PI) * 30 * u;
+        if (arrive > 0) {
+          g.save(); g.translate(tx, by); g.globalAlpha = smooth(0, .3, arrive);
+          g.fillStyle = '#e8eef2'; g.beginPath(); g.roundRect(-62 * u, -46 * u, 124 * u, 50 * u, 8 * u); g.fill();
+          g.fillStyle = '#0b1416'; [[-38, 8], [38, 8]].forEach(([x, y]) => { g.beginPath(); g.arc(x * u, y * u, 11 * u, 0, TAU); g.fill(); });
+          g.fillStyle = '#00e6e1'; g.fillRect(-62 * u, -14 * u, 124 * u, 5 * u);
+          g.restore();
+        }
+        if (flap < .2) {
+          // Inside of the open box, then the card, clipped at the box opening so it never shows through the front.
+          g.fillStyle = '#7a5a30'; g.fillRect(bx - 34 * u, by + top + lift - 4 * u, 68 * u, 8 * u);
+          g.save(); g.beginPath(); g.rect(bx - 200 * u, -H, 400 * u, H + by + top + lift); g.clip();
+          card(g, art.cards['latch-slowking-014.webp'], bx, mix(oy - 70 * u, by + 2 * u, drop), 80 * u, 0, {});
+          g.restore();
+        }
+        g.save(); g.translate(bx, by + lift);
+        g.fillStyle = '#c99a5b'; g.fillRect(-34 * u, top, 68 * u, 48 * u);
+        g.fillStyle = '#b5874a'; g.fillRect(-34 * u, top, 68 * u, 4 * u);
+        g.save(); g.translate(-34 * u, top); g.rotate(-Math.PI * .85 * (1 - flap)); g.fillRect(0, -3 * u, 34 * u, 6 * u); g.restore();
+        g.save(); g.translate(34 * u, top); g.rotate(Math.PI * .85 * (1 - flap)); g.fillRect(-34 * u, -3 * u, 34 * u, 6 * u); g.restore();
+        if (flap >= 1) { g.fillStyle = '#00e6e1'; const tape = smooth(.48, .54, k); g.fillRect(-4 * u, top - 2 * u, 8 * u, 50 * u * tape); }
         g.restore();
-        if (drive > 0) for (let i = 0; i < 4; i++) { g.strokeStyle = 'rgba(255,255,255,' + (.3 - i * .06) + ')'; g.lineWidth = 2; g.beginPath(); g.moveTo(bx - 70 * u - i * 18 * u, by - 20 * u + i * 8 * u); g.lineTo(bx - 100 * u - i * 18 * u, by - 20 * u + i * 8 * u); g.stroke(); }
+        if (drive > 0) for (let i = 0; i < 4; i++) { g.strokeStyle = 'rgba(255,255,255,' + ((.3 - i * .06) * smooth(0, .15, drive)) + ')'; g.lineWidth = 2; g.beginPath(); g.moveTo(tx - 70 * u - i * 18 * u, by - 20 * u + i * 8 * u); g.lineTo(tx - 100 * u - i * 18 * u, by - 20 * u + i * 8 * u); g.stroke(); }
       }
       // Latch walks to the active step and gestures at it.
       const point = moving < .2 ? smooth(0, .4, st) : 0;
@@ -612,7 +631,8 @@
       if (!ready || !W) return;
       const dpr = canvas._dpr || 1; rect = host.getBoundingClientRect();
       g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, canvas.width, canvas.height); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      try { scene(g, W, H, T, { first, resized, pointer, rect }); } catch (e) { if (!errored) console.warn('[cardbit hero]', e); errored = true; }
+      /* SITE */ const inner = slide.querySelector('.cbh-inner')?.getBoundingClientRect(); const colL = inner?.width ? inner.left - rect.left : 0, colR = inner?.width ? inner.right - rect.left : W;
+      try { scene(g, W, H, T, { first, resized, pointer, rect, colL, colR }); } catch (e) { if (!errored) console.warn('[cardbit hero]', e); errored = true; }
       first = false; resized = false;
     }
     function start() { if (running) return; running = true; if (motion.matches) { draw(kind === 'packs' ? 5.6 : kind === 'levels' ? 8.4 : 2.5); running = false; return; } raf = requestAnimationFrame(frame); }

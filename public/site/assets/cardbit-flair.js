@@ -39,6 +39,20 @@
     const src = img.currentSrc || img.src;
     if (src) holo.style.setProperty('--cbf-mask', 'url("' + src.replace(/"/g, '%22') + '")');
     img.after(holo);
+    /* SITE */ fitHolo(img, holo);
+  }
+  /* SITE */ function fitHolo(img, holo) {
+    const sync = () => {
+      const host = img.parentElement;
+      if (!host || !holo.isConnected || !img.offsetWidth) return;
+      const t = getComputedStyle(img).transform;
+      const turned = t && t !== 'none';
+      if (!turned && img.offsetWidth >= host.clientWidth - 2 && img.offsetHeight >= host.clientHeight - 2) return;
+      Object.assign(holo.style, {inset:'auto', left:img.offsetLeft+'px', top:img.offsetTop+'px', width:img.offsetWidth+'px', height:img.offsetHeight+'px', transform:turned ? t : ''});
+    };
+    sync();
+    if (!img.complete) img.addEventListener('load', sync, {once:true});
+    if (window.ResizeObserver) new ResizeObserver(sync).observe(img);
   }
   function bindTilt(scope) {
     scope.querySelectorAll('.cb-shelf-wrapper > img, .cb-pack-portrait, .cc-pack-art > img').forEach(holoFor);
