@@ -1167,3 +1167,97 @@ model CardbitGuardEvent {
   @@index([shop, createdAt])
   @@index([shop, customerId])
 }
+
+// ==== Standalone site: shipping + transactional email (branch cardbit-site) ====
+// Owned by the shipping/email work. SiteCopy and customers live in the lead's block.
+
+// One vault shipment request. Copies are locked VAULTED -> SHIP_LOCKED when it is created.
+model SiteShipment {
+  id                  String    @id @default(cuid())
+  customerId          String
+  // DRAFT -> PAID -> LABEL_PURCHASED -> IN_TRANSIT -> DELIVERED; RETURNED / EXCEPTION / CANCELED
+  status              String    @default("DRAFT")
+  toName              String
+  toEmail             String?
+  toAddress           Json
+  addressValidated    Boolean   @default(false)
+  cardCount           Int
+  // FREE (over 30 cards) | CARDBITS (600) | USD ($6)
+  feeKind             String
+  feeBits             Int       @default(0)
+  feeCents            Int       @default(0)
+  paymentRef          String?
+  idempotencyKey      String    @unique
+  shippoShipmentId    String?
+  shippoRateId        String?
+  shippoTransactionId String?   @unique
+  carrier             String?
+  service             String?
+  postageCents        Int?
+  trackingNumber      String?
+  trackingUrl         String?
+  labelUrl            String?
+  trackingStatus      String?
+  trackingDetail      String?
+  processBy           DateTime
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  canceledAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  items               SiteShipmentItem[]
+  events              SiteShipmentEvent[]
+
+  @@index([customerId, createdAt])
+  @@index([status, processBy])
+  @@index([carrier, trackingNumber])
+}
+
+model SiteShipmentItem {
+  id         String       @id @default(cuid())
+  shipmentId String
+  shipment   SiteShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  copyId     String
+  title      String
+  slot       Int?
+  pocket     Int?
+
+  @@unique([shipmentId, copyId])
+  @@index([copyId])
+}
+
+// Audit trail and webhook dedupe for shipments.
+model SiteShipmentEvent {
+  id         String       @id @default(cuid())
+  shipmentId String
+  shipment   SiteShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  kind       String
+  fromStatus String?
+  toStatus   String?
+  actor      String
+  detail     Json?
+  dedupeKey  String?      @unique
+  createdAt  DateTime     @default(now())
+
+  @@index([shipmentId, createdAt])
+}
+
+// Transactional email outbox. dedupeKey makes each logical email send at most once.
+model SiteEmail {
+  id         String    @id @default(cuid())
+  kind       String
+  to         String
+  subject    String
+  dedupeKey  String    @unique
+  payload    Json
+  // PENDING -> SENT | FAILED (retried) | REJECTED (bad address, not retried)
+  status     String    @default("PENDING")
+  providerId String?
+  attempts   Int       @default(0)
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status, createdAt])
+}

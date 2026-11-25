@@ -85,3 +85,41 @@ Unchanged sources: retail and buyback come from Poke-Collect's per-card buylist 
   hero code in `cardbit-storefront.js`, "Full-width hero scenes" CSS in `cardbit-flair.css`).
 - Policies page: main (from `cardbit-policies-v2`).
 - How It Works: PR #1, branch `cardbit-how-it-works-live`.
+
+## Shipping + transactional email (branch `cardbit-site-shipping`)
+
+Code: `app/site/region.server.ts`, `app/site/shipping/*`, `app/site/email/*`,
+route `app/routes/site.webhooks.shippo.tsx` (404 unless `CARDBIT_SITE_MODE=on`).
+Tables (fenced block at the end of `schema.prisma`): `SiteShipment`, `SiteShipmentItem`,
+`SiteShipmentEvent`, `SiteEmail`.
+
+Flow:
+1. `createShipment` — region check (billing + delivery + IP), Shippo address validation (the
+   normalized state is re-checked), fee per `policy.ts` ($6 / 600 Cardbits, free over 30 cards),
+   then one transaction: shipment row, `CopyStore.lockForShipment` (whole selection or nothing),
+   `FeePayer.debitBits`. Same idempotency key = same shipment. Email "shipment_created".
+2. `cancelShipment` — only before a label; releases copies, refunds the Cardbits once.
+3. `buyLabel` (staff) — conditional PAID → LABEL_PENDING claim, so a double click buys one label.
+   Prefers USPS Ground Advantage, then Priority, then UPS (override `CARDBIT_SHIP_SERVICES`).
+4. Tracking — Shippo `track_updated` webhook at `/site/webhooks/shippo?token=…`. The handler re-reads
+   tracking from Shippo, dedupes, only moves forward. First TRANSIT (or staff `markShipped`) moves
+   copies SHIP_LOCKED → SHIPPED and emails "shipped"; DELIVERED emails "delivered".
+5. `shippingQueue` lists paid shipments with `overdue` past the 48-hour promise. `packingSlipHtml`
+   prints the card list sorted by slot/pocket.
+
+Contracts the lead implements (`app/site/shipping/types.ts`): `CopyStore` on SiteCopy
+(`sql-copy-store.ts` is a working reference using conditional UPDATEs) and `FeePayer` on the
+wallet ledger (`verifyUsd` optional until Trevor decides on card payments). Register both once at
+startup with `registerSiteShipping()` from `wire.server.ts`.
+
+Email: `sendEmail(deps, kind, to, data, dedupeKey)` — kinds `signin_code`, `topup_receipt`,
+`pack_receipt`, `pack_opened`, `buyback_confirmation`, `shipment_created|shipped|delivered`.
+Call after your transaction commits; the dedupe key (e.g. pull id, order id) guarantees one send.
+Sign-in codes are never stored. `sendPendingEmails` retries failures (run from the site cron).
+Email links assume routes `/packs`, `/my-packs`, `/vault`, `/vault/shipments/:id` on `CARDBIT_SITE_URL`.
+
+Env (site / app-site): `SHIPPO_API_TOKEN` (test key set), `SHIPPO_WEBHOOK_TOKEN` (set),
+`CARDBIT_SHIP_FROM_*` (ship-from address — needed before label tests),
+`CARDBIT_SITE_RESEND_API_KEY` (pending Trevor), `CARDBIT_SITE_MAIL_FROM` (set),
+`CARDBIT_SITE_IPINFO_TOKEN` (optional; without it IP isn't checked, addresses still are),
+`CARDBIT_SITE_URL`.

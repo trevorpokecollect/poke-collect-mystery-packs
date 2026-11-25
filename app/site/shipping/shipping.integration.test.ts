@@ -1,0 +1,254 @@
+import { execFileSync } from "node:child_process";
+import { PrismaClient } from "@prisma/client";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { LogMailer } from "../email/mailer.server";
+import { sendEmail, sendPendingEmails, shipmentNotifier } from "../email/outbox.server";
+import {
+  buyLabel,
+  cancelShipment,
+  createShipment,
+  handleTrackingWebhook,
+  markShipped,
+  shippingQueue,
+  type ShippingDeps,
+} from "./service.server";
+import type { Address, Label, Rate, ShippingProvider, Tracking } from "./shippo.server";
+import { sqlCopyStore } from "./sql-copy-store";
+import { FeePaymentError, type FeePayer, type Tx } from "./types";
+
+const url = process.env.TEST_DATABASE_URL;
+const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
+const T = "TestSiteCopy";
+
+class FakeShippo implements ShippingProvider {
+  labels = 0;
+  validCalls = 0;
+  tracking: Record<string, Tracking> = {};
+  invalid = false;
+  async validateAddress(a: Address) {
+    this.validCalls++;
+    return { valid: !this.invalid, address: { ...a, street1: a.street1.toUpperCase() }, residential: true, messages: this.invalid ? ["Address not found"] : [] };
+  }
+  async rates(): Promise<Rate[]> {
+    return [
+      { rateId: "r_pri", shipmentId: "s1", carrier: "USPS", service: "Priority Mail", serviceToken: "usps_priority", amountCents: 910, currency: "USD", days: 2, attributes: [] },
+      { rateId: "r_ga", shipmentId: "s1", carrier: "USPS", service: "Ground Advantage", serviceToken: "usps_ground_advantage", amountCents: 495, currency: "USD", days: 4, attributes: [] },
+    ];
+  }
+  async buyLabel(rateId: string): Promise<Label> {
+    this.labels++;
+    await new Promise((r) => setTimeout(r, 30));
+    return { transactionId: `tx_${this.labels}`, status: "SUCCESS", trackingNumber: `9400${this.labels}`, trackingUrl: "https://track.test", labelUrl: "https://label.test", messages: [rateId] };
+  }
+  async track(carrier: string, n: string): Promise<Tracking> {
+    return this.tracking[n] ?? { carrier, trackingNumber: n, status: "UNKNOWN", detail: "", at: null, eta: null };
+  }
+}
+
+// Wallet stand-in with the same idempotency contract the lead's ledger must honor.
+function memoryFees(balances: Map<string, number>): FeePayer & { keys: Set<string> } {
+  const keys = new Set<string>();
+  return {
+    keys,
+    async debitBits(_tx: Tx, customer, bits, key) {
+      if (keys.has(key)) return { ledgerId: key };
+      const bal = balances.get(customer) ?? 0;
+      if (bal < bits) throw new FeePaymentError("Not enough Cardbits.", "INSUFFICIENT_BITS");
+      balances.set(customer, bal - bits);
+      keys.add(key);
+      return { ledgerId: key };
+    },
+    async refundBits(_tx: Tx, customer, bits, key) {
+      if (keys.has(key)) return { ledgerId: key };
+      balances.set(customer, (balances.get(customer) ?? 0) + bits);
+      keys.add(key);
+      return { ledgerId: key };
+    },
+  };
+}
+
+const from: Address = { name: "Cardbit", street1: "100 Test Way", city: "Austin", state: "TX", zip: "78701", country: "US" };
+const to: Address = { name: "Ash K", street1: "1 Main St", city: "Dallas", state: "TX", zip: "75201", country: "US" };
+
+describe.skipIf(!url)("site shipping (integration)", () => {
+  let shippo: FakeShippo;
+  let balances: Map<string, number>;
+  let mailer: LogMailer;
+  let deps: ShippingDeps;
+
+  beforeAll(async () => {
+    execFileSync("npx", ["prisma", "migrate", "deploy"], { env: { ...process.env, DATABASE_URL: url }, stdio: "ignore" });
+    await db.$executeRawUnsafe(`DROP TABLE IF EXISTS "${T}"`);
+    await db.$executeRawUnsafe(
+      `CREATE TABLE "${T}" (id text primary key, title text not null, slot int, pocket int, status text not null, "ownerId" text, "orderId" text, "updatedAt" timestamptz default now())`,
+    );
+  });
+  afterAll(async () => {
+    await db.$executeRawUnsafe(`DROP TABLE IF EXISTS "${T}"`);
+    await db.$disconnect();
+  });
+  beforeEach(async () => {
+    await db.siteShipment.deleteMany();
+    await db.siteEmail.deleteMany();
+    await db.$executeRawUnsafe(`DELETE FROM "${T}"`);
+    for (let i = 1; i <= 40; i++)
+      await db.$executeRawUnsafe(
+        `INSERT INTO "${T}" (id, title, slot, pocket, status, "ownerId") VALUES ($1, $2, $3, $4, 'VAULTED', $5)`,
+        `c${i}`, `Card ${i}`, Math.ceil(i / 20), ((i - 1) % 20) + 1, i <= 35 ? "u1" : "u2",
+      );
+    shippo = new FakeShippo();
+    balances = new Map([["u1", 1000], ["u2", 100]]);
+    mailer = new LogMailer();
+    deps = {
+      db,
+      copies: sqlCopyStore(T),
+      fees: memoryFees(balances),
+      provider: shippo,
+      notify: shipmentNotifier({ db, mailer, env: {} }),
+      from,
+      now: () => new Date("2026-11-25T12:00:00Z"),
+    };
+  });
+
+  const statusOf = async (id: string) =>
+    (await db.$queryRawUnsafe<{ status: string }[]>(`SELECT status FROM "${T}" WHERE id = $1`, id))[0].status;
+  const base = (over: Partial<Parameters<typeof createShipment>[1]> = {}) => ({
+    customerId: "u1",
+    customerEmail: "ash@example.com",
+    copyIds: ["c1", "c2"],
+    address: to,
+    billing: { country: "US", state: "TX" },
+    ip: null,
+    method: "CARDBITS" as const,
+    idempotencyKey: "click-1",
+    ...over,
+  });
+
+  it("locks copies, takes 600 Cardbits, validates the address, emails once, and replays", async () => {
+    const { shipment, replay } = await createShipment(deps, base());
+    expect(replay).toBe(false);
+    expect(shipment).toMatchObject({ status: "PAID", feeKind: "CARDBITS", feeBits: 600, cardCount: 2, addressValidated: true });
+    expect((shipment.toAddress as Address).street1).toBe("1 MAIN ST");
+    expect(shipment.processBy.toISOString()).toBe("2026-11-27T12:00:00.000Z");
+    expect(await statusOf("c1")).toBe("SHIP_LOCKED");
+    expect(balances.get("u1")).toBe(400);
+    const again = await createShipment(deps, base());
+    expect(again).toMatchObject({ replay: true });
+    expect(again.shipment.id).toBe(shipment.id);
+    expect(balances.get("u1")).toBe(400);
+    expect(mailer.sent.map((m) => m.subject)).toEqual(["Shipment Requested: 2 Cards"]);
+  });
+
+  it("ships over 30 cards free", async () => {
+    const ids = Array.from({ length: 31 }, (_, i) => `c${i + 1}`);
+    const { shipment } = await createShipment(deps, base({ copyIds: ids }));
+    expect(shipment).toMatchObject({ feeKind: "FREE", feeBits: 0 });
+    expect(balances.get("u1")).toBe(1000);
+  });
+
+  it("rejects the whole selection if one copy isn't the customer's vaulted copy, leaving nothing behind", async () => {
+    await expect(createShipment(deps, base({ copyIds: ["c1", "c36"] }))).rejects.toMatchObject({ name: "CopyLockError", unavailable: ["c36"] });
+    expect(await statusOf("c1")).toBe("VAULTED");
+    expect(await db.siteShipment.count()).toBe(0);
+    expect(balances.get("u1")).toBe(1000);
+  });
+
+  it("rolls back the lock when the customer can't cover the fee", async () => {
+    await expect(createShipment(deps, base({ customerId: "u2", copyIds: ["c36"] }))).rejects.toMatchObject({ code: "INSUFFICIENT_BITS" });
+    expect(await statusOf("c36")).toBe("VAULTED");
+    expect(await db.siteShipment.count()).toBe(0);
+  });
+
+  it("gives the last copy to exactly one of two simultaneous requests", async () => {
+    const results = await Promise.allSettled([
+      createShipment(deps, base({ copyIds: ["c5"], idempotencyKey: "a" })),
+      createShipment(deps, base({ copyIds: ["c5", "c6"], idempotencyKey: "b" })),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(await db.siteShipment.count()).toBe(1);
+  });
+
+  it("blocks excluded states and bad carrier addresses before touching copies", async () => {
+    await expect(createShipment(deps, base({ address: { ...to, state: "NY" } }))).rejects.toMatchObject({ code: "EXCLUDED_STATE" });
+    await expect(createShipment(deps, base({ billing: { country: "US", state: "UT" } }))).rejects.toMatchObject({ code: "EXCLUDED_STATE" });
+    shippo.invalid = true;
+    await expect(createShipment(deps, base())).rejects.toMatchObject({ code: "ADDRESS_INVALID", details: ["Address not found"] });
+    expect(await statusOf("c1")).toBe("VAULTED");
+  });
+
+  it("refuses USD fees until card payments are enabled", async () => {
+    await expect(createShipment(deps, base({ method: "USD", paymentRef: "pay_1" }))).rejects.toMatchObject({ code: "USD_DISABLED" });
+  });
+
+  it("cancels before a label: copies back to the vault, fee refunded once", async () => {
+    const { shipment } = await createShipment(deps, base());
+    await cancelShipment(deps, shipment.id, "staff:t", "customer asked");
+    await cancelShipment(deps, shipment.id, "staff:t", "double click");
+    expect(await statusOf("c1")).toBe("VAULTED");
+    expect(balances.get("u1")).toBe(1000);
+  });
+
+  it("buys exactly one label when staff double-click, picks Ground Advantage, then can't cancel", async () => {
+    const { shipment } = await createShipment(deps, base());
+    const results = await Promise.allSettled([buyLabel(deps, shipment.id, "staff:a"), buyLabel(deps, shipment.id, "staff:b")]);
+    expect(shippo.labels).toBe(1);
+    expect(results.some((r) => r.status === "fulfilled")).toBe(true);
+    const s = await db.siteShipment.findUniqueOrThrow({ where: { id: shipment.id } });
+    expect(s).toMatchObject({ status: "LABEL_PURCHASED", service: "Ground Advantage", postageCents: 495, trackingNumber: "94001" });
+    await expect(cancelShipment(deps, shipment.id, "staff:a", "x")).rejects.toMatchObject({ code: "WRONG_STATE" });
+  });
+
+  it("follows tracking webhooks: re-reads Shippo, dedupes, ignores stale events, emails once each", async () => {
+    const { shipment } = await createShipment(deps, base());
+    await buyLabel(deps, shipment.id, "staff:a");
+    const hook = { event: "track_updated", data: { tracking_number: "94001", carrier: "usps", tracking_status: { status: "DELIVERED" } } };
+
+    // Body says DELIVERED, Shippo says PRE_TRANSIT: nothing changes.
+    expect(await handleTrackingWebhook(deps, hook)).toMatchObject({ ignored: "pre_transit" });
+
+    shippo.tracking["94001"] = { carrier: "usps", trackingNumber: "94001", status: "TRANSIT", detail: "Accepted", at: "2026-11-26T15:00:00Z", eta: null };
+    await handleTrackingWebhook(deps, hook);
+    await handleTrackingWebhook(deps, hook); // duplicate delivery
+    expect(await statusOf("c1")).toBe("SHIPPED");
+
+    shippo.tracking["94001"] = { carrier: "usps", trackingNumber: "94001", status: "DELIVERED", detail: "Front door", at: "2026-11-28T18:00:00Z", eta: null };
+    expect(await handleTrackingWebhook(deps, hook)).toMatchObject({ status: "DELIVERED" });
+
+    shippo.tracking["94001"] = { carrier: "usps", trackingNumber: "94001", status: "TRANSIT", detail: "late scan", at: "2026-11-27T01:00:00Z", eta: null };
+    expect(await handleTrackingWebhook(deps, hook)).toMatchObject({ status: "DELIVERED" });
+
+    expect(await handleTrackingWebhook(deps, { event: "track_updated", data: { tracking_number: "nope" } })).toMatchObject({ ignored: "unknown_number" });
+    expect(mailer.sent.map((m) => m.subject)).toEqual([
+      "Shipment Requested: 2 Cards",
+      "Your Cards Have Shipped",
+      "Your Cards Were Delivered",
+    ]);
+  });
+
+  it("lists overdue paid shipments for staff", async () => {
+    const { shipment } = await createShipment(deps, base());
+    const q = await shippingQueue(db, new Date("2026-11-28T00:00:00Z"));
+    expect(q.find((r) => r.id === shipment.id)?.overdue).toBe(true);
+    await buyLabel(deps, shipment.id, "staff:a");
+    await markShipped(deps, shipment.id, "staff:a");
+    expect((await shippingQueue(db)).some((r) => r.id === shipment.id)).toBe(false);
+  });
+
+  it("outbox: one send per dedupe key, sign-in codes never stored, failures retried", async () => {
+    await sendEmail({ db, mailer, env: {} }, "signin_code", "Ash@Example.com", { code: "123456", minutes: 10 }, "otp-1");
+    await sendEmail({ db, mailer, env: {} }, "signin_code", "ash@example.com", { code: "123456", minutes: 10 }, "otp-1");
+    expect(mailer.sent).toHaveLength(1);
+    const row = await db.siteEmail.findFirstOrThrow({ where: { kind: "signin_code" } });
+    expect(JSON.stringify(row.payload)).not.toContain("123456");
+    expect(row.to).toBe("ash@example.com");
+
+    let fail = true;
+    const flaky = { live: true, async send() { if (fail) throw new Error("timeout"); return { id: "em_9" }; } };
+    const r1 = await sendEmail({ db, mailer: flaky, env: {} }, "buyback_confirmation", "ash@example.com", { cards: [{ title: "X", bits: 100 }], totalBits: 100, balanceBits: 200 }, "bb-1");
+    expect(r1.status).toBe("FAILED");
+    fail = false;
+    const later = new Date(Date.now() + 5 * 60_000);
+    expect(await sendPendingEmails({ db, mailer: flaky, env: {} }, later)).toMatchObject({ sent: 1 });
+    expect((await db.siteEmail.findUniqueOrThrow({ where: { id: r1.id } })).status).toBe("SENT");
+  });
+});
