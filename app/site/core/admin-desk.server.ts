@@ -378,7 +378,9 @@ export async function eraseCustomer(db: PrismaClient, actor: string, input: { cu
       where: { id: c.id },
       data: { email: `${c.id}@${ERASED_DOMAIN}`, name: null, googleSub: null, tags: [], staffNote: `Personal data erased ${new Date().toISOString().slice(0, 10)}.`, riskNote: null },
     });
-    await tx.siteMarketing.updateMany({ where, data: { smsPhone: null, ip: null, emailOptOutAt: new Date(), smsOptOutAt: new Date(), syncedAt: null } });
+    // syncedAt = now: the Klaviyo sync must not send the placeholder address; staff delete the Klaviyo profile by hand.
+    await tx.siteMarketing.updateMany({ where, data: { smsPhone: null, ip: null, emailOptOutAt: new Date(), smsOptOutAt: new Date(), syncedAt: new Date() } });
+    await tx.siteKlaviyoEvent.updateMany({ where: { customerId: c.id, status: { in: ["PENDING", "FAILED"] } }, data: { status: "SKIPPED", error: "customer erased" } });
     await tx.siteSession.deleteMany({ where });
     await tx.siteEmailCode.deleteMany({ where: { email: oldEmail } });
     await tx.siteAppHandoff.deleteMany({ where });
@@ -386,7 +388,6 @@ export async function eraseCustomer(db: PrismaClient, actor: string, input: { cu
     await tx.siteVisit.updateMany({ where, data: { customerId: null } });
     await tx.siteChatMessage.updateMany({ where, data: { name: "Former Member", body: "[removed]", deletedAt: new Date(), deletedBy: actor } });
     await tx.siteTopup.updateMany({ where, data: { ip: null, userAgent: null, deviceId: null } });
-    await tx.siteSession.deleteMany({ where });
     await tx.siteStaffAction.create({ data: { action: "erase", actor, customerId: c.id, reason, requestId } });
   });
   return { replay: false, klaviyo: "Also delete this person's profile in Klaviyo (Profiles → request deletion)." };
