@@ -50,5 +50,16 @@ describe("Cardbit site pages", () => {
     expect(tools).toContain("action:'ship-group',copyIds:item.copyIds,address:item.address,method:'CARDBITS'");
     expect(tools).toContain("const EXCLUDED = ['AL','HI','ID','MN','NV','NY','UT','WA'];");
     expect(tools).toContain("SHIP_FEE_BITS = 600, FREE_OVER = 30");
+    // Live Pulls card feed on home (no text ticker), plain footer Policies link.
+    expect(js).toContain("window.CardbitSite.api('recent?limit=12')");
+    expect(js).toContain("(site() ? pullFeed() : '')");
+    expect(js).toContain("(site() ? '' : '<div class=\"cbf-ticker\"");
+    expect(js).toContain("Policies</a>' : policyLink('Policies'))");
+    // Holo follows the pack image; hero conveyor spacing, desktop column and Ship Home fixes.
+    expect(readFileSync("public/site/assets/cardbit-flair.js", "utf8")).toContain("fitHolo(img, holo)");
+    const hero = readFileSync("public/site/assets/cardbit-hero-scenes.js", "utf8");
+    expect(hero).toContain("gap = (W + ph * 1.64) / count");
+    expect(hero).toContain("colL, colR");
+    expect(hero).toContain("SITE: the card sinks into an open box");
   });
 });

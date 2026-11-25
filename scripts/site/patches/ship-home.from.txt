@@ -1,0 +1,14 @@
+        // Card drops into a box, the box closes and drives away.
+        const k = st / STEP;
+        const drive = smooth(.62, 1, k), bx = ox + drive * W * .6, by = floor - 30 * u;
+        const flap = smooth(.32, .48, k);
+        if (k < .35) card(g, art.cards['latch-slowking-014.webp'], ox, mix(oy - 60 * u, by - 10 * u, smooth(.05, .3, k)), 80 * u, 0, {});
+        g.save(); g.translate(bx, by);
+        if (drive > 0) { g.fillStyle = '#e8eef2'; g.beginPath(); g.roundRect(-62 * u, -46 * u, 124 * u, 50 * u, 8 * u); g.fill(); g.fillStyle = '#0b1416'; [[-38, 8], [38, 8]].forEach(([x, y]) => { g.beginPath(); g.arc(x * u, y * u, 11 * u, 0, TAU); g.fill(); }); g.fillStyle = '#00e6e1'; g.fillRect(-62 * u, -14 * u, 124 * u, 5 * u); }
+        g.fillStyle = '#c99a5b'; g.fillRect(-34 * u, -44 * u + (drive ? -40 * u : 0), 68 * u, 48 * u);
+        g.fillStyle = '#b5874a'; g.save(); g.translate(-34 * u, -44 * u + (drive ? -40 * u : 0)); g.rotate(-Math.PI * .85 * (1 - flap)); g.fillRect(0, 0, 34 * u, 6 * u); g.restore();
+        g.save(); g.translate(34 * u, -44 * u + (drive ? -40 * u : 0)); g.rotate(Math.PI * .85 * (1 - flap)); g.fillRect(-34 * u, 0, 34 * u, 6 * u); g.restore();
+        if (flap >= 1) { g.fillStyle = '#00e6e1'; g.fillRect(-4 * u, -46 * u + (drive ? -40 * u : 0), 8 * u, 50 * u); }
+        g.restore();
+        if (drive > 0) for (let i = 0; i < 4; i++) { g.strokeStyle = 'rgba(255,255,255,' + (.3 - i * .06) + ')'; g.lineWidth = 2; g.beginPath(); g.moveTo(bx - 70 * u - i * 18 * u, by - 20 * u + i * 8 * u); g.lineTo(bx - 100 * u - i * 18 * u, by - 20 * u + i * 8 * u); g.stroke(); }
+      }

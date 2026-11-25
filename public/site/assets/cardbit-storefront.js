@@ -229,7 +229,7 @@
   }
   function footer(){
     const welcomeLink = window.CardbitWelcome ? link('welcome','Welcome Rewards') : '';
-    return '<footer class="cb-footer"><div class="cb-wrap"><div class="cb-foot-main"><div><img alt="cardbit" width="135" height="27" src="'+esc(asset('brand-lockup.webp'))+'"><p>Hosted by Poke-Collect</p></div><nav aria-label="Footer">'+link('packs','Browse Packs')+link('chase','Chase')+link('ship-together','Ship Together')+link('shop','Card Shop')+link('help','How It Works')+welcomeLink+policyLink('Policies')+'<a href="mailto:Support@cardbit.com">Contact Us</a></nav></div><div class="cb-foot-end"><span>Cardbit, LLC · Madison, Alabama</span></div></div></footer>';
+    return '<footer class="cb-footer"><div class="cb-wrap"><div class="cb-foot-main"><div><img alt="cardbit" width="135" height="27" src="'+esc(asset('brand-lockup.webp'))+'"><p>Hosted by Poke-Collect</p></div><nav aria-label="Footer">'+link('packs','Browse Packs')+link('chase','Chase')+link('ship-together','Ship Together')+link('shop','Card Shop')+link('help','How It Works')+welcomeLink+/* SITE */(site() ? '<a href="'+esc(root.dataset.policyView || '/policies')+'">Policies</a>' : policyLink('Policies'))+'<a href="mailto:Support@cardbit.com">Contact Us</a></nav></div><div class="cb-foot-end"><span>Cardbit, LLC · Madison, Alabama</span></div></div></footer>';
   }
   function displayTitle(value) {
     const minor = /^(?:a|an|the|and|as|at|but|by|for|from|in|into|nor|of|on|or|per|to|via|with|without)$/i;
@@ -314,11 +314,11 @@
   }
 
   function pullFeed() {
-    if (root.dataset.mode !== 'demo' || !(inBrowser() || isDemoShopper())) return '';
+    if (!site() && (root.dataset.mode !== 'demo' || !(inBrowser() || isDemoShopper()))) return '';
     return '<section class="cb-pull-feed" aria-labelledby="cb-feed-title"><div class="cb-feed-heading">'+
       '<h2 id="cb-feed-title">Just Pulled</h2>'+
       '<button type="button" class="cb-feed-control" data-feed-toggle aria-label="Pause Just Pulled">'+icon('pause',15)+'</button></div>'+
-      '<div class="cbf-ticker" data-pull-ticker hidden><span class="cbf-ticker-live" data-ticker-label>Live</span><div class="cbf-ticker-track" data-ticker-track aria-live="polite"></div></div>'+
+      /* SITE */(site() ? '' : '<div class="cbf-ticker" data-pull-ticker hidden><span class="cbf-ticker-live" data-ticker-label>Live</span><div class="cbf-ticker-track" data-ticker-track aria-live="polite"></div></div>')+
       '<ul class="cb-feed-items" data-feed-items aria-live="off"></ul></section>';
   }
 
@@ -407,8 +407,10 @@
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let source = new Map(), visible = [], previousMarkup = null;
     let paused = motion.matches, hover = false, available = true;
+    /* SITE */ let live = null;
 
     function draw() {
+      /* SITE */ if (live) return drawLive();
       const markup = visible.map(ref => {
         const {card, key, pack} = source.get(ref);
         return '<li data-feed-ref="'+esc(ref)+'">'+pullCardLink(card,key,pack,false,available)+'</li>';
@@ -456,11 +458,50 @@
         visible = visible.filter(ref => source.has(ref));
         const count = Math.min(5,printings.size);
         while (visible.length < count) nextPull();
-        toggle.hidden = printings.size <= 5;
+        toggle.hidden = live ? true : printings.size <= 5;
       }
       draw();
     }
 
+    /* SITE: Live Pulls. Real revealed pulls from /api/recent show as "Just Pulled"; until there are any,
+       the feed cycles cards from the pack pools under "In the Packs" so the heading stays truthful. */
+    function livePullLink(p){
+      const pack=(state.packs||[]).find(x=>x.id===p.packId);
+      const match=pack&&(pack.cards||[]).find(c=>cardName(c)===p.name&&String(c.number||'')===String(p.number||''));
+      const route=match?'chase/'+enc(window.CardbitCollectorRules.printingKey(match)):'packs/'+enc(p.packId);
+      const tier=typeof p.tier==='string'?p.tier:'';
+      const color=window.CardbitOpening?.tierFor?.({tier})?.color;
+      const when=timeAgo(p.at);
+      const meta=[tier?tierMarkup({tier}):'',esc(packTitle({id:p.packId}))].filter(Boolean).join('<span aria-hidden="true"> · </span>');
+      return link(route,miniature({image:p.image,name:p.name})+'<span class="cb-pull-copy"><strong class="cb-pull-name">'+esc(shortName({name:p.name}))+
+        '</strong><span class="cb-pull-meta">'+meta+'</span></span><span class="cb-pull-quote"><span class="cb-offer-unavailable">'+esc(when)+'</span></span>',
+        'cb-feed-card','aria-label="'+esc([p.name,p.set,tier,when].filter(Boolean).join(' · '))+'"'+(/^#[\da-f]{6}$/i.test(color||'')?' style="--cb-pull-tier:'+color+'"':''));
+    }
+    function drawLive(){
+      const markup=live.slice(0,5).map(p=>'<li data-feed-ref="'+esc(p.id)+'">'+livePullLink(p)+'</li>').join('');
+      if(markup===previousMarkup)return;
+      feed.innerHTML=markup;previousMarkup=markup;
+    }
+    if(site()){
+      const title=root.querySelector('#cb-feed-title');
+      if(title)title.textContent='In the Packs';
+      const readLive=async()=>{
+        if(signal.aborted||document.hidden)return;
+        try{
+          const res=await fetch(window.CardbitSite.api('recent?limit=12'),{headers:{Accept:'application/json'},credentials:'same-origin',signal});
+          if(!res.ok)return;
+          const data=await res.json();
+          const pulls=(Array.isArray(data?.pulls)?data.pulls:[]).filter(p=>p&&typeof p.id==='string'&&typeof p.name==='string');
+          if(!pulls.length)return;
+          live=pulls;
+          if(title)title.textContent='Just Pulled';
+          toggle.hidden=true;previousMarkup=null;draw();
+        }catch{}
+      };
+      readLive();
+      const livePoll=setInterval(readLive,30000);
+      signal.addEventListener('abort',()=>clearInterval(livePoll),{once:true});
+    }
     toggle.addEventListener('click',()=>{paused=!paused;syncControl();},{signal});
     motion.addEventListener('change',event=>{if(event.matches){paused=true;syncControl();}},{signal});
     feed.addEventListener('pointerenter',event=>{hover=event.pointerType==='mouse';},{signal});
@@ -662,7 +703,7 @@
     const counter = shelfOrder();
     const shelf = counter.length ? '<div class="cb-shelf">'+counter.map(packTile).join('')+'</div>' :
       empty('No Packs Available','Check Back for the Next Release.');
-    return heroCarousel()+'<div class="cb-wrap cb-stack cb-home-stack">'+
+    return heroCarousel()+'<div class="cb-wrap cb-stack cb-home-stack">'+/* SITE */(site() ? pullFeed() : '')+
       '<section id="cb-pack-counter" tabindex="-1">'+sectionHd(shelfTitle())+shelf+'</section>'+
       (root.dataset.welcomeShelf !== 'false' ? window.CardbitWelcome?.teaser('home') || '' : '')+featuredSingles()+'</div>';
   }

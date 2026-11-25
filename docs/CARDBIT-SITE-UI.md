@@ -48,6 +48,18 @@ address form (excluded states shown but disabled), a 600 Cardbits fee that drops
 Server errors `address_invalid` (fields[]), `region_blocked`, `unavailable`, `insufficient_bits`,
 `account_frozen` show in the review dialog. A single-card Ship button opens Ship Together with that card selected.
 
+## Site fixes over the theme (Nov 25)
+
+- Home shows the Live Pulls card feed (no text ticker). Real pulls from `GET /api/recent` show as "Just Pulled"
+  with time ago; until there are any, the feed cycles pool cards under "In the Packs" (patches/live-pulls.js).
+- Footer Policies is a plain link like the others.
+- Pack page holo is sized and rotated to the pack image (flair `fitHolo`), so it follows the wrapper shape.
+- Hero: the conveyor uses a whole number of evenly spaced packs (no overlap at the wrap); on desktop the
+  giveaway and levels scenes stay inside the content column (mobile unchanged); Ship Home is redrawn
+  (patches/ship-home.js replaces the block in patches/ship-home.from.txt).
+- `scripts/site/overrides/` replaces theme files after the copy (cardbit-latch-cheer.webp: background
+  behind Latch's feet removed).
+
 ## Not ported yet
 
 Rewards and leaderboard pages, daily giveaway entry window (Whatnot + email entry), Welcome Rewards,
