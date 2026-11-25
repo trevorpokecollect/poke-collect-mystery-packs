@@ -56,6 +56,21 @@ const friend = (id: string) => {
 
 const pack = (id: string) => assetUrl(`cardbit-latch-pack-${id}.webp`);
 
+// Community callout under the hero signup (Trevor, Nov 25): Instagram, Facebook, Discord. Icons match the site footer.
+const SOCIALS = [
+  { id: "instagram", name: "Instagram", href: "https://www.instagram.com/cardbitshop", label: "Follow Cardbit on Instagram",
+    icon: '<svg aria-hidden="true" focusable="false" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6" fill="currentColor"/></svg>' },
+  { id: "facebook", name: "Facebook", href: "https://www.facebook.com/cardbitshop", label: "Follow Cardbit on Facebook",
+    icon: '<svg aria-hidden="true" focusable="false" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12Z"/></svg>' },
+  { id: "discord", name: "Discord", href: "https://discord.gg/F9Z6jbgj4Y", label: "Join the Cardbit Discord",
+    icon: '<svg aria-hidden="true" focusable="false" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.5C.6 9.1-.3 13.6.1 18.1a19.7 19.7 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12.2 0l.5.4a12.8 12.8 0 0 1-2 1l1.3 2.1a19.6 19.6 0 0 0 6-3c.5-5.2-.9-9.7-3.6-13.7ZM8 15.4c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.6 8 10.6s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg>' },
+];
+const socials = () => `<div class="wl-social" data-wl-rise>
+          <p class="wl-social__title">Join the Community</p>
+          <p class="wl-social__text">Follow along for sneak peeks, pulls and launch news.</p>
+          <div class="wl-social__row">${SOCIALS.map((x) => `<a class="wl-social__btn wl-social__btn--${x.id}" href="${x.href}" target="_blank" rel="noopener" aria-label="${x.label} (opens in a new tab)">${x.icon}<span>${x.name}</span></a>`).join("")}</div>
+        </div>`;
+
 function form(id: string, compact = false) {
   return `<form class="wl-form${compact ? " wl-form--compact" : ""}" data-wl-form novalidate>
     <div class="wl-field">
@@ -154,6 +169,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
           <h2 class="wl-join__title">Join the Waitlist</h2>
           ${form("hero")}
         </div>
+        ${socials()}
       </div>
 
       <div class="wl-stage" data-wl-stage aria-hidden="true">
