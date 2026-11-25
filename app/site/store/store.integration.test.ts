@@ -73,7 +73,7 @@ describe.skipIf(!url)("site store", () => {
     await db.sitePrice.create({ data: { printingKey: copy, retailBits: 300, buybackBits: 200 } });
     state = await storeState(db, customer);
     expect(state.singles).toHaveLength(1);
-    expect(state.singles[0]).toMatchObject({ available: 2, priceBits: 300, retailBits: 300, buybackBits: 200 });
+    expect(state.singles[0]).toMatchObject({ available: 2, tier: null, priceBits: 300, retailBits: 300, buybackBits: 200 });
     const requestId = randomUUID();
     const r = await storeAction(db, customer, { action: "buy", requestId, id: state.singles[0].id });
     expect(await storeAction(db, customer, { action: "buy", requestId, id: state.singles[0].id })).toEqual(r);
@@ -81,7 +81,7 @@ describe.skipIf(!url)("site store", () => {
     state = await storeState(db, customer);
     expect(state.singles[0].available).toBe(1);
     expect(state.binder).toHaveLength(1);
-    expect(state.binder[0]).toMatchObject({ status: "held", buybackBits: 200 });
+    expect(state.binder[0]).toMatchObject({ status: "held", tier: null, buybackBits: 200 });
 
     // buyback must match the shown offer, then the copy goes back on sale
     await expect(storeAction(db, customer, { action: "buyback", requestId: randomUUID(), id: String(r.copyId), amount: 150 })).rejects.toThrow(StoreError);
@@ -142,7 +142,8 @@ describe.skipIf(!url)("site store", () => {
     expect(pulls[0]).toMatchObject({ name: "Snorlax", packId: "cobalt", tier: "Rare" });
     expect(Object.keys(pulls[0]).sort()).toEqual(["at", "id", "image", "name", "number", "packId", "set", "tier"]);
     const state = await storeState(db, customer);
-    expect(state.binder[0].tier).toBe("Rare");
+    expect(state.binder[0].tier).toBeNull(); // tiers stay in the pools
+    expect(state.openings[0].cards[0].tier).toBe("Rare");
     await db.siteOpening.updateMany({ data: { demo: true } });
     expect(await recentPulls(db)).toHaveLength(0); // demo never shows
     expect(r).toBeTruthy();

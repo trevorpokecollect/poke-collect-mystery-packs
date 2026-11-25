@@ -119,7 +119,8 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
     else groups.set(k, { copy: c, available: 1 });
   }
   const singles = [...groups.entries()]
-    .map(([k, g]) => ({ ...cardView(g.copy, prices.get(pk(g.copy)), k), editionId: null, available: g.available }))
+    // Tiers belong to pools only (pack pages, odds, pool contents, pack reveals), never to Shop Singles.
+    .map(([k, g]) => ({ ...cardView(g.copy, prices.get(pk(g.copy)), k), tier: null, editionId: null, available: g.available }))
     .filter((c) => c.priceBits != null && c.priceBits > 0);
 
   if (!customer) {
@@ -161,7 +162,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
     account: { id: customer.id, name: customer.name || customer.email.split("@")[0], email: customer.email, bits: balance, frozen: Boolean(customer.frozenAt) },
     packs: packViews,
     singles,
-    binder: owned.filter((c) => !c.openingId || !sealed.has(c.openingId)).map((c) => copyView(c, prices)),
+    binder: owned.filter((c) => !c.openingId || !sealed.has(c.openingId)).map((c) => ({ ...copyView(c, prices), tier: null })),
     openings: openings.map((o) => {
       const cards = openingCopies.filter((c) => c.openingId === o.id);
       return {
