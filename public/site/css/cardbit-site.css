@@ -59,27 +59,27 @@
 @media (max-width: 720px) { #cardbit-store .cb-sparks-link { min-height:39px; padding:7px 8px; font-size:12px; gap:4px; } #cardbit-store .cb-sparks-link img { width:17px; height:17px; } }
 
 /* Pack rewards on the reveal: XP bar and Sparks. */
-.cbx-rewards { margin:6px 0 20px; padding:16px 18px; border:1px solid #2d4a4c; border-radius:14px; background:linear-gradient(135deg,#132326,#171d2a); color:#f6faf9; }
-.cbx-rewards .cbx-kicker { margin:0 0 10px; font:800 12px/1 'Cardbit Outfit',system-ui,sans-serif; letter-spacing:.08em; text-transform:uppercase; color:#73e6dc; }
-.cbx-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
-.cbx-xp-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
-.cbx-xp-gain { font:800 26px/1 'Cardbit Outfit',system-ui,sans-serif; color:#7df3ea; font-variant-numeric:tabular-nums; }
-.cbx-level { font:800 14px/1 'Cardbit Outfit',system-ui,sans-serif; color:#d9e6e6; }
-.cbx-level-up { padding:4px 9px; border-radius:999px; background:#ffcf6b; color:#2b1d05; font:800 12px/1 'Cardbit Outfit',system-ui,sans-serif; text-transform:uppercase; letter-spacing:.05em; animation:cbx-pop .5s cubic-bezier(.2,1.6,.4,1); }
-.cbx-bar { height:12px; border-radius:999px; background:#0b1214; border:1px solid #2b3d40; overflow:hidden; }
-.cbx-bar i { display:block; height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg,#00e6e1,#8ff7b6); box-shadow:0 0 12px rgba(0,230,225,.55); transition:width .75s cubic-bezier(.3,.8,.3,1); }
-.cbx-note { display:block; margin-top:6px; color:#b6c4c5; font-size:13px; font-variant-numeric:tabular-nums; }
-.cbx-sparks { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:#21190f; border:1px solid #4a3a26; }
-.cbx-sparks b { display:block; font:800 22px/1.1 'Cardbit Outfit',system-ui,sans-serif; color:#ffd59a; }
-.cbx-sparks small { display:block; margin-top:3px; color:#d8c3a5; font-size:13px; }
-.cbx-sparks.is-none { background:#171d22; border-color:#2f3b40; }
-.cbx-sparks.is-none b { color:#d9e6e6; font-size:17px; }
-.cbx-sparks.is-none img { opacity:.55; }
-.cbx-rewards.is-fresh .cbx-sparks:not(.is-none) { animation:cbx-pop .6s .9s both cubic-bezier(.2,1.5,.4,1); }
-.cbx-rewards.is-level-up { border-color:#8a6a2a; box-shadow:0 0 0 1px rgba(255,207,107,.25),0 0 28px rgba(255,207,107,.18); }
+.cbpr-rewards { margin:6px 0 20px; padding:16px 18px; border:1px solid #2d4a4c; border-radius:14px; background:linear-gradient(135deg,#132326,#171d2a); color:#f6faf9; }
+.cbpr-rewards .cbpr-kicker { margin:0 0 10px; font:800 12px/1 'Cardbit Outfit',system-ui,sans-serif; letter-spacing:.08em; text-transform:uppercase; color:#73e6dc; }
+.cbpr-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+.cbpr-xp-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.cbpr-xp-gain { font:800 26px/1 'Cardbit Outfit',system-ui,sans-serif; color:#7df3ea; font-variant-numeric:tabular-nums; }
+.cbpr-level { font:800 14px/1 'Cardbit Outfit',system-ui,sans-serif; color:#d9e6e6; }
+.cbpr-level-up { padding:4px 9px; border-radius:999px; background:#ffcf6b; color:#2b1d05; font:800 12px/1 'Cardbit Outfit',system-ui,sans-serif; text-transform:uppercase; letter-spacing:.05em; animation:cbx-pop .5s cubic-bezier(.2,1.6,.4,1); }
+.cbpr-bar { height:12px; border-radius:999px; background:#0b1214; border:1px solid #2b3d40; overflow:hidden; }
+.cbpr-bar i { display:block; height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg,#00e6e1,#8ff7b6); box-shadow:0 0 12px rgba(0,230,225,.55); transition:width .75s cubic-bezier(.3,.8,.3,1); }
+.cbpr-note { display:block; margin-top:6px; color:#b6c4c5; font-size:13px; font-variant-numeric:tabular-nums; }
+.cbpr-sparks { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:#21190f; border:1px solid #4a3a26; }
+.cbpr-sparks b { display:block; font:800 22px/1.1 'Cardbit Outfit',system-ui,sans-serif; color:#ffd59a; }
+.cbpr-sparks small { display:block; margin-top:3px; color:#d8c3a5; font-size:13px; }
+.cbpr-sparks.is-none { background:#171d22; border-color:#2f3b40; }
+.cbpr-sparks.is-none b { color:#d9e6e6; font-size:17px; }
+.cbpr-sparks.is-none img { opacity:.55; }
+.cbpr-rewards.is-fresh .cbpr-sparks:not(.is-none) { animation:cbx-pop .6s .9s both cubic-bezier(.2,1.5,.4,1); }
+.cbpr-rewards.is-level-up { border-color:#8a6a2a; box-shadow:0 0 0 1px rgba(255,207,107,.25),0 0 28px rgba(255,207,107,.18); }
 @keyframes cbx-pop { from { transform:scale(.7); opacity:0; } to { transform:none; opacity:1; } }
-@media (prefers-reduced-motion: reduce) { .cbx-bar i { transition:none; } .cbx-level-up, .cbx-rewards.is-fresh .cbx-sparks { animation:none; } }
-@media (max-width: 560px) { .cbx-row { grid-template-columns:1fr; } .cbx-rewards { padding:14px; } }
+@media (prefers-reduced-motion: reduce) { .cbpr-bar i { transition:none; } .cbpr-level-up, .cbpr-rewards.is-fresh .cbpr-sparks { animation:none; } }
+@media (max-width: 560px) { .cbpr-row { grid-template-columns:1fr; } .cbpr-rewards { padding:14px; } }
 
 /* Footer: community Discord. */
 #cardbit-store .cb-foot-social { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border:1px solid #3b4470; border-radius:999px; background:#1a1f3a; color:#c9cffd; font:800 13px/1 'Cardbit Outfit',var(--cb-sans); text-decoration:none; }

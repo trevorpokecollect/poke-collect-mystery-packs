@@ -111,20 +111,20 @@
     if (!earnedXp && !earnedSparks && !level && !sparksOn) return null;
     const first = fresh.get(openingId);
     fresh.delete(openingId);
-    const box = el('section', 'cbx-rewards' + (first ? ' is-fresh' : ''));
+    const box = el('section', 'cbpr-rewards' + (first ? ' is-fresh' : ''));
     box.setAttribute('aria-label', 'Pack Rewards');
-    box.append(el('p', 'cbx-kicker', first ? 'Pack Rewards' : 'Earned From This Pack'));
-    const row = el('div', 'cbx-row');
+    box.append(el('p', 'cbpr-kicker', first ? 'Pack Rewards' : 'Earned From This Pack'));
+    const row = el('div', 'cbpr-row');
     if (level && earnedXp) {
-      const xp = el('div', 'cbx-xp');
-      const head = el('div', 'cbx-xp-head');
-      const gain = el('b', 'cbx-xp-gain', '+' + fmt(earnedXp) + ' XP');
-      const lvl = el('span', 'cbx-level', 'Level ' + level.level);
+      const xp = el('div', 'cbpr-xp');
+      const head = el('div', 'cbpr-xp-head');
+      const gain = el('b', 'cbpr-xp-gain', '+' + fmt(earnedXp) + ' XP');
+      const lvl = el('span', 'cbpr-level', 'Level ' + level.level);
       head.append(gain, lvl);
-      const bar = el('div', 'cbx-bar'); const fill = el('i'); bar.append(fill);
+      const bar = el('div', 'cbpr-bar'); const fill = el('i'); bar.append(fill);
       bar.setAttribute('role', 'progressbar'); bar.setAttribute('aria-label', 'Level Progress');
       bar.setAttribute('aria-valuemin', '0'); bar.setAttribute('aria-valuemax', String(level.nextLevelXp || 1)); bar.setAttribute('aria-valuenow', String(level.nextLevelXp ? level.levelXp : 1));
-      const note = el('small', 'cbx-note', level.nextLevelXp ? fmt(level.levelXp) + ' / ' + fmt(level.nextLevelXp) + ' XP to Level ' + (level.level + 1) : 'Max Level');
+      const note = el('small', 'cbpr-note', level.nextLevelXp ? fmt(level.levelXp) + ' / ' + fmt(level.nextLevelXp) + ' XP to Level ' + (level.level + 1) : 'Max Level');
       xp.append(head, bar, note);
       row.append(xp);
       const before = first?.level;
@@ -147,14 +147,14 @@
             fill.style.transition = 'none'; fill.style.width = '0%';
             lvl.textContent = 'Level ' + level.level;
             box.classList.add('is-level-up');
-            const badge = el('span', 'cbx-level-up', 'Level Up!'); head.append(badge);
+            const badge = el('span', 'cbpr-level-up', 'Level Up!'); head.append(badge);
             void fill.offsetWidth; fill.style.transition = ''; fill.style.width = pct(level) + '%';
           }, 760);
         }, 350);
       } else fill.style.width = pct(level) + '%';
     }
     if (sparksOn || earnedSparks) {
-      const sp = el('div', 'cbx-sparks' + (earnedSparks ? '' : ' is-none'));
+      const sp = el('div', 'cbpr-sparks' + (earnedSparks ? '' : ' is-none'));
       const icon = el('img'); icon.alt = ''; icon.width = 34; icon.height = 34; icon.src = sparksIcon();
       const text = el('div');
       text.append(el('b', '', earnedSparks ? '+' + fmt(earnedSparks) + ' Sparks' : 'No Sparks This Time'),
