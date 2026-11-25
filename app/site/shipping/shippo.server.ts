@@ -58,9 +58,14 @@ export type Tracking = {
 
 /** Everything the shipping service needs from a label provider. Faked in tests. */
 export interface ShippingProvider {
+  /** Shown on the staff desk ("Shippo", "EasyPost"). */
+  readonly name?: string;
+  /** True for test keys: labels are free samples that can't be mailed. */
+  readonly test?: boolean;
   validateAddress(address: Address): Promise<AddressCheck>;
   rates(from: Address, to: Address, parcel: Parcel, metadata: string): Promise<Rate[]>;
-  buyLabel(rateId: string, metadata: string): Promise<Label>;
+  /** shipmentId is the Rate's shipmentId (EasyPost buys on the shipment; Shippo ignores it). */
+  buyLabel(rateId: string, metadata: string, shipmentId?: string): Promise<Label>;
   track(carrier: string, trackingNumber: string): Promise<Tracking>;
   /** Asks Shippo to send track_updated webhooks for a number bought elsewhere (labels we buy are auto-registered). */
   registerTracking?(carrier: string, trackingNumber: string, metadata: string): Promise<void>;
@@ -81,6 +86,7 @@ export function shippoFromEnv(env: NodeJS.ProcessEnv = process.env, fetcher: Fet
 }
 
 export class ShippoClient implements ShippingProvider {
+  readonly name = "Shippo";
   readonly test: boolean;
   constructor(private token: string, private fetcher: Fetch = fetch, private base = "https://api.goshippo.com") {
     this.test = token.startsWith("shippo_test_");
