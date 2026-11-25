@@ -11,8 +11,15 @@
 import { protectionScript } from "./payments/coinflow.server";
 import manifest from "./assets-manifest.json";
 import howItWorks from "./partials/how-it-works.html?raw";
+import siteStoreSource from "../../public/site/js/cardbit-site-store.js?raw";
+import siteCssSource from "../../public/site/css/cardbit-site.css?raw";
+import { createHash } from "node:crypto";
 
 const files = manifest as Record<string, string>;
+// Cache-busting versions for the site's own files (not part of the theme port).
+const version = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 10);
+const SITE_STORE_V = version(siteStoreSource);
+const SITE_CSS_V = version(siteCssSource);
 
 export const SITE_ENABLED = () => process.env.CARDBIT_SITE === "on";
 
@@ -90,10 +97,13 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
   const rootAttrs = Object.entries(attrs)
     .map(([key, value]) => `${key}="${escapeAttr(value)}"`)
     .join(" ");
-  const styles = STYLES.map((name) => `<link rel="stylesheet" href="${assetUrl(name)}">`).join("\n    ");
+  const styles = [
+    ...STYLES.map((name) => `<link rel="stylesheet" href="${assetUrl(name)}">`),
+    `<link rel="stylesheet" href="/site/css/cardbit-site.css?v=${SITE_CSS_V}">`,
+  ].join("\n    ");
   const scripts = SCRIPTS.map((name) =>
     name === "SITE_STORE"
-      ? `<script src="/site/js/cardbit-site-store.js?v=${files["cardbit-storefront.js"]}" defer></script>`
+      ? `<script src="/site/js/cardbit-site-store.js?v=${SITE_STORE_V}" defer></script>`
       : `<script src="${assetUrl(name)}" defer></script>`,
   ).join("\n    ");
 

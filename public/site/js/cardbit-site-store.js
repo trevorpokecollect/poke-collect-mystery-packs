@@ -57,7 +57,10 @@
     catch { throw codeError('CONNECTION', 'Cardbit could not load your account. Try again.'); }
     if (!response.ok || body.error) {
       if (response.status === 401 || body.code === 'sign_in') throw codeError('sign_in', 'Sign In to Continue.');
-      throw codeError(body.code || 'REQUEST_FAILED', publicText(String(body.error || '')) || 'This Action Could Not Be Completed. Try Again.');
+      const error = codeError(body.code || 'REQUEST_FAILED', publicText(String(body.error || '')) || 'This Action Could Not Be Completed. Try Again.');
+      if (Array.isArray(body.fields)) error.fields = body.fields.map(String);
+      if (Array.isArray(body.unavailable)) error.unavailable = body.unavailable.map(String);
+      throw error;
     }
     return body;
   }

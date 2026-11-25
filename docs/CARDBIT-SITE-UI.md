@@ -39,6 +39,15 @@ Same-origin session cookie, JSON. Errors are non-2xx `{error, code}`; 401 or `co
 - Sign in: `/sign-in?return_to=<path>`. Top-ups: `/checkout/cardbits?amount=<base Cardbits>&return_to=<path>`
   (amount is 1000/5000/10000/50000; bonus 500 on 10000, 5000 on 50000).
 
+## Ship Together (site)
+
+`scripts/site/patches/ship-together.js` replaces the theme's sample destinations with a US delivery
+address form (excluded states shown but disabled), a 600 Cardbits fee that drops to free for more than
+30 cards, a balance check with a Buy Cardbits link, and a review step. It sends
+`{action:'ship-group', copyIds, address:{name,street1,street2,city,state,zip,phone}, method:'CARDBITS'}`.
+Server errors `address_invalid` (fields[]), `region_blocked`, `unavailable`, `insufficient_bits`,
+`account_frozen` show in the review dialog. A single-card Ship button opens Ship Together with that card selected.
+
 ## Not ported yet
 
 Rewards and leaderboard pages, daily giveaway entry window (Whatnot + email entry), Welcome Rewards,

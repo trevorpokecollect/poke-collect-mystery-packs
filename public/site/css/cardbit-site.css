@@ -1,0 +1,10 @@
+/* Cardbit standalone site additions on top of the ported theme styles. */
+#cardbit-store .ct-address{border:0;margin:0 0 16px;padding:0;display:grid;gap:10px}
+#cardbit-store .ct-address legend{font-family:var(--cb-display,'Cardbit Outfit',sans-serif);font-weight:800;font-size:17px;margin-bottom:6px;color:#f2f6f7}
+#cardbit-store .ct-address label{display:grid;gap:5px}
+#cardbit-store .ct-address input,#cardbit-store .ct-address select{display:block;box-sizing:border-box;width:100%;min-height:44px;padding:10px;color:#f2f6f7;background:#0e1822;border:1px solid #536371;border-radius:10px;font:inherit}
+#cardbit-store .ct-address input:focus-visible,#cardbit-store .ct-address select:focus-visible{outline:2px solid #00e6e1;outline-offset:2px}
+#cardbit-store .ct-address .cb-micro{margin:2px 0 0;color:#9fb0bd}
+#cardbit-store [data-parcel-summary] .cb-note ul{margin:0;padding-left:18px}
+#cardbit-store [data-parcel-summary] .cb-secondary{width:100%;margin-bottom:10px}
+.ct-review-address{font-style:normal;line-height:1.5;margin:10px 0;padding:10px 12px;border:1px solid #354652;border-radius:10px}
