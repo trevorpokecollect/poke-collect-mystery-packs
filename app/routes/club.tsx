@@ -37,7 +37,9 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
   const live = v.current && ["PENDING", "ACTIVE", "PAST_DUE"].includes(v.current.status);
   const cards = TIERS.map((t) => {
     const mine = v.current?.tier === t.id && live;
-    const cta = !customerId
+    const cta = !ready && !mine
+      ? `<button class="btn" disabled>Coming Soon</button>`
+      : !customerId
       ? `<a class="btn" href="/sign-in?return_to=${encodeURIComponent(PATH)}">Sign In to Join</a>`
       : mine
         ? `<p class="note">Your Plan</p>`
@@ -64,7 +66,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
      .plan h2{margin:0;font:800 1.3rem 'Cardbit Outfit',system-ui,sans-serif}.price{font:800 2rem 'Cardbit Outfit',system-ui,sans-serif;margin:6px 0}.price small{font-size:.9rem;color:var(--muted)}
      .plan ul{padding-left:1.1rem;margin:10px 0}.plan li{margin:5px 0}.tag{position:absolute;top:12px;right:12px;font-size:.75rem;font-weight:800;color:var(--on-accent);background:var(--accent);border-radius:999px;padding:2px 10px}
      .bill{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:520px}.btn[disabled]{opacity:.55;cursor:not-allowed}.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent)}</style>
-     <h1>Cardbit Club</h1><p class="sub">Monthly Cardbits with a bonus, faster levels and Club perks.</p>${msg}${status}
+     <h1>Cardbit Club</h1><p class="sub">Monthly Cardbits with a bonus, faster levels and Club perks.${ready ? "" : " Coming soon."}</p>${msg}${status}
      ${customerId && ready && !live ? `<form method="post" id="join"><input type="hidden" name="op" value="join"><div class="bill"><div><label for="state">Billing State</label><select id="state" name="state" required><option value="">Choose…</option>${allowedStates.map((st) => `<option>${st}</option>`).join("")}</select></div>
        <div><label for="zip">Billing ZIP Code</label><input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" maxlength="5" required></div></div></form>` : ""}
      <div class="plans">${cards}</div>
