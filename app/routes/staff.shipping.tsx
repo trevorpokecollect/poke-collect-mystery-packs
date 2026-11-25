@@ -6,6 +6,7 @@ import { currentCustomer } from "../site/core/auth.server";
 import { deskAction, loadDesk, renderDesk } from "../site/shipping/desk.server";
 import { notFound, sameOrigin, staffUser } from "../site/shipping/staff.server";
 import { siteShippingDeps } from "../site/shipping/wire.server";
+import { mailerFromEnv } from "../site/email/mailer.server";
 
 const resolve = (request: Request) => currentCustomer(prisma, request);
 
@@ -30,6 +31,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const staff = await staffUser(request, resolve);
   if (!staff) return notFound();
   if (!sameOrigin(request)) return new Response("Forbidden", { status: 403 });
-  const to = await deskAction(siteShippingDeps(), await request.formData(), `staff:${staff.email}`);
+  const to = await deskAction(siteShippingDeps(), await request.formData(), `staff:${staff.email}`, {
+    db: prisma,
+    mailer: mailerFromEnv(),
+  });
   return new Response(null, { status: 303, headers: { Location: to } });
 }

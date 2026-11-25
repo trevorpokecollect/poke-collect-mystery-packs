@@ -9,6 +9,7 @@ import {
   cancelShipment,
   fixShipmentCard,
   markShipped,
+  pickRate,
   ratesForShipment,
   shippingQueue,
   ShippingError,
@@ -16,6 +17,8 @@ import {
 } from "./service.server";
 import type { Address, Rate } from "./shippo.server";
 import { CopyLockError, FeePaymentError } from "./types";
+import { parcelFor } from "./policy";
+import { sendEmail, type EmailDeps } from "../email/outbox.server";
 
 type Shipment = SiteShipment & { items: SiteShipmentItem[] };
 type QueueRow = Shipment & { overdue: boolean };
@@ -57,7 +60,7 @@ export async function loadDesk(deps: ShippingDeps, url: URL) {
 
 // ---------- action ----------
 
-export async function deskAction(deps: ShippingDeps, form: FormData, actor: string): Promise<string> {
+export async function deskAction(deps: ShippingDeps, form: FormData, actor: string, emailDeps?: EmailDeps): Promise<string> {
   const intent = String(form.get("intent") ?? "");
   const id = String(form.get("shipmentId") ?? "");
   const back = (params: Record<string, string>) =>
@@ -83,6 +86,25 @@ export async function deskAction(deps: ShippingDeps, form: FormData, actor: stri
       case "shipped":
         await markShipped(deps, id, actor);
         return back({ msg: "Marked shipped. The customer was emailed tracking." });
+      case "selftest-address": {
+        if (!deps.provider) return back({ err: "Shippo isn't connected (SHIPPO_API_TOKEN)." });
+        const from = await deps.provider.validateAddress(deps.from);
+        if (!from.valid) return back({ err: `Ship-from address failed carrier check: ${from.messages.join(" ") || "no details"}` });
+        const sample = { name: "Rate Check", street1: "1600 Pennsylvania Ave NW", city: "Washington", state: "DC", zip: "20500", country: "US" };
+        const rates = await deps.provider.rates(deps.from, sample, parcelFor(2), "selftest");
+        const pick = pickRate(rates, deps.services);
+        return back({
+          msg: `Ship-from address verified (${from.address.street1}, ${from.address.city} ${from.address.state}). ${rates.length} rates to a sample address; default ${pick ? `${pick.carrier} ${pick.service} ${usd(pick.amountCents)}` : "none matched"}.`,
+        });
+      }
+      case "selftest-email": {
+        const to = String(form.get("to") ?? "");
+        if (!emailDeps) return back({ err: "Email isn't wired." });
+        const row = await sendEmail(emailDeps, "shipment_delivered", to, { shipmentId: "selftest", cardCount: 1, trackingUrl: null }, `selftest:${Date.now()}`);
+        return row.status === "SENT"
+          ? back({ msg: `Test email sent to ${to}${emailDeps.mailer.live ? "" : " (log only: no Resend key)"}.` })
+          : back({ err: `Test email ${row.status.toLowerCase()}: ${row.error ?? ""}` });
+      }
       case "cancel": {
         const reason = String(form.get("reason") ?? "").trim() || "staff canceled";
         await cancelShipment(deps, id, actor, reason);
@@ -197,7 +219,11 @@ export function renderDesk(d: Awaited<ReturnType<typeof loadDesk>>, staffEmail: 
   const body = `<header class="top"><a href="${DESK_PATH}" class="brand">cardbit <span>Shipping Desk</span></a><span class="who">${esc(staffEmail)}</span></header>
 ${d.msg ? `<p class="flash ok" role="status">${esc(d.msg)}</p>` : ""}${d.err ? `<p class="flash bad" role="alert">${esc(d.err)}</p>` : ""}
 <main class="grid"><aside><h2>Queue</h2>${queueHtml(d.queue, d.selected?.id ?? null)}</aside>
-<div>${d.selected ? detailHtml(d.selected, d) : `<p class="empty">Pick a shipment from the queue.</p>`}</div></main>`;
+<div>${d.selected ? detailHtml(d.selected, d) : `<p class="empty">Pick a shipment from the queue.</p>`}
+<details class="selftest"><summary>System Check</summary>
+<form method="post" class="inline"><input type="hidden" name="intent" value="selftest-address"><button class="ghost">Check Ship-From And Rates</button></form>
+<form method="post" class="inline"><input type="hidden" name="intent" value="selftest-email"><input type="hidden" name="to" value="${esc(staffEmail)}"><button class="ghost">Send Me A Test Email</button></form>
+</details></div></main>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Shipping Desk · cardbit</title>
 <style>
 :root{--cobalt:${BRAND.cobalt};--apricot:${BRAND.apricot};--navy:${BRAND.navy};--ivory:${BRAND.ivory};--ink:${BRAND.ink};--muted:${BRAND.muted};--line:${BRAND.line};--bad:#B42318;--good:#067647}
@@ -222,7 +248,7 @@ ol.picks li{display:flex;gap:12px;border:1px solid var(--line);border-radius:12p
 button,.button{display:inline-block;font:800 14px ${BRAND.heading};background:var(--cobalt);color:#fff;border:0;border-radius:999px;padding:9px 16px;cursor:pointer;text-decoration:none}
 button.ghost,.button.ghost{background:#fff;color:var(--cobalt);border:1.5px solid var(--cobalt)}button.danger{background:var(--bad)}
 button:focus-visible,.button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid var(--apricot);outline-offset:2px}
-details.fix,details.cancel{margin-top:6px}details summary{cursor:pointer;color:var(--cobalt);font-weight:700}
+details.fix,details.cancel{margin-top:6px}details.selftest{margin-top:16px}details.selftest form{margin:8px 8px 0 0}details summary{cursor:pointer;color:var(--cobalt);font-weight:700}
 details form{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin:8px 0}details small{color:var(--muted);max-width:52ch}
 form.inline{display:inline}form.rates{display:flex;flex-direction:column;gap:6px;margin:8px 0}
 input[name=reason]{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit}
