@@ -239,7 +239,9 @@ describe.skipIf(!url)("verified restocks", () => {
   });
 
   it("enforces pool rules at staging and re-ranks tiers at each restock; a pull keeps its tier", async () => {
+    await savePackEv(db, "cobalt", { targetEvPct: 120, evBandPct: 10 });
     await savePackEv(db, "cobalt", { languages: ["English", "Japanese"], minValueBits: 100, maxValueBits: 50_000, typeCaps: { Japanese: 40 }, tierMix: [50, 25, 15, 8, 2], topTierMin: null });
+    expect(await db.sitePack.findUniqueOrThrow({ where: { id: "cobalt" } })).toMatchObject({ targetEvPct: 120, evBandPct: 10, minValueBits: 100 }); // rules save keeps EV
     await expect(savePackEv(db, "cobalt", { tierMix: [50, 25, 15, 8, 0] })).rejects.toThrow(RestockError);
     await expect(savePackEv(db, "cobalt", { minValueBits: 900, maxValueBits: 100 })).rejects.toThrow(RestockError);
     const low = await stock("Lowball", 1, 50);

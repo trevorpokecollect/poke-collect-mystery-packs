@@ -640,11 +640,13 @@ export async function savePackEv(db: PrismaClient, packId: string, b: Record<str
     if (!Array.isArray(v) || v.some((x) => !allowed.includes(x))) throw new RestockError(`${label}: choose from ${allowed.join(", ")}.`);
     return [...new Set(v as string[])];
   };
-  const data: Prisma.SitePackUpdateInput = {
-    targetEvPct: int(b.targetEvPct, 10, 500, "Target EV"),
-    evBandPct: int(b.evBandPct, 1, 50, "EV band") ?? 5,
-    minTopPer100: int(b.minTopPer100, 0, 100, "Top-tier minimum"),
-  };
+  const data: Prisma.SitePackUpdateInput = {};
+  // Only the fields a form sends change (the EV form and the Pool Rules form save separately).
+  if ("targetEvPct" in b) {
+    data.targetEvPct = int(b.targetEvPct, 10, 500, "Target EV");
+    data.evBandPct = int(b.evBandPct, 1, 50, "EV band") ?? 5;
+    data.minTopPer100 = int(b.minTopPer100, 0, 100, "Top-tier minimum");
+  }
   if ("languages" in b) data.languages = names(b.languages, ["English", "Japanese"], "Languages") ?? Prisma_DbNull;
   if ("eras" in b) data.eras = names(b.eras, ["Modern", "Vintage"], "Eras") ?? Prisma_DbNull;
   // Pool rules (Trevor, Nov 25): value range, max % per card type, tier mix and top-tier minimum value.

@@ -7,7 +7,8 @@
 //      Restocks (pools change only when published): "pool"/"unpool" STAGE copies for the pack's next restock;
 //      {intent:"restocks"} → staged restock + odds now/after + history per pack
 //      {intent:"restock-unstage", copyIds} | {intent:"restock-publish", packId, note?} (goes live now, new pool version)
-//      {intent:"pack-ev", packId, targetEvPct|null, evBandPct, minTopPer100|null, languages?, eras?} (EV is internal only)
+//      {intent:"pack-ev", packId, targetEvPct|null, evBandPct, minTopPer100|null, languages?, eras?,
+//        minValueBits?, maxValueBits?, typeCaps?, tierMix?, topTierMin?} (only sent fields change; EV/rules internal only)
 //      {intent:"auto-restock-run"} runs the hourly automatic buyback restock now
 //      {intent:"remove", copyIds, reason} deletes unsold Draft/Active copies (→ REMOVED, pocket freed, logged)
 //      {intent:"slot", copyId, slot, pocket?} moves one copy to a chosen slot (10001+) and pocket
