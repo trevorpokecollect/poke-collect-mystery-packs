@@ -1361,6 +1361,7 @@ model SiteCopy {
   poolSlotId  String?  @unique
   orderId     String?
   packId      String? // set while POOLED in a SitePack pool
+  pulledTier  String? // tier when it was pulled from a pack (auto tiers move; a pull's tier never does)
   autoRestock Boolean  @default(false) // sold back, waiting for the hourly automatic restock to route it
   era         String? // "Modern" | "Vintage" from Card Broker; null = worked out from the set name
   restockId   String? // staged in a pack's pending restock (add while DRAFT, remove while POOLED); locked meanwhile
@@ -1443,6 +1444,13 @@ model SitePack {
   minTopPer100 Int? // minimum top-tier cards per 100 in the pool (routing favours packs below it)
   languages    Json? // ["English","Japanese"] eligible card languages; null = any
   eras         Json? // ["Modern","Vintage"] eligible eras; null = any
+  // Pool rules (Trevor, Nov 25): value range, mix caps and auto-scaling tiers.
+  minValueBits Int? // cards below this Poke-Collect retail can't join the pool
+  maxValueBits Int? // cards above it can't join
+  typeCaps     Json? // {"Japanese": 30, "Vintage": 10, ...} max % of the pool per type
+  tierMix      Json? // [{name, pct}] lowest first; null = pyramid 50/25/15/8/2
+  topTierMin   Int? // minimum value for the top tier (else the pool is flagged Needs Restock)
+  tiersAt      DateTime? // last automatic tier recompute
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -1667,6 +1675,7 @@ model SiteRestock {
   actor     String?
   auto      Boolean   @default(false) // hourly automatic buyback restock
   evPct     Float? // internal: pool EV right after publish (Poke-Collect retail basis)
+  tierRules Json? // auto tier cutoffs in force from this version
   liveAt    DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

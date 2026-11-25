@@ -1,13 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { postLedger } from "./ledger.server";
 import { priceKey, receiveSiteIntake } from "./stock.server";
 import { movePool, setListing } from "./stock-desk.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { storeAction, storeState } from "../store/store.server";
-import { eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError } from "./restock.server";
+import { eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
+import { autoTierRules } from "../store/tiers";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -31,8 +32,14 @@ const wipe = async () => {
   await db.appValue.deleteMany({ where: { key: "cardbit-site:auto-restock" } });
   await db.cardbitAgeConfirmation.deleteMany({ where: { shop: "cardbit-site" } });
   await db.siteCustomer.deleteMany({ where: { email: { endsWith: "@restock.test" } } });
-  await db.sitePack.updateMany({ data: { active: false, targetEvPct: null, evBandPct: 5, minTopPer100: null } });
+  await db.sitePack.updateMany({
+    data: { active: false, targetEvPct: null, evBandPct: 5, minTopPer100: null, minValueBits: null, maxValueBits: null, typeCaps: Prisma.DbNull, tierMix: Prisma.DbNull, topTierMin: null, tiersAt: null },
+  });
+  // Put back the seeded tier ladders (auto tiers rewrite them) so other suites see the same packs.
+  for (const [id, rules, languages, eras, cardsPerPack] of ladders)
+    await db.sitePack.update({ where: { id }, data: { tierRules: rules ?? Prisma.DbNull, languages: languages ?? Prisma.DbNull, eras: eras ?? Prisma.DbNull, cardsPerPack } });
 };
+let ladders: [string, Prisma.JsonValue, Prisma.JsonValue, Prisma.JsonValue, number][] = [];
 /** n Draft copies of one printing at a Poke-Collect retail (and 80% buyback). */
 async function stock(key: string, n: number, retail: number, extra: Record<string, unknown> = {}) {
   await receiveSiteIntake(db, { ...card(key, n, key, extra), priceBits: retail, buybackBits: Math.round(retail * 0.8) });
@@ -59,9 +66,10 @@ describe("restock helpers", () => {
   it("routes a card to the eligible pool it moves toward target EV, never out of band", () => {
     const pack = (id: string, target: number | null, extra = {}) => ({
       id, title: id, priceBits: 1000, cardsPerPack: 1, active: true, sortOrder: 0, tierRules: null, createdAt: new Date(), updatedAt: new Date(),
-      targetEvPct: target, evBandPct: 5, minTopPer100: null, languages: null, eras: null, ...extra,
-    });
-    const st = (p: ReturnType<typeof pack>, cards: number, retail: number) => ({ pack: p, cards, retail, top: 0, topTier: "Legendary" });
+      targetEvPct: target, evBandPct: 5, minTopPer100: null, languages: null, eras: null,
+      minValueBits: null as number | null, maxValueBits: null as number | null, typeCaps: null as unknown, tierMix: null, topTierMin: null, tiersAt: null, ...extra,
+    }) as unknown as PoolState["pack"];
+    const st = (p: PoolState["pack"], cards: number, retail: number): PoolState => ({ pack: p, cards, retail, top: 0, topTier: "Legendary" });
     const english = { language: "English", era: null, setName: "Modern Set" };
     // low: 10 cards worth 9,000 → EV 90 (target 100). high: EV 104 (target 100).
     const low = st(pack("low", 100), 10, 9_000);
@@ -73,10 +81,46 @@ describe("restock helpers", () => {
   });
 });
 
+describe("pool rules and auto tiers", () => {
+  it("ranks tiers by value on the fixed mix, always keeps a top tier, and honours a top-tier minimum", () => {
+    const vals = Array.from({ length: 100 }, (_, i) => (i + 1) * 100); // 100 … 10,000
+    const { rules, topShort } = autoTierRules(vals);
+    expect(rules.map((r) => r.name)).toEqual(["Common", "Uncommon", "Rare", "Epic", "Legendary"]);
+    // Top 2 → Legendary (≥ 9,900), next 8 → Epic (≥ 9,100), next 15 → Rare (≥ 7,600), next 25 → Uncommon (≥ 5,100).
+    expect(rules.map((r) => r.min)).toEqual([0, 5_100, 7_600, 9_100, 9_900]);
+    expect(topShort).toBe(false);
+    // Tiny pool: still exactly one Legendary.
+    expect(autoTierRules([100, 200, 300]).rules.at(-1)).toEqual({ name: "Legendary", min: 300 });
+    // Top-tier minimum nobody reaches: flagged, cutoff held at the minimum.
+    const short = autoTierRules([100, 200, 300], undefined, 5_000);
+    expect(short.topShort).toBe(true);
+    expect(short.rules.at(-1)).toEqual({ name: "Legendary", min: 5_000 });
+    // Empty pool: only the base tier (callers keep the old cutoffs).
+    expect(autoTierRules([]).cards).toBe(0);
+  });
+
+  it("checks value range, eligibility and max % per card type", () => {
+    const pack = { languages: ["English", "Japanese"], eras: null, minValueBits: 200, maxValueBits: 5_000, typeCaps: { Japanese: 30 } };
+    const en = { language: "English", era: null, setName: "Paldea" };
+    const jp = { language: "Japanese", era: null, setName: "Paldea" };
+    expect(ruleBreak(pack, en, 1_000)).toBeNull();
+    expect(ruleBreak(pack, en, 100)).toMatch(/Below/);
+    expect(ruleBreak(pack, en, 6_000)).toMatch(/Above/);
+    expect(ruleBreak(pack, en, null)).toMatch(/No price/);
+    const mix = typeCounts([en, en, jp]);
+    expect(mix).toMatchObject({ English: 2, Japanese: 1, Modern: 3 });
+    expect(capBreak(pack, { ...mix, Japanese: 2 }, 4)).toMatch(/Japanese cards would be more than 30%/);
+    expect(capBreak(pack, { ...mix, Japanese: 2 }, 7)).toBeNull();
+  });
+});
+
 describe.skipIf(!url)("verified restocks", () => {
   let customer: Awaited<ReturnType<typeof db.siteCustomer.create>>;
   beforeAll(() => {
     execFileSync("npx", ["prisma", "migrate", "deploy"], { env: { ...process.env, DATABASE_URL: url }, stdio: "ignore" });
+  });
+  beforeAll(async () => {
+    if (!ladders.length) ladders = (await db.sitePack.findMany({ select: { id: true, tierRules: true, languages: true, eras: true, cardsPerPack: true } })).map((p) => [p.id, p.tierRules, p.languages, p.eras, p.cardsPerPack]);
   });
   beforeEach(async () => {
     await wipe();
@@ -192,6 +236,43 @@ describe.skipIf(!url)("verified restocks", () => {
     const later = await runAutoRestock(db, { now: new Date(Date.now() + 61 * 60_000) });
     expect(later.versions.map((v) => v.packId)).toEqual(["gold"]);
     expect((await db.siteCopy.findUniqueOrThrow({ where: { id: old[0].id } })).packId).toBe("gold");
+  });
+
+  it("enforces pool rules at staging and re-ranks tiers at each restock; a pull keeps its tier", async () => {
+    await savePackEv(db, "cobalt", { languages: ["English", "Japanese"], minValueBits: 100, maxValueBits: 50_000, typeCaps: { Japanese: 40 }, tierMix: [50, 25, 15, 8, 2], topTierMin: null });
+    await expect(savePackEv(db, "cobalt", { tierMix: [50, 25, 15, 8, 0] })).rejects.toThrow(RestockError);
+    await expect(savePackEv(db, "cobalt", { minValueBits: 900, maxValueBits: 100 })).rejects.toThrow(RestockError);
+    const low = await stock("Lowball", 1, 50);
+    const ok = await stock("Okay", 10, 500);
+    const top = await stock("Topper", 1, 20_000);
+    const r1 = await stageRestock(db, "t", "cobalt", [...low, ...ok, ...top].map((c) => c.id), "add");
+    expect(r1.staged).toBe(11);
+    expect(r1.blocked).toEqual([{ id: low[0].id, reason: expect.stringMatching(/Below/) }]);
+    const v2 = await publishRestock(db, "t", "cobalt");
+    expect(v2.tierRules).toEqual(expect.arrayContaining([{ name: "Legendary", min: 20_000 }]));
+    expect((await db.sitePack.findUniqueOrThrow({ where: { id: "cobalt" } })).tiersAt).not.toBeNull();
+    // Japanese cap: 40% of an 11-card pool → the 6th Japanese card would break it.
+    const jp = await stock("Nihon", 8, 600, { language: "Japanese" });
+    const r2 = await stageRestock(db, "t", "cobalt", jp.map((c) => c.id), "add");
+    expect(r2.staged).toBe(7); // 7 of 18 = 38.9%; the 8th would be 8/19 = 42%
+    expect(r2.blocked[0].reason).toMatch(/Japanese/);
+    // Pull every card (11 + nothing published yet for the Japanese) and check stamped tiers.
+    await db.sitePack.update({ where: { id: "cobalt" }, data: { cardsPerPack: 1 } });
+    const pulls: string[] = [];
+    for (let i = 0; i < 11; i++) {
+      const r = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+      pulls.push(String(r.openingId));
+    }
+    const pulled = await db.siteCopy.findMany({ where: { openingId: { in: pulls } } });
+    expect(pulled.every((c) => c.pulledTier)).toBe(true);
+    expect(pulled.find((c) => c.name === "Topper")?.pulledTier).toBe("Legendary");
+    // Publishing the Japanese cards re-ranks the pool; the earlier Legendary pull stays Legendary.
+    const v3 = await publishRestock(db, "t", "cobalt");
+    expect(v3.poolSize).toBe(7);
+    expect((await db.siteCopy.findFirstOrThrow({ where: { name: "Topper" } })).pulledTier).toBe("Legendary");
+    const view = (await stagedRestocks(db)).find((p) => p.packId === "cobalt")!;
+    expect(view.rules.cutoffs.at(-1)?.name).toBe("Legendary");
+    expect(view.rules.mix).toMatchObject({ Japanese: 7 });
   });
 
   it("flags pools outside their EV band and suggests Draft cards that bring them back", async () => {

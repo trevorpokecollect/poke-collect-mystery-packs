@@ -200,11 +200,13 @@ describe.skipIf(!url)("site store", () => {
     const r = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
     let pulls = await recentPulls(db);
     expect(pulls).toHaveLength(1);
-    expect(pulls[0]).toMatchObject({ name: "Snorlax", packId: "cobalt", tier: "Rare" });
+    // Auto tiers (ranked within the pool): two equal-value cards are both the top tier.
+    expect(pulls[0]).toMatchObject({ name: "Snorlax", packId: "cobalt", tier: "Legendary" });
     expect(Object.keys(pulls[0]).sort()).toEqual(["at", "id", "image", "name", "number", "packId", "set", "tier"]);
     const state = await storeState(db, customer);
     expect(state.binder[0].tier).toBeNull(); // tiers stay in the pools
-    expect(state.openings[0].cards[0].tier).toBe("Rare");
+    expect(state.openings[0].cards[0].tier).toBe("Legendary");
+    expect((await db.siteCopy.findFirstOrThrow({ where: { openingId: String(r.openingId) } })).pulledTier).toBe("Legendary");
     await db.siteOpening.updateMany({ data: { demo: true } });
     expect(await recentPulls(db)).toHaveLength(0); // demo never shows
     expect(r).toBeTruthy();

@@ -48,7 +48,8 @@ import { DEFAULT_TIERS, tierFor, tierRules, type TierRule } from "./tiers";
 function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule[] = DEFAULT_TIERS) {
   const retail = c.retailBits ?? p?.retailBits ?? null;
   const buyback = p?.buybackBits ?? null;
-  const tier = tierFor(retail ?? buyback, rules);
+  // A pulled card keeps the tier it was pulled at; pool cards use the pack's current (auto) cutoffs.
+  const tier = c.status !== "POOLED" && c.pulledTier ? c.pulledTier : tierFor(retail ?? buyback, rules);
   return {
     id,
     name: c.name,
@@ -278,10 +279,13 @@ export async function storeAction(db: PrismaClient, customer: SiteCustomer, a: S
         // The published pool version this draw comes from (records the starting pool on first use).
         const poolVersion = await currentPoolVersion(tx, pack.id);
         const drawn = (await drawForOpening(tx, customer.id, opening.id, pool, pack.cardsPerPack, poolVersion)).sort((x, y) => value(x) - value(y));
+        // Freeze each pull's tier now: auto tiers re-rank at restocks and daily, a pull's tier never changes.
+        const rulesNow = tierRules((await tx.sitePack.findUnique({ where: { id: pack.id }, select: { tierRules: true } }))?.tierRules);
+        const tierOf = (c: SiteCopy) => tierFor(c.retailBits ?? prices.get(pk(c))?.retailBits ?? prices.get(pk(c))?.buybackBits ?? null, rulesNow);
         for (const [i, c] of drawn.entries()) {
           const n = await tx.siteCopy.updateMany({
             where: { id: c.id, status: "POOLED", packId: pack.id },
-            data: { status: "VAULTED", ownerId: customer.id, packId: null, restockId: null, openingId: opening.id, position: i + 1, orderId: opening.id },
+            data: { status: "VAULTED", ownerId: customer.id, packId: null, restockId: null, openingId: opening.id, position: i + 1, orderId: opening.id, pulledTier: tierOf(c) },
           });
           if (n.count !== 1) throw new StoreError("retry", "Packs are busy. Try again.");
           await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: "POOLED", toStatus: "VAULTED", actor: `customer:${customer.id}`, reason: `pack opening ${opening.id}` } });

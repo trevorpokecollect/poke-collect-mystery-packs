@@ -12,7 +12,7 @@ import { Prisma } from "@prisma/client";
 import type { PrismaClient, SiteCopy } from "@prisma/client";
 const Prisma_DbNull = Prisma.DbNull;
 import { priceKey } from "./stock.server";
-import { tierFor, tierRules, type TierRule } from "../store/tiers";
+import { autoTierRules, DEFAULT_MIX, tierFor, tierMix, tierRules, type TierRule } from "../store/tiers";
 
 type Tx = Prisma.TransactionClient;
 type Db = PrismaClient | Tx;
@@ -62,7 +62,8 @@ export async function ensureBaseline(tx: Tx, packId: string, actor = "system") {
   const live = await tx.siteRestock.findFirst({ where: { packId, status: "LIVE" }, orderBy: { version: "desc" } });
   if (live) return live;
   const pool = await tx.siteCopy.findMany({ where: { packId, status: "POOLED" }, select: { id: true, printingKey: true, condition: true, retailBits: true } });
-  const pack = await tx.sitePack.findUnique({ where: { id: packId }, select: { tierRules: true } });
+  const tiered = await recomputeTiers(tx, packId);
+  const rules = tiered ? tiered.rules : tierRules((await tx.sitePack.findUnique({ where: { id: packId }, select: { tierRules: true } }))?.tierRules);
   const ids = pool.map((c) => c.id).sort(cmp);
   return tx.siteRestock.create({
     data: {
@@ -73,7 +74,8 @@ export async function ensureBaseline(tx: Tx, packId: string, actor = "system") {
       poolIds: ids,
       poolHash: poolHashOf(ids),
       poolSize: ids.length,
-      tiers: await tierCounts(tx, pool, tierRules(pack?.tierRules)),
+      tiers: await tierCounts(tx, pool, rules),
+      tierRules: rules,
       note: "Starting Pool",
       actor,
       liveAt: new Date(),
@@ -86,6 +88,73 @@ export async function currentPoolVersion(tx: Tx, packId: string) {
   return (await ensureBaseline(tx, packId)).version!;
 }
 
+// ---------- Pool rules (Trevor, Nov 25 2026) ----------
+
+type RulePack = { languages: unknown; eras: unknown; minValueBits: number | null; maxValueBits: number | null; typeCaps: unknown };
+const TYPES = ["English", "Japanese", "Modern", "Vintage"] as const;
+type Mix = Record<string, number>;
+
+/** Why a card can't join this pack's pool (null = it can). Value is Poke-Collect retail in Cardbits. */
+export function ruleBreak(pack: RulePack, c: Pick<SiteCopy, "language" | "era" | "setName">, value: number | null) {
+  if (!eligible(pack, c)) return "Not an eligible language or era for this pack.";
+  if ((pack.minValueBits != null || pack.maxValueBits != null) && (value == null || value <= 0)) return "No price yet, so it can't be checked against this pack's value range.";
+  if (pack.minValueBits != null && value! < pack.minValueBits) return `Below this pack's minimum value (${pack.minValueBits.toLocaleString("en-US")} Cardbits).`;
+  if (pack.maxValueBits != null && value! > pack.maxValueBits) return `Above this pack's maximum value (${pack.maxValueBits.toLocaleString("en-US")} Cardbits).`;
+  return null;
+}
+const caps = (pack: RulePack): Mix => {
+  const raw = pack.typeCaps && typeof pack.typeCaps === "object" ? (pack.typeCaps as Record<string, unknown>) : {};
+  const out: Mix = {};
+  for (const t of TYPES) if (Number.isFinite(Number(raw[t])) && raw[t] !== null && raw[t] !== "") out[t] = Number(raw[t]);
+  return out;
+};
+export const hasCaps = (pack: RulePack) => Object.keys(caps(pack)).length > 0;
+const typesOf = (c: Pick<SiteCopy, "language" | "era" | "setName">) => [c.language.toLowerCase() === "japanese" ? "Japanese" : "English", eraOf(c)];
+export function typeCounts(cards: Pick<SiteCopy, "language" | "era" | "setName">[]): Mix {
+  const out: Mix = { English: 0, Japanese: 0, Modern: 0, Vintage: 0 };
+  for (const c of cards) for (const t of typesOf(c)) out[t]++;
+  return out;
+}
+const addType = (m: Mix, c: Pick<SiteCopy, "language" | "era" | "setName">) => {
+  const out = { ...m };
+  for (const t of typesOf(c)) out[t] = (out[t] ?? 0) + 1;
+  return out;
+};
+/** Which mix cap (max % of the pool per type) a pool of `total` cards with counts `m` would break. */
+export function capBreak(pack: RulePack, m: Mix, total: number) {
+  if (!total) return null;
+  for (const [t, max] of Object.entries(caps(pack))) {
+    // A cap can't stop the first few cards of a type in a tiny pool: allow at least one.
+    if ((m[t] ?? 0) > 1 && ((m[t] ?? 0) / total) * 100 > max) return `${t} cards would be more than ${max}% of this pool.`;
+  }
+  return null;
+}
+
+// ---------- Auto-scaling tiers ----------
+
+/**
+ * Recompute a pack's tier cutoffs from its current pool (rank by value, fixed mix). Pulls made under the old
+ * cutoffs are stamped with the tier they had first, so a pull's tier never changes. Caller holds the pack lock.
+ */
+export async function recomputeTiers(tx: Tx, packId: string) {
+  const pack = await tx.sitePack.findUnique({ where: { id: packId } });
+  if (!pack) return null;
+  const pool = await tx.siteCopy.findMany({ where: { packId, status: "POOLED" }, select: { printingKey: true, condition: true, retailBits: true } });
+  const auto = autoTierRules(await retailOf(tx, pool), tierMix(pack.tierMix), pack.topTierMin);
+  if (!auto.cards) return { ...auto, rules: tierRules(pack.tierRules), pack }; // empty or unpriced pool: keep the last cutoffs
+  const oldRules = tierRules(pack.tierRules);
+  const openings = await tx.siteOpening.findMany({ where: { packId }, select: { id: true } });
+  const unstamped = openings.length
+    ? await tx.siteCopy.findMany({ where: { pulledTier: null, openingId: { in: openings.map((o) => o.id) } }, select: { id: true, printingKey: true, condition: true, retailBits: true } })
+    : [];
+  if (unstamped.length) {
+    const vals = await retailOf(tx, unstamped);
+    for (const [i, c] of unstamped.entries()) await tx.siteCopy.update({ where: { id: c.id }, data: { pulledTier: tierFor(vals[i], oldRules) ?? "Unpriced" } });
+  }
+  await tx.sitePack.update({ where: { id: packId }, data: { tierRules: auto.rules, tiersAt: new Date() } });
+  return { ...auto, pack: { ...pack, tierRules: auto.rules } };
+}
+
 /**
  * Stage copies for the pack's next restock: "add" takes unowned Draft copies, "remove" takes copies in this
  * pack's pool. Copies already staged (here or for another pack), listed, vaulted or locked are skipped.
@@ -96,20 +165,60 @@ export async function stageRestock(db: PrismaClient, actor: string, packId: stri
   if (!ids.length) throw new RestockError("Select cards first.");
   return db.$transaction(async (tx) => {
     await lockPack(tx, packId);
+    const pack = (await tx.sitePack.findUnique({ where: { id: packId } }))!;
     const restock = await stagedRestock(tx, packId);
     const where: Prisma.SiteCopyWhereInput =
       mode === "add" ? { status: "DRAFT", ownerId: null, restockId: null } : { status: "POOLED", packId, ownerId: null, restockId: null };
     let staged = 0;
+    const blocked: { id: string; reason: string }[] = [];
+    // Pool rules (Trevor, Nov 25): eligibility, value range and mix caps, checked against the pool as it will be
+    // after this restock (current pool − staged removals + staged additions).
+    let mix: Record<string, number> | null = null;
+    let mixTotal = 0;
+    const cands = mode === "add" ? await tx.siteCopy.findMany({ where: { id: { in: ids } } }) : [];
+    const candValue = new Map((await retailOf(tx, cands)).map((v, i) => [cands[i].id, v]));
+    if (mode === "add" && hasCaps(pack)) {
+      const after = await tx.siteCopy.findMany({
+        // (restockId is nullable: NOT alone would drop the unstaged NULL rows.)
+        where: { OR: [{ packId, status: "POOLED", restockId: null }, { packId, status: "POOLED", restockId: { not: restock.id } }, { restockId: restock.id, status: "DRAFT" }] },
+        select: { language: true, era: true, setName: true },
+      });
+      mix = typeCounts(after);
+      mixTotal = after.length;
+    }
     for (const id of ids) {
+      if (mode === "add") {
+        const c = cands.find((x) => x.id === id);
+        if (c) {
+          const why = ruleBreak(pack, c, candValue.get(id) ?? null);
+          if (why) {
+            blocked.push({ id, reason: why });
+            continue;
+          }
+          if (mix) {
+            const next = addType(mix, c);
+            const cap = capBreak(pack, next, mixTotal + 1);
+            if (cap) {
+              blocked.push({ id, reason: cap });
+              continue;
+            }
+          }
+        }
+      }
       // Conditional update: two staff staging the same copy at once can't both win.
       const n = await tx.siteCopy.updateMany({ where: { id, ...where }, data: { restockId: restock.id, autoRestock: false } });
       if (!n.count) continue;
       staged++;
+      if (mix) {
+        const c = cands.find((x) => x.id === id)!;
+        mix = addType(mix, c);
+        mixTotal++;
+      }
       await tx.siteCopyEvent.create({
         data: { copyId: id, fromStatus: mode === "add" ? "DRAFT" : "POOLED", toStatus: mode === "add" ? "DRAFT" : "POOLED", actor, reason: `staged to ${mode === "add" ? "add to" : "remove from"} ${packId} pool` },
       });
     }
-    return { restockId: restock.id, staged, skipped: ids.length - staged, moved: staged };
+    return { restockId: restock.id, staged, skipped: ids.length - staged, moved: staged, blocked: blocked.slice(0, 50) };
   });
 }
 
@@ -168,6 +277,9 @@ async function applyRestock(
   if (!added.length && !removed.length) return null;
   const pool = await tx.siteCopy.findMany({ where: { packId, status: "POOLED" }, select: { id: true, printingKey: true, condition: true, retailBits: true } });
   const ids = pool.map((c) => c.id).sort(cmp);
+  // Auto tiers (Trevor, Nov 25): new cutoffs from the pool as published, saved with this version.
+  const tiered = await recomputeTiers(tx, packId);
+  const rules = tiered ? tiered.rules : tierRules(pack.tierRules);
   const data = {
     status: "LIVE",
     version,
@@ -176,7 +288,8 @@ async function applyRestock(
     poolIds: ids,
     poolHash: poolHashOf(ids),
     poolSize: ids.length,
-    tiers: await tierCounts(tx, added, tierRules(pack.tierRules)),
+    tiers: await tierCounts(tx, added, rules),
+    tierRules: rules,
     note: meta.note,
     actor: meta.actor,
     auto: meta.auto,
@@ -242,21 +355,25 @@ export function eligible(pack: { languages: unknown; eras: unknown }, c: Pick<Si
   return true;
 }
 
-type PoolState = { pack: Awaited<ReturnType<PrismaClient["sitePack"]["findMany"]>>[number]; cards: number; retail: number; top: number; topTier: string };
+export type PoolState = { pack: Awaited<ReturnType<PrismaClient["sitePack"]["findMany"]>>[number]; cards: number; retail: number; top: number; topTier: string; mix?: Mix };
 
 const topTierOf = (rules: TierRule[]) => rules[rules.length - 1].name;
 
 async function poolStates(db: Db) {
   const packs = await db.sitePack.findMany({ orderBy: { sortOrder: "asc" } });
-  const pooled = await db.siteCopy.findMany({ where: { status: "POOLED", packId: { not: null } }, select: { packId: true, printingKey: true, condition: true, retailBits: true } });
+  const pooled = await db.siteCopy.findMany({
+    where: { status: "POOLED", packId: { not: null } },
+    select: { packId: true, printingKey: true, condition: true, retailBits: true, language: true, era: true, setName: true },
+  });
   const values = await retailOf(db, pooled);
   const states = new Map<string, PoolState>();
-  for (const p of packs) states.set(p.id, { pack: p, cards: 0, retail: 0, top: 0, topTier: topTierOf(tierRules(p.tierRules)) });
+  for (const p of packs) states.set(p.id, { pack: p, cards: 0, retail: 0, top: 0, topTier: topTierOf(tierRules(p.tierRules)), mix: typeCounts([]) });
   pooled.forEach((c, i) => {
     const st = states.get(c.packId!);
     if (!st) return;
     st.cards++;
     st.retail += values[i] ?? 0;
+    st.mix = addType(st.mix!, c);
     if (tierFor(values[i], tierRules(st.pack.tierRules)) === st.topTier) st.top++;
   });
   return states;
@@ -270,7 +387,8 @@ export function routeCard(value: number, card: Pick<SiteCopy, "language" | "era"
   let best: { st: PoolState; score: number } | null = null;
   for (const st of states) {
     const p = st.pack;
-    if (p.targetEvPct == null || !eligible(p, card)) continue;
+    if (p.targetEvPct == null || ruleBreak(p, card, value)) continue;
+    if (st.mix && capBreak(p, addType(st.mix, card), st.cards + 1)) continue;
     const before = evPct(st.retail, st.cards, p);
     const after = evPct(st.retail + value, st.cards + 1, p)!;
     const lo = p.targetEvPct - p.evBandPct;
@@ -304,9 +422,10 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
     ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value", "updatedAt" = EXCLUDED."updatedAt"
     WHERE "AppValue"."updatedAt" <= ${since}
     RETURNING "key"`;
-  if (!claimed.length) return { ran: false, routed: 0, held: 0, versions: [] as { packId: string; version: number }[] };
+  if (!claimed.length) return { ran: false, routed: 0, held: 0, versions: [] as { packId: string; version: number }[], retiered: 0 };
+  const retiered = await dailyTiers(db, now);
   const waiting = await db.siteCopy.findMany({ where: { autoRestock: true, status: "DRAFT", ownerId: null, restockId: null }, orderBy: { updatedAt: "asc" }, take: 2000 });
-  if (!waiting.length) return { ran: true, routed: 0, held: 0, versions: [] };
+  if (!waiting.length) return { ran: true, routed: 0, held: 0, versions: [], retiered };
   const values = await retailOf(db, waiting);
   const states = await poolStates(db);
   const plan = new Map<string, SiteCopy[]>();
@@ -321,6 +440,7 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
     }
     st.cards++;
     st.retail += v!;
+    if (st.mix) st.mix = addType(st.mix, c);
     if (tierFor(v!, tierRules(st.pack.tierRules)) === st.topTier) st.top++;
     plan.set(st.pack.id, [...(plan.get(st.pack.id) ?? []), c]);
   }
@@ -343,7 +463,27 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
       routed += (out.addIds as string[]).length;
     }
   }
-  return { ran: true, routed, held, versions };
+  return { ran: true, routed, held, versions, retiered };
+}
+
+/** Once a day (after price refreshes) re-rank each pool's tiers so cutoffs follow current prices. */
+async function dailyTiers(db: PrismaClient, now: Date) {
+  const day = new Date(now.getTime() - 24 * 60 * 60_000);
+  const packs = await db.sitePack.findMany({ where: { OR: [{ tiersAt: null }, { tiersAt: { lte: day } }] }, select: { id: true } });
+  let n = 0;
+  for (const { id } of packs) {
+    const has = await db.siteCopy.count({ where: { packId: id, status: "POOLED" } });
+    if (!has) continue;
+    await db.$transaction(
+      async (tx) => {
+        await lockPack(tx, id);
+        await recomputeTiers(tx, id);
+      },
+      { timeout: 20_000 },
+    );
+    n++;
+  }
+  return n;
 }
 
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -411,7 +551,10 @@ export async function stagedRestocks(db: PrismaClient) {
   const packs = await db.sitePack.findMany({ orderBy: { sortOrder: "asc" } });
   const [staged, pooled, history, waiting, drafts] = await Promise.all([
     db.siteRestock.findMany({ where: { status: "STAGED" } }),
-    db.siteCopy.findMany({ where: { status: "POOLED", packId: { not: null } }, select: { id: true, packId: true, printingKey: true, condition: true, retailBits: true, restockId: true } }),
+    db.siteCopy.findMany({
+      where: { status: "POOLED", packId: { not: null } },
+      select: { id: true, packId: true, printingKey: true, condition: true, retailBits: true, restockId: true, language: true, era: true, setName: true },
+    }),
     restockHistory(db, packs.map((p) => p.id), 10),
     db.siteCopy.count({ where: { autoRestock: true, status: "DRAFT", restockId: null } }),
     db.siteCopy.findMany({ where: { status: "DRAFT", ownerId: null, restockId: null }, take: 3000 }),
@@ -419,6 +562,7 @@ export async function stagedRestocks(db: PrismaClient) {
   const evRows = await db.siteRestock.findMany({ where: { status: "LIVE", packId: { in: packs.map((p) => p.id) } }, select: { packId: true, version: true, evPct: true }, orderBy: { version: "desc" } });
   const stagedCopies = staged.length ? await db.siteCopy.findMany({ where: { restockId: { in: staged.map((s) => s.id) } } }) : [];
   const draftValues = await retailOf(db, drafts);
+  const nowTyped = pooled;
   return Promise.all(
     packs.map(async (p) => {
       const rules = tierRules(p.tierRules);
@@ -429,12 +573,13 @@ export async function stagedRestocks(db: PrismaClient) {
       const now = pooled.filter((c) => c.packId === p.id);
       const removeIds = new Set(removes.map((c) => c.id));
       const after = [...now.filter((c) => !removeIds.has(c.id)), ...adds];
-      const odds = async (cards: typeof now) => {
-        const counts = await tierCounts(db, cards, rules);
+      const odds = async (cards: typeof now, ladder = rules) => {
+        const counts = await tierCounts(db, cards, ladder);
         const retail = await retailSum(db, cards);
         return { cards: cards.length, packs: Math.floor(cards.length / p.cardsPerPack), tiers: counts, retailBits: retail, evPct: evPct(retail, cards.length, p) };
       };
       const nowOdds = await odds(now);
+      const projected = autoTierRules(await retailOf(db, after), tierMix(p.tierMix), p.topTierMin);
       const band = p.targetEvPct == null ? null : { lo: p.targetEvPct - p.evBandPct, hi: p.targetEvPct + p.evBandPct };
       const needsRestock = Boolean(band && nowOdds.evPct != null && (nowOdds.evPct < band.lo || nowOdds.evPct > band.hi));
       // Suggestions: eligible Draft cards that move EV toward target the most (internal, staff only).
@@ -443,7 +588,7 @@ export async function stagedRestocks(db: PrismaClient) {
           ? []
           : drafts
               .map((c, i) => ({ c, v: draftValues[i] }))
-              .filter(({ c, v }) => v && v > 0 && eligible(p, c))
+              .filter(({ c, v }) => v && v > 0 && !ruleBreak(p, c, v))
               .map(({ c, v }) => ({ c, v: v!, after: evPct(nowOdds.retailBits + v!, now.length + 1, p)! }))
               .filter((x) => Math.abs(x.after - p.targetEvPct!) < Math.abs(nowOdds.evPct! - p.targetEvPct!))
               .sort((a, b) => Math.abs(a.after - p.targetEvPct!) - Math.abs(b.after - p.targetEvPct!))
@@ -459,7 +604,20 @@ export async function stagedRestocks(db: PrismaClient) {
         adds: adds.map((c) => ({ id: c.id, title: c.title, condition: c.condition, slot: c.slot, pocket: c.pocket })),
         removes: removes.map((c) => ({ id: c.id, title: c.title, condition: c.condition, slot: c.slot, pocket: c.pocket })),
         now: nowOdds,
-        after: await odds(after),
+        // After publish, tiers re-rank on the new pool (auto tiers), so "after" odds use the projected cutoffs.
+        after: await odds(after, projected.cards ? projected.rules : rules),
+        rules: {
+          minValueBits: p.minValueBits,
+          maxValueBits: p.maxValueBits,
+          typeCaps: p.typeCaps ?? null,
+          tierMix: tierMix(p.tierMix),
+          topTierMin: p.topTierMin,
+          cutoffs: rules,
+          cutoffsAfter: projected.cards ? projected.rules : rules,
+          topShort: projected.topShort,
+          tiersAt: p.tiersAt?.toISOString() ?? null,
+          mix: typeCounts(nowTyped.filter((c) => c.packId === p.id)),
+        },
         suggestions,
         history: (history.get(p.id) ?? []).map((h) => ({ ...h, evPct: evRows.find((e) => e.packId === p.id && e.version === h.version)?.evPct ?? null })),
         autoWaiting: waiting,
@@ -489,5 +647,38 @@ export async function savePackEv(db: PrismaClient, packId: string, b: Record<str
   };
   if ("languages" in b) data.languages = names(b.languages, ["English", "Japanese"], "Languages") ?? Prisma_DbNull;
   if ("eras" in b) data.eras = names(b.eras, ["Modern", "Vintage"], "Eras") ?? Prisma_DbNull;
-  return db.sitePack.update({ where: { id: packId }, data });
+  // Pool rules (Trevor, Nov 25): value range, max % per card type, tier mix and top-tier minimum value.
+  if ("minValueBits" in b) data.minValueBits = int(b.minValueBits, 0, 100_000_000, "Minimum card value");
+  if ("maxValueBits" in b) data.maxValueBits = int(b.maxValueBits, 1, 100_000_000, "Maximum card value");
+  const lo = "minValueBits" in b ? data.minValueBits : undefined;
+  const hi = "maxValueBits" in b ? data.maxValueBits : undefined;
+  if (typeof lo === "number" && typeof hi === "number" && lo > hi) throw new RestockError("Minimum card value must be below the maximum.");
+  if ("typeCaps" in b) {
+    const raw = b.typeCaps && typeof b.typeCaps === "object" ? (b.typeCaps as Record<string, unknown>) : {};
+    const out: Record<string, number> = {};
+    for (const t of TYPES) {
+      const n = int(raw[t], 1, 100, `${t} max %`);
+      if (n != null && n < 100) out[t] = n;
+    }
+    data.typeCaps = Object.keys(out).length ? out : Prisma_DbNull;
+  }
+  if ("tierMix" in b) {
+    if (b.tierMix == null || b.tierMix === "") data.tierMix = Prisma_DbNull;
+    else {
+      const raw = Array.isArray(b.tierMix) ? b.tierMix : [];
+      const mix = DEFAULT_MIX.map((d, i) => ({ name: d.name, pct: Number((raw[i] as { pct?: unknown })?.pct ?? raw[i]) }));
+      if (mix.some((m) => !Number.isFinite(m.pct) || m.pct < 0) || Math.abs(mix.reduce((a, m) => a + m.pct, 0) - 100) > 0.01 || mix[mix.length - 1].pct <= 0)
+        throw new RestockError("Tier mix must add up to 100%, with some share for the top tier.");
+      data.tierMix = mix;
+    }
+  }
+  if ("topTierMin" in b) data.topTierMin = int(b.topTierMin, 1, 100_000_000, "Top-tier minimum value");
+  const saved = await db.sitePack.update({ where: { id: packId }, data });
+  // New mix or top-tier minimum: re-rank the pool now so staff see the effect.
+  if ("tierMix" in b || "topTierMin" in b)
+    await db.$transaction(async (tx) => {
+      await lockPack(tx, packId);
+      if (await tx.siteCopy.count({ where: { packId, status: "POOLED" } })) await recomputeTiers(tx, packId);
+    });
+  return saved;
 }
