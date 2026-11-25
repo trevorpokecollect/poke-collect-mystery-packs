@@ -1381,6 +1381,7 @@ model SiteTopup {
   baseBits     Int
   bonusBits    Int
   cents        Int
+  provider     String   @default("coinflow") // coinflow | stripe
   status       String   @default("PENDING") // PENDING | CREDITED | REFUNDED | CHARGEBACK | CHARGEBACK_WON | CHARGEBACK_LOST
   paymentId    String?  @unique
   billingState String

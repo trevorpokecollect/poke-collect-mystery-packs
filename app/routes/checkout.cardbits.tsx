@@ -7,6 +7,7 @@ import { clientIp, currentCustomer, safeReturn, siteOrigin } from "../site/core/
 import { esc, htmlResponse, simplePage } from "../site/core/simple-page";
 import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, defaultGeoLookup } from "../site/region.server";
 import { CoinflowError, coinflowConfigured, createCheckoutLink, topupPackage } from "../site/payments/coinflow.server";
+import { createStripeCheckout, siteStripe, siteStripeConfig, topupProvider } from "../site/payments/stripe-site.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -20,7 +21,7 @@ function form(o: { amount: number; returnTo: string; state?: string; zip?: strin
   const bonus = p.bonusBits ? `<div class="sum"><span>Bonus</span><b>+${fmt(p.bonusBits)} Cardbits</b></div>` : "";
   return simplePage(
     "Buy Cardbits",
-    `<h1>Buy Cardbits</h1><p class="sub">Paid securely by card through Coinflow.</p>${err}
+    `<h1>Buy Cardbits</h1><p class="sub">Paid securely by card.</p>${err}
      <div class="sum"><span>Cardbits</span><b>${fmt(p.baseBits)}</b></div>${bonus}
      <div class="sum"><span>Total</span><b>${usd(p.cents)}</b></div>
      <form method="post" id="f"><input type="hidden" name="amount" value="${p.baseBits}">
@@ -46,7 +47,7 @@ async function guard(request: Request, amountRaw: string | null, returnTo: strin
   const amount = Number(amountRaw);
   if (!topupPackage(amount)) return { res: blocked("Choose a Cardbits package.", returnTo) };
   if (customer.frozenAt || customer.closedAt) return { res: blocked("This account can't buy Cardbits right now. Contact hello@cardbit.com.", returnTo, 403) };
-  if (!coinflowConfigured()) return { res: blocked("Card checkout isn't open yet.", returnTo, 503) };
+  if (topupProvider() === "coinflow" && !coinflowConfigured()) return { res: blocked("Card checkout isn't open yet.", returnTo, 503) };
   return { customer, amount };
 }
 
@@ -79,10 +80,23 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   if (!ip) return again("We couldn't confirm your connection. Please try again.");
   const p = topupPackage(g.amount)!;
+  const provider = topupProvider();
   const topup = await db.siteTopup.create({
-    data: { customerId: g.customer.id, ...p, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion },
+    data: { customerId: g.customer.id, ...p, provider, billingState: state, billingZip: zip, ip, ipRegion: region.ipRegion },
   });
   const callbackUrl = `${siteOrigin()}/checkout/cardbits/return?topup=${encodeURIComponent(topup.id)}&return_to=${encodeURIComponent(returnTo)}`;
+  if (provider === "stripe") {
+    try {
+      const url = await createStripeCheckout(siteStripe(siteStripeConfig()!), topup, g.customer.email, {
+        success: callbackUrl,
+        cancel: `${siteOrigin()}/checkout/cardbits?amount=${p.baseBits}&return_to=${encodeURIComponent(returnTo)}`,
+      });
+      return new Response(null, { status: 303, headers: { Location: url } });
+    } catch (e) {
+      console.error("[site] stripe checkout failed", (e as Error).message);
+      return again("Card checkout is unavailable right now. Please try again.", 502);
+    }
+  }
   try {
     const link = await createCheckoutLink({ topup, email: g.customer.email, ip, deviceId: String(fd.get("device_id") || "") || null, callbackUrl });
     return new Response(null, { status: 303, headers: { Location: link } });

@@ -143,3 +143,10 @@ Env (site / app-site): `SHIPPO_API_TOKEN` (test key set), `SHIPPO_WEBHOOK_TOKEN`
 - Coinflow's chargeback-protection script (nSure) is in the head of every site page; sandbox partner id `COINFTEST`, production partner id via `COINFLOW_NSURE_PARTNER_ID`.
 - Optional env: `COINFLOW_PRODUCT_TYPE` (default `topUp`), `COINFLOW_SETTLEMENT_TYPE`, `COINFLOW_AUTH_BLOCKCHAIN`.
 - Shipping fees: `ledgerFeePayer` (app/site/core/fees.server.ts) debits `SHIPPING` / refunds `REFUND`; USD shipping stays off. Wired in app/site/boot.server.ts.
+
+## Backup processor: Stripe (test mode)
+
+- `SITE_PAYMENT_PROVIDER=stripe` + `SITE_STRIPE_SECRET_KEY` (sk_test_/rk_test_) + `SITE_STRIPE_WEBHOOK_SECRET` (whsec_) switches `/checkout/cardbits` to Stripe hosted Checkout. Default and fallback = Coinflow.
+- Live keys are refused unless `SITE_STRIPE_LIVE_APPROVED=yes` (Trevor only, after Stripe's written business-model approval).
+- Webhook `/site/webhooks/stripe` (separate from production `/webhooks/stripe`): checkout.session.completed (session re-read from Stripe), charge.refunded, charge.dispute.created/closed. Same crediting, refund and chargeback rules as Coinflow (shared handler); payment ids are stored as `stripe:<payment_intent>`.
+- Names differ from production's `STRIPE_*` on purpose; the app-site start script refuses `STRIPE_SECRET_KEY`.
