@@ -1811,3 +1811,28 @@ model SiteNexusAlert {
   period    String
   createdAt DateTime @default(now())
 }
+
+// Coming-soon waitlist (cardbit.com before launch). Founding Collectors: badge + 1,000 Cardbits (400 email,
+// 600 confirmed phone) that unlock with the first top-up on an account with the same email (Trevor, Nov 25 2026).
+model SiteWaitlist {
+  id            String    @id @default(cuid())
+  emailKey      String    @unique // normalized for duplicate checks (lowercase; Gmail dots and +tags removed)
+  email         String    // lowercased, as typed
+  phone         String?   @unique // E.164, US only; given with text consent
+  smsConsentAt  DateTime?
+  emailConsentAt DateTime
+  termsVersion  String
+  ip            String?
+  userAgent     String?
+  source        Json?     // utm_* and referrer
+  customerId    String?   @unique // site account that claimed the bonus
+  claimedAt     DateTime?
+  emailBonusAt  DateTime?
+  smsBonusAt    DateTime?
+  syncedAt      DateTime? // Klaviyo email consent + profile properties
+  smsSyncedAt   DateTime? // Klaviyo text consent (sent once KLAVIYO_SMS_LIST_ID is set)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  @@index([ip, createdAt])
+  @@index([syncedAt])
+}

@@ -36,6 +36,9 @@ export function klaviyoConfig(env: Env = process.env) {
     key,
     emailListId: (env.KLAVIYO_EMAIL_LIST_ID || "").trim() || null,
     smsListId: (env.KLAVIYO_SMS_LIST_ID || "").trim() || null,
+    // Coming-soon waitlist signups; falls back to the Email List. A separate list keeps them out of the
+    // regular welcome series (which promises the 200/300 Welcome Rewards, not the Founding Collector bonus).
+    waitlistListId: (env.KLAVIYO_WAITLIST_LIST_ID || env.KLAVIYO_EMAIL_LIST_ID || "").trim() || null,
     accountName: (env.KLAVIYO_ACCOUNT_NAME || "Cardbit").trim().toLowerCase(),
     origin: (env.SITE_ORIGIN || env.CARDBIT_SITE_URL || "https://cardbit.com").replace(/\/+$/, ""),
   };
@@ -126,6 +129,64 @@ export async function syncConsent(deps: KlaviyoDeps, cfg: Config, limit = 100) {
   // Only rows not changed again while we were sending.
   await deps.db.siteMarketing.updateMany({ where: { customerId: { in: done }, syncedAt: null, updatedAt: { lte: rows.reduce((a, r) => (r.updatedAt > a ? r.updatedAt : a), rows[0].updatedAt) } }, data: { syncedAt: now } });
   return { synced: done.length, subscribed: subEmail.length + subSms.length, unsubscribed: unsubEmail.length + unsubSms.length };
+}
+
+// ---- waitlist ----------------------------------------------------------------------------------
+
+/** Coming-soon signups: profile properties (Founding Collector), then email consent on the waitlist list.
+ *  Text consent goes to Klaviyo only once KLAVIYO_SMS_LIST_ID is set (the sender is still in carrier review). */
+export async function syncWaitlist(deps: KlaviyoDeps, cfg: Config, limit = 100) {
+  const now = deps.now?.() ?? new Date();
+  const rows = await deps.db.siteWaitlist.findMany({ where: { syncedAt: null }, orderBy: { updatedAt: "asc" }, take: limit });
+  if (!rows.length) return { synced: 0, texts: await syncWaitlistTexts(deps, cfg, limit) };
+  const profiles = rows.map((r) => ({
+    type: "profile",
+    attributes: {
+      email: r.email,
+      properties: {
+        cardbit_waitlist: true,
+        founding_collector: true,
+        founding_bonus_cardbits: 1000,
+        waitlist_joined_at: r.createdAt.toISOString(),
+        waitlist_text_consent: !!r.smsConsentAt,
+        ...(r.source && typeof r.source === "object" ? Object.fromEntries(Object.entries(r.source as Record<string, string>).filter(([k]) => k.startsWith("utm_")).map(([k, v]) => ["waitlist_" + k, v])) : {}),
+      },
+    },
+  }));
+  await call(deps, cfg, "POST", "/profile-bulk-import-jobs", { data: { type: "profile-bulk-import-job", attributes: { profiles: { data: profiles } } } });
+  const sub = (list: string | null, items: object[]) => ({
+    data: {
+      type: "profile-subscription-bulk-create-job",
+      attributes: { custom_source: "cardbit.com waitlist", historical_import: false, profiles: { data: items } },
+      ...(list ? { relationships: { list: { data: { type: "list", id: list } } } } : {}),
+    },
+  });
+  await call(deps, cfg, "POST", "/profile-subscription-bulk-create-jobs", sub(cfg.waitlistListId, rows.map((r) => ({
+    type: "profile", attributes: { email: r.email, subscriptions: { email: { marketing: { consent: "SUBSCRIBED", consented_at: r.emailConsentAt.toISOString() } } } },
+  }))));
+  const newest = rows.reduce((a, r) => (r.updatedAt > a ? r.updatedAt : a), rows[0].updatedAt);
+  await deps.db.siteWaitlist.updateMany({ where: { id: { in: rows.map((r) => r.id) }, syncedAt: null, updatedAt: { lte: newest } }, data: { syncedAt: now } });
+  return { synced: rows.length, texts: await syncWaitlistTexts(deps, cfg, limit) };
+}
+
+/** Text consent from the waitlist. Waits (rows stay smsSyncedAt null) until KLAVIYO_SMS_LIST_ID is set. */
+async function syncWaitlistTexts(deps: KlaviyoDeps, cfg: Config, limit: number) {
+  if (!cfg.smsListId) return 0;
+  const now = deps.now?.() ?? new Date();
+  const rows = await deps.db.siteWaitlist.findMany({ where: { smsSyncedAt: null, phone: { not: null }, smsConsentAt: { not: null } }, orderBy: { updatedAt: "asc" }, take: limit });
+  if (!rows.length) return 0;
+  await call(deps, cfg, "POST", "/profile-subscription-bulk-create-jobs", {
+    data: {
+      type: "profile-subscription-bulk-create-job",
+      attributes: {
+        custom_source: "cardbit.com waitlist", historical_import: false,
+        profiles: { data: rows.map((r) => ({ type: "profile", attributes: { email: r.email, phone_number: r.phone, subscriptions: { sms: { marketing: { consent: "SUBSCRIBED", consented_at: r.smsConsentAt!.toISOString() } } } } })) },
+      },
+      relationships: { list: { data: { type: "list", id: cfg.smsListId } } },
+    },
+  });
+  await deps.db.siteWaitlist.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { smsSyncedAt: now } });
+  return rows.length;
 }
 
 // ---- event outbox ----------------------------------------------------------------------------
@@ -339,9 +400,10 @@ export async function runKlaviyoSync(deps: KlaviyoDeps) {
   const account = await verifyAccount(deps, cfg);
   if (!account.ok) return { enabled: false as const, reason: "wrong_account", account: account.name };
   const consent = await syncConsent(deps, cfg);
+  const waitlist = await syncWaitlist(deps, cfg);
   const queued = await collectEvents(deps, cfg);
   const sent = await sendEvents(deps, cfg);
-  return { enabled: true as const, consent, queued, ...sent };
+  return { enabled: true as const, consent, waitlist, queued, ...sent };
 }
 
 let timer: ReturnType<typeof setInterval> | undefined;

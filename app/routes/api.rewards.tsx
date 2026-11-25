@@ -12,9 +12,11 @@ import { PlayPaused, assertNotPaused } from "../site/play/limits.server";
 import { activeTier } from "../site/play/subscriptions.server";
 import { CLUB_SUFFIX, clubIcons, isClubIcon } from "../site/play/club-icons";
 import { SITE_SHOP, siteLeaderboardOn, siteLevelsOn, siteWeeklyStandings } from "../site/rewards/rewards.server";
+import { gateApi } from "../site/waitlist/gate.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!siteOn()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   if (!siteLevelsOn()) return json({ enabled: false });
   const customer = await currentCustomer(db, request);
   const leaderboard = siteLeaderboardOn() ? await siteWeeklyStandings(db, customer?.id) : null;
@@ -37,6 +39,7 @@ async function viewWithClub(customerId: string) {
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!siteOn()) return new Response("Not found", { status: 404 });
+  { const gated = gateApi(request); if (gated) return gated; }
   if (!siteLevelsOn()) return json({ error: "Rewards are not open yet." }, 404);
   if (request.method !== "POST" || !sameOriginJson(request)) return json({ error: "Method not allowed." }, 405);
   const customer = await currentCustomer(db, request);
