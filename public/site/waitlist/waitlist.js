@@ -312,6 +312,16 @@
   })();
   const joined = () => { try { return localStorage.getItem('cardbit:waitlist') === '1'; } catch { return false; } };
   const markJoined = () => { try { localStorage.setItem('cardbit:waitlist', '1'); } catch { /* private mode */ } };
+  // Never show a broken-image box on the success card: retry the Latch once, then hide it.
+  $$('.wl-success__latch').forEach((img) => {
+    let retried = false;
+    const bad = () => {
+      if (!retried) { retried = true; img.src = img.src.split('?')[0] + '?r=' + Date.now(); return; }
+      img.hidden = true;
+    };
+    img.addEventListener('error', bad);
+    if (img.complete && img.naturalWidth === 0 && img.getAttribute('src')) bad();
+  });
 
   function showSuccess(form, data) {
     const wrap = form.parentElement;

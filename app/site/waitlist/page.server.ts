@@ -94,7 +94,7 @@ function form(id: string, compact = false) {
     <p class="wl-error" role="alert" data-wl-error hidden></p>
   </form>
   <div class="wl-success" data-wl-success hidden tabindex="-1">
-    <img class="wl-success__latch" src="${assetUrl("cardbit-latch-cheer.webp")}" alt="" width="180" height="191">
+    <img class="wl-success__latch" src="/site/waitlist/latch-cheer.webp?v=1" alt="" width="180" height="191">
     <div class="wl-badge-medal" aria-hidden="true"><span>Founding<br>Collector</span></div>
     <h3 data-wl-success-title>You're In, Founding Collector</h3>
     <p data-wl-success-text>Watch your inbox. When Cardbit launches, sign up with this email and make your first top-up to unlock <b>${n(FOUNDING_TOTAL)} Cardbits</b>.</p>
