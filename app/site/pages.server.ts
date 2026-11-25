@@ -2,7 +2,11 @@
  * Cardbit standalone site: standalone (non-storefront) pages, ported from the theme.
  */
 import policies from "./partials/policies.html?raw";
-import { assetUrl } from "./shell.server";
+import { STYLES, assetUrl } from "./shell.server";
+import rewardsIn from "./partials/rewards-in.html?raw";
+import rewardsOut from "./partials/rewards-out.html?raw";
+import leaderboardIn from "./partials/leaderboard-in.html?raw";
+import leaderboardOut from "./partials/leaderboard-out.html?raw";
 
 // Official Rules body (Trevor approved showing it, Nov 24 2026). Source: the rules thread's
 // official-rules-page.html with the draft banner and counsel review notes removed.
@@ -43,4 +47,27 @@ export function officialRulesPage(): string | null {
 <a class="cbp-return" href="/policies">All Policies</a></div></header>
 <main class="cbp-frame cbp-legal" id="cbp-main"><h1>Official Rules</h1><div class="cbp-legal-body">${officialRules}</div></main></div>`;
   return page("Official Rules", "Official Rules for Cardbit's Daily Giveaway, Daily Spinner and Weekly Leaderboard.", body, ["cardbit-policy-page.css"]);
+}
+
+const escapeHtml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+/** Signed-in variant gets the customer's first and last name for the initials avatar. */
+function member(html: string, customer: { name: string | null; email: string } | null) {
+  if (!customer) return html;
+  const parts = (customer.name || customer.email.split("@")[0]).trim().split(/\s+/);
+  const first = parts[0] || "", last = parts.length > 1 ? parts[parts.length - 1] : "";
+  return html.replace("%%FIRST%%", escapeHtml(first)).replace("%%LAST%%", escapeHtml(last));
+}
+
+const rewardStyles = [...STYLES, "cardbit-rewards.css"];
+const script = (name: string) => `<script src="${assetUrl(name)}" defer></script>`;
+
+export function rewardsPage(customer: { name: string | null; email: string } | null): string {
+  const body = member(customer ? rewardsIn : rewardsOut, customer) + (customer ? script("cardbit-rewards.js") : "");
+  return page("Rewards", "Cardbit Rewards: levels, XP, daily check-in streaks, free Daily Spins and Latch & Friends icons.", body, rewardStyles);
+}
+
+export function leaderboardPage(customer: { name: string | null; email: string } | null): string {
+  const body = member(customer ? leaderboardIn : leaderboardOut, customer) + script("cardbit-leaderboard.js");
+  return page("Leaderboard", "Cardbit Weekly Leaderboard: the top collectors this week.", body, rewardStyles);
 }

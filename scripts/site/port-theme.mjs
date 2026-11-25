@@ -56,6 +56,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const SHIP_TOGETHER = readFileSync(join(here, 'patches/ship-together.js'), 'utf8');
 const LIVE_PULLS = readFileSync(join(here, 'patches/live-pulls.js'), 'utf8');
 const SHIP_HOME = readFileSync(join(here, 'patches/ship-home.js'), 'utf8');
+const AGE_CONFIRM = readFileSync(join(here, 'patches/age-confirm.js'), 'utf8');
 // The theme's Ship Home step, replaced whole by patches/ship-home.js.
 const SHIP_HOME_FROM = readFileSync(join(here, 'patches/ship-home.from.txt'), 'utf8');
 
@@ -125,6 +126,18 @@ const PATCHES = {
     // Ship Home: the card no longer shows through the box (Trevor, Nov 24).
     [SHIP_HOME_FROM, SHIP_HOME],
   ],
+  'cardbit-rewards.js': [
+    // 18+ confirmation when the server asks for it (site only; Shopify uses its own age gate).
+    ["  async function call(body) {\n", AGE_CONFIRM + "  async function call(body) {\n"],
+    ["    if (!res.ok) throw Object.assign(new Error(data.error || 'Something Went Wrong.'), { status: res.status });",
+     "    /* SITE */ if (!res.ok && data.code === 'AGE_REQUIRED' && body && body.action !== 'confirm-age' && await siteConfirmAge()) return call(body);\n    if (!res.ok) throw Object.assign(new Error(data.error || 'Something Went Wrong.'), { status: res.status });"],
+  ],
+  'cardbit-rewards-nav.js': [
+    // Site: site API and /rewards path; only for signed-in customers.
+    ["const endpoint = new URL(root + 'apps/packs/api/rewards', location.origin).pathname;", "const endpoint = store.dataset.mode === 'site' ? '/api/rewards' : new URL(root + 'apps/packs/api/rewards', location.origin).pathname;"],
+    ["  function href() {\n", "  function href() {\n    /* SITE */ if (store.dataset.mode === 'site') return '/rewards';\n"],
+    ["      data = d && d.enabled && d.signedIn ? d : START;", "      /* SITE */ if (store.dataset.mode === 'site' && !(d && d.enabled && d.signedIn)) return;\n      data = d && d.enabled && d.signedIn ? d : START;"],
+  ],
   'cardbit-flair.js': [
     // Holo shine sits on the pack image's own box and rotation, not the whole stage (pack page).
     ["    img.after(holo);\n  }\n", "    img.after(holo);\n    /* SITE */ fitHolo(img, holo);\n  }\n  /* SITE */ function fitHolo(img, holo) {\n    const sync = () => {\n      const host = img.parentElement;\n      if (!host || !holo.isConnected || !img.offsetWidth) return;\n      const t = getComputedStyle(img).transform;\n      const turned = t && t !== 'none';\n      if (!turned && img.offsetWidth >= host.clientWidth - 2 && img.offsetHeight >= host.clientHeight - 2) return;\n      Object.assign(holo.style, {inset:'auto', left:img.offsetLeft+'px', top:img.offsetTop+'px', width:img.offsetWidth+'px', height:img.offsetHeight+'px', transform:turned ? t : ''});\n    };\n    sync();\n    if (!img.complete) img.addEventListener('load', sync, {once:true});\n    if (window.ResizeObserver) new ResizeObserver(sync).observe(img);\n  }\n"],
@@ -132,6 +145,13 @@ const PATCHES = {
 };
 
 const PAGE_LINKS = [
+  // Rewards and Leaderboard pages (Shopify ?view= routes) -> site paths and site API.
+  [/(href|data-vault|data-board)="\/\?view=account#vault"/g, '$1="/vault"'],
+  [/(href|data-vault|data-board)="\/\?view=account"/g, '$1="/account"'],
+  [/(href|data-vault|data-board)="\/\?view=rewards"/g, '$1="/rewards"'],
+  [/(href|data-vault|data-board)="\/\?view=leaderboard"/g, '$1="/leaderboard"'],
+  [/data-endpoint="\/apps\/packs\/api\/rewards"/g, 'data-endpoint="/api/rewards"'],
+  [/href="\/customer_authentication\/login\?return_to=\/\?view=([a-z]+)"/g, 'href="/sign-in?return_to=%2F$1"'],
   // Theme links use query routing (/?cb=packs); the site uses paths (/packs).
   [/href="\/\?cb=([a-z0-9/-]+)"/g, 'href="/$1"'],
   [/href="\/pages\/official-rules"/g, 'href="/official-rules"'],
@@ -211,5 +231,17 @@ writeFileSync(join(outPartials, 'how-it-works.html'), how);
 
 const policySettings = JSON.parse(readFileSync(join(theme, 'templates/index.policies.json'), 'utf8')).sections.policies.settings;
 writeFileSync(join(outPartials, 'policies.html'), patch('policies.html', await section('cardbit-policies.liquid', policySettings), PAGE_COPY['policies.html']));
+
+// Rewards and Leaderboard: signed-in and signed-out variants. %%FIRST%%/%%LAST%% are filled per request.
+const member = { first_name: '%%FIRST%%', last_name: '%%LAST%%' };
+for (const [file, out] of [['cardbit-rewards.liquid', 'rewards'], ['cardbit-leaderboard.liquid', 'leaderboard']]) {
+  for (const [variant, customer] of [['in', member], ['out', null]]) {
+    const prev = ctx.customer; ctx.customer = customer;
+    const html = await section(file);
+    ctx.customer = prev;
+    if (/apps\/packs|view=|customer_authentication/.test(html)) throw new Error(`${out}-${variant}: unported Shopify link`);
+    writeFileSync(join(outPartials, `${out}-${variant}.html`), html);
+  }
+}
 
 console.log(`Copied ${copied} assets to public/site/assets; wrote ${readdirSync(outPartials).length} partials.`);

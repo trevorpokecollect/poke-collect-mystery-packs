@@ -37,7 +37,7 @@ const escapeAttr = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 // Script order matches layout/cardbit-dark.liquid; every script is deferred, so they run in order.
-const STYLES = [
+export const STYLES = [
   "cardbit-storefront.css",
   "cardbit-collector-tools.css",
   "cardbit-collector-pages.css",
@@ -66,6 +66,7 @@ const SCRIPTS = [
   "cardbit-flair.js",
   "cardbit-how-it-works.js",
   "cardbit-storefront.js",
+  "cardbit-rewards-nav.js",
   "cardbit-market-chart.js",
   "PORTFOLIO",
 ];
@@ -76,6 +77,14 @@ function assetMap(): string {
   for (const name of Object.keys(files)) {
     if (/\.(?:webp|png|jpe?g|svg|mp4|wav)$/i.test(name)) map[name.replace(/^cardbit-/, "")] = assetUrl(name);
   }
+  return JSON.stringify(map).replace(/</g, "\\u003c");
+}
+
+const ICON_IDS = ["latch", "blazebit", "driplink", "mossbit", "zappix", "cryobyte", "glitchog", "phantab", "nimbyte", "wyrmware", "latch-gold", "latch-holo"];
+function rewardIcons(): string {
+  // Latch & Friends icons for the header Rewards badge (same files as the Rewards page).
+  const map: Record<string, string> = {};
+  for (const id of ICON_IDS) map[id] = assetUrl(`cardbit-icon-${id}${id.startsWith("latch") ? ".webp" : ".svg"}`);
   return JSON.stringify(map).replace(/</g, "\\u003c");
 }
 
@@ -136,6 +145,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     <script>
       window.cardbitAssets = ${assetMap()};
       window.cardbitValueIcon = window.cardbitAssets["bits-card-emblem.png"];
+      window.CardbitRewardIcons = ${rewardIcons()};
     </script>
     ${protectionScript()}
     ${scripts}

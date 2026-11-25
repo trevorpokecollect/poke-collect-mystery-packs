@@ -1,0 +1,110 @@
+<div id="cardbit-store" class="cbr"
+  data-cb-rewards
+  data-endpoint="/api/rewards"
+  data-first="%%FIRST%%" data-last="%%LAST%%"
+  data-spin-art='{"basic":"/site/assets/cardbit-spin-basic.svg","bronze":"/site/assets/cardbit-spin-bronze.svg","silver":"/site/assets/cardbit-spin-silver.svg","gold":"/site/assets/cardbit-spin-gold.svg","cobalt":"/site/assets/cardbit-spin-cobalt.svg","holo":"/site/assets/cardbit-spin-holo.svg"}'
+  data-sparks-art="/site/assets/cardbit-sparks.svg" data-latch="/site/assets/cardbit-latch-cheer.webp"
+  data-vault="/vault" data-board="/leaderboard"
+  data-icons='{"latch":"/site/assets/cardbit-icon-latch.webp","blazebit":"/site/assets/cardbit-icon-blazebit.svg","driplink":"/site/assets/cardbit-icon-driplink.svg","mossbit":"/site/assets/cardbit-icon-mossbit.svg","zappix":"/site/assets/cardbit-icon-zappix.svg","cryobyte":"/site/assets/cardbit-icon-cryobyte.svg","glitchog":"/site/assets/cardbit-icon-glitchog.svg","phantab":"/site/assets/cardbit-icon-phantab.svg","nimbyte":"/site/assets/cardbit-icon-nimbyte.svg","wyrmware":"/site/assets/cardbit-icon-wyrmware.svg","latch-gold":"/site/assets/cardbit-icon-latch-gold.webp","latch-holo":"/site/assets/cardbit-icon-latch-holo.webp"}'
+  data-cb-authenticated>
+  <a class="cb-skip" href="#rewards-main">Skip to Content</a>
+  <header class="cb-header"><div class="cb-wrap cb-head">
+    <a class="cb-brand" href="/" aria-label="Cardbit home"><span class="cb-lockup"><img class="cb-logo-exact" src="/site/assets/cardbit-brand-lockup.webp" width="2091" height="419" alt="cardbit"></span></a>
+    <nav class="cb-account" aria-label="Account"><a class="cb-binder-link" href="/account"><span>My Account</span></a></nav>
+  </div></header>
+  <main id="rewards-main" class="cb-wrap cb-page cbr-page" tabindex="-1">
+    <nav class="cbr-tabs" aria-label="Rewards"><a href="/rewards" aria-current="page">Rewards</a><a href="/leaderboard">Leaderboard</a></nav>
+    
+      <p role="status" class="cbr-status" data-rw-status>Loading Your Rewards…</p>
+      <div data-rw-content hidden>
+        <section class="cbr-hero" aria-labelledby="rw-level">
+          <div class="cbr-hero-main">
+            <button type="button" class="cbr-avatar" data-rw-avatar data-rw-open-icons aria-label="Change Your Icon"></button>
+            <div class="cbr-hero-copy">
+              <p class="cbr-kicker" data-rw-rank>Rookie</p>
+              <h1 id="rw-level" class="cbr-level-title" data-rw-level>Level 1</h1>
+              <div class="cbr-bar" role="progressbar" aria-labelledby="rw-level" data-rw-bar aria-valuemin="0"><span data-rw-fill></span></div>
+              <p class="cbr-bar-meta"><span data-rw-xp></span><span data-rw-next></span></p>
+            </div>
+          </div>
+          <dl class="cbr-stats">
+            <div><dt>Total XP</dt><dd data-rw-total>0</dd></div>
+            <div><dt>This Month</dt><dd data-rw-month>0</dd></div>
+            <div><dt>Free Spins Today</dt><dd data-rw-left>0</dd></div>
+          </dl>
+          <img class="cbr-latch" src="/site/assets/cardbit-latch-cheer.webp" alt="" width="220" height="220" loading="lazy">
+        </section>
+
+        <section class="cbr-card cbr-streak" aria-labelledby="rw-streak">
+          <div class="cbr-streak-copy">
+            <h2 id="rw-streak"><span data-rw-streak-count>0</span> Day Streak</h2>
+            <p class="cbr-muted" data-rw-streak-note>Check In Every Day. Each Day in a Row Boosts Your Card Odds.</p>
+          </div>
+          <ol class="cbr-flames" data-rw-flames aria-hidden="true"></ol>
+          <span class="cbr-pill" data-rw-bonus>+0% Card Odds</span>
+          <button type="button" class="cb-primary cbr-cta" data-rw-checkin>Check In</button>
+        </section>
+
+        <section class="cbr-spins" aria-labelledby="rw-spins">
+          <div class="cbr-section-head">
+            <div><h2 id="rw-spins">Daily Spins</h2>
+            <p class="cbr-muted">Every Spin You've Unlocked Is Free Once a Day. Level Up to Unlock Bigger Spins.</p></div>
+            <p class="cbr-reset">Resets In <b data-rw-reset>--:--:--</b></p>
+          </div>
+          <div class="cbr-spin-grid" data-rw-spins></div>
+          <p class="cbr-legal">No Purchase Necessary. See <a href="/official-rules">Official Rules</a> for the Free Mail-In Method.</p>
+        </section>
+
+        <section class="cbr-card" aria-labelledby="rw-icon" data-rw-icon-panel>
+          <h2 id="rw-icon">Your Icon</h2>
+          <p class="cbr-muted">Pick a Color for Your Initials, or Choose a Latch &amp; Friends Icon. More Icons Unlock as You Level Up.</p>
+          <fieldset class="cbr-colors"><legend>Initials Color</legend><div data-rw-colors></div></fieldset>
+          <fieldset class="cbr-icons"><legend>Latch &amp; Friends</legend><div data-rw-icons></div></fieldset>
+          <p role="status" class="cbr-muted" data-rw-icon-status></p>
+        </section>
+
+        <section class="cbr-card" aria-labelledby="rw-earn">
+          <h2 id="rw-earn">How to Earn XP</h2>
+          <ul class="cbr-earn" data-rw-earn></ul>
+          <p class="cbr-muted">XP Has No Cash Value. Free Spins and Free Openings Don't Count Toward the Leaderboard.</p>
+        </section>
+      </div>
+
+      <div class="cbr-spin-modal" data-rw-modal hidden role="dialog" aria-modal="true" aria-labelledby="rw-modal-title">
+        <div class="cbr-spin-stage">
+          <header class="cbr-modal-head">
+            <p class="cbr-kicker" data-rw-modal-kicker>Daily Spin</p>
+            <h2 id="rw-modal-title" data-rw-modal-title>Basic Spin</h2>
+            <button type="button" class="cbr-close" data-rw-close aria-label="Close">&times;</button>
+          </header>
+          <div class="cbr-reel" data-rw-reel-wrap>
+            <span class="cbr-marker cbr-marker-top" aria-hidden="true"></span>
+            <div class="cbr-reel-track" data-rw-reel></div>
+            <span class="cbr-marker cbr-marker-bottom" aria-hidden="true"></span>
+          </div>
+          <div class="cbr-reveal" data-rw-reveal hidden>
+            <p class="cbr-kicker">You Won</p>
+            <div class="cbr-reveal-tile" data-rw-reveal-tile></div>
+            <p class="cbr-reveal-name" data-rw-reveal-name></p>
+            <p class="cbr-muted" data-rw-reveal-note></p>
+          </div>
+          <div class="cbr-modal-actions">
+            <button type="button" class="cb-primary cbr-cta cbr-spin-go" data-rw-go>Spin</button>
+            <button type="button" class="cb-secondary" data-rw-skip hidden>Skip</button>
+            <a class="cb-primary cbr-cta" data-rw-vault hidden href="#">View in My Vault</a>
+            <button type="button" class="cb-secondary" data-rw-done hidden>Done</button>
+          </div>
+          <p role="status" class="cbr-modal-status" data-rw-modal-status></p>
+          <div class="cbr-odds-wrap">
+            <h3>What You Can Win</h3>
+            <ul class="cbr-odds" data-rw-odds></ul>
+            <div class="cbr-contents" data-rw-contents></div>
+            <p class="cbr-legal">No Purchase Necessary. See <a href="/official-rules">Official Rules</a> for the Free Mail-In Method.</p>
+          </div>
+        </div>
+      </div>
+      
+    
+  </main>
+  <footer class="cb-footer"><div class="cb-wrap"><div class="cb-foot-main"><div><img src="/site/assets/cardbit-brand-lockup.webp" width="135" height="27" alt="cardbit"><p>Hosted by Poke-Collect</p></div></div></div></footer>
+</div>

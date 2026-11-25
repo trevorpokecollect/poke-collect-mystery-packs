@@ -21,3 +21,11 @@
 #cardbit-store .ct-bar.is-full .ct-bar-track i { background: linear-gradient(90deg, #00e6e1, #7cf3ff); box-shadow: 0 0 12px #00e6e199; }
 #cardbit-store .ct-free .cb-micro { margin: 0; }
 @media (prefers-reduced-motion: reduce) { #cardbit-store .ct-bar-track i { transition: none; } }
+
+/* Rewards page: 18+ confirmation dialog before a Daily Spin. */
+.cbr-age { max-width: 22rem; border: 1px solid #344145; border-radius: 16px; background: #121b22; color: #f6faf9; padding: 1.4rem; }
+.cbr-age::backdrop { background: #02040bcc; }
+.cbr-age h2 { margin: 0 0 .4rem; font: 800 1.35rem/1.2 var(--cb-display, "Cardbit Outfit", system-ui, sans-serif); }
+.cbr-age label { display: flex; gap: .5rem; align-items: center; margin: 1rem 0 .4rem; font-weight: 700; }
+.cbr-age-error { color: #ff8a7a; min-height: 1.2em; margin: 0; font-size: .9rem; }
+.cbr-age-actions { display: flex; gap: .6rem; justify-content: flex-end; margin-top: .8rem; }

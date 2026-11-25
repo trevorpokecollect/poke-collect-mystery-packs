@@ -59,6 +59,11 @@
     if (!state || typeof state !== 'object') throw codeError('CONNECTION', 'Cardbit could not load your account. Try again.');
     // For the Sign In / Buy Cardbits dialogs (cardbit-site-auth.js).
     window.CardbitSiteSession = Object.freeze({ signedIn: !!state.account, bits: state.account ? Number(state.account.bits) : undefined });
+    // Initials for the header Rewards badge (cardbit-rewards-nav.js).
+    if (root && state.account) {
+      const parts = String(state.account.name || '').trim().split(/\s+/).filter(Boolean);
+      root.dataset.initials = ((parts[0] || '')[0] || '' ) .toUpperCase() + ((parts.length > 1 ? parts[parts.length - 1] : '')[0] || '').toUpperCase() || '?';
+    }
     return {
       ...state,
       mode: 'shopper-test',
