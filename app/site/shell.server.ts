@@ -20,6 +20,7 @@ import sitePlaySource from "../../public/site/js/cardbit-site-play.js?raw";
 import sitePlayCssSource from "../../public/site/css/cardbit-site-play.css?raw";
 import siteChatSource from "../../public/site/js/cardbit-site-chat.js?raw";
 import siteChatCssSource from "../../public/site/css/cardbit-site-chat.css?raw";
+import sitePulseSource from "../../public/site/js/cardbit-site-pulse.js?raw";
 const chatOn = () => process.env.SITE_CHAT === "on"; // same flag as app/site/play/chat.server.ts
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
@@ -36,6 +37,9 @@ const SITE_PLAY_V = version(sitePlaySource);
 const SITE_PLAY_CSS_V = version(sitePlayCssSource);
 const SITE_CHAT_V = version(siteChatSource);
 const SITE_CHAT_CSS_V = version(siteChatCssSource);
+const SITE_PULSE_V = version(sitePulseSource);
+/** First-party analytics beacon (Card Broker Analytics tab). Every customer page includes it. */
+export const pulseTag = () => `<script src="/site/js/cardbit-site-pulse.js?v=${SITE_PULSE_V}" defer></script>`;
 
 export const SITE_ENABLED = () => process.env.CARDBIT_SITE === "on";
 
@@ -206,6 +210,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     </script>
     ${protectionScript()}
     ${scripts}
+    ${pulseTag()}
   </head>
   <body>
     <div ${rootAttrs}>

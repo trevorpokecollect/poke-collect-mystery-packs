@@ -1596,4 +1596,43 @@ model SiteChatMute {
   updatedAt  DateTime @updatedAt
 }
 
+// Site analytics (app/site/analytics). First-party only: one SiteVisit per browsing session
+// (ends after 30 idle minutes), one SitePageView per page. Read by Card Broker's Analytics tab.
+model SiteVisit {
+  id           String    @id @default(cuid())
+  visitorId    String // random first-party cookie (cb_vid), not tied to anything else
+  customerId   String?
+  newVisitor   Boolean   @default(true)
+  staff        Boolean   @default(false) // a SITE_STAFF_EMAILS account was signed in
+  startedAt    DateTime  @default(now())
+  lastSeenAt   DateTime  @default(now())
+  landingPath  String
+  exitPath     String
+  pageviews    Int       @default(1)
+  referrerHost String?
+  source       String // direct | search | social | discord | email | sms | paid | referral | campaign
+  sourceName   String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  device       String // desktop | mobile | tablet
+  browser      String?
+  os           String?
+  country      String?
+  region       String?
+  @@index([startedAt])
+  @@index([lastSeenAt])
+  @@index([visitorId])
+  @@index([customerId, startedAt])
+}
+
+model SitePageView {
+  id        String   @id @default(cuid())
+  visitId   String
+  path      String
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+  @@index([visitId])
+}
+
 // ---- end Cardbit standalone site: core ------------------------------------------------------

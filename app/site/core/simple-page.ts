@@ -1,11 +1,12 @@
 // Minimal server-rendered page in the Cardbit palette (sign-in, checkout, payment return).
 import { protectionScript } from "../payments/coinflow.server";
+import { pulseTag } from "../shell.server";
 
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function simplePage(title: string, inner: string, extraHead = "") {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · Cardbit</title><meta name="robots" content="noindex">${protectionScript()}${extraHead}
+<title>${esc(title)} · Cardbit</title><meta name="robots" content="noindex">${protectionScript()}${pulseTag()}${extraHead}
 <style>
 @font-face{font-family:'Cardbit Outfit';src:url('/site/assets/cardbit-outfit-800-latin.woff2') format('woff2');font-weight:800;font-display:swap}
 @font-face{font-family:'Cardbit Atkinson';src:url('/site/assets/cardbit-type-atkinson.woff') format('woff');font-weight:200 800;font-display:swap}
