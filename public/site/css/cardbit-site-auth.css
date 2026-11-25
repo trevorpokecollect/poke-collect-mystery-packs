@@ -1,0 +1,75 @@
+/* Cardbit standalone site: Sign In and Buy Cardbits windows (public/site/js/cardbit-site-auth.js).
+   Built on the theme's .cb-dialog, .cb-kicker and .cb-primary so they match the storefront. */
+html.cbx-lock{overflow:hidden}
+#cardbit-store .cb-dialog.cbx{width:min(420px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:26px 24px 20px;border-radius:18px;
+  background:linear-gradient(180deg,#1a2427 0%,var(--cb-panel,#161e21) 120px);border:1px solid color-mix(in srgb,var(--cb-accent,#00e6e1) 22%,#344145);
+  box-shadow:0 30px 90px #000a,0 0 0 1px #ffffff08 inset;overscroll-behavior:contain}
+#cardbit-store .cb-dialog.cbx::backdrop{background:#05080a8c;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+#cardbit-store .cbx.cbx-buy{width:min(460px,calc(100vw - 32px))}
+@media (prefers-reduced-motion:no-preference){
+  #cardbit-store .cb-dialog.cbx[open]{animation:cbx-in .22s cubic-bezier(.2,.8,.2,1)}
+  #cardbit-store .cb-dialog.cbx[open]::backdrop{animation:cbx-fade .22s ease-out}
+}
+@keyframes cbx-in{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes cbx-fade{from{opacity:0}to{opacity:1}}
+
+#cardbit-store .cbx-x{position:absolute;top:12px;right:12px;display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--cb-muted,#b6c4c5);cursor:pointer}
+#cardbit-store .cbx-x:hover{background:#ffffff0f;color:var(--cb-text,#f6faf9)}
+#cardbit-store .cbx-head{text-align:center;margin:0 0 18px}
+#cardbit-store .cbx-emblem{display:block;margin:0 auto 10px;width:40px;height:40px;object-fit:contain}
+#cardbit-store .cbx .cbx-head .cb-kicker{justify-content:center;padding:0}
+#cardbit-store .cbx h2{font-family:var(--cb-display,'Cardbit Outfit',sans-serif);font-weight:800;font-size:26px;line-height:1.15;margin:6px 0 6px;color:var(--cb-text,#f6faf9)}
+#cardbit-store .cbx .cbx-sub{margin:0 auto;max-width:32ch;color:var(--cb-muted,#b6c4c5);font-size:14px;line-height:1.45}
+#cardbit-store .cbx .cbx-sub b{color:var(--cb-text,#f6faf9);overflow-wrap:anywhere}
+
+/* Google button: Google's brand rules want the full-color G on white or a neutral fill. */
+#cardbit-store .cbx-google{display:flex;align-items:center;justify-content:center;gap:10px;min-height:46px;padding:10px 16px;border-radius:10px;background:#fff;color:#1f1f1f;
+  border:1px solid #dadce0;font:600 15px/1.2 var(--cb-sans,system-ui,sans-serif);text-decoration:none;transition:background .15s,box-shadow .15s}
+#cardbit-store .cbx-google:hover{background:#f3f6f6;box-shadow:0 2px 10px #0004}
+#cardbit-store .cbx-g{flex:none}
+#cardbit-store .cbx-or{display:flex;align-items:center;gap:12px;margin:16px 0 4px;color:var(--cb-muted,#b6c4c5);font-size:12px;text-transform:uppercase;letter-spacing:.14em}
+#cardbit-store .cbx-or::before,#cardbit-store .cbx-or::after{content:"";flex:1;height:1px;background:var(--cb-border,#344145)}
+
+#cardbit-store .cbx-form{display:grid;gap:8px}
+#cardbit-store .cbx label{display:block;margin:6px 0 0;font-size:13px;font-weight:700;color:#d3dbe0}
+#cardbit-store .cbx input:not([type=radio]),#cardbit-store .cbx select{display:block;box-sizing:border-box;width:100%;min-height:46px;margin-top:6px;padding:10px 12px;color:var(--cb-text,#f6faf9);
+  background:#0d1416;border:1px solid #3b4a4e;border-radius:10px;font:inherit;font-size:16px}
+#cardbit-store .cbx input:focus-visible,#cardbit-store .cbx select:focus-visible{outline:2px solid var(--cb-accent,#00e6e1);outline-offset:1px;border-color:transparent}
+#cardbit-store .cbx .cbx-code{text-align:center;font:800 26px/1 var(--cb-display,'Cardbit Outfit',sans-serif);letter-spacing:.35em;padding-left:.35em}
+#cardbit-store .cbx .cbx-wide{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;min-height:48px;font-family:var(--cb-display,'Cardbit Outfit',sans-serif);font-weight:800;font-size:16px}
+#cardbit-store .cbx .cbx-wide:disabled{opacity:.75;cursor:progress}
+#cardbit-store .cbx-error{margin:4px 0 0;padding:9px 11px;border-radius:9px;background:#ff6b6b1a;border:1px solid #ff6b6b55;color:#ffb3b3;font-size:14px}
+#cardbit-store .cbx-error[hidden]{display:none}
+#cardbit-store .cbx-note{margin:2px 0 0;color:var(--cb-gold,#73e6dc);font-size:14px}
+#cardbit-store .cbx-links{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px}
+#cardbit-store .cbx-link{padding:4px 0;border:0;background:none;color:var(--cb-accent,#00e6e1);font:inherit;font-size:14px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+#cardbit-store .cbx-fine{margin:16px 0 0;text-align:center;color:#8fa0a3;font-size:12px;line-height:1.5}
+#cardbit-store .cbx-fine a{color:var(--cb-muted,#b6c4c5)}
+#cardbit-store .cbx-spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:cbx-rot .7s linear infinite}
+@keyframes cbx-rot{to{transform:rotate(1turn)}}
+@media (prefers-reduced-motion:reduce){#cardbit-store .cbx-spin{animation-duration:2s}}
+#cardbit-store .cbx-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Buy Cardbits */
+#cardbit-store .cbx-packs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0;padding:0;border:0}
+#cardbit-store .cbx label.cbx-pack{position:relative;display:grid;gap:2px;justify-items:center;margin:0;padding:14px 8px 12px;border:1.5px solid #34444a;border-radius:12px;background:#0f181b;cursor:pointer;text-align:center;transition:border-color .15s,background .15s,transform .15s}
+#cardbit-store .cbx-pack:hover{border-color:#56707a}
+#cardbit-store .cbx-pack input{position:absolute;opacity:0;pointer-events:none}
+#cardbit-store .cbx-pack:has(input:checked){border-color:var(--cb-accent,#00e6e1);background:color-mix(in srgb,var(--cb-accent,#00e6e1) 9%,#0f181b);box-shadow:0 0 0 3px color-mix(in srgb,var(--cb-accent,#00e6e1) 18%,transparent)}
+#cardbit-store .cbx-pack:has(input:focus-visible){outline:2px solid var(--cb-accent,#00e6e1);outline-offset:2px}
+#cardbit-store .cbx-pack-bits{display:flex;align-items:center;gap:6px;font:800 22px/1.1 var(--cb-display,'Cardbit Outfit',sans-serif);color:var(--cb-text,#f6faf9)}
+#cardbit-store .cbx-pack-bits img{width:20px;height:22px;object-fit:contain}
+#cardbit-store .cbx-pack-math{font-size:12px;color:var(--cb-muted,#b6c4c5)}
+#cardbit-store .cbx-pack-bonus .cbx-pack-math{color:#ffb65c;font-weight:700}
+#cardbit-store .cbx-pack-price{margin-top:4px;font:800 15px/1 var(--cb-display,'Cardbit Outfit',sans-serif);color:var(--cb-gold,#73e6dc)}
+#cardbit-store .cbx-flag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);padding:2px 8px;border-radius:99px;background:#ffb65c;color:#1d1405;font:800 10px/1.5 var(--cb-sans,system-ui,sans-serif);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
+#cardbit-store .cbx-total{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:12px 0 2px;padding:11px 12px;border-radius:10px;background:#0d1416;border:1px solid #2b383c;font-size:14px;color:var(--cb-muted,#b6c4c5)}
+#cardbit-store .cbx-total b{color:var(--cb-text,#f6faf9);font-family:var(--cb-display,'Cardbit Outfit',sans-serif);font-weight:800}
+#cardbit-store .cbx-total small{display:block;font-size:12px}
+#cardbit-store .cbx-row{display:grid;grid-template-columns:1.4fr 1fr;gap:10px}
+
+@media (max-width:420px){
+  #cardbit-store .cb-dialog.cbx{padding:22px 16px 16px}
+  #cardbit-store .cbx h2{font-size:23px}
+  #cardbit-store .cbx-pack-bits{font-size:19px}
+}
