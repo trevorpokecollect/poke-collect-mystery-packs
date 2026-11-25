@@ -551,7 +551,7 @@ export async function sales(db: PrismaClient, input: { from?: unknown; to?: unkn
     db.$queryRaw<{ total: bigint; holders: bigint }[]>`
       SELECT coalesce(sum(balance), 0) total, count(*) FILTER (WHERE balance > 0) holders FROM "SiteWallet" WHERE ${ns('"customerId"')}`,
   ]);
-type DayRow = { topups: number; topupCents: number; paidBits: number; bonusBits: number; refundCents: number; shipCents: number; packBits: number; packs: number; singleBits: number; singles: number; shipBits: number; buybackBits: number; rewardBits: number };
+  type DayRow = { topups: number; topupCents: number; paidBits: number; bonusBits: number; refundCents: number; shipCents: number; packBits: number; packs: number; singleBits: number; singles: number; shipBits: number; buybackBits: number; rewardBits: number };
   const byDay = new Map<string, DayRow>();
   const row = (k: string) => {
     let v = byDay.get(k);
