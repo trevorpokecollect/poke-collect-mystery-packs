@@ -69,7 +69,7 @@ function memoryFees(balances: Map<string, number>): FeePayer & { keys: Set<strin
 }
 
 const from: Address = { name: "Cardbit", street1: "100 Test Way", city: "Austin", state: "TX", zip: "78701", country: "US" };
-const to: Address = { name: "Ash K", street1: "1 Main St", city: "Dallas", state: "TX", zip: "75201", country: "US" };
+const toAddr: Address = { name: "Ash K", street1: "1 Main St", city: "Dallas", state: "TX", zip: "75201", country: "US" };
 
 describe.skipIf(!url)("site shipping (integration)", () => {
   let shippo: FakeShippo;
@@ -122,7 +122,7 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     customerId: "u1",
     customerEmail: "ash@example.com",
     copyIds: ["c1", "c2"],
-    address: to,
+    address: toAddr,
     billing: { country: "US", state: "TX" },
     ip: null,
     method: "CARDBITS" as const,
@@ -175,7 +175,7 @@ describe.skipIf(!url)("site shipping (integration)", () => {
   });
 
   it("blocks excluded states and bad carrier addresses before touching copies", async () => {
-    await expect(createShipment(deps, base({ address: { ...to, state: "NY" } }))).rejects.toMatchObject({ code: "EXCLUDED_STATE" });
+    await expect(createShipment(deps, base({ address: { ...toAddr, state: "NY" } }))).rejects.toMatchObject({ code: "EXCLUDED_STATE" });
     await expect(createShipment(deps, base({ billing: { country: "US", state: "UT" } }))).rejects.toMatchObject({ code: "EXCLUDED_STATE" });
     shippo.invalid = true;
     await expect(createShipment(deps, base())).rejects.toMatchObject({ code: "ADDRESS_INVALID", details: ["Address not found"] });
@@ -281,6 +281,17 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     expect(new URL(to, "https://x").searchParams.get("msg")).toContain("Label bought: USPS 9400");
     const view = await loadDesk(deps, new URL(`https://site.test/staff/shipping?id=${shipment.id}`));
     expect(view.selected?.status).toBe("LABEL_PURCHASED");
+  });
+
+  it("desk system check: ship-from + rates, test email; billing defaults to the delivery address", async () => {
+    const form = (o: Record<string, string>) => { const f = new FormData(); for (const [k, v] of Object.entries(o)) f.set(k, v); return f; };
+    let to = await deskAction(deps, form({ intent: "selftest-address" }), "staff:t");
+    expect(new URL(to, "https://x").searchParams.get("msg")).toContain("Ground Advantage");
+    to = await deskAction(deps, form({ intent: "selftest-email", to: "staff@example.com" }), "staff:t", { db, mailer, env: {} });
+    expect(new URL(to, "https://x").searchParams.get("msg")).toContain("Test email sent");
+    const { shipment } = await createShipment(deps, base({ billing: null, idempotencyKey: "nobill" }));
+    expect(shipment.status).toBe("PAID");
+    await expect(createShipment(deps, base({ billing: null, address: { ...toAddr, state: "WA" }, idempotencyKey: "wa" }))).rejects.toMatchObject({ code: "EXCLUDED_STATE" });
   });
 
   it("lists overdue paid shipments for staff", async () => {

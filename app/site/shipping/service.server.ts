@@ -118,7 +118,8 @@ export type CreateShipmentInput = {
   customerEmail: string;
   copyIds: string[];
   address: Address;
-  billing: { country: string; state: string };
+  /** Billing address on file. Cardbits-paid fees have none; the delivery address stands in. */
+  billing?: { country: string; state: string } | null;
   ip: string | null;
   method: FeeMethod;
   /** Server-verified USD capture reference when method = USD. */
@@ -142,10 +143,11 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
     throw new ShippingError("A card was picked twice.", "DUPLICATE_COPY");
   const fee: ShippingFee = shippingFee(copyIds.length, input.method);
 
+  const billing = input.billing ?? { country: input.address.country, state: input.address.state };
   await assertAllowedRegion(
     {
       action: "shipping",
-      billing: input.billing,
+      billing,
       shipping: { country: input.address.country, state: input.address.state },
       ip: input.ip,
     },
@@ -167,7 +169,7 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
     validated = true;
     // The carrier may correct the state; recheck the normalized one.
     await assertAllowedRegion(
-      { action: "shipping", billing: input.billing, shipping: { country: address.country, state: address.state } },
+      { action: "shipping", billing: input.billing ?? { country: address.country, state: address.state }, shipping: { country: address.country, state: address.state } },
       null,
     );
   }
