@@ -154,6 +154,6 @@ export async function oauthFinish(
       name = null;
     }
   }
-  const customer = await upsertCustomer(db, { email, name });
+  const customer = await upsertCustomer(db, { email, name, method: p });
   return { customer, returnTo: safeReturn(saved.returnTo), age: saved.age === true, clearState: clearStateCookie(p) };
 }

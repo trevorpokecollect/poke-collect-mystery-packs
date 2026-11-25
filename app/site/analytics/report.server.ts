@@ -431,3 +431,230 @@ export async function traffic(db: PrismaClient, input: { from?: unknown; to?: un
     pages: pages.map((x) => ({ key: x.key, views: num(x.views), visits: num(x.visits) })),
   };
 }
+
+// ---------- Funnel (stage 2) ----------
+
+/**
+ * Two funnels. Sessions: visit → signed in → started a Cardbits checkout → bought (a paid top-up,
+ * pack or single during the visit). Accounts: new accounts in the range → paid a top-up → opened a
+ * paid pack → bought again (2+ purchases), counted up to the end of the range.
+ */
+export async function funnel(db: PrismaClient, input: { from?: unknown; to?: unknown }, deps: AnalyticsDeps = {}) {
+  const tz = deps.tz ?? TZ;
+  const r = parseRange(input.from, input.to, deps.now, tz);
+  const p = previousRange(r, tz);
+  const ids = await staffIds(db, deps.env ?? process.env);
+  const sessionSteps = (start: Date, end: Date) =>
+    db.$queryRaw<{ sessions: bigint; signed: bigint; checkout: bigint; bought: bigint }[]>`
+      WITH v AS (${visitsSql(start, end, ids)})
+      SELECT count(*) sessions,
+             count(*) FILTER (WHERE "customerId" IS NOT NULL) signed,
+             count(*) FILTER (WHERE "customerId" IS NOT NULL AND EXISTS (
+               SELECT 1 FROM "SiteTopup" t WHERE t."customerId" = v."customerId"
+                 AND t."createdAt" BETWEEN v."startedAt" AND v."lastSeenAt" + interval '30 minutes')) checkout,
+             count(*) FILTER (WHERE converted) bought
+      FROM v`;
+  const accountSteps = (start: Date, end: Date) =>
+    db.$queryRaw<{ accounts: bigint; topped: bigint; opened: bigint; again: bigint }[]>`
+      WITH c AS (SELECT id FROM "SiteCustomer" WHERE "createdAt" >= ${start} AND "createdAt" < ${end} AND ${notStaff(Prisma.sql`id`, ids)}),
+      p AS (
+        SELECT "customerId", "createdAt" FROM "SiteTopup" WHERE status = ANY(${PAID_TOPUP}::text[]) AND "createdAt" < ${end}
+        UNION ALL SELECT "customerId", "createdAt" FROM "SiteOpening" WHERE NOT demo AND "createdAt" < ${end}
+        UNION ALL SELECT "customerId", "createdAt" FROM "SiteLedger" WHERE kind = 'SINGLE' AND "createdAt" < ${end}
+      )
+      SELECT count(*) accounts,
+             count(*) FILTER (WHERE EXISTS (SELECT 1 FROM "SiteTopup" t WHERE t."customerId" = c.id AND t.status = ANY(${PAID_TOPUP}::text[]) AND t."createdAt" < ${end})) topped,
+             count(*) FILTER (WHERE EXISTS (SELECT 1 FROM "SiteOpening" o WHERE o."customerId" = c.id AND NOT o.demo AND o."createdAt" < ${end})) opened,
+             count(*) FILTER (WHERE (SELECT count(*) FROM p WHERE p."customerId" = c.id) >= 2) again
+      FROM c`;
+  const [s, sp, a, ap, abandoned] = await Promise.all([
+    sessionSteps(r.start, r.end),
+    sessionSteps(p.start, p.end),
+    accountSteps(r.start, r.end),
+    accountSteps(p.start, p.end),
+    db.$queryRaw<{ id: string; createdAt: Date; cents: number; baseBits: number; bonusBits: number; email: string; paidLater: boolean }[]>`
+      SELECT t.id, t."createdAt", t.cents, t."baseBits", t."bonusBits", c.email,
+             EXISTS (SELECT 1 FROM "SiteTopup" t2 WHERE t2."customerId" = t."customerId" AND t2.status = ANY(${PAID_TOPUP}::text[]) AND t2."createdAt" > t."createdAt") "paidLater"
+      FROM "SiteTopup" t JOIN "SiteCustomer" c ON c.id = t."customerId"
+      WHERE t.status = 'PENDING' AND t."createdAt" < now() - interval '1 hour'
+        AND t."createdAt" >= ${r.start} AND t."createdAt" < ${r.end} AND ${notStaff(Prisma.sql`t."customerId"`, ids)}
+      ORDER BY t."createdAt" DESC LIMIT 100`,
+  ]);
+  const sess = (x: (typeof s)[number]) => [
+    { step: "Sessions", n: num(x.sessions) },
+    { step: "Signed In", n: num(x.signed) },
+    { step: "Started Checkout", n: num(x.checkout) },
+    { step: "Bought", n: num(x.bought) },
+  ];
+  const acct = (x: (typeof a)[number]) => [
+    { step: "New Accounts", n: num(x.accounts) },
+    { step: "Bought Cardbits", n: num(x.topped) },
+    { step: "Opened a Pack", n: num(x.opened) },
+    { step: "Bought Again", n: num(x.again) },
+  ];
+  return {
+    range: { from: r.from, to: r.to, days: r.days, hourly: r.hourly, tz },
+    previousRange: { from: p.from, to: p.to },
+    sessions: sess(s[0]),
+    previousSessions: sess(sp[0]),
+    accounts: acct(a[0]),
+    previousAccounts: acct(ap[0]),
+    abandoned: abandoned.map((t) => ({ id: t.id, at: t.createdAt.toISOString(), cents: t.cents, bits: t.baseBits + t.bonusBits, email: t.email, paidLater: t.paidLater })),
+  };
+}
+
+// ---------- Sales reports (stage 2) ----------
+
+/** Sales by day, by product, top-ups by tier, top-ups by billing state (tax), refunds, and the Cardbits owed to customers. */
+export async function sales(db: PrismaClient, input: { from?: unknown; to?: unknown }, deps: AnalyticsDeps = {}) {
+  const tz = deps.tz ?? TZ;
+  const r = parseRange(input.from, input.to, deps.now, tz);
+  const ids = await staffIds(db, deps.env ?? process.env);
+  const ns = (col: string) => notStaff(Prisma.raw(col), ids);
+  const day = (col: string) => bucketSql(Prisma.raw(col), { ...r, hourly: false }, tz);
+  const inR = (col: string) => Prisma.sql`${Prisma.raw(col)} >= ${r.start} AND ${Prisma.raw(col)} < ${r.end}`;
+  const [daily, packs, ledger, tiers, states, ship, refunds, owed] = await Promise.all([
+    db.$queryRaw<{ k: string; topups: bigint; topup_cents: bigint; paid_bits: bigint; bonus_bits: bigint; refund_cents: bigint }[]>`
+      SELECT ${day('"createdAt"')} k, count(*) topups, coalesce(sum(cents), 0) topup_cents,
+             coalesce(sum("baseBits"), 0) paid_bits, coalesce(sum("bonusBits"), 0) bonus_bits,
+             coalesce(sum(cents) FILTER (WHERE status = ANY(${REFUNDED_TOPUP}::text[])), 0) refund_cents
+      FROM "SiteTopup" WHERE status = ANY(${PAID_TOPUP}::text[]) AND ${inR('"createdAt"')} AND ${ns('"customerId"')}
+      GROUP BY 1`,
+    db.$queryRaw<{ id: string; title: string | null; n: bigint; bits: bigint; buyers: bigint }[]>`
+      SELECT o."packId" id, max(p.title) title, count(*) n, coalesce(sum(o."priceBits"), 0) bits, count(DISTINCT o."customerId") buyers
+      FROM "SiteOpening" o LEFT JOIN "SitePack" p ON p.id = o."packId"
+      WHERE NOT o.demo AND ${inR('o."createdAt"')} AND ${notStaff(Prisma.sql`o."customerId"`, ids)}
+      GROUP BY o."packId" ORDER BY bits DESC`,
+    db.$queryRaw<{ k: string; kind: string; n: bigint; bits: bigint }[]>`
+      SELECT ${day('"createdAt"')} k, kind, count(*) n, coalesce(sum(delta), 0) bits
+      FROM "SiteLedger" WHERE ${inR('"createdAt"')} AND ${ns('"customerId"')} GROUP BY 1, 2`,
+    db.$queryRaw<{ cents: number; n: bigint; paid_bits: bigint; bonus_bits: bigint }[]>`
+      SELECT cents, count(*) n, coalesce(sum("baseBits"), 0) paid_bits, coalesce(sum("bonusBits"), 0) bonus_bits
+      FROM "SiteTopup" WHERE status = ANY(${PAID_TOPUP}::text[]) AND ${inR('"createdAt"')} AND ${ns('"customerId"')}
+      GROUP BY cents ORDER BY cents`,
+    db.$queryRaw<{ state: string; n: bigint; cents: bigint; refund_cents: bigint }[]>`
+      SELECT "billingState" state, count(*) n, coalesce(sum(cents), 0) cents,
+             coalesce(sum(cents) FILTER (WHERE status = ANY(${REFUNDED_TOPUP}::text[])), 0) refund_cents
+      FROM "SiteTopup" WHERE status = ANY(${PAID_TOPUP}::text[]) AND ${inR('"createdAt"')} AND ${ns('"customerId"')}
+      GROUP BY 1 ORDER BY cents DESC`,
+    db.$queryRaw<{ k: string; kind: string; n: bigint; cents: bigint; bits: bigint; postage: bigint }[]>`
+      SELECT ${day('"createdAt"')} k, "feeKind" kind, count(*) n, coalesce(sum("feeCents"), 0) cents, coalesce(sum("feeBits"), 0) bits,
+             coalesce(sum("postageCents"), 0) postage
+      FROM "SiteShipment" WHERE NOT (status = ANY(${SHIP_DONE}::text[])) AND ${inR('"createdAt"')} AND ${ns('"customerId"')}
+      GROUP BY 1, 2`,
+    db.$queryRaw<{ id: string; at: Date; status: string; cents: number; clawed: number; owed: number; email: string }[]>`
+      SELECT t.id, t."updatedAt" at, t.status, t.cents, t."clawedBits" clawed, t."owedBits" owed, c.email
+      FROM "SiteTopup" t JOIN "SiteCustomer" c ON c.id = t."customerId"
+      WHERE t.status = ANY(${REFUNDED_TOPUP.concat("CHARGEBACK_WON")}::text[]) AND t."updatedAt" >= ${r.start} AND t."updatedAt" < ${r.end}
+        AND ${notStaff(Prisma.sql`t."customerId"`, ids)}
+      ORDER BY t."updatedAt" DESC LIMIT 100`,
+    db.$queryRaw<{ total: bigint; holders: bigint }[]>`
+      SELECT coalesce(sum(balance), 0) total, count(*) FILTER (WHERE balance > 0) holders FROM "SiteWallet" WHERE ${ns('"customerId"')}`,
+  ]);
+type DayRow = { topups: number; topupCents: number; paidBits: number; bonusBits: number; refundCents: number; shipCents: number; packBits: number; packs: number; singleBits: number; singles: number; shipBits: number; buybackBits: number; rewardBits: number };
+  const byDay = new Map<string, DayRow>();
+  const row = (k: string) => {
+    let v = byDay.get(k);
+    if (!v) byDay.set(k, (v = { topups: 0, topupCents: 0, paidBits: 0, bonusBits: 0, refundCents: 0, shipCents: 0, packBits: 0, packs: 0, singleBits: 0, singles: 0, shipBits: 0, buybackBits: 0, rewardBits: 0 }));
+    return v;
+  };
+  for (const d of daily) Object.assign(row(d.k), { topups: num(d.topups), topupCents: num(d.topup_cents), paidBits: num(d.paid_bits), bonusBits: num(d.bonus_bits), refundCents: num(d.refund_cents) });
+  for (const l of ledger) {
+    const v = row(l.k);
+    if (l.kind === "PACK") (v.packBits += -num(l.bits)), (v.packs += num(l.n));
+    if (l.kind === "SINGLE") (v.singleBits += -num(l.bits)), (v.singles += num(l.n));
+    if (l.kind === "SHIPPING") v.shipBits += -num(l.bits);
+    if (l.kind === "BUYBACK") v.buybackBits += num(l.bits);
+    if (l.kind === "REWARD") v.rewardBits += num(l.bits);
+  }
+  for (const s of ship) if (s.kind === "USD") row(s.k).shipCents += num(s.cents);
+  const days = Array.from({ length: r.days }, (_, i) => {
+    const k = localDay(new Date(r.start.getTime() + i * 864e5 + 12 * 3600e3), tz);
+    const v = byDay.get(k) ?? row(k);
+    return { day: k, ...v, netCents: v.topupCents + v.shipCents - v.refundCents };
+  });
+  const shipKinds: Record<string, { n: number; cents: number; bits: number; postage: number }> = {};
+  for (const s of ship) {
+    const v = (shipKinds[s.kind] ??= { n: 0, cents: 0, bits: 0, postage: 0 });
+    v.n += num(s.n), v.cents += num(s.cents), v.bits += num(s.bits), v.postage += num(s.postage);
+  }
+  const sum = (kind: string) => ledger.filter((l) => l.kind === kind).reduce((a, l) => ({ n: a.n + num(l.n), bits: a.bits + num(l.bits) }), { n: 0, bits: 0 });
+  return {
+    range: { from: r.from, to: r.to, days: r.days, hourly: false, tz },
+    days,
+    products: [
+      ...packs.map((p) => ({ key: p.title ?? p.id, kind: "pack", n: num(p.n), bits: num(p.bits), buyers: num(p.buyers) })),
+      { key: "Singles", kind: "single", n: sum("SINGLE").n, bits: -sum("SINGLE").bits, buyers: null },
+      { key: "Shipping (Cardbits)", kind: "shipping", n: shipKinds.CARDBITS?.n ?? 0, bits: shipKinds.CARDBITS?.bits ?? 0, buyers: null },
+    ],
+    shipping: Object.entries(shipKinds).map(([kind, v]) => ({ kind, ...v })),
+    tiers: tiers.map((t) => ({ cents: t.cents, n: num(t.n), paidBits: num(t.paid_bits), bonusBits: num(t.bonus_bits) })),
+    states: states.map((s) => ({ state: s.state, n: num(s.n), cents: num(s.cents), refundCents: num(s.refund_cents), netCents: num(s.cents) - num(s.refund_cents) })),
+    refunds: refunds.map((x) => ({ id: x.id, at: x.at.toISOString(), status: x.status, cents: x.cents, clawedBits: x.clawed, owedBits: x.owed, email: x.email })),
+    outstanding: { bits: num(owed[0].total), holders: num(owed[0].holders) },
+  };
+}
+
+// ---------- Customers (stage 2) ----------
+
+/** New vs returning buyers, signups by method, top spenders, lifetime value and weekly cohort retention. */
+export async function customers(db: PrismaClient, input: { from?: unknown; to?: unknown }, deps: AnalyticsDeps = {}) {
+  const tz = deps.tz ?? TZ;
+  const r = parseRange(input.from, input.to, deps.now, tz);
+  const ids = await staffIds(db, deps.env ?? process.env);
+  const ns = (col: string) => notStaff(Prisma.raw(col), ids);
+  const purchases = Prisma.sql`
+    SELECT "customerId", "createdAt", cents, 0 bits, 'topup' kind FROM "SiteTopup" WHERE status = ANY(${PAID_TOPUP}::text[])
+    UNION ALL SELECT "customerId", "createdAt", 0, "priceBits", 'pack' FROM "SiteOpening" WHERE NOT demo
+    UNION ALL SELECT "customerId", "createdAt", 0, -delta, 'single' FROM "SiteLedger" WHERE kind = 'SINGLE'`;
+  const [methods, buyers, top, ltv, cohorts] = await Promise.all([
+    db.$queryRaw<{ method: string | null; n: bigint }[]>`
+      SELECT "signupMethod" method, count(*) n FROM "SiteCustomer"
+      WHERE "createdAt" >= ${r.start} AND "createdAt" < ${r.end} AND ${ns("id")} GROUP BY 1 ORDER BY n DESC`,
+    db.$queryRaw<{ fresh: bigint; repeat_n: bigint; fresh_cents: bigint; repeat_cents: bigint }[]>`
+      WITH p AS (${purchases}),
+      b AS (
+        SELECT "customerId", sum(cents) cents,
+               bool_or(EXISTS (SELECT 1 FROM p p2 WHERE p2."customerId" = p."customerId" AND p2."createdAt" < ${r.start})) repeat_buyer
+        FROM p WHERE "createdAt" >= ${r.start} AND "createdAt" < ${r.end} AND ${ns('"customerId"')} GROUP BY 1
+      )
+      SELECT count(*) FILTER (WHERE NOT repeat_buyer) fresh, count(*) FILTER (WHERE repeat_buyer) repeat_n,
+             coalesce(sum(cents) FILTER (WHERE NOT repeat_buyer), 0) fresh_cents, coalesce(sum(cents) FILTER (WHERE repeat_buyer), 0) repeat_cents
+      FROM b`,
+    db.$queryRaw<{ id: string; email: string; cents: bigint; bits: bigint; orders: bigint; last: Date; first: Date }[]>`
+      WITH p AS (${purchases})
+      SELECT c.id, c.email, coalesce(sum(p.cents), 0) cents, coalesce(sum(p.bits), 0) bits, count(*) FILTER (WHERE p.kind <> 'topup') orders,
+             max(p."createdAt") last, c."createdAt" first
+      FROM p JOIN "SiteCustomer" c ON c.id = p."customerId"
+      WHERE p."createdAt" >= ${r.start} AND p."createdAt" < ${r.end} AND ${notStaff(Prisma.sql`c.id`, ids)}
+      GROUP BY c.id ORDER BY cents DESC, bits DESC LIMIT 25`,
+    db.$queryRaw<{ customers: bigint; buyers: bigint; cents: bigint }[]>`
+      WITH p AS (${purchases})
+      SELECT (SELECT count(*) FROM "SiteCustomer" WHERE ${ns("id")}) customers,
+             count(DISTINCT "customerId") buyers, coalesce(sum(cents), 0) cents
+      FROM p WHERE ${ns('"customerId"')}`,
+    db.$queryRaw<{ week: string; size: bigint; w: number[] }[]>`
+      WITH p AS (${purchases}),
+      c AS (
+        SELECT id, date_trunc('week', ("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${tz}) wk FROM "SiteCustomer"
+        WHERE "createdAt" >= ${new Date(r.end.getTime() - 8 * 7 * 864e5)} AND "createdAt" < ${r.end} AND ${ns("id")}
+      )
+      SELECT to_char(c.wk, 'YYYY-MM-DD') week, count(*) size,
+             ARRAY(SELECT count(DISTINCT c2.id)::int FROM generate_series(0, 7) g
+                   LEFT JOIN c c2 ON c2.wk = c.wk AND EXISTS (
+                     SELECT 1 FROM p WHERE p."customerId" = c2.id
+                       AND date_trunc('week', (p."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${tz}) = c.wk + g * interval '1 week')
+                   GROUP BY g ORDER BY g) w
+      FROM c GROUP BY c.wk ORDER BY c.wk`,
+  ]);
+  const b = buyers[0];
+  const l = ltv[0];
+  return {
+    range: { from: r.from, to: r.to, days: r.days, hourly: false, tz },
+    methods: methods.map((m) => ({ key: m.method ?? "unknown", n: num(m.n) })),
+    buyers: { fresh: num(b.fresh), returning: num(b.repeat_n), freshCents: num(b.fresh_cents), returningCents: num(b.repeat_cents) },
+    lifetime: { customers: num(l.customers), buyers: num(l.buyers), cents: num(l.cents), avgCentsPerBuyer: num(l.buyers) ? Math.round(num(l.cents) / num(l.buyers)) : 0 },
+    top: top.map((t) => ({ id: t.id, email: t.email, cents: num(t.cents), bits: num(t.bits), orders: num(t.orders), last: t.last.toISOString(), since: t.first.toISOString() })),
+    cohorts: cohorts.map((c) => ({ week: c.week, size: num(c.size), weeks: c.w.map(Number) })),
+  };
+}
