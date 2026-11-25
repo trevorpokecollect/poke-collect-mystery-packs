@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assertAllowedRegion, RegionBlocked, stateCode } from "./region.server";
 import { cardsUntilFree, parcelFor, processBy, shippingFee } from "./shipping/policy";
-import { parseAddress, pickRate, ShippingError, statusFromTracking } from "./shipping/service.server";
+import { DEFAULT_SERVICES, parseAddress, pickRate, ShippingError, statusFromTracking } from "./shipping/service.server";
 import { renderEmail, type EmailData, type EmailKind } from "./email/templates";
 import { ResendMailer, MailRejected } from "./email/mailer.server";
 import type { Rate } from "./shipping/shippo.server";
@@ -70,8 +70,13 @@ describe("shipping policy", () => {
   });
   it("picks the preferred service, cheapest first", () => {
     const r = (token: string, cents: number) => ({ rateId: token + cents, serviceToken: token, amountCents: cents }) as Rate;
-    expect(pickRate([r("usps_priority", 900), r("usps_ground_advantage", 520), r("usps_ground_advantage", 480)])?.rateId).toBe("usps_ground_advantage480");
-    expect(pickRate([r("fedex_2day", 2000)])).toBeNull();
+    // Default: cheapest of everything, like Shopify.
+    expect(pickRate([r("usps_priority", 900), r("ups_ground", 470), r("usps_ground_advantage", 480)])?.rateId).toBe("ups_ground470");
+    expect(pickRate([r("fedex_2day", 2000)])?.rateId).toBe("fedex_2day2000");
+    expect(pickRate([])).toBeNull();
+    // Configured preference list (CARDBIT_SHIP_SERVICES).
+    expect(pickRate([r("usps_priority", 900), r("usps_ground_advantage", 520), r("usps_ground_advantage", 480)], DEFAULT_SERVICES)?.rateId).toBe("usps_ground_advantage480");
+    expect(pickRate([r("fedex_2day", 2000)], DEFAULT_SERVICES)).toBeNull();
   });
   it("maps carrier tracking to shipment status", () => {
     expect(statusFromTracking("PRE_TRANSIT")).toBeNull();

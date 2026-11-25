@@ -8,6 +8,7 @@ import {
   fixShipmentCard,
   cancelShipment,
   createShipment,
+  handleEasyPostWebhook,
   handleTrackingWebhook,
   markShipped,
   shippingQueue,
@@ -18,6 +19,9 @@ import { sqlCopyStore } from "./sql-copy-store";
 import { priceKey } from "../core/stock.server";
 import { deskAction, loadDesk } from "./desk.server";
 import { FeePaymentError, type FeePayer, type Tx } from "./types";
+import type { Parcel } from "./policy";
+import { brokerShippingAction } from "./broker-api.server";
+import { SHIP_SETTINGS_KEY } from "./packages.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -32,14 +36,18 @@ class FakeShippo implements ShippingProvider {
     this.validCalls++;
     return { valid: !this.invalid, address: { ...a, street1: a.street1.toUpperCase(), ...(this.carrierState ? { state: this.carrierState } : {}) }, residential: true, messages: this.invalid ? ["Address not found"] : [] };
   }
-  async rates(): Promise<Rate[]> {
+  lastParcel: Parcel | null = null;
+  async rates(_from: Address, _to: Address, parcel: Parcel): Promise<Rate[]> {
+    this.lastParcel = parcel;
     return [
       { rateId: "r_pri", shipmentId: "s1", carrier: "USPS", service: "Priority Mail", serviceToken: "usps_priority", amountCents: 910, currency: "USD", days: 2, attributes: [] },
       { rateId: "r_ga", shipmentId: "s1", carrier: "USPS", service: "Ground Advantage", serviceToken: "usps_ground_advantage", amountCents: 495, currency: "USD", days: 4, attributes: [] },
     ];
   }
-  async buyLabel(rateId: string): Promise<Label> {
+  boughtOn: (string | undefined)[] = [];
+  async buyLabel(rateId: string, _meta: string, shipmentId?: string): Promise<Label> {
     this.labels++;
+    this.boughtOn.push(shipmentId);
     await new Promise((r) => setTimeout(r, 30));
     return { transactionId: `tx_${this.labels}`, status: "SUCCESS", trackingNumber: `9400${this.labels}`, trackingUrl: "https://track.test", labelUrl: "https://label.test", messages: [rateId] };
   }
@@ -87,6 +95,8 @@ describe.skipIf(!url)("site shipping (integration)", () => {
   });
   beforeEach(async () => {
     await db.siteShipment.deleteMany();
+    await db.siteShipPackage.deleteMany();
+    await db.appValue.deleteMany({ where: { key: SHIP_SETTINGS_KEY } });
     await db.siteEmail.deleteMany();
     await db.siteCopyEvent.deleteMany();
     await db.siteRestock.deleteMany();
@@ -247,6 +257,22 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     ]);
   });
 
+  it("EasyPost path: buys on the rate's shipment and follows tracker.updated webhooks", async () => {
+    const { shipment } = await createShipment(deps, base());
+    await buyLabel(deps, shipment.id, "staff:a");
+    expect(shippo.boughtOn).toEqual([expect.any(String)]);
+    const ev = await db.siteShipmentEvent.findFirstOrThrow({ where: { shipmentId: shipment.id, kind: "label_purchased" } });
+    expect(ev.detail).toMatchObject({ carrier: expect.any(String) });
+    const hook = { object: "Event", description: "tracker.updated", result: { object: "Tracker", tracking_code: "94001", carrier: "USPS", status: "delivered" } };
+    expect(await handleEasyPostWebhook(deps, { description: "batch.updated", result: {} })).toMatchObject({ ignored: "event" });
+    expect(await handleEasyPostWebhook(deps, hook)).toMatchObject({ ignored: "pre_transit" }); // re-read says not moving yet
+    shippo.tracking["94001"] = { carrier: "usps", trackingNumber: "94001", status: "DELIVERED", detail: "Mailbox", at: "2026-11-28T18:00:00Z", eta: null };
+    expect(await handleEasyPostWebhook(deps, hook)).toMatchObject({ status: "DELIVERED" });
+    const last = await db.siteShipmentEvent.findFirstOrThrow({ where: { shipmentId: shipment.id, kind: "status" }, orderBy: { createdAt: "desc" } });
+    expect(last.actor).toBe("easypost");
+    expect(await statusOf("c1")).toBe("SHIPPED");
+  });
+
   it("Fix Card swap: replacement becomes the customer's locked copy, old copy goes back to stock unfiled", async () => {
     const { shipment } = await createShipment(deps, base());
     const fixed = await fixShipmentCard(deps, shipment.id, { action: "swap", copyId: "c1", revision: shipment.updatedAt.toISOString() }, "staff:a");
@@ -346,5 +372,55 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     const later = new Date(Date.now() + 5 * 60_000);
     expect(await sendPendingEmails({ db, mailer: flaky, env: {} }, later)).toMatchObject({ sent: 1 });
     expect((await db.siteEmail.findUniqueOrThrow({ where: { id: r1.id } })).status).toBe("SENT");
+  });
+
+  it("Card Broker desk: packages, weight, all rates with cheapest pre-selected, label with chosen package", async () => {
+    const act = (b: Record<string, unknown>) => brokerShippingAction(deps, b, "cardbroker:emily@poke-collect.com");
+    const { shipment } = await createShipment(deps, base({ copyIds: ["c1", "c2", "c3"] }));
+
+    // No saved packages yet: built-in sizes still quote.
+    const d0 = await act({ intent: "detail", id: shipment.id, rates: true });
+    expect(d0).toMatchObject({ packages: [], plan: { packageId: null, auto: true } });
+
+    const saved = await act({ intent: "package-save", package: { name: "Small Mailer", kind: "mailer", lengthIn: 7.5, widthIn: 5.5, heightIn: 0.5, weightOz: 0.4, maxCards: 8 } });
+    expect(saved).toMatchObject({ ok: true, packages: [{ name: "Small Mailer", kind: "MAILER", isDefault: true }] }); // first one is default
+    await act({ intent: "package-save", package: { name: "Box", kind: "BOX", lengthIn: 8, widthIn: 6, heightIn: 4, weightOz: 3.2, maxCards: 120 } });
+    await act({ intent: "settings-save", ozPerCard: 0.3, packingOz: 0.2 });
+    await expect(act({ intent: "package-save", package: { name: "", lengthIn: 1, widthIn: 1, heightIn: 1, weightOz: 1 } })).rejects.toMatchObject({ status: 422 });
+
+    const d1 = (await act({ intent: "detail", id: shipment.id, rates: true })) as Record<string, any>;
+    // 3 cards fit the small mailer: 0.4 + 3 × 0.3 + 0.2 = 1.5 oz.
+    expect(d1.plan).toMatchObject({ packageName: "Small Mailer", auto: true, weight: { totalOz: 1.5, cardsOz: 0.9 } });
+    expect(d1.rates.map((r: { cents: number }) => r.cents)).toEqual([495, 910]); // cheapest first
+    expect(d1.suggested).toBe("r_ga");
+    expect(shippo.lastParcel).toMatchObject({ length: 7.5, weightOz: 1.5 });
+
+    // Staff choose the box and a scale weight; rates re-quote with that parcel.
+    const box = d1.packages.find((p: { name: string }) => p.name === "Box");
+    const d2 = (await act({ intent: "detail", id: shipment.id, rates: true, packageId: box.id, weightOz: 4.04 })) as Record<string, any>;
+    expect(d2.plan).toMatchObject({ packageId: box.id, auto: false, weight: { calculatedOz: 4.3, overrideOz: 4.04, totalOz: 4.1 } });
+    expect(shippo.lastParcel).toMatchObject({ length: 8, height: 4, weightOz: 4.1 });
+
+    const bought = (await act({ intent: "label", id: shipment.id, rateId: "r_pri", service: "usps_priority", packageId: box.id, weightOz: 4.04 })) as Record<string, any>;
+    expect(bought.shipment).toMatchObject({ status: "LABEL_PURCHASED", postageCents: 910, canMarkShipped: true });
+    const row = await db.siteShipment.findUniqueOrThrow({ where: { id: shipment.id } });
+    expect(row).toMatchObject({ packageId: box.id, weightOz: 4.1 });
+    const ev = await db.siteShipmentEvent.findFirstOrThrow({ where: { shipmentId: shipment.id, kind: "label_purchased" } });
+    expect(ev.actor).toBe("cardbroker:emily@poke-collect.com");
+    expect(ev.detail).toMatchObject({ package: "Box", weightOz: 4.1 });
+
+    // Queue, slip, shipped.
+    const q = (await act({ intent: "queue" })) as Record<string, any>;
+    expect(q.shipments[0]).toMatchObject({ id: shipment.id, email: null, items: [{ location: expect.any(String), image: expect.stringContaining("img.test") }, {}, {}] });
+    expect(((await act({ intent: "slip", id: shipment.id })) as { html: string }).html).toContain("Packing Slip");
+    expect(await act({ intent: "shipped", id: shipment.id })).toMatchObject({ ok: true, shipment: { status: "IN_TRANSIT" } });
+    // A second Buy Label (stale tab) returns the existing label instead of buying another.
+    expect(await act({ intent: "label", id: shipment.id })).toMatchObject({ shipment: { trackingNumber: row.trackingNumber } });
+    expect(shippo.labels).toBe(1);
+
+    // Removing the default moves it to the remaining package.
+    const small = d1.packages.find((p: { name: string }) => p.name === "Small Mailer");
+    expect(await act({ intent: "package-delete", packageId: small.id })).toMatchObject({ packages: [{ name: "Box", isDefault: true }] });
+    await expect(act({ intent: "detail", id: "nope" })).rejects.toMatchObject({ status: 404 });
   });
 });

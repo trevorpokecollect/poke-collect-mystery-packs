@@ -1203,6 +1203,10 @@ model SiteShipment {
   shippedAt           DateTime?
   deliveredAt         DateTime?
   canceledAt          DateTime?
+  // Package and weight the label was bought with (staff choice or auto-pick; see packages.server.ts).
+  packageId           String?
+  weightOz            Float?
+  parcel              Json?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   items               SiteShipmentItem[]
@@ -1211,6 +1215,27 @@ model SiteShipment {
   @@index([customerId, createdAt])
   @@index([status, processBy])
   @@index([carrier, trackingNumber])
+}
+
+// Saved shipping packages for the label desk (like Shopify's saved packages). One isDefault.
+// Auto-pick: the smallest active package whose maxCards fits the shipment, else the default.
+model SiteShipPackage {
+  id        String   @id @default(cuid())
+  name      String
+  // MAILER | BOX | ENVELOPE (soft packaging vs rigid box; shown to staff)
+  kind      String   @default("MAILER")
+  lengthIn  Float
+  widthIn   Float
+  heightIn  Float
+  // Empty package weight, including filler.
+  weightOz  Float
+  maxCards  Int?
+  isDefault Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, maxCards])
 }
 
 model SiteShipmentItem {

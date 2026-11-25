@@ -1,5 +1,5 @@
 // Staff shipping desk (/staff/shipping): queue, pick list with photos and slot/pocket, Fix Card,
-// Buy Label (Shippo), Mark Shipped, Cancel, Print Slip. Server-rendered HTML with plain forms
+// Buy Label (Shippo, or EasyPost when CARDBIT_LABEL_PROVIDER=easypost), Mark Shipped, Cancel, Print Slip. Server-rendered HTML with plain forms
 // (post → redirect → get), so it works without client JavaScript.
 
 import { shelfLabel } from "../core/stock.server";
@@ -56,6 +56,7 @@ export async function loadDesk(deps: ShippingDeps, url: URL) {
     err: url.searchParams.get("err"),
     labelsLive: deps.provider ? !(deps.provider as { test?: boolean }).test : false,
     providerReady: Boolean(deps.provider),
+    providerName: deps.provider?.name ?? "Shippo",
   };
 }
 
@@ -88,14 +89,14 @@ export async function deskAction(deps: ShippingDeps, form: FormData, actor: stri
         await markShipped(deps, id, actor);
         return back({ msg: "Marked shipped. The customer was emailed tracking." });
       case "selftest-address": {
-        if (!deps.provider) return back({ err: "Shippo isn't connected (SHIPPO_API_TOKEN)." });
+        if (!deps.provider) return back({ err: "No label provider is connected (SHIPPO_API_TOKEN, or EASYPOST_API_KEY with CARDBIT_LABEL_PROVIDER=easypost)." });
         const from = await deps.provider.validateAddress(deps.from);
         if (!from.valid) return back({ err: `Ship-from address failed carrier check: ${from.messages.join(" ") || "no details"}` });
         const sample = { name: "Rate Check", street1: "1600 Pennsylvania Ave NW", city: "Washington", state: "DC", zip: "20500", country: "US" };
         const rates = await deps.provider.rates(deps.from, sample, parcelFor(2), "selftest");
         const pick = pickRate(rates, deps.services);
         return back({
-          msg: `Ship-from address verified (${from.address.street1}, ${from.address.city} ${from.address.state}). ${rates.length} rates to a sample address; default ${pick ? `${pick.carrier} ${pick.service} ${usd(pick.amountCents)}` : "none matched"}.`,
+          msg: `${deps.provider.name ?? "Shippo"}: ship-from address verified (${from.address.street1}, ${from.address.city} ${from.address.state}). ${rates.length} rates to a sample address; default ${pick ? `${pick.carrier} ${pick.service} ${usd(pick.amountCents)}` : "none matched"}.`,
         });
       }
       case "selftest-email": {
@@ -178,7 +179,7 @@ function pickListHtml(s: Shipment) {
 function labelHtml(s: Shipment, d: Awaited<ReturnType<typeof loadDesk>>) {
   const hidden = `<input type="hidden" name="shipmentId" value="${esc(s.id)}">`;
   if (s.status === "PAID") {
-    if (!d.providerReady) return `<p class="warn">Connect Shippo (SHIPPO_API_TOKEN) to buy labels.</p>`;
+    if (!d.providerReady) return `<p class="warn">Connect a label provider (SHIPPO_API_TOKEN, or EASYPOST_API_KEY with CARDBIT_LABEL_PROVIDER=easypost) to buy labels.</p>`;
     const rates = d.rates
       ? `<form method="post" class="rates">${hidden}<input type="hidden" name="intent" value="label">${d.rates
           .slice()
@@ -190,7 +191,7 @@ function labelHtml(s: Shipment, d: Awaited<ReturnType<typeof loadDesk>>) {
           .join("")}<button>Buy Label</button></form>`
       : `<a class="button ghost" href="${DESK_PATH}?id=${encodeURIComponent(s.id)}&rates=1">Compare Rates</a>
 <form method="post" class="inline">${hidden}<input type="hidden" name="intent" value="label"><button>Buy Label (Ground Advantage)</button></form>`;
-    return `${d.labelsLive ? "" : '<p class="note">Shippo test mode: labels are free samples and can\'t be mailed.</p>'}${d.rateError ? `<p class="warn">${esc(d.rateError)}</p>` : ""}${rates}
+    return `${d.labelsLive ? "" : `<p class="note">${esc(d.providerName ?? "Shippo")} test mode: labels are free samples and can't be mailed.</p>`}${d.rateError ? `<p class="warn">${esc(d.rateError)}</p>` : ""}${rates}
 <details class="cancel"><summary>Cancel Shipment</summary><form method="post">${hidden}<input type="hidden" name="intent" value="cancel"><input name="reason" placeholder="Reason (customer asked, address problem…)" required><button class="danger">Cancel And Refund</button></form></details>`;
   }
   if (s.status === "LABEL_PURCHASED")
