@@ -29,6 +29,7 @@ export const clearCookie = (name: string) => `${name}=; Path=/; HttpOnly; SameSi
 
 export { clientIp } from "../region.server";
 import { clientIp } from "../region.server";
+import { adoptWaitlist } from "../waitlist/waitlist.server";
 
 /** Terms + Privacy version shown as clickwrap on the sign-in forms ("By continuing you agree…"). */
 export const TERMS_VERSION = process.env.SITE_TERMS_VERSION || "2026-11-24";
@@ -149,7 +150,9 @@ export async function upsertCustomer(
     return existing;
   }
   try {
-    return await db.siteCustomer.create({ data: { email, googleSub: p.googleSub ?? null, name: p.name ?? null, signupMethod: p.method ?? null } });
+    const created = await db.siteCustomer.create({ data: { email, googleSub: p.googleSub ?? null, name: p.name ?? null, signupMethod: p.method ?? null } });
+    await adoptWaitlist(db, created); // Founding Collector: badge + carry waitlist consent over (never throws)
+    return created;
   } catch (e) {
     if ((e as { code?: string }).code === "P2002") return db.siteCustomer.findUniqueOrThrow({ where: { email } });
     throw e;

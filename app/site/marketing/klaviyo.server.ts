@@ -173,7 +173,14 @@ export async function syncWaitlist(deps: KlaviyoDeps, cfg: Config, limit = 100) 
 async function syncWaitlistTexts(deps: KlaviyoDeps, cfg: Config, limit: number) {
   if (!cfg.smsListId) return 0;
   const now = deps.now?.() ?? new Date();
-  const rows = await deps.db.siteWaitlist.findMany({ where: { smsSyncedAt: null, phone: { not: null }, smsConsentAt: { not: null } }, orderBy: { updatedAt: "asc" }, take: limit });
+  const pending = await deps.db.siteWaitlist.findMany({ where: { smsSyncedAt: null, phone: { not: null }, smsConsentAt: { not: null } }, orderBy: { updatedAt: "asc" }, take: limit });
+  if (!pending.length) return 0;
+  // A phone already in SiteMarketing (account created; adoptWaitlist copied it) goes through syncConsent and
+  // the YES poll instead, so the person never gets two confirmation prompts.
+  const owned = new Set((await deps.db.siteMarketing.findMany({ where: { smsPhone: { in: pending.map((r) => r.phone!) } }, select: { smsPhone: true } })).map((m) => m.smsPhone));
+  const skip = pending.filter((r) => r.customerId || owned.has(r.phone));
+  if (skip.length) await deps.db.siteWaitlist.updateMany({ where: { id: { in: skip.map((r) => r.id) } }, data: { smsSyncedAt: now } });
+  const rows = pending.filter((r) => !skip.includes(r));
   if (!rows.length) return 0;
   await call(deps, cfg, "POST", "/profile-subscription-bulk-create-jobs", {
     data: {

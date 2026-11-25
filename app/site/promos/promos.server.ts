@@ -87,6 +87,8 @@ export async function joinEmail(db: PrismaClient, customer: SiteCustomer, consen
       create: { customerId: customer.id, emailOptInAt: now, emailSource: ctx.source ?? "welcome-rewards", termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null },
       update: { emailOptInAt: now, emailSource: ctx.source ?? "welcome-rewards", termsVersion: WELCOME_TERMS, ip: ctx.ip ?? null, syncedAt: null },
     });
+    // A Founding Collector whose 400 email bonus is already paid gets no extra 200 (1,000 total, not 1,200).
+    if (await tx.siteLedger.findFirst({ where: { customerId: customer.id, idempotencyKey: { startsWith: "founding:email:" } } })) return { credited: 0 };
     const { replay } = await applyLedger(tx, {
       customerId: customer.id, delta: WELCOME.email, kind: "BONUS",
       idempotencyKey: "welcome:email:" + customer.id, ref: "welcome", note: "Welcome Rewards: Email Signup",

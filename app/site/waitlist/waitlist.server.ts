@@ -214,6 +214,40 @@ export async function settleFounding(tx: Tx, customerId: string, opts: { topupId
   return { credited };
 }
 
+/**
+ * New account whose email is on the waitlist: claim the spot, add the badge tag, and carry the waitlist
+ * consent into SiteMarketing (email opt-in, plus the phone as a pending text request with smsSource
+ * "waitlist"). The text bonus still waits for the number to confirm (confirmSms); nothing is credited here.
+ * Never throws: sign-in must not fail because of the waitlist.
+ */
+export async function adoptWaitlist(db: PrismaClient, customer: { id: string; email: string }, now = new Date()) {
+  try {
+    const row = await foundingRow(db, customer.email);
+    if (!row || (row.customerId && row.customerId !== customer.id)) return false;
+    await db.$transaction(async (tx) => {
+      await tx.siteWaitlist.updateMany({ where: { id: row.id, customerId: null }, data: { customerId: customer.id, claimedAt: now } });
+      const c = await tx.siteCustomer.findUnique({ where: { id: customer.id } });
+      if (c && !c.tags.includes(FOUNDING_TAG)) await tx.siteCustomer.update({ where: { id: c.id }, data: { tags: { push: FOUNDING_TAG } } });
+      const m = await tx.siteMarketing.findUnique({ where: { customerId: customer.id } });
+      const phoneFree = row.phone ? !(await tx.siteMarketing.findUnique({ where: { smsPhone: row.phone } })) : false;
+      const data = {
+        ...(!m?.emailOptInAt && !m?.emailOptOutAt ? { emailOptInAt: row.emailConsentAt, emailSource: "waitlist" } : {}),
+        ...(row.phone && row.smsConsentAt && phoneFree && !m?.smsPhone ? { smsPhone: row.phone, smsRequestedAt: row.smsConsentAt, smsSource: "waitlist" } : {}),
+      };
+      if (!Object.keys(data).length) return;
+      await tx.siteMarketing.upsert({
+        where: { customerId: customer.id },
+        create: { customerId: customer.id, ...data, termsVersion: WAITLIST_TERMS, syncedAt: null },
+        update: { ...data, syncedAt: null },
+      });
+    });
+    return true;
+  } catch (e) {
+    console.error("[site-waitlist] adopt failed", (e as Error).message);
+    return false;
+  }
+}
+
 /** A refunded or charged-back top-up takes back the founding bonus it unlocked (up to the balance). */
 export async function clawFounding(tx: Tx, t: Pick<SiteTopup, "id" | "customerId">, kind: "REFUND" | "CHARGEBACK") {
   const paid = await tx.siteLedger.findMany({ where: { customerId: t.customerId, ref: t.id, kind: "BONUS", idempotencyKey: { startsWith: "founding:" } } });

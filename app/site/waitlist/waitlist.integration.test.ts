@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { balanceOf } from "../core/ledger.server";
 import { handleCoinflowEvent, topupPackage } from "../payments/coinflow.server";
 import { confirmSms, joinEmail, requestSms } from "../promos/promos.server";
+import { upsertCustomer } from "../core/auth.server";
 import { FOUNDING_TAG, foundingView, joinWaitlist, WaitlistError } from "./waitlist.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -116,6 +117,20 @@ describe.skipIf(!url)("Founding Collector bonus", () => {
     expect(await bonusTotal(a.id)).toBe(400);
     expect(await bonusTotal(b.id)).toBe(0);
     expect(await foundingView(db, b)).toBeNull();
+  });
+
+  it("a new account adopts the waitlist spot: badge, email consent, pending phone", async () => {
+    await joinWaitlist(db, { email: "founder5@wl.test", phone: "2565550155", smsConsent: true, ...consent });
+    const c = await upsertCustomer(db, { email: "founder5@wl.test", method: "email" });
+    expect((await db.siteCustomer.findUniqueOrThrow({ where: { id: c.id } })).tags).toContain(FOUNDING_TAG);
+    const m = await db.siteMarketing.findUniqueOrThrow({ where: { customerId: c.id } });
+    expect(m).toMatchObject({ smsPhone: "+12565550155", smsSource: "waitlist", smsConfirmedAt: null, emailSource: "waitlist" });
+    expect(await bonusTotal(c.id)).toBe(0); // nothing until a top-up / confirmation
+    expect((await confirmSms(db, c.id, "+12565550155")).credited).toBe(300); // regular 300; founding waits for a top-up
+    await topup(c.id, 1000);
+    expect(await bonusTotal(c.id)).toBe(1000);
+    expect((await joinEmail(db, c, true)).credited).toBe(0); // no extra 200 after the founding email bonus
+    expect(await bonusTotal(c.id)).toBe(1000);
   });
 
   it("people who never joined the waitlist get nothing extra", async () => {
