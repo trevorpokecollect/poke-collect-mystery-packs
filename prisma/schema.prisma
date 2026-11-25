@@ -1261,3 +1261,112 @@ model SiteEmail {
 
   @@index([status, createdAt])
 }
+// ---- Cardbit standalone site: core (lead thread) -------------------------------------------
+// Used only on cardbit-mystery-packs / site / app-site (CARDBIT_SITE=on). The Shopify setup
+// never reads or writes these tables.
+
+model SiteCustomer {
+  id        String   @id @default(cuid())
+  email     String   @unique // lowercased
+  googleSub String?  @unique
+  name      String?
+  frozenAt  DateTime?
+  closedAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SiteSession {
+  id         String   @id // sha256 of the cookie token
+  customerId String
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  @@index([customerId])
+}
+
+model SiteEmailCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  ip        String?
+  createdAt DateTime @default(now())
+  @@index([email, createdAt])
+}
+
+// Balance in Cardbits. Paid and promotional funds are tracked separately (ledger kinds).
+model SiteWallet {
+  customerId String   @id
+  balance    Int      @default(0)
+  updatedAt  DateTime @updatedAt
+}
+
+model SiteLedger {
+  id             String   @id @default(cuid())
+  customerId     String
+  delta          Int
+  balanceAfter   Int
+  kind           String // TOPUP | BONUS | PACK | SINGLE | BUYBACK | SHIPPING | REFUND | CHARGEBACK | ADJUST | REWARD
+  ref            String?
+  idempotencyKey String   @unique
+  note           String?
+  createdAt      DateTime @default(now())
+  @@index([customerId, createdAt])
+}
+
+// One row per physical copy. Status changes are conditional UPDATEs, so each copy has one owner.
+model SiteCopy {
+  id          String   @id @default(cuid())
+  receiptKey  String   @unique // Card Broker eventKey + ":" + unit
+  printingKey String
+  tcgplayerId Int?
+  title       String
+  game        String
+  setName     String
+  number      String
+  name        String
+  finish      String
+  language    String
+  condition   String
+  image       String?
+  slot        Int?
+  pocket      Int?
+  lookKey     String
+  faceKey     String
+  status      String   @default("FOR_SALE") // FOR_SALE | POOLED | VAULTED | SHIP_LOCKED | SHIPPED | REMOVED
+  retailBits  Int?
+  ownerId     String?
+  poolSlotId  String?  @unique
+  orderId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([slot, pocket])
+  @@unique([slot, lookKey])
+  @@unique([slot, faceKey])
+  @@index([status, printingKey])
+  @@index([ownerId, status])
+}
+
+model SiteCopyEvent {
+  id         String   @id @default(cuid())
+  copyId     String
+  fromStatus String?
+  toStatus   String
+  actor      String
+  reason     String
+  createdAt  DateTime @default(now())
+  @@index([copyId, createdAt])
+}
+
+model SiteIntakeReceipt {
+  eventKey  String   @id
+  digest    String
+  response  Json
+  createdAt DateTime @default(now())
+}
+// ---- end Cardbit standalone site: core ------------------------------------------------------
