@@ -4,7 +4,12 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto
 import type { PrismaClient, SiteCustomer } from "@prisma/client";
 
 export const SESSION_COOKIE = "cb_site";
-const SESSION_DAYS = 30;
+// Sessions roll: each visit pushes expiry out to 90 days (written at most once a day), so a
+// regular collector rarely signs in again. The cookie itself lives ~400 days (browser cap);
+// the server-side expiry is what counts.
+const SESSION_DAYS = 90;
+const COOKIE_DAYS = 400;
+const ROLL_AFTER_MS = 864e5;
 const CODE_MINUTES = 10;
 const CODE_ATTEMPTS = 5;
 const CODES_PER_HOUR = 5;
@@ -43,7 +48,7 @@ export async function createSession(db: PrismaClient, customerId: string, reques
       expiresAt: new Date(Date.now() + SESSION_DAYS * 864e5),
     },
   });
-  return setCookie(SESSION_COOKIE, token, SESSION_DAYS * 86400);
+  return setCookie(SESSION_COOKIE, token, COOKIE_DAYS * 86400);
 }
 
 export async function currentCustomer(db: PrismaClient, request: Request): Promise<SiteCustomer | null> {
@@ -52,7 +57,14 @@ export async function currentCustomer(db: PrismaClient, request: Request): Promi
   const s = await db.siteSession.findUnique({ where: { id: sha(token) } });
   if (!s || s.revokedAt || s.expiresAt < new Date()) return null;
   const c = await db.siteCustomer.findUnique({ where: { id: s.customerId } });
-  return c && !c.closedAt ? c : null;
+  if (!c || c.closedAt) return null;
+  const rolled = new Date(Date.now() + SESSION_DAYS * 864e5);
+  if (rolled.getTime() - s.expiresAt.getTime() > ROLL_AFTER_MS) {
+    await db.siteSession
+      .updateMany({ where: { id: s.id, revokedAt: null }, data: { expiresAt: rolled } })
+      .catch((e) => console.warn("[site] session roll failed", (e as Error).message));
+  }
+  return c;
 }
 
 export async function endSession(db: PrismaClient, request: Request) {
@@ -127,7 +139,7 @@ const GOOGLE_STATE = "cb_site_g";
 export function siteOrigin() {
   return (process.env.SITE_ORIGIN || process.env.CARDBIT_SITE_URL || "https://app-site-site.up.railway.app").replace(/\/$/, "");
 }
-export function googleStart(returnTo: string) {
+export function googleStart(returnTo: string, opts: { age?: boolean } = {}) {
   const id = process.env.GOOGLE_CLIENT_ID;
   if (!id) throw new SignInError("Google sign-in is not set up yet. Use an email code.");
   const state = randomBytes(16).toString("base64url");
@@ -144,7 +156,7 @@ export function googleStart(returnTo: string) {
     code_challenge_method: "S256",
     prompt: "select_account",
   }).toString();
-  const cookie = setCookie(GOOGLE_STATE, JSON.stringify({ state, verifier, returnTo: safeReturn(returnTo) }), 600);
+  const cookie = setCookie(GOOGLE_STATE, JSON.stringify({ state, verifier, returnTo: safeReturn(returnTo), age: opts.age === true }), 600);
   return { url: url.toString(), cookie };
 }
 
@@ -183,5 +195,5 @@ export async function googleFinish(db: PrismaClient, request: Request, fetcher: 
   if (!info.sub || !info.email || info.email_verified !== true)
     throw new SignInError("Your Google account needs a verified email.");
   const customer = await upsertCustomer(db, { email: info.email, googleSub: info.sub, name: info.name ?? null });
-  return { customer, returnTo: safeReturn(saved.returnTo), clearState: clearCookie(GOOGLE_STATE) };
+  return { customer, returnTo: safeReturn(saved.returnTo), age: saved.age === true, clearState: clearCookie(GOOGLE_STATE) };
 }

@@ -58,7 +58,7 @@
   function shape(state) {
     if (!state || typeof state !== 'object') throw codeError('CONNECTION', 'Cardbit could not load your account. Try again.');
     // For the Sign In / Buy Cardbits dialogs (cardbit-site-auth.js).
-    window.CardbitSiteSession = Object.freeze({ signedIn: !!state.account, bits: state.account ? Number(state.account.bits) : undefined });
+    window.CardbitSiteSession = Object.freeze({ signedIn: !!state.account, id: state.account ? String(state.account.id) : undefined, bits: state.account ? Number(state.account.bits) : undefined });
     return {
       ...state,
       mode: 'shopper-test',

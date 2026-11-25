@@ -11,6 +11,7 @@ import {
   verifyEmailCode,
 } from "../site/core/auth.server";
 import { sendEmail } from "../site/email/outbox.server";
+import { recordSignupAge } from "../site/core/age.server";
 import { mailerFromEnv } from "../site/email/mailer.server";
 import { esc, simplePage } from "../site/core/simple-page";
 
@@ -67,11 +68,18 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     if (f.get("intent") === "send") {
       const issued = await issueEmailCode(db, email, clientIp(request));
-      await sendEmail({ db, mailer: mailerFromEnv() }, "signin_code", issued.email, { code: issued.code, minutes: 10 }, issued.id);
+      await sendEmail(
+        { db, mailer: mailerFromEnv() },
+        "signin_code",
+        issued.email,
+        { code: issued.code, minutes: 10, email: issued.email, returnTo },
+        issued.id,
+      );
       if (asJson) return json({ ok: true, step: "code", email: issued.email });
       return html(page({ returnTo, step: "code", email: issued.email, note: "We emailed you a 6-digit code." }));
     }
     const customer = await verifyEmailCode(db, email, String(f.get("code") || ""));
+    await recordSignupAge(db, customer.id, f.get("age") === "1");
     const cookie = await createSession(db, customer.id, request);
     if (asJson) return json({ ok: true, signedIn: true, returnTo }, 200, { "Set-Cookie": cookie });
     return new Response(null, { status: 303, headers: { Location: returnTo, "Set-Cookie": cookie } });

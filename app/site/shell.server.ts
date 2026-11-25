@@ -16,6 +16,7 @@ import siteCssSource from "../../public/site/css/cardbit-site.css?raw";
 import siteAuthSource from "../../public/site/js/cardbit-site-auth.js?raw";
 import siteAuthCssSource from "../../public/site/css/cardbit-site-auth.css?raw";
 import { createHash } from "node:crypto";
+import { signInProviders } from "./core/oauth.server";
 
 const files = manifest as Record<string, string>;
 // Cache-busting versions for the site's own files (not part of the theme port).
@@ -93,6 +94,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     "data-api-base": "/api",
     "data-sign-in": "/sign-in",
     "data-topup-checkout": "/checkout/cardbits",
+    "data-sign-in-providers": signInProviders().join(","),
     "data-policy-view": "/policies",
     "data-rewards-view": "/rewards",
     "data-shelf-title": "Shop Packs",

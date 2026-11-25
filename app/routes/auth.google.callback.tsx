@@ -1,11 +1,13 @@
 import type { LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { SignInError, createSession, googleFinish } from "../site/core/auth.server";
+import { recordSignupAge } from "../site/core/age.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (process.env.CARDBIT_SITE !== "on") return new Response("Not found", { status: 404 });
   try {
-    const { customer, returnTo, clearState } = await googleFinish(db, request);
+    const { customer, returnTo, age, clearState } = await googleFinish(db, request);
+    await recordSignupAge(db, customer.id, age);
     const session = await createSession(db, customer.id, request);
     const headers = new Headers({ Location: returnTo });
     headers.append("Set-Cookie", session);

@@ -7,7 +7,7 @@ export type EmailCard = { title: string; image?: string | null; offerBits?: numb
 export type EmailAddress = { name: string; street1: string; street2?: string; city: string; state: string; zip: string };
 
 export type EmailData = {
-  signin_code: { code: string; minutes: number };
+  signin_code: { code: string; minutes: number; email?: string; returnTo?: string };
   topup_receipt: {
     orderId: string;
     paidCents: number;
@@ -110,17 +110,25 @@ export function renderEmail<K extends EmailKind>(kind: K, data: EmailData[K], en
     case "signin_code": {
       const d = data as EmailData["signin_code"];
       const preheader = `Your Cardbit sign-in code is ${d.code}`;
+      // One-tap link: the code rides in the #fragment, so it never reaches server logs, and the
+      // page asks for a tap before signing in (mail scanners that open links can't use it up).
+      const link = d.email && d.code
+        ? `${base}/sign-in/link?e=${encodeURIComponent(d.email)}${d.returnTo ? `&rt=${encodeURIComponent(d.returnTo)}` : ""}#c=${encodeURIComponent(d.code)}`
+        : null;
       return {
         subject: `${d.code} Is Your Cardbit Sign-In Code`,
         preheader,
         html: layout({
           preheader,
           heading: "Your Sign-In Code",
-          intro: `Enter this code to sign in to Cardbit. It expires in ${d.minutes} minutes.`,
+          intro: link
+            ? `Tap the button to sign in, or enter this code. It expires in ${d.minutes} minutes.`
+            : `Enter this code to sign in to Cardbit. It expires in ${d.minutes} minutes.`,
           body: `<div style="font-family:${BRAND.heading};font-weight:800;font-size:40px;letter-spacing:10px;color:${BRAND.navy};background:${BRAND.ivory};border-radius:14px;padding:18px 0;text-align:center">${esc(d.code)}</div>`,
+          cta: link ? { label: "Sign In To Cardbit", href: link } : undefined,
           footnote: "Didn't ask for this? You can ignore it. Nobody can sign in without the code, and Cardbit will never ask you for it.",
         }),
-        text: `Your Cardbit sign-in code: ${d.code}\n\nIt expires in ${d.minutes} minutes. Didn't ask for this? Ignore this email. Cardbit will never ask you for the code.${textFooter}`,
+        text: `Your Cardbit sign-in code: ${d.code}\n\n${link ? `Or sign in with this link: ${link}\n\n` : ""}It expires in ${d.minutes} minutes. Didn't ask for this? Ignore this email. Cardbit will never ask you for the code.${textFooter}`,
       };
     }
     case "topup_receipt": {
