@@ -148,7 +148,7 @@ const SPARK_CSS = `<style>
 .sx-card .sx-btn{margin-top:8px;width:100%}
 .sx-tier{align-self:flex-start;font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:#13262a;color:#73e6dc}
 .sx-empty{padding:40px 16px;text-align:center;border:1px dashed #2b4448;border-radius:18px;color:#b6c4c5}
-.sx-fine{margin-top:28px;color:#8fa0a3;font-size:.85rem}
+p.sx-fine{margin:28px 0 0;color:#8fa0a3;font-size:.85rem}p.sx-fine a{color:#5fe3ec}
 .sx :focus-visible{outline:2px solid #00e6e1;outline-offset:2px}
 @media (max-width:560px){.sx-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.sx-hero{padding:18px}.sx-confirm form{margin-left:0;width:100%}.sx-confirm form .sx-btn{flex:1}}
 </style>`;
