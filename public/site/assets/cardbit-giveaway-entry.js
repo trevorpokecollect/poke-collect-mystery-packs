@@ -61,7 +61,7 @@
     return new Date(afternoon.getTime() + hoursUntilEight * 3600000).toISOString();
   }
   function onHome() {
-    /* SITE */ if (script.dataset.endpoint === '/api/giveaway') return location.pathname === '/' && !location.hash;
+    /* SITE */ if (script.dataset.endpoint === '/api/giveaway') return (location.pathname === '/' && !location.hash) || window.matchMedia('(max-width: 640px)').matches; // phones: the quick-action row shows it on every page
     const p = new URLSearchParams(location.search), route = p.get('cb'), surface = p.get('view');
     return (!surface || surface === 'daily-giveaway') && (!route || route === 'home') &&
       (!location.hash || /^#(?:home|daily-giveaway)?\/?$/i.test(location.hash));
@@ -411,6 +411,7 @@
   }
   window.addEventListener('cardbit:storefront-rendered',routeChanged);
   window.addEventListener('popstate',routeChanged); window.addEventListener('hashchange',routeChanged);
+  /* SITE */ if (script.dataset.endpoint === '/api/giveaway') window.matchMedia('(max-width: 640px)').addEventListener?.('change',routeChanged);
   document.addEventListener('visibilitychange',() => { if (!document.hidden && dialog.open) { clock(); void load(); } });
   window.addEventListener('pageshow',event => { if (event.persisted && dialog.open) void load(); });
   dismissedDay = readSession(storageKey + ':dismiss') || '';

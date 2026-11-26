@@ -210,7 +210,8 @@ const PATCHES = {
   ],
   'cardbit-giveaway-entry.js': [
     // Site: path routing (home is "/"), sign-in return_to, email signup lives in Welcome Rewards.
-    ["  function onHome() {\n", "  function onHome() {\n    /* SITE */ if (script.dataset.endpoint === '/api/giveaway') return location.pathname === '/' && !location.hash;\n"],
+    ["  function onHome() {\n", "  function onHome() {\n    /* SITE */ if (script.dataset.endpoint === '/api/giveaway') return (location.pathname === '/' && !location.hash) || window.matchMedia('(max-width: 640px)').matches; // phones: the quick-action row shows it on every page\n"],
+    ["  window.addEventListener('popstate',routeChanged); window.addEventListener('hashchange',routeChanged);\n", "  window.addEventListener('popstate',routeChanged); window.addEventListener('hashchange',routeChanged);\n  /* SITE */ if (script.dataset.endpoint === '/api/giveaway') window.matchMedia('(max-width: 640px)').addEventListener?.('change',routeChanged);\n"],
     ["      login.searchParams.set('return_url',back.pathname + back.search);", "      login.searchParams.set(/* SITE */ script.dataset.endpoint === '/api/giveaway' ? 'return_to' : 'return_url',back.pathname + back.search);"],
     ["      extraLink.href = root + '?cb=cardbits';", "      extraLink.href = /* SITE */ script.dataset.endpoint === '/api/giveaway' ? '/cardbits' : root + '?cb=cardbits';"],
     ["    if (key === 'email') preferences.href = root + '?cb=welcome';", "    if (key === 'email') preferences.href = /* SITE */ script.dataset.endpoint === '/api/giveaway' ? '/welcome' : root + '?cb=welcome';"],

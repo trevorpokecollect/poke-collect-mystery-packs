@@ -71,7 +71,9 @@
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
   const asset = name => (window.cardbitAssets && window.cardbitAssets[name]) || '';
   const still = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const onHome = () => location.pathname === '/' || location.pathname === '';
+  // The launcher shows on the home page, and on every page on phones (the app nav's quick-action row).
+  const PHONE = window.matchMedia('(max-width: 640px)');
+  const onHome = () => location.pathname === '/' || location.pathname === '' || PHONE.matches;
   const num = n => Number(n || 0).toLocaleString('en-US');
   let rw = null, open = false, timer = 0;
 
@@ -249,6 +251,7 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load); else load();
   // The storefront routes client-side; re-check visibility when the URL changes.
+  PHONE.addEventListener?.('change', () => render());
   let lastPath = location.pathname;
   setInterval(() => { if (location.pathname !== lastPath) { lastPath = location.pathname; render(); } }, 500);
 
