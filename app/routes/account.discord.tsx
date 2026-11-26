@@ -75,6 +75,8 @@ async function page(customerId: string, flash?: { ok?: string; error?: string })
      <h1>Discord</h1><p class="sub">Show off your Cardbit rank and your best pulls.</p>${msg}
      ${status}${level}${link}${how}${feed}${unlinkForm}
      <p class="fine" style="margin-top:22px">We store your Discord user ID and name so we can update your role. We never see your Discord email or messages. See our <a href="/policies">Privacy Policy</a>. <a href="/account">Back to My Account</a></p>`,
+    "",
+    { back: "/account" },
   );
 }
 

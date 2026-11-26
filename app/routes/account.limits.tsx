@@ -99,6 +99,8 @@ async function page(customerId: string, flash?: { ok?: string; error?: string })
        <label class="chk"><input type="checkbox" name="confirm" value="yes" required> I understand this can't be undone until it ends.</label>
        <button class="btn warn" name="op" value="exclude">Self-Exclude</button></form>
      <p class="fine" style="margin-top:22px">Need to talk to someone? Call or text 1-800-GAMBLER (1-800-426-2537), free and confidential. <a href="/">Back to Cardbit</a></p>`,
+    "",
+    { back: "/account" },
   );
 }
 
