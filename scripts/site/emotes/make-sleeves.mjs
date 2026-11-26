@@ -22,16 +22,15 @@ function text(str, x, y, size, attrs, track = 0) {
   }).join("");
 }
 
-// The Cardbit emblem: a card with two clipped corners, the B, bit squares and three stripes.
+// The real Cardbit emblem and wordmark, traced from public/site/assets/cardbit-brand-lockup.webp
+// into art/cardbit-emblem-paths.json (142x170 emblem, wordmark in its own box). Recolored per sleeve.
+const LOGO = JSON.parse(readFileSync("scripts/site/emotes/art/cardbit-emblem-paths.json", "utf8"));
+const STRIPES = [0, 1, 2].map((i) => { const x = 96 + i * 11.5; return `M${x + 3},142 H${x + 10} L${x + 7},148.5 H${x} Z`; }).join("");
 function emblem(scale, { card, edge, b, bits, stripe, glow }) {
-  const w = 200, h = 236, c = 34; // emblem box, corner cut
-  const pts = `${-w / 2},${-h / 2} ${w / 2 - c},${-h / 2} ${w / 2},${-h / 2 + c} ${w / 2},${h / 2} ${-w / 2 + c},${h / 2} ${-w / 2},${h / 2 - c}`;
-  const sq = [[-70, -58], [-52, -58], [-70, -40], [-88, -40], [-52, -22], [-70, -22]]
-    .map(([x, y], i) => `<rect x="${x}" y="${y}" width="14" height="14" rx="2" fill="${bits}" opacity="${1 - i * 0.12}"/>`).join("");
-  const st = [0, 1, 2].map((i) => `<polygon points="${42 + i * 16},${86} ${52 + i * 16},${86} ${46 + i * 16},${100} ${36 + i * 16},${100}" fill="${stripe}"/>`).join("");
-  return `<g transform="translate(${CX},${CY}) scale(${scale})"${glow ? ` filter="url(#${glow})"` : ""}>
-<polygon points="${pts}" fill="${card}" stroke="${edge}" stroke-width="8" stroke-linejoin="round"/>
-${sq}<g transform="translate(-6,0)">${text("B", 0, 62, 176, `fill="${b}"`)}</g>${st}</g>`;
+  const sc = scale * 1.5;
+  return `<g transform="translate(${CX - 71 * sc},${CY - 85 * sc}) scale(${sc})"${glow ? ` filter="url(#${glow})"` : ""}>
+<path d="${LOGO.outer}" fill="${edge}"/><path d="${LOGO.inner}" fill="${card}"/>
+<path d="${LOGO.b}" fill="${b}"/><path d="${LOGO.bits}" fill="${bits}"/><path d="${STRIPES}" fill="${stripe}"/></g>`;
 }
 
 const frame = (inner, stroke, sw = 3) => `<rect x="34" y="34" width="${W - 68}" height="${H - 68}" rx="18" fill="none" stroke="${stroke}" stroke-width="${sw}"/>${inner || ""}`;
@@ -42,8 +41,12 @@ const head = (id, label, css, defs) => `<svg xmlns="http://www.w3.org/2000/svg" 
 <style>${SWEEP_CSS}${css}${RM}</style>
 <defs><clipPath id="clip"><rect width="${W}" height="${H}" rx="30"/></clipPath>
 <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>${defs}</defs>`;
-const word = (fill, y = 112, size = 44) => text("CARDBIT", CX, y, size, `fill="${fill}"`, 10) +
-  `<g transform="rotate(180 ${CX} ${H - y + size * 0.36})">${text("CARDBIT", CX, H - y + size * 0.72, size, `fill="${fill}"`, 10)}</g>`;
+// The italic "cardbit" wordmark at the top, and upside down at the bottom like a real card back.
+function word(fill, y = 112, size = 44) {
+  const wd = size * 4.3, sc = wd / LOGO.wordW, ht = LOGO.wordH * sc, top = y - ht * 0.8;
+  const one = (t) => `<g transform="translate(${CX - wd / 2},${t}) scale(${sc.toFixed(4)})"><path d="${LOGO.word}" fill="${fill}"/></g>`;
+  return one(top) + `<g transform="rotate(180 ${CX} ${H / 2})">${one(top)}</g>`;
+}
 
 // Seeded random so the art is the same on every run.
 let seed = 7;
