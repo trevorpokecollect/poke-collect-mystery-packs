@@ -65,6 +65,10 @@ const PATCHES = {
     // Pack Pass: frame around members' icons (public/site/js/cardbit-site-pass.js).
     ["  function face(node, r) {\n", "  function face(node, r) { /* SITE */ siteFace(node, r); window.CardbitPass?.frame(node, r && r.tier, { small: !node.classList.contains('cbr-pod-avatar') }); }\n  function siteFace(node, r) {\n"],
   ],
+  'cardbit-value-view.js': [
+    // Standalone prices: the Cardbit logo replaces the word (Trevor, Nov 26 2026); screen readers still hear "Cardbits".
+    ["        span.append(img,document.createTextNode(m[0]));fragment.append(span);position=m.index+m[0].length;\n", "        /* SITE */ const alone=root.CardbitStore?.site && text.trim()===m[0];\n        span.append(img,document.createTextNode(alone?m[0].replace(/ (?:test )?Cardbits$/,''):m[0]));if(alone){const unit=document.createElement('span');unit.className='cb-unit';unit.textContent=' Cardbits';span.append(unit);}fragment.append(span);position=m.index+m[0].length;\n"],
+  ],
   'cardbit-collector-tools.js': [
     // Chase: the first rows load right away (lazy loading left desktop tiles blank in some browsers).
     ["    function chaseTile({row,variants}){\n", "    function chaseTile({row,variants},index){\n"],

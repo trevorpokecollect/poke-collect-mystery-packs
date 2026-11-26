@@ -12,6 +12,16 @@ const args = (path: string) =>
 afterEach(() => { delete process.env.CARDBIT_SITE; });
 
 describe("Cardbit site pages", () => {
+  it("load the phone tab bar (with Pack Pass) on storefront pages, and show prices without the word", () => {
+    const html = storefrontShell();
+    expect(html).toMatch(/cardbit-site-appnav\.js\?v=/);
+    expect(html).toMatch(/cardbit-site-appnav\.css\?v=/);
+    const nav = readFileSync(new URL("../../public/site/js/cardbit-site-appnav.js", import.meta.url), "utf8");
+    for (const href of ["/packs", "/chase", "/shop", "/pass", "/help"]) expect(nav).toContain(`href: '${href}'`);
+    const values = readFileSync(new URL("../../public/site/assets/cardbit-value-view.js", import.meta.url), "utf8");
+    expect(values).toContain("unit.textContent=' Cardbits'"); // screen readers still hear the unit
+  });
+
   it("stay off unless CARDBIT_SITE=on", async () => {
     expect((await splat(args("packs/mystery")) as Response).status).toBe(404);
     expect((await policies() as Response).status).toBe(404);

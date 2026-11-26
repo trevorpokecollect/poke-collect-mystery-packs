@@ -29,6 +29,8 @@ import siteUprightSource from "../../public/site/js/cardbit-site-upright.js?raw"
 import siteChatCssSource from "../../public/site/css/cardbit-site-chat.css?raw";
 import sitePulseSource from "../../public/site/js/cardbit-site-pulse.js?raw";
 import siteAdsSource from "../../public/site/js/cardbit-site-ads.js?raw";
+import siteAppNavSource from "../../public/site/js/cardbit-site-appnav.js?raw";
+import siteAppNavCssSource from "../../public/site/css/cardbit-site-appnav.css?raw";
 const chatOn = () => process.env.SITE_CHAT === "on"; // same flag as app/site/play/chat.server.ts
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
@@ -61,6 +63,11 @@ const decodeOn = () => process.env.SITE_DECODE !== "off";
 const SITE_CHAT_CSS_V = version(siteChatCssSource);
 const SITE_PULSE_V = version(sitePulseSource);
 const SITE_ADS_V = version(siteAdsSource);
+const SITE_APPNAV_V = version(siteAppNavSource + siteAppNavCssSource);
+
+/** Phones: bottom tab bar + small quick-action row (Trevor, Nov 26 2026). Every customer page with the site header. */
+export const appNavTags = () =>
+  `<link rel="stylesheet" href="/site/css/cardbit-site-appnav.css?v=${SITE_APPNAV_V}"><script src="/site/js/cardbit-site-appnav.js?v=${SITE_APPNAV_V}" defer></script>`;
 
 /** Ad pixel IDs from Railway variables (Trevor 2026-11-25: Meta, TikTok, Google Ads). Malformed values are ignored. */
 export function adPixels(env: NodeJS.ProcessEnv = process.env) {
@@ -266,6 +273,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     ${protectionScript()}
     ${scripts}
     ${pulseTag()}
+    ${appNavTags()}
   </head>
   <body>
     <div ${rootAttrs}>

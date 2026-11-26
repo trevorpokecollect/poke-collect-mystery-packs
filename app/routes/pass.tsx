@@ -5,6 +5,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { TERMS_VERSION, clientIp, currentCustomer, siteOrigin } from "../site/core/auth.server";
 import { esc, htmlResponse, simplePage } from "../site/core/simple-page";
+import { appNavTags } from "../site/shell.server";
 import { EXCLUDED_STATES, RegionBlocked, US_STATES, assertAllowedRegion, geoLookupFor } from "../site/region.server";
 import { CoinflowError } from "../site/payments/coinflow.server";
 import { cancelAtCoinflow, createSubscriptionLink, subscriptionsReady } from "../site/payments/coinflow-subscriptions.server";
@@ -100,6 +101,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
      <p class="free">${ICON.gift}<span>Daily Spins, giveaway entries and the leaderboard stay <b>free for everyone</b>. A plan never adds spins, entries or points.</span></p>
      <p class="fine">Renews automatically every month at the plan's price, charged to the card you use at checkout, until you cancel. Cancel any time on this page or by emailing Support@cardbit.com, at least a day before your renewal date to avoid the next charge; perks last through the month you paid for. Monthly charges are final once the month's Cardbits are added, except as the <a href="/policies#refund-policy">Refund Policy</a> says. Plan Cardbits are store credit (100 = $1), never cash, and follow the Terms. Bonus Cardbits are promotional. Plan charges count toward your Top-Up Limits.
      Not available in ${EXCLUDED_STATES.join(", ")}. 18+. <a href="/policies#terms">Terms</a> · <a href="/">Back to Cardbit</a></p>`,
+    appNavTags(), // phones: the site's bottom tab bar, with Pack Pass lit
   );
 }
 

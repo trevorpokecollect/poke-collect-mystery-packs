@@ -211,3 +211,33 @@
   #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-pull-amount{font-size:.64rem;white-space:normal;line-height:1.15}
   #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-pull-amount .cb-reference{white-space:normal;display:inline-block;text-align:center}
 }
+
+/* Shop Packs on phones, round 2 (Trevor, Nov 26 2026): one compact title line with the price beside it, which
+   frees the space for bigger Top Chases art. */
+@media (max-width:600px){
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile{grid-template-columns:31% minmax(0,1fr);grid-template-rows:auto 1fr}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile > .cb-pack-art{grid-row:1 / 3}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile .cb-niche{min-height:clamp(150px,46vw,184px)}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile .cb-shelf-wrapper{width:86%}
+  #cardbit-store[data-chase-style="beside"] .cb-edition-name{display:flex;align-items:center;gap:8px;align-self:start;padding:12px 10px 8px 12px;min-width:0}
+  #cardbit-store[data-chase-style="beside"] .cb-edition-name .cb-tile-head{flex:0 1 auto;min-width:0;margin:0}
+  #cardbit-store[data-chase-style="beside"] .cb-edition-name .cb-tile-head h3{font-size:1rem;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cardbit-store[data-chase-style="beside"] .cb-edition-name .cb-tile-head svg{display:none}
+  #cardbit-store[data-chase-style="beside"] .cb-edition-name .cb-tile-price{flex:none;margin:0 0 0 auto;padding:3px 8px;border-radius:999px;background:#0e2427;border:1px solid #1f4a4d;font-size:.86rem;line-height:1}
+  #cardbit-store[data-chase-style="beside"] .cb-edition-name .cb-tile-price .cb-reference{line-height:1;font-weight:800}
+  /* The heading is implied by the art; screen readers still get it. */
+  #cardbit-store[data-chase-style="beside"] .cb-pack-info .cb-chase-heading{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;padding:0}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-list{grid-row:2;gap:7px;padding:2px 10px 12px 12px;align-self:center}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-info .cb-chase-empty{grid-row:2}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link{--cb-pull-art:100%;gap:5px}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-mini-scan{width:100%}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-pull-amount{font-size:.74rem;white-space:nowrap}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-pull-amount .cb-reference{display:inline-flex;white-space:nowrap}
+}
+
+/* Prices: the Cardbit logo stands in for the word (Trevor, Nov 26 2026); logo and number share one centered line. */
+#cardbit-store .cb-reference{align-items:center;line-height:1}
+#cardbit-store .cb-reference img{align-self:center}
+#cardbit-store .cb-pull-quote,#cardbit-store .cb-art-value{text-align:center}
+#cardbit-store .cb-pull-quote .cb-reference,#cardbit-store .cb-art-value .cb-reference{justify-content:center}
+.cb-reference .cb-unit{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

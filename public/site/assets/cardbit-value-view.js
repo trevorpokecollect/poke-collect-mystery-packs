@@ -41,7 +41,8 @@
       for(const m of matches){
         fragment.append(text.slice(position,m.index));
         const span=document.createElement('span');span.className='cb-reference';const img=document.createElement('img');img.src=src;img.alt='';
-        span.append(img,document.createTextNode(m[0]));fragment.append(span);position=m.index+m[0].length;
+        /* SITE */ const alone=root.CardbitStore?.site && text.trim()===m[0];
+        span.append(img,document.createTextNode(alone?m[0].replace(/ (?:test )?Cardbits$/,''):m[0]));if(alone){const unit=document.createElement('span');unit.className='cb-unit';unit.textContent=' Cardbits';span.append(unit);}fragment.append(span);position=m.index+m[0].length;
       }
       fragment.append(text.slice(position));node.replaceWith(fragment);return;
     }
