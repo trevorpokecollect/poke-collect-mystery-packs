@@ -28,6 +28,11 @@
     return c;
   }
 
+  // TCGplayer's CDN sends no CORS header, so its pictures are read through cardbit.com's own copy
+  // (/api/card-image) and the rotated canvas can be exported. Other hosts are tried directly.
+  const TCG = /^https:\/\/(product-images|tcgplayer-cdn)\.tcgplayer\.com\//;
+  const readable = src => TCG.test(src) ? '/api/card-image?u=' + encodeURIComponent(src) : src;
+
   function rotatedUrl(src) {
     if (!cache.has(src)) cache.set(src, new Promise(res => {
       const im = new Image();
@@ -40,7 +45,7 @@
         } catch { res(''); } // host without CORS: canvas can't export
       };
       im.onerror = () => res('');
-      im.src = src;
+      im.src = readable(src);
     }));
     return cache.get(src);
   }
@@ -50,6 +55,17 @@
     const r = img.getBoundingClientRect();
     if (!r.width || !r.height) return;
     img.classList.add('cb-upright-css');
+    const mount = img.closest('.cb-scan-mount');
+    if (mount && img.parentElement?.classList.contains('cb-scan-face')) {
+      // Scan frames size to the picture, so give it a portrait box first (the frame follows), then turn
+      // and enlarge the contained landscape picture to fill it. Without this the card sat small in a wide frame.
+      const k = Math.min(1, (mount.clientHeight * .86) / r.width, (mount.clientWidth * .86) / r.height);
+      img.style.width = (r.height * k) + 'px';
+      img.style.height = (r.width * k) + 'px';
+      img.style.maxWidth = img.style.maxHeight = 'none';
+      img.style.setProperty('--cb-upright-scale', String(r.width / r.height));
+      return;
+    }
     img.style.setProperty('--cb-upright-scale', String(r.height / r.width));
   }
 
