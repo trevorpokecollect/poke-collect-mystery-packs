@@ -3,6 +3,7 @@
 // Shopify Cardbit shelf, which shares the same physical boxes (20 per slot, 20 slots per box).
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { cardImage } from "./card-image";
 
 export const SITE_FIRST_SLOT = 10001;
 export const POCKETS_PER_SLOT = 20;
@@ -278,7 +279,7 @@ async function receiveRow(db: PrismaClient, row: SiteIntake, body: string): Prom
             finish: row.finish,
             language: row.language,
             condition: row.condition,
-            image: row.image,
+            image: cardImage(row),
             slot,
             pocket,
             lookKey: look,

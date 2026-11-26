@@ -2,6 +2,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { POCKETS_PER_SLOT, ROWS_PER_BOX, SITE_FIRST_SLOT, SLOTS_PER_ROW, faceKey, legacyPrintingKey, lookKey, priceKey, printingKey, shelfAddress, shelfLabel } from "./stock.server";
 import { RestockError, stageRestock } from "./restock.server";
+import { cardImage } from "./card-image";
 
 export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
 
@@ -163,7 +164,7 @@ export async function relinkCopy(
   if (image !== null && (typeof image !== "string" || !/^https:\/\//.test(image) || image.length > 2000)) throw new DeskError("Image must be an https URL.");
   const next = {
     game: text("game", 40), setName: text("setName", 350), number: text("number", 60), finish: text("finish", 80), language: text("language", 60),
-    name: text("name", 350), title: text("title", 500), tcgplayerId: tcgplayerId as number, image: image as string | null,
+    name: text("name", 350), title: text("title", 500), tcgplayerId: tcgplayerId as number, image: cardImage({ image: image as string | null, tcgplayerId: tcgplayerId as number }),
   };
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;

@@ -152,3 +152,62 @@
 @media(prefers-reduced-motion:no-preference){.cb-nav-pass{--cb-move:cb-nav-ticket}}
 /* Phones: the header row has room for four links; Pack Pass stays in the footer. */
 @media(max-width:640px){#cardbit-store .cb-nav .cb-nav-passlink,.cb-nav .cb-nav-passlink{display:none}}
+
+/* Pack page buttons (Nov 26 2026, Trevor): one tidy group on phone and desktop.
+   Buy Pack runs full width; Demo Opening and View Card Pool sit under it as two equal buttons. */
+#cardbit-store .cb-detail-copy > .cb-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%}
+#cardbit-store .cb-detail-copy > .cb-actions > *{width:100%;min-width:0;min-height:52px;margin:0;box-sizing:border-box;justify-content:center;text-align:center;white-space:nowrap}
+#cardbit-store .cb-detail-copy > .cb-actions > :first-child{grid-column:1 / -1}
+#cardbit-store .cb-detail-copy > .cb-actions > :last-child:nth-child(2){grid-column:1 / -1}
+#cardbit-store .cb-detail-copy > .cb-actions > [data-series-buy]{display:grid}
+#cardbit-store .cb-detail-copy > .cb-actions > [data-series-buy] > *{width:100%;min-height:52px;justify-content:center}
+#cardbit-store .cb-detail-copy > .cb-actions .cb-primary{font-size:1.05rem}
+/* Desktop: the pack sits level with the title instead of centered against the long column. */
+#cardbit-store .cb-detail.cb-detail-with-odds{align-items:start}
+#cardbit-store .cb-detail-with-odds > .cb-detail-stage{margin-top:8px}
+
+/* Pack page on phones (Nov 26 2026, Trevor: "the pack should be higher"): the pack shows first, in a shorter stage,
+   so the title, odds and Buy Pack all land on the first screen. */
+@media (max-width:760px){
+  #cardbit-store .cb-detail.cb-detail-with-odds{gap:16px}
+  #cardbit-store .cb-detail-with-odds > .cb-detail-copy{grid-row:auto}
+  #cardbit-store .cb-detail-with-odds > .cb-detail-stage{margin-top:0;aspect-ratio:auto;height:clamp(150px,40vw,190px);max-height:none}
+  #cardbit-store .cb-detail-with-odds .cb-pack-portrait{height:90%;width:auto;max-width:70%}
+  #cardbit-store .cb-detail-with-odds > .cb-detail-copy > h1{font-size:clamp(34px,10vw,48px);margin:0 0 10px}
+  #cardbit-store .cb-detail-copy > .cb-actions{max-width:none;gap:8px}
+  #cardbit-store .cb-detail-copy > .cb-actions > *{min-height:50px;padding-inline:10px;font-size:.95rem}
+  #cardbit-store .cb-detail-copy > .cb-actions .cb-primary{font-size:1.02rem}
+}
+
+/* Shop Packs on phones (Nov 26 2026, Trevor: Top Chases took too much room): the three chases sit side by side
+   as small cards under each pack instead of a tall list. */
+@media (max-width:600px){
+  #cardbit-store .cb-pack-info .cb-chase-heading{padding:10px 14px 6px}
+  #cardbit-store .cb-chase-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:0 12px 12px}
+  #cardbit-store .cb-chase-list li + li{border-top:0}
+  #cardbit-store .cb-chase-link{--cb-pull-art:52px;grid-template-columns:minmax(0,1fr);grid-template-rows:auto;justify-items:center;text-align:center;gap:5px;height:100%;box-sizing:border-box;padding:9px 5px 8px;border:1px solid #2b393e;border-radius:10px;background:#152024}
+  #cardbit-store .cb-chase-link .cb-mini-scan,#cardbit-store .cb-chase-link .cb-pull-copy,#cardbit-store .cb-chase-link .cb-pull-quote{grid-row:auto;grid-column:1;align-self:start}
+  #cardbit-store .cb-chase-link .cb-pull-copy{display:grid;gap:1px;width:100%;min-width:0}
+  #cardbit-store .cb-chase-link .cb-pull-name{font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Tier only (the card number lives on the chase page); the tier color also rings the art. */
+  #cardbit-store .cb-chase-link .cb-pull-meta{font-size:0;line-height:1.2;overflow:hidden;white-space:nowrap}
+  #cardbit-store .cb-chase-link .cb-pull-meta > :first-child{font-size:.68rem}
+  #cardbit-store .cb-chase-link .cb-pull-meta > [aria-hidden]{display:none}
+  #cardbit-store .cb-chase-link .cb-pull-quote{justify-items:center;max-width:none;text-align:center;width:100%}
+  #cardbit-store .cb-chase-link .cb-pull-amount{font-size:.74rem;white-space:nowrap}
+}
+/* Option B: the chases sit beside the pack, under its name and price, so each pack is one short row. */
+@media (max-width:600px){
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile{grid-template-columns:34% minmax(0,1fr);grid-template-rows:auto auto 1fr;align-items:start}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile > .cb-pack-art{grid-column:1;grid-row:1 / 4;align-self:stretch;min-width:0;overflow:hidden}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile .cb-niche{width:100%;aspect-ratio:auto;height:100%;min-height:clamp(150px,44vw,180px)}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-tile .cb-shelf-wrapper{height:auto;width:78%;max-width:none}
+  #cardbit-store[data-chase-style="beside"] .cb-edition-name{grid-column:2;grid-row:1;align-self:end;padding:14px 12px 6px}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-info .cb-chase-heading{grid-column:2;grid-row:2;border-top:0;padding:4px 12px 5px;font-size:.7rem}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-list{grid-column:2;grid-row:3;gap:6px;padding:0 12px 12px}
+  #cardbit-store[data-chase-style="beside"] .cb-pack-info .cb-chase-empty{grid-column:2;grid-row:2 / 4;padding:0 12px}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link{--cb-pull-art:42px;padding:0;gap:4px;border:0;background:none}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-pull-copy{display:none}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-pull-amount{font-size:.64rem;white-space:normal;line-height:1.15}
+  #cardbit-store[data-chase-style="beside"] .cb-chase-link .cb-pull-amount .cb-reference{white-space:normal;display:inline-block;text-align:center}
+}

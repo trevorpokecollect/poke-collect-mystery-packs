@@ -202,6 +202,8 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     "data-order": "mystery,booster,gold,japanese,wildcard",
     "data-animate-header": "true",
     "data-autoplay-hero": "true",
+    // Shop Packs on phones: Top Chases sit beside each pack (cardbit-site.css). Remove for the 3-card row under it.
+    "data-chase-style": "beside",
     ...data,
   };
   const rootAttrs = Object.entries(attrs)

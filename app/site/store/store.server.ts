@@ -44,6 +44,7 @@ async function pricesFor(db: PrismaClient | Tx, keys: string[]): Promise<Prices>
 
 export { DEFAULT_TIERS, tierFor, tierRules, type TierRule } from "./tiers";
 import { DEFAULT_TIERS, tierFor, tierRules, type TierRule } from "./tiers";
+import { cardImage } from "../core/card-image";
 
 /** Card fields the storefront reads (same names as the theme catalog). */
 function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule[] = DEFAULT_TIERS) {
@@ -61,7 +62,7 @@ function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule
     condition: c.condition,
     language: c.language,
     game: c.game,
-    image: c.image,
+    image: cardImage(c),
     rarity: c.rarity ?? null,
     kind: c.kind, // card | slab | sealed
     ...(c.kind === "slab" ? { grader: c.grader, grade: c.grade, certNumber: c.certNumber } : {}),
