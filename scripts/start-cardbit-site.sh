@@ -27,4 +27,6 @@ if [ "${COINFLOW_ENV:-}" != "sandbox" ] && [ "${CARDBIT_SITE_LIVE_APPROVED:-}" !
 fi
 export CARDBIT_SITE=on
 export DAILY_SCHEDULER=off
-exec npm run docker-start
+# Same as `npm run docker-start` (migrations, then serve), with long browser caching for versioned assets.
+npm run setup
+exec node scripts/site/serve.mjs build/server/index.js
