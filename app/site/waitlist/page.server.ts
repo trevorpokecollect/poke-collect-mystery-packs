@@ -5,6 +5,8 @@ import { createHash } from "node:crypto";
 import { assetUrl, pulseTag, shareMeta, SITE_SECURITY_HEADERS } from "../shell.server";
 import { robotsTags } from "../seo.server";
 import { helpTags } from "../help/tag.server";
+import { fastUrl } from "../fast-assets";
+import { LOADER_HEAD, loaderMarkup } from "../loader.server";
 import { FOUNDING, FOUNDING_TOTAL } from "./waitlist.server";
 import cssSource from "../../../public/site/waitlist/waitlist.css?raw";
 import jsSource from "../../../public/site/waitlist/waitlist.js?raw";
@@ -27,7 +29,10 @@ const PACKS = [
 // card or Pokemon shown twice anywhere on the page. Every pull fits the rules of the pack it is shown with:
 // Mystery = modern English; Booster = modern English/Japanese; Japanese = modern Japanese;
 // Gold and Wildcard = modern + vintage, English/Japanese.
-const cardUrl = (slug: string) => `/site/waitlist/cards/${slug}.webp?v=1`;
+// Served from the right-sized copies in public/site/fast/ (400 px, or 200 px "sm" for small tiles).
+const cardUrl = (slug: string) => fastUrl(`card-${slug}.webp`);
+const cardSm = (slug: string) => fastUrl(`card-${slug}-sm.webp`);
+const lazy = 'loading="lazy" decoding="async"';
 // Hero rip: three pulls per pack, in PACKS order.
 const RIPS: Record<string, string[]> = {
   mystery: ["charizard-ex-sir-obf", "umbreon-ex-sir-pre", "pikachu-ex-sir-ssp"],
@@ -43,7 +48,8 @@ const FINAL = ["roaring-moon-ex-sir-par", "shining-gyarados-neo-revelation", "er
 const REEL_CARDS = ["terapagos-ex-sir-scr", "squirtle-ir-151", "bulbasaur-ir-151", "alakazam-holo-base", "magikarp-ir-pal", "raichu-ir-pal", "lillies-clefairy-ex-sir-jtg", "slowking-holo-1st-neo-revelation"];
 // Daily Spin strip: each card tile appears once (REEL_CARDS index), the rest are Sparks and XP.
 const REEL: [string, number][] = [["sparks", 25], ["card", 0], ["xp", 25], ["sparks", 50], ["xp", 10], ["card", 1], ["sparks", 10], ["xp", 50], ["sparks", 25], ["card", 2], ["xp", 25], ["sparks", 100], ["xp", 10], ["card", 3], ["sparks", 25], ["xp", 50], ["sparks", 50], ["card", 4], ["xp", 25], ["sparks", 10], ["xp", 10], ["card", 5], ["sparks", 25], ["xp", 50], ["sparks", 50], ["card", 6], ["xp", 25], ["sparks", 10], ["xp", 10], ["card", 7], ["sparks", 25], ["xp", 50]];
-const BACK: Record<string, string> = { japanese: "cardbit-card-back-ja-modern.webp" };
+const BACK: Record<string, string> = { japanese: "card-back-ja-modern.webp" };
+const backEn = () => fastUrl("card-back-en.webp");
 
 const FRIENDS = [
   ["latch", "Latch", "webp"], ["blazebit", "Blazebit", "svg"], ["driplink", "Driplink", "svg"], ["mossbit", "Mossbit", "svg"],
@@ -55,7 +61,7 @@ const friend = (id: string) => {
   return assetUrl(`cardbit-icon-${f[0]}.${f[2]}`);
 };
 
-const pack = (id: string) => assetUrl(`cardbit-latch-pack-${id}.webp`);
+const pack = (id: string) => fastUrl(`pack-${id}.webp`);
 
 // Community callout under the hero signup (Trevor, Nov 25): Instagram, Facebook, Discord. Icons match the site footer.
 export const SOCIALS = [
@@ -95,7 +101,7 @@ function form(id: string, compact = false) {
     <p class="wl-error" role="alert" data-wl-error hidden></p>
   </form>
   <div class="wl-success" data-wl-success hidden tabindex="-1">
-    <img class="wl-success__latch" src="/site/waitlist/latch-cheer.webp?v=1" alt="" width="180" height="191">
+    <img class="wl-success__latch" src="${fastUrl("latch-cheer.webp")}" alt="" loading="lazy" decoding="async" width="180" height="191">
     <div class="wl-badge-medal" aria-hidden="true"><span>Founding<br>Collector</span></div>
     <h3 data-wl-success-title>You're In, Founding Collector</h3>
     <p data-wl-success-text>Watch your inbox. When Cardbit launches, sign up with this email and make your first top-up to unlock <b>${n(FOUNDING_TOTAL)} Cardbits</b>.</p>
@@ -131,24 +137,32 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
   <meta name="referrer" content="same-origin">
   <title>cardbit · Launching Soon</title>
   ${shareMeta(share, env)}
-  <link rel="icon" type="image/png" href="${assetUrl("cardbit-brand-emblem.png")}">
+  <link rel="icon" type="image/webp" href="${fastUrl("brand-emblem.webp")}">
   <link rel="preload" as="font" type="font/woff2" href="${assetUrl("cardbit-outfit-800-latin.woff2")}" crossorigin>
-  <link rel="preload" as="image" href="${pack("mystery")}">
+  <link rel="preload" as="image" href="${pack("mystery")}" fetchpriority="high">
+  <link rel="preload" as="font" type="font/woff2" href="${fastUrl("atkinson.woff2")}" crossorigin>
   <style>
     @font-face{font-family:'Cardbit Outfit';src:url('${assetUrl("cardbit-outfit-800-latin.woff2")}') format('woff2');font-weight:800;font-display:swap}
-    @font-face{font-family:'Cardbit Atkinson';src:url('${assetUrl("cardbit-type-atkinson.woff")}') format('woff');font-weight:200 800;font-display:swap}
+    @font-face{font-family:'Cardbit Atkinson';src:url('${fastUrl("atkinson.woff2")}') format('woff2');font-weight:200 800;font-display:swap}
   </style>
-  <link rel="stylesheet" href="/site/waitlist/waitlist.css?v=${CSS_V}">
-  <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), rips: PACKS.map((p) => RIPS[p.id].map(cardUrl)), backs: PACKS.map((p) => assetUrl(BACK[p.id] || "cardbit-card-back-en.webp")) }).replace(/</g, "\\u003c")};</script>
+  <style>body.wl{margin:0;background:#0b1114;color:#f6faf9}html:not(.cb-css) body.wl{visibility:hidden}html:not(.cb-css) .cbl{visibility:visible}</style>
+  <noscript><style>html:not(.cb-css) body.wl{visibility:visible}</style></noscript>
+  ${LOADER_HEAD}
+  <script>function cbCssIn(){if(window.cbCssReady)return;window.cbCssReady=1;document.documentElement.classList.add('cb-css');cbLoaderReady('css');dispatchEvent(new Event('cb:css'))}setTimeout(cbCssIn,6000)</script>
+  <!-- The stylesheet loads without blocking the first paint; the branded loader covers the page until it is in. -->
+  <link rel="preload" as="style" href="/site/waitlist/waitlist.css?v=${CSS_V}" onload="this.onload=null;this.rel='stylesheet';cbCssIn()" onerror="this.rel='stylesheet';cbCssIn()">
+  <noscript><link rel="stylesheet" href="/site/waitlist/waitlist.css?v=${CSS_V}"></noscript>
+  <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), rips: PACKS.map((p) => RIPS[p.id].map(cardUrl)), backs: PACKS.map((p) => fastUrl(BACK[p.id] || "card-back-en.webp")) }).replace(/</g, "\\u003c")};</script>
   <script src="/site/waitlist/waitlist.js?v=${JS_V}" defer></script>
-  ${helpTags("waitlist", assetUrl("cardbit-latch-cheer.webp"), env)}
+  ${helpTags("waitlist", fastUrl("latch-cheer-icon.webp"), env, { lazy: true })}
   ${pulseTag()}
 </head>
 <body class="wl">
+  ${loaderMarkup({ wait: ["dom", "css"], maxMs: 5000 })}
   <a class="wl-skip" href="#join">Skip to the Waitlist</a>
   <canvas class="wl-sparks" data-wl-sparks aria-hidden="true"></canvas>
   <header class="wl-top" data-wl-top>
-    <a href="/" class="wl-logo" aria-label="cardbit home"><img src="${assetUrl("cardbit-brand-lockup.webp")}" alt="cardbit" width="150" height="30"></a>
+    <a href="/" class="wl-logo" aria-label="cardbit home"><img src="${fastUrl("brand-lockup.webp")}" alt="cardbit" width="150" height="30" fetchpriority="high"></a>
     <span class="wl-pill"><i></i>Launching Soon</span>
     <a class="wl-btn wl-btn--small" href="#join" data-wl-jump>Join the Waitlist</a>
   </header>
@@ -161,7 +175,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
         <h1 id="wl-h1" class="wl-h1" data-wl-split>Rip Real Pokémon Packs Online.</h1>
         <p class="wl-lede" data-wl-rise>Open a pack in seconds, see your pull instantly, and own the real card. Keep it in your Vault, ship it to your door, or sell it back for Cardbits.</p>
         <div class="wl-offer" data-wl-rise>
-          <div class="wl-offer__coin" aria-hidden="true"><img src="${assetUrl("cardbit-bits-card-emblem.png")}" alt="" width="60" height="70"></div>
+          <div class="wl-offer__coin" aria-hidden="true"><img src="${fastUrl("bits-card-emblem.webp")}" alt="" width="60" height="70"></div>
           <div>
             <b><span data-wl-count="${FOUNDING_TOTAL}">${n(FOUNDING_TOTAL)}</span> Free Cardbits + Founding Collector Badge</b>
             <small>${n(FOUNDING.email)} for your email, ${n(FOUNDING.sms)} for your phone. Unlocks with your first top-up after launch.</small>
@@ -177,11 +191,11 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
       <div class="wl-stage" data-wl-stage aria-hidden="true">
         <div class="wl-stage__glow"></div>
         <div class="wl-stage__ring"></div>
-        <img class="wl-side wl-side--l" src="${pack("gold")}" alt="" width="842" height="1520">
-        <img class="wl-side wl-side--r" src="${pack("japanese")}" alt="" width="842" height="1520">
+        <img class="wl-side wl-side--l" src="${fastUrl("pack-gold-side.webp")}" decoding="async" alt="" width="842" height="1520">
+        <img class="wl-side wl-side--r" src="${fastUrl("pack-japanese-side.webp")}" decoding="async" alt="" width="842" height="1520">
         <div class="wl-rip" data-wl-rip>
           <div class="wl-rip__cards">
-            ${[0, 1, 2].map((i) => `<div class="wl-rip__card" style="--i:${i}"><div class="wl-flip"><img class="wl-flip__back" data-wl-back src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" data-wl-front src="${cardUrl(RIPS.mystery[i])}" alt=""></div></div>`).join("")}
+            ${[0, 1, 2].map((i) => `<div class="wl-rip__card" style="--i:${i}"><div class="wl-flip"><img class="wl-flip__back" data-wl-back data-wl-src="${backEn()}" alt="" decoding="async"><img class="wl-flip__front" data-wl-front data-wl-src="${cardUrl(RIPS.mystery[i])}" alt="" decoding="async"></div></div>`).join("")}
           </div>
           <div class="wl-rip__pack" data-wl-pack>
             <div class="wl-rip__body" style="--art:url('${pack("mystery")}')"></div>
@@ -190,7 +204,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
           </div>
           <div class="wl-rip__burst"></div>
         </div>
-        <img class="wl-stage__latch" src="/site/waitlist/latch-full.webp?v=2" alt="" width="713" height="790">
+        <img class="wl-stage__latch" src="${fastUrl("latch-full.webp")}" alt="" width="713" height="790" fetchpriority="high">
       </div>
       <a class="wl-scrollcue" href="#how" aria-label="See How Cardbit Works"><span></span></a>
     </section>
@@ -205,24 +219,24 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
           <p class="wl-eyebrow">How Cardbit Works</p>
           <h2 id="wl-how-h" class="wl-h2">From Rip to Real in Four Steps</h2>
           <ol class="wl-steps">
-            ${steps.map((s, i) => `<li class="wl-step" data-wl-step="${i}"><img src="${friend(s.f)}" alt="" width="56" height="56"><div><b><em>${i + 1}</em>${s.t}</b><p>${s.d}</p></div></li>`).join("")}
+            ${steps.map((s, i) => `<li class="wl-step" data-wl-step="${i}"><img src="${friend(s.f)}" alt="" width="56" height="56" ${lazy}><div><b><em>${i + 1}</em>${s.t}</b><p>${s.d}</p></div></li>`).join("")}
           </ol>
           <div class="wl-rail" aria-hidden="true"><i data-wl-rail></i></div>
         </div>
         <div class="wl-how__stage" aria-hidden="true" data-wl-how-stage data-scene="0">
           <div class="wl-scene wl-scene--pick">
-            ${PACKS.map((p, i) => `<img src="${pack(p.id)}" alt="" style="--i:${i};--ai:${Math.abs(i - 2)}">`).join("")}
+            ${PACKS.map((p, i) => `<img src="${pack(p.id)}" alt="" style="--i:${i};--ai:${Math.abs(i - 2)}" ${lazy}>`).join("")}
           </div>
           <div class="wl-scene wl-scene--rip">
-            <div class="wl-bigflip"><div class="wl-flip"><img class="wl-flip__back" src="${assetUrl("cardbit-card-back-en.webp")}" alt=""><img class="wl-flip__front" src="${cardUrl(HOW_FLIP)}" alt=""></div></div>
+            <div class="wl-bigflip"><div class="wl-flip"><img class="wl-flip__back" src="${backEn()}" alt="" ${lazy}><img class="wl-flip__front" src="${cardUrl(HOW_FLIP)}" alt="" ${lazy}></div></div>
             <span class="wl-tierchip">Pulled!</span>
           </div>
           <div class="wl-scene wl-scene--vault">
-            <div class="wl-vault">${VAULT.map((c, i) => `<img src="${cardUrl(c)}" alt="" style="--i:${i}" loading="lazy">`).join("")}</div>
+            <div class="wl-vault">${VAULT.map((c, i) => `<img src="${cardSm(c)}" alt="" style="--i:${i}" ${lazy}>`).join("")}</div>
             <div class="wl-vault__label"><b>My Vault</b><span>Real Cards, Held for You</span></div>
           </div>
           <div class="wl-scene wl-scene--choose">
-            <div class="wl-choose__card"><img src="${cardUrl(HOW_CHOOSE)}" alt=""></div>
+            <div class="wl-choose__card"><img src="${cardUrl(HOW_CHOOSE)}" alt="" ${lazy}></div>
             <div class="wl-choice wl-choice--keep"><b>Keep</b><span>Stays in My Vault</span></div>
             <div class="wl-choice wl-choice--ship"><b>Ship Together</b><span>Bundle Cards in One Box</span></div>
             <div class="wl-choice wl-choice--sell"><b>Sell Back</b><span>Instant Cardbits</span></div>
@@ -236,7 +250,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
       <h2 id="wl-packs-h" class="wl-h2" data-wl-reveal>Five Packs. Every Card Real.</h2>
       <div class="wl-carousel" data-wl-carousel tabindex="0" role="group" aria-roledescription="carousel" aria-label="Cardbit packs. Use the arrow keys to browse.">
         ${PACKS.map((p, i) => `<figure class="wl-packcard" data-i="${i}" role="group" aria-roledescription="slide" aria-label="${p.name} Pack, ${i + 1} of ${PACKS.length}">
-          <div class="wl-packcard__art"><img src="${pack(p.id)}" alt="${p.name} Edition pack" width="842" height="1520" loading="lazy"><i style="--m:url('${pack(p.id)}')"></i></div>
+          <div class="wl-packcard__art"><img src="${pack(p.id)}" alt="${p.name} Edition pack" width="842" height="1520" ${lazy}><i data-wl-mask="${pack(p.id)}"></i></div>
           <figcaption><b>${p.name} Edition</b><span class="wl-count">${p.cards}</span><p>${p.line}</p><div class="wl-tags">${tags(p.tags)}</div></figcaption>
         </figure>`).join("")}
       </div>
@@ -253,13 +267,13 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
       <div class="wl-grid3">
         <article class="wl-card wl-feature" data-wl-reveal>
           <div class="wl-reel" aria-hidden="true" data-wl-reel><span class="wl-reel__mk wl-reel__mk--t"></span><div class="wl-reel__track" data-wl-reel-track>${REEL.map(([k, x]) =>
-            k === "card" ? `<div class="wl-tile is-card" data-k="card"><img src="${cardUrl(REEL_CARDS[x])}" alt="" loading="lazy"></div>`
-            : k === "sparks" ? `<div class="wl-tile is-sparks" data-k="sparks"><img src="${assetUrl("cardbit-sparks.svg")}" alt=""><b>${x}</b><span>Sparks</span></div>`
+            k === "card" ? `<div class="wl-tile is-card" data-k="card"><img src="${cardSm(REEL_CARDS[x])}" alt="" ${lazy}></div>`
+            : k === "sparks" ? `<div class="wl-tile is-sparks" data-k="sparks"><img src="${assetUrl("cardbit-sparks.svg")}" alt="" ${lazy}><b>${x}</b><span>Sparks</span></div>`
             : `<div class="wl-tile is-xp" data-k="xp"><i>XP</i><b>+${x}</b><span>XP</span></div>`).join("")}</div><span class="wl-reel__mk wl-reel__mk--b"></span></div>
           <h3>Daily Spins</h3><p>A free spin every day for Sparks, XP or a real card. Level up to unlock better spins with bigger prizes.</p>
         </article>
         <article class="wl-card wl-feature" data-wl-reveal>
-          <div class="wl-level" aria-hidden="true"><img src="${friend("nimbyte")}" alt=""><div><b>Level <span data-wl-level>7</span></b><div class="wl-xp"><i data-wl-xp></i></div><small>XP From Every Pack You Open</small></div></div>
+          <div class="wl-level" aria-hidden="true"><img src="${friend("nimbyte")}" alt="" ${lazy}><div><b>Level <span data-wl-level>7</span></b><div class="wl-xp"><i data-wl-xp></i></div><small>XP From Every Pack You Open</small></div></div>
           <h3>Levels & XP</h3><p>Earn XP as you open packs and check in. Higher levels unlock new Latch & Friends icons and better daily rewards.</p>
         </article>
         <article class="wl-card wl-feature" data-wl-reveal>
@@ -271,7 +285,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
 
     <section class="wl-trust" aria-labelledby="wl-trust-h">
       <div class="wl-trust__shuffle" aria-hidden="true" data-wl-shuffle>
-        ${[0, 1, 2, 3, 4].map((i) => `<img src="${assetUrl("cardbit-card-back-en.webp")}" alt="" style="--i:${i}">`).join("")}
+        ${[0, 1, 2, 3, 4].map((i) => `<img src="${backEn()}" alt="" style="--i:${i}" ${lazy}>`).join("")}
         <div class="wl-lock"><svg viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="5" y="10" width="14" height="11" rx="2.5" fill="currentColor"/></svg><code data-wl-hash>9f3a·c41e·77b0·2d58</code></div>
       </div>
       <div class="wl-trust__copy">
@@ -292,12 +306,12 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
       <h2 id="wl-friends-h" class="wl-h2" data-wl-reveal>Meet Latch & Friends</h2>
       <p class="wl-sub" data-wl-reveal>Latch is the Cardbit mascot. Collect his digital friends as profile icons as you level up.</p>
       <ul class="wl-friendrow">
-        ${FRIENDS.map(([id, name], i) => `<li style="--i:${i}" data-wl-reveal><img src="${friend(id)}" alt="" width="96" height="96" loading="lazy"><span>${name}</span></li>`).join("")}
+        ${FRIENDS.map(([id, name], i) => `<li style="--i:${i}" data-wl-reveal><img src="${friend(id)}" alt="" width="96" height="96" ${lazy}><span>${name}</span></li>`).join("")}
       </ul>
     </section>
 
     <section class="wl-final" aria-labelledby="wl-final-h">
-      <div class="wl-final__cards" aria-hidden="true">${FINAL.map((c, i) => `<img src="${cardUrl(c)}" alt="" style="--i:${i}" loading="lazy">`).join("")}</div>
+      <div class="wl-final__cards" aria-hidden="true">${FINAL.map((c, i) => `<img src="${cardUrl(c)}" alt="" style="--i:${i}" ${lazy}>`).join("")}</div>
       <div class="wl-card wl-final__box" data-wl-reveal>
         <p class="wl-eyebrow">Launching Soon</p>
         <h2 id="wl-final-h" class="wl-h2">Become a Founding Collector</h2>
@@ -321,7 +335,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
   </main>
 
   <footer class="wl-foot">
-    <img src="${assetUrl("cardbit-brand-lockup.webp")}" alt="cardbit" width="130" height="26" loading="lazy">
+    <img src="${fastUrl("brand-lockup.webp")}" alt="cardbit" width="130" height="26" ${lazy}>
     <p>Hosted by Poke-Collect.</p>
     <nav aria-label="Footer">
       <a href="/policies">Policies</a><a href="/official-rules">Official Rules</a><a href="mailto:Support@cardbit.com">Support@cardbit.com</a>

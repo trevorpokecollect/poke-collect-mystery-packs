@@ -38,6 +38,7 @@ import { PASS_ICON_URLS, passClientJson } from "./play/pass-icons";
 import { planClientJson, withPlanCopy } from "./play/plan-brand";
 import { subscriptionsReady } from "./payments/coinflow-subscriptions.server";
 import { helpTags } from "./help/tag.server";
+import { LOADER_HEAD, loaderMarkup } from "./loader.server";
 
 const files = manifest as Record<string, string>;
 // Cache-busting versions for the site's own files (not part of the theme port).
@@ -257,6 +258,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     <title>${escapeAttr(title)}</title>
     ${shareMeta(share ?? { ...HOME_SHARE, title })}
     <link rel="icon" type="image/png" href="${assetUrl("cardbit-brand-emblem.png")}">
+    ${LOADER_HEAD}
     ${styles}
     <style>
       body { margin: 0; background: #101619; color: #f6faf9; }
@@ -277,11 +279,10 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
   </head>
   <body>
     <div ${rootAttrs}>
-      <div class="cb-loading" role="status" aria-live="polite">
-        <img src="${assetUrl("cardbit-brand-lockup.webp")}" width="158" height="32" alt="cardbit">
-        <p>Loading the Card Shop…</p>
-      </div>
+      <div class="cb-loading" data-cb-boot></div>
     </div>
+    ${loaderMarkup({ wait: ["shop"], maxMs: 6000 })}
+    <script>(function(){var b=document.querySelector('[data-cb-boot]');if(!b)return cbLoaderReady('shop');var r=b.parentNode;new MutationObserver(function(_,o){if(!r.contains(b)){o.disconnect();cbLoaderReady('shop')}}).observe(r,{childList:true,subtree:true})})();</script>
     <noscript><p>Enable JavaScript to Browse the Cards or Open a Pack.</p><a href="mailto:Support@cardbit.com">Support@cardbit.com</a></noscript>
     ${withPlanCopy(howItWorks, subscriptionsReady())}
     ${giveaway.replace(/src="\/site\/assets\/([^"?]+)"/g, (m, name) => (files[name] ? `src="${assetUrl(name)}"` : m))}

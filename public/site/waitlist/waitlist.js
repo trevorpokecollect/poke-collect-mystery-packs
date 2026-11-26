@@ -3,8 +3,9 @@
  * - Pinned How It Works scenes driven by scroll progress.
  * - 3D pack carousel (buttons, dots, arrows, swipe), reveals, Daily Spin reel / XP / shuffle demos (visual only).
  * - POST /api/waitlist, success state with confetti; consent-gated Lead event if an ad pixel is loaded.
- * Everything respects prefers-reduced-motion. */
-(() => {
+ * Everything respects prefers-reduced-motion.
+ * Starts once waitlist.css has applied (the stylesheet loads without blocking paint; see loader.server.ts). */
+const wlBoot = () => {
   const d = document;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = (s, r = d) => r.querySelector(s);
@@ -78,6 +79,11 @@
     stage.addEventListener('pointerleave', () => { rip.style.setProperty('--ry', '0deg'); rip.style.setProperty('--rx', '0deg'); });
   }
 
+  /* ---------- hero rip cards: hidden until the first tear, so they load after the page (keeps the hero fast) ---------- */
+  const lateImgs = $$('[data-wl-src]');
+  const loadLate = () => lateImgs.forEach((img) => { if (!img.getAttribute('src')) img.src = img.dataset.wlSrc; });
+  if (d.readyState === 'complete') loadLate(); else addEventListener('load', loadLate, { once: true });
+
   /* ---------- hero rip loop ---------- */
   const A = window.CardbitWaitlist || {};
   const packs = A.packs || [];
@@ -143,6 +149,17 @@
     io.unobserve(en.target);
   }), { rootMargin: '0px 0px -10% 0px', threshold: .12 });
   $$('[data-wl-reveal]').forEach((el) => io.observe(el));
+
+  /* ---------- pack foil masks: set the mask image only when the lineup is near (keeps it off first load) ---------- */
+  const masks = $$('[data-wl-mask]');
+  if (masks.length) {
+    const mo = new IntersectionObserver((ents) => ents.forEach((en) => {
+      if (!en.isIntersecting) return;
+      en.target.style.setProperty('--m', `url('${en.target.dataset.wlMask}')`);
+      mo.unobserve(en.target);
+    }), { rootMargin: '600px 0px' });
+    masks.forEach((el) => mo.observe(el));
+  }
 
   /* ---------- how it works (pinned scroll) ---------- */
   const how = $('[data-wl-how]');
@@ -439,4 +456,5 @@
       else { await navigator.clipboard.writeText(data.url); say('Link Copied'); }
     } catch { /* closed share sheet */ }
   });
-})();
+};
+if (window.cbCssReady) wlBoot(); else addEventListener('cb:css', wlBoot, { once: true });
