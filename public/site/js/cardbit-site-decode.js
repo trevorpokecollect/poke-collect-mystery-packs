@@ -22,6 +22,10 @@
   const easeOut = k => 1 - Math.pow(1 - k, 3);
   // Cardbit value per card: the same buyback number the pool pages show (never retail).
   const BITS_ICON = document.currentScript?.dataset.bits || '';
+  // Opening music: "Treasure Token Trot", made in Trevor's ElevenLabs account (picked Nov 25 2026), trimmed
+  // to a seamless 44 s loop. Loaded only when sound is on; the built-in chiptune plays if it can't load.
+  const MUSIC_URL = document.currentScript?.dataset.music || '';
+  let musicBuf = null;
   const bitsOf = c => { const v = Number(c?.buybackBits); return Number.isSafeInteger(v) && v > 0 ? v : 0; };
   const fmtBits = n => Math.round(n).toLocaleString('en-US');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -65,8 +69,27 @@
     let music = null, wanted = false;
     function voice(c, bus, type, f, t, dur, peak) { const o = c.createOscillator(), gn = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); gn.gain.setValueAtTime(peak, t); gn.gain.exponentialRampToValueAtTime(.0001, t + dur); o.connect(gn).connect(bus); o.start(t); o.stop(t + dur + .02); return o; }
     function hit(c, bus, t, dur, peak, freq, type = 'highpass') { const sN = c.createBufferSource(); sN.buffer = noiseBuf; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; const gn = c.createGain(); gn.gain.setValueAtTime(peak, t); gn.gain.exponentialRampToValueAtTime(.0001, t + dur); sN.connect(f).connect(gn).connect(bus); sN.start(t, Math.random() * .5); sN.stop(t + dur + .02); }
+    let musicPos = 0;
     function startMusic() {
       const c = A(); if (!c || music) return;
+      if (MUSIC_URL && musicBuf !== false) return startTrack(c);
+      startSynth(c);
+    }
+    function startTrack(c) {
+      let src = null, t0 = 0, stopped = false;
+      const bus = c.createGain(); bus.gain.setValueAtTime(.0001, c.currentTime); bus.connect(master);
+      const me = music = { stop() { stopped = true; const t = c.currentTime; if (src) musicPos = (musicPos + t - t0) % src.buffer.duration; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(Math.max(.0001, bus.gain.value), t); bus.gain.exponentialRampToValueAtTime(.0001, t + .5); setTimeout(() => { try { src?.stop(); bus.disconnect(); } catch {} }, 700); } };
+      (musicBuf ||= fetch(MUSIC_URL).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(b => new Promise((ok, no) => c.decodeAudioData(b, ok, no))))
+        .then(buf => {
+          musicBuf = Promise.resolve(buf);
+          if (stopped || music !== me) return;
+          src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(bus);
+          t0 = c.currentTime; src.start(t0, musicPos % buf.duration);
+          bus.gain.exponentialRampToValueAtTime(.32, t0 + 1);
+        })
+        .catch(() => { musicBuf = false; if (!stopped && music === me) { music = null; startSynth(c); } });
+    }
+    function startSynth(c) {
       const bus = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
       bus.gain.setValueAtTime(.0001, c.currentTime); bus.gain.exponentialRampToValueAtTime(.055, c.currentTime + .8);
       bus.connect(lp).connect(master);

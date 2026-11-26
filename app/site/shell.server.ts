@@ -228,7 +228,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-upright.js?v=${SITE_UPRIGHT_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-live-pulls.js?v=${SITE_LIVE_PULLS_V}" data-back="${assetUrl("cardbit-card-back-en.webp")}" defer></script>` +
-    (decodeOn() ? `\n    <script src="/site/js/cardbit-site-decode.js?v=${SITE_DECODE_V}" data-bits="${assetUrl("cardbit-bits-card-emblem.png")}" defer></script>` : "") +
+    (decodeOn() ? `\n    <script src="/site/js/cardbit-site-decode.js?v=${SITE_DECODE_V}" data-bits="${assetUrl("cardbit-bits-card-emblem.png")}" data-music="/site/audio/cardbit-opening-music.mp3?v=ttt1" defer></script>` : "") +
     (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "") +
     (helpTags("site", assetUrl("cardbit-latch-cheer.webp")) ? `\n    ${helpTags("site", assetUrl("cardbit-latch-cheer.webp"))}` : "");
 
