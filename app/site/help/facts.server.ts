@@ -49,7 +49,7 @@ export function siteFacts(plansOpen: boolean): string {
     "- Free, confidential help: call or text 1-800-GAMBLER (1-800-426-2537).",
     "",
     "## Redeem a Code (cardbit.com/redeem, signed in; also My Account › Redeem a Code)",
-    "- Single-use codes, such as Poke-Collect Black Friday codes (PCBF-XXXXXXXX, emailed by Poke-Collect to customers who spent $200+ Nov 27-30), add free promotional Cardbits. PCBF codes add 1,000 Cardbits.",
+    "- Single-use codes, such as Poke-Collect Black Friday codes (PCBF-XXXXXXXX, emailed by Poke-Collect to customers with one order of $200+ in products after discounts, not counting shipping or tax, placed Nov 27-30, 2026 Central Time), add free promotional Cardbits. PCBF codes add 1,000 Cardbits and must be redeemed by January 25, 2027 at 11:59 PM CT.",
     "- Each code works once, and each account can redeem one code per promotion. A code must be redeemed by the expiry date shown on the redeem page. Codes and redeemed Cardbits have no cash value and can't be transferred; redeemed Cardbits don't expire once in the balance.",
     "- The email link cardbit.com/redeem?code=... fills in the code; signed-out visitors sign in or create an account first and come right back. Lost or not-working codes: email Support@cardbit.com (Cardbit can't look up Poke-Collect orders).",
     "",
