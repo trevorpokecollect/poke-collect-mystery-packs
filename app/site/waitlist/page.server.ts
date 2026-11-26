@@ -141,7 +141,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
   <link rel="stylesheet" href="/site/waitlist/waitlist.css?v=${CSS_V}">
   <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), rips: PACKS.map((p) => RIPS[p.id].map(cardUrl)), backs: PACKS.map((p) => assetUrl(BACK[p.id] || "cardbit-card-back-en.webp")) }).replace(/</g, "\\u003c")};</script>
   <script src="/site/waitlist/waitlist.js?v=${JS_V}" defer></script>
-  ${helpTags("waitlist", assetUrl("cardbit-icon-latch.webp"), env)}
+  ${helpTags("waitlist", assetUrl("cardbit-latch-cheer.webp"), env)}
   ${pulseTag()}
 </head>
 <body class="wl">

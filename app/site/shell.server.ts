@@ -212,7 +212,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
   ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>` +
     (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "") +
-    (helpTags("site", assetUrl("cardbit-icon-latch.webp")) ? `\n    ${helpTags("site", assetUrl("cardbit-icon-latch.webp"))}` : "");
+    (helpTags("site", assetUrl("cardbit-latch-cheer.webp")) ? `\n    ${helpTags("site", assetUrl("cardbit-latch-cheer.webp"))}` : "");
 
   return `<!doctype html>
 <html lang="en">
