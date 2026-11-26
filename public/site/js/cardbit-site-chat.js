@@ -1,7 +1,8 @@
 /*
  * Cardbit standalone site: live chat (site-only, loaded only when SITE_CHAT=on).
- * Closed by default. The "Chat" toggle (bottom-left) opens a full-height chat rail on the LEFT side of the
- * page; on wide screens the page slides over to make room, on phones the rail covers the page.
+ * Closed by default. Desktop/tablet: a compact Chat toggle in the page's top-left corner; the chat panel drops
+ * down from it along the LEFT side (wide screens shift the page over). Phones: the toggle sits bottom-left just
+ * above the Daily Giveaway button and the panel covers the page.
  * Rooms: Everyone and Pass (Pack Pass members), picked from the room dropdown with live "online" counts.
  * Extras: replies, author levels, big pulls (Epic/Legendary) dropped into the Everyone room, chat rules,
  * settings (big pulls on/off, hidden users), hide a user, jump to latest, unread count on the toggle.
@@ -306,15 +307,31 @@
     input.setSelectionRange(s + e.length, s + e.length);
   }
 
+  // Phones: the toggle sits bottom-left, just above the Daily Giveaway button (measured, so they never overlap).
+  let placing = 0;
+  function place() {
+    placing = 0;
+    const root = document.querySelector('.cb-chat');
+    if (!root) return;
+    const g = document.querySelector('.cbg-shortcut');
+    const gr = g && !g.hidden && getComputedStyle(g).display !== 'none' ? g.getBoundingClientRect() : null;
+    root.style.setProperty('--ch-bottom', Math.round(gr && gr.height ? innerHeight - gr.top + 10 : 16) + 'px');
+  }
+  const schedule = () => { if (!placing) placing = requestAnimationFrame(place); };
+
   function mount() {
     if (document.querySelector('.cb-chat')) return;
     const root = document.createElement('div');
     root.className = 'cb-chat';
-    root.innerHTML = '<button type="button" class="cb-chat-btn" aria-expanded="false" aria-controls="cb-chat-rail">' + svg(I.chat, 20) +
+    root.innerHTML = '<button type="button" class="cb-chat-btn" aria-expanded="false" aria-controls="cb-chat-rail" aria-label="Open chat" title="Chat">' + svg(I.chat, 20) +
       '<span class="cb-chat-btn-label">Chat</span><span class="cb-chat-btn-online"></span>' + svg(I.chev, 18) +
       '<span class="cb-chat-unread" hidden></span></button>' +
       '<aside class="cb-chat-rail" id="cb-chat-rail" aria-labelledby="cb-chat-title" hidden></aside>';
     document.body.append(root);
+    place();
+    addEventListener('resize', schedule);
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+    setTimeout(place, 600);
     root.querySelector('.cb-chat-btn').addEventListener('click', () => setOpen(!open, true));
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape' || !open) return;
