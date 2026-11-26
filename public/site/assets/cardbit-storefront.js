@@ -597,7 +597,7 @@
         '<div class="cbh-copy"><h1>'+headline+'</h1><p>Ship Your Favorites or Sell Eligible Cards for Cardbits.</p>'+
         '<div class="cb-actions"><a class="cb-primary" href="#cb-pack-counter">Explore Packs'+icon('arrow',17)+'</a></div></div>'},
       {name:'Daily 10,000 Cardbits Giveaway', kind:'giveaway', html:
-        '<div class="cbh-copy"><p class="cbh-kicker">Daily Giveaway</p><h2>Win <span class="cbh-count" data-count-to="10000">10,000</span> Cardbits</h2>'+
+        '<div class="cbh-copy"><p class="cbh-kicker">Daily Giveaway</p><h2>Win <span class="cbh-bits">'+(asset('brand-emblem.png') ? '<img src="'+esc(asset('brand-emblem.png'))+'" alt="" width="22" height="26">' : '')+'<span class="cbh-count" data-count-to="10000">10,000</span></span> Cardbits</h2>'+
         '<p class="cbh-clock">Next Draw In <b data-draw-clock>--:--:--</b></p><div class="cb-actions">'+giveawayButton+'</div>'+
         '<p class="cbh-fine">No Purchase Necessary. <a href="/official-rules">Official Rules</a>.</p></div>'},
       {name:'Levels and Rewards', kind:'levels', html:
@@ -618,17 +618,21 @@
     return '<section class="cbh" aria-roledescription="carousel" aria-label="Cardbit Highlights" data-hero-carousel'+background+'>'+
       '<div class="cbh-track">'+slides.map((slide,i)=>'<div class="cbh-slide cbh-'+slide.kind+(i===0?' is-active':'')+'" role="group" aria-roledescription="slide" aria-label="'+(i+1)+' of '+slides.length+': '+esc(slide.name)+'" data-slide="'+i+'"'+(i?' inert':'')+'><div class="cb-wrap cbh-inner">'+slide.html+'</div></div>').join('')+'</div>'+
       '<div class="cbh-controls"><button type="button" class="cbh-arrow" data-hero-prev aria-label="Previous Slide">'+icon('arrow',16)+'</button>'+
-      '<div class="cbh-dots">'+slides.map((slide,i)=>'<button type="button" class="cbh-dot" data-hero-dot="'+i+'" aria-label="Show Slide '+(i+1)+': '+esc(slide.name)+'"'+(i===0?' aria-current="true"':'')+'></button>').join('')+'</div>'+
+      '<div class="cbh-dots">'+slides.map((slide,i)=>'<button type="button" class="cbh-dot" data-hero-dot="'+i+'" aria-label="Show Slide '+(i+1)+': '+esc(slide.name)+'"'+(i===0?' aria-current="true"':'')+'><i></i></button>').join('')+'</div>'+
       '<button type="button" class="cbh-arrow cbh-next" data-hero-next aria-label="Next Slide">'+icon('arrow',16)+'</button>'+
-      '<button type="button" class="cbh-pause" data-hero-pause aria-label="Pause Slides">'+icon('pause',14)+'</button></div></section>';
+      '<button type="button" class="cbh-pause" data-hero-pause aria-label="Pause Slides">'+icon('pause',14)+'</button></div>'+
+      '<div class="cbh-hint" aria-hidden="true">'+icon('back',16)+'<span>Swipe for More</span></div></section>';
   }
   function mountHero(signal) {
     const box = root.querySelector('[data-hero-carousel]');
     if (!box) return;
+    const track = box.querySelector('.cbh-track');
     const slides = [...box.querySelectorAll('.cbh-slide')], dots = [...box.querySelectorAll('[data-hero-dot]')];
-    const pauseBtn = box.querySelector('[data-hero-pause]');
+    const pauseBtn = box.querySelector('[data-hero-pause]'), hint = box.querySelector('.cbh-hint'), nextBtn = box.querySelector('[data-hero-next]');
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let index = 0, timer = 0, userPaused = motion.matches, hovering = false, focused = false, countTimer = 0;
+    let index = 0, userPaused = motion.matches, hovering = false, focused = false, countTimer = 0, onScreen = true;
+    let elapsed = 0, last = 0, raf = 0, preloaded = -1, dragging = false;
+    // Scenes download their art on first start(), so only the slide on screen (plus the next one, just before it slides in) loads anything.
     const scenes = slides.map(slide => {
       const kind = (/\bcbh-(packs|giveaway|levels|how)\b/.exec(slide.className) || [])[1];
       try { return kind && window.CardbitHeroScenes ? window.CardbitHeroScenes.mount(slide, kind, {asset, signal, root}) : null; } catch (e) { console.warn('[cardbit hero]', e); return null; }
@@ -636,6 +640,7 @@
     box._scenes = scenes;
     const clock = box.querySelector('[data-draw-clock]');
     if (clock && window.CardbitHeroScenes) { const tick = () => window.CardbitHeroScenes.drawClock(clock); tick(); const ct = setInterval(tick, 1000); signal.addEventListener('abort', () => clearInterval(ct), {once:true}); }
+    const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
     function countUp(slide) {
       clearInterval(countTimer);
       const node = slide.querySelector('[data-count-to]');
@@ -645,59 +650,92 @@
       let i = 0; const steps = 28;
       countTimer = setInterval(() => { i++; node.textContent = Math.round(to * (1 - Math.pow(1 - i/steps, 3))).toLocaleString('en-US'); if (i >= steps) clearInterval(countTimer); }, 40);
     }
+    const place = (px = 0) => { track.style.transform = 'translateX(calc(' + (-index * 100) + '% + ' + px + 'px))'; };
     function show(next, fromUser) {
-      index = (next + slides.length) % slides.length;
+      const prev = index;
+      index = (next + slides.length) % slides.length; elapsed = 0;
+      place();
       slides.forEach((slide, i) => {
         const on = i === index;
         slide.classList.toggle('is-active', on);
         slide.toggleAttribute('inert', !on);
-        if (!on) { slide.querySelectorAll('video').forEach(v => { try { v.pause(); } catch {} }); scenes[i]?.stop(); }
-        else { playFilm(slide); scenes[i]?.start(); }
+        if (!on) slide.querySelectorAll('video').forEach(v => { try { v.pause(); } catch {} });
       });
-      dots.forEach((dot, i) => on(dot, i === index));
+      // The incoming scene restarts from its first frame; the outgoing one stops once the slide has moved away.
+      if (onScreen && !document.hidden) scenes[index]?.restart();
+      if (prev !== index) setTimeout(() => { if (index !== prev) scenes[prev]?.stop(); }, 650);
+      dots.forEach((dot, i) => { on(dot, i === index); dot.style.setProperty('--p', 0); });
       countUp(slides[index]);
-      if (fromUser) restart();
-    }
-    function playFilm(slide) {
-      const v = slide.querySelector('.cbh-video');
-      if (!v || motion.matches) return;
-      if (!v.src && v.dataset.src) v.src = v.dataset.src;
-      v.addEventListener('playing', () => slide.classList.add('is-playing'), {once:true, signal});
-      v.play?.().catch(() => {});
+      if (fromUser) dismissHint();
     }
     function on(dot, active) { if (active) dot.setAttribute('aria-current','true'); else dot.removeAttribute('aria-current'); }
-    function running() { return !userPaused && !hovering && !focused && !document.hidden; }
-    function restart() { clearTimeout(timer); if (running()) timer = setTimeout(() => show(index + 1), slides[index]?.classList.contains('cbh-how') ? 17500 : 8000); }
+    function running() { return !userPaused && !hovering && !focused && !document.hidden && onScreen && !dragging; }
+    // Autoplay waits for each banner's animation to play through (scene time), then moves on.
+    function tick(now) {
+      raf = requestAnimationFrame(tick);
+      const dt = last ? Math.min(.1, (now - last) / 1000) : 0; last = now;
+      const sc = scenes[index], dur = sc?.duration || 8;
+      if (running() && (!sc || sc.ready)) elapsed += dt;
+      dots[index]?.style.setProperty('--p', Math.min(1, elapsed / dur));
+      if (dur - elapsed < 2 && preloaded !== index) { preloaded = index; scenes[(index + 1) % slides.length]?.load?.(); }
+      if (elapsed >= dur) show(index + 1);
+    }
     function syncPause() {
       pauseBtn.innerHTML = icon(userPaused ? 'play' : 'pause', 14);
       pauseBtn.setAttribute('aria-label', userPaused ? 'Play Slides' : 'Pause Slides');
       box.classList.toggle('is-paused', userPaused);
     }
+    // First visit: the next slide peeks in and a "Swipe for More" chip shows, so people know there is more to see.
+    function showHint() {
+      if (dragging || motion.matches) return;
+      hint.classList.add('is-on'); nextBtn.classList.add('is-hinting');
+      place(-56); setTimeout(() => { if (!dragging) place(); }, 700);
+      setTimeout(() => hint.classList.remove('is-on'), 3200);
+      store.set('cbh-hinted', '1');
+    }
+    function dismissHint() { hint.classList.remove('is-on'); nextBtn.classList.remove('is-hinting'); store.set('cbh-hinted', '1'); }
+    if (!store.get('cbh-hinted')) { const ht = setTimeout(showHint, 3500); signal.addEventListener('abort', () => clearTimeout(ht), {once:true}); }
     box.querySelector('[data-hero-prev]').addEventListener('click', () => show(index - 1, true), {signal});
-    box.querySelector('[data-hero-next]').addEventListener('click', () => show(index + 1, true), {signal});
+    nextBtn.addEventListener('click', () => show(index + 1, true), {signal});
     dots.forEach((dot, i) => dot.addEventListener('click', () => show(i, true), {signal}));
-    pauseBtn.addEventListener('click', () => { userPaused = !userPaused; syncPause(); restart(); }, {signal});
-    box.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') { hovering = true; clearTimeout(timer); } }, {signal});
-    box.addEventListener('pointerleave', () => { hovering = false; restart(); }, {signal});
-    box.addEventListener('focusin', () => { focused = true; clearTimeout(timer); }, {signal});
-    box.addEventListener('focusout', e => { if (!box.contains(e.relatedTarget)) { focused = false; restart(); } }, {signal});
+    pauseBtn.addEventListener('click', () => { userPaused = !userPaused; syncPause(); }, {signal});
+    box.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') hovering = true; }, {signal});
+    box.addEventListener('pointerleave', () => { hovering = false; }, {signal});
+    box.addEventListener('focusin', e => { if (e.target.matches(':focus-visible')) focused = true; }, {signal});
+    box.addEventListener('focusout', e => { if (!box.contains(e.relatedTarget)) focused = false; }, {signal});
     box.addEventListener('keydown', e => {
       if (e.target.closest('input,textarea,select')) return;
       if (e.key === 'ArrowRight') { e.preventDefault(); show(index + 1, true); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); show(index - 1, true); }
     }, {signal});
-    let startX = null, startY = 0;
-    box.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') { startX = e.clientX; startY = e.clientY; } }, {signal});
-    box.addEventListener('pointerup', e => {
-      if (startX == null) return;
-      const dx = e.clientX - startX, dy = e.clientY - startY; startX = null;
-      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.4) show(index + (dx < 0 ? 1 : -1), true);
+    // Drag or swipe: the track follows the finger (or mouse) and snaps to the next or previous slide.
+    let pid = null, sx = 0, sy = 0, dx = 0, t0 = 0, moved = false;
+    box.addEventListener('pointerdown', e => { if (e.button !== 0 || e.target.closest('.cbh-controls,input,textarea,select')) return; pid = e.pointerId; sx = e.clientX; sy = e.clientY; dx = 0; t0 = performance.now(); moved = false; }, {signal});
+    box.addEventListener('pointermove', e => {
+      if (e.pointerId !== pid) return;
+      const mx = e.clientX - sx, my = e.clientY - sy;
+      if (!dragging) {
+        if (Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my)) { dragging = moved = true; box.classList.add('is-dragging'); try { box.setPointerCapture(pid); } catch {} dismissHint(); }
+        else if (Math.abs(my) > 10) pid = null;
+        return;
+      }
+      dx = mx; place(dx);
     }, {signal});
-    box.addEventListener('pointercancel', () => { startX = null; }, {signal});
-    document.addEventListener('visibilitychange', restart, {signal});
-    motion.addEventListener('change', e => { if (e.matches) { userPaused = true; syncPause(); restart(); } }, {signal});
-    signal.addEventListener('abort', () => { clearTimeout(timer); clearInterval(countTimer); }, {once:true});
-    syncPause(); restart(); scenes[0]?.start();
+    const end = e => {
+      if (e.pointerId !== pid) return; pid = null;
+      if (!dragging) return; dragging = false; box.classList.remove('is-dragging');
+      const w = box.clientWidth, v = dx / Math.max(1, performance.now() - t0);
+      if (dx < -w * .18 || v < -.45) show(index + 1, true); else if (dx > w * .18 || v > .45) show(index - 1, true); else place();
+    };
+    box.addEventListener('pointerup', end, {signal}); box.addEventListener('pointercancel', end, {signal});
+    box.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, {capture:true, signal});
+    // Only draw while the banner is on screen and the tab is visible.
+    const io = new IntersectionObserver(es => es.forEach(en => { onScreen = en.isIntersecting; if (onScreen && !document.hidden) scenes[index]?.start(); else scenes[index]?.stop(); }), {threshold:.15});
+    io.observe(box);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) scenes[index]?.stop(); else if (onScreen) scenes[index]?.start(); }, {signal});
+    motion.addEventListener('change', e => { if (e.matches) { userPaused = true; syncPause(); } }, {signal});
+    signal.addEventListener('abort', () => { cancelAnimationFrame(raf); clearInterval(countTimer); io.disconnect(); scenes.forEach(sc => sc?.stop()); }, {once:true});
+    syncPause(); place(); scenes[0]?.start(); raf = requestAnimationFrame(tick);
   }
   function home() {
     const counter = shelfOrder();

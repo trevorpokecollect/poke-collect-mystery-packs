@@ -84,9 +84,14 @@ describe("Cardbit site pages", () => {
     // Holo follows the pack image; hero conveyor spacing, desktop column and Ship Home fixes.
     expect(readFileSync("public/site/assets/cardbit-flair.js", "utf8")).toContain("fitHolo(img, holo)");
     const hero = readFileSync("public/site/assets/cardbit-hero-scenes.js", "utf8");
-    expect(hero).toContain("gap = (W + ph * 1.64) / count");
     expect(hero).toContain("colL, colR");
-    expect(hero).toContain("SITE: the card sinks into an open box");
+    // Hero v2: real pulls at real tiers, one card through How It Works, art loads only when a slide is shown.
+    expect(hero).toContain("card-gold-charizard-ex-151-199.webp', tier: 4");
+    expect(hero).toContain("HOW_CARD = 'card-mystery-nidoking-151-174.webp', HOW_TIER = 2, HOW_SELL = 1384");
+    expect(hero).toContain("if (!ready) { want = true; load(); return; }");
+    expect(hero).not.toMatch(/coinSprite|GOLD, \.13/);
+    expect(js).toContain("if (elapsed >= dur) show(index + 1);");
+    expect(js).toContain('<span class="cbh-bits">');
     // Round 2: no pack tile tags, Vault market data from /api/portfolio, copy matches the free-shipping rule.
     expect(js).toContain("(site() ? '' : categoryTags(pack.id,true))");
     expect(readFileSync("public/site/assets/cardbit-collector-pages.js", "utf8")).toContain("root.CardbitSite?.marketLabel?.(c)");
