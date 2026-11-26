@@ -20,6 +20,8 @@ import siteAuthCssSource from "../../public/site/css/cardbit-site-auth.css?raw";
 import sitePlaySource from "../../public/site/js/cardbit-site-play.js?raw";
 import sitePlayCssSource from "../../public/site/css/cardbit-site-play.css?raw";
 import siteChatSource from "../../public/site/js/cardbit-site-chat.js?raw";
+import siteLivePullsSource from "../../public/site/js/cardbit-site-live-pulls.js?raw";
+import siteLivePullsCssSource from "../../public/site/css/cardbit-site-live-pulls.css?raw";
 import siteChatCssSource from "../../public/site/css/cardbit-site-chat.css?raw";
 import sitePulseSource from "../../public/site/js/cardbit-site-pulse.js?raw";
 import siteAdsSource from "../../public/site/js/cardbit-site-ads.js?raw";
@@ -41,6 +43,8 @@ const SITE_AUTH_CSS_V = version(siteAuthCssSource);
 const SITE_PLAY_V = version(sitePlaySource);
 const SITE_PLAY_CSS_V = version(sitePlayCssSource);
 const SITE_CHAT_V = version(siteChatSource);
+const SITE_LIVE_PULLS_V = version(siteLivePullsSource);
+const SITE_LIVE_PULLS_CSS_V = version(siteLivePullsCssSource);
 const SITE_CHAT_CSS_V = version(siteChatCssSource);
 const SITE_PULSE_V = version(sitePulseSource);
 const SITE_ADS_V = version(siteAdsSource);
@@ -199,6 +203,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     `<link rel="stylesheet" href="/site/css/cardbit-site.css?v=${SITE_CSS_V}">`,
     `<link rel="stylesheet" href="/site/css/cardbit-site-auth.css?v=${SITE_AUTH_CSS_V}">`,
     `<link rel="stylesheet" href="/site/css/cardbit-site-play.css?v=${SITE_PLAY_CSS_V}">`,
+    `<link rel="stylesheet" href="/site/css/cardbit-site-live-pulls.css?v=${SITE_LIVE_PULLS_CSS_V}">`,
     ...(chatOn() ? [`<link rel="stylesheet" href="/site/css/cardbit-site-chat.css?v=${SITE_CHAT_CSS_V}">`] : []),
   ].join("\n    ");
   const scripts = SCRIPTS.map((name) =>
@@ -211,6 +216,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
         : `<script src="${assetUrl(name)}" defer></script>`,
   ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>` +
+    `\n    <script src="/site/js/cardbit-site-live-pulls.js?v=${SITE_LIVE_PULLS_V}" data-back="${assetUrl("cardbit-card-back-en.webp")}" defer></script>` +
     (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "") +
     (helpTags("site", assetUrl("cardbit-latch-cheer.webp")) ? `\n    ${helpTags("site", assetUrl("cardbit-latch-cheer.webp"))}` : "");
 

@@ -37,6 +37,9 @@ describe("Cardbit site pages", () => {
     expect(home).toContain('data-endpoint="/api/giveaway"');
     expect(home).toContain('data-cardbit-welcome data-endpoint="/api/welcome"');
     expect(home).not.toContain("cbg-referral");
+    // Live Pulls presentation layer (flip-in, tier glows, Big Hit spotlight, Biggest Hit Today).
+    expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-live-pulls\.js\?v=\w+" data-back="\/site\/assets\/cardbit-card-back-en\.webp\?v=\w+" defer>/);
+    expect(home).toContain("/site/css/cardbit-site-live-pulls.css?v=");
     for (const path of ["open/cobalt", "welcome"]) expect((await splat(args(path)) as Response).status).toBe(200);
   });
 

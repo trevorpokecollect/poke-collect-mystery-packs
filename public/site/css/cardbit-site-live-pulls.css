@@ -1,0 +1,72 @@
+/* Live Pulls, upgraded. See public/site/js/cardbit-site-live-pulls.js. */
+#cardbit-store .cbx-lp{position:relative;--cbx-tc:#f4f7ff}
+#cardbit-store .cbx-lp .cb-feed-heading{gap:10px}
+#cardbit-store .cbx-live{display:inline-flex;align-items:center;gap:7px;font:800 .72rem/1 "Outfit",system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#ff6b78;background:rgba(255,93,108,.11);padding:6px 10px;border-radius:999px}
+#cardbit-store .cbx-live::before{content:"";width:8px;height:8px;border-radius:50%;background:#ff5d6c;animation:cbx-ping 1.4s infinite}
+@keyframes cbx-ping{0%{box-shadow:0 0 0 0 rgba(255,93,108,.6)}70%{box-shadow:0 0 0 8px rgba(255,93,108,0)}100%{box-shadow:0 0 0 0 rgba(255,93,108,0)}}
+
+#cardbit-store .cbx-lp-body{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:stretch}
+#cardbit-store .cbx-has-hit .cbx-lp-body{grid-template-columns:minmax(210px,250px) minmax(0,1fr)}
+@media (max-width:760px){#cardbit-store .cbx-has-hit .cbx-lp-body{grid-template-columns:minmax(0,1fr)}}
+#cardbit-store .cbx-rail{min-width:0}
+
+/* Card-forward pulls */
+#cardbit-store .cbx-lp .cb-feed-items{grid-auto-columns:clamp(140px,15vw,164px);gap:12px;padding:12px 3px 10px;perspective:900px}
+#cardbit-store .cbx-lp .cb-feed-card{display:flex;flex-direction:column;gap:6px;min-height:0;height:100%;padding:10px;position:relative;border-color:#2c3f45;background:linear-gradient(170deg,#16252b,#0f191d 80%);transition:border-color .2s,transform .2s}
+#cardbit-store .cbx-lp .cb-feed-card:hover{transform:translateY(-2px);background:linear-gradient(170deg,#1a2d33,#11201f 80%)}
+#cardbit-store .cbx-lp .cb-mini-scan{width:100%;transform-style:preserve-3d;border-radius:7px;background:#1c2b2f;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
+#cardbit-store .cbx-lp .cb-mini-scan img{backface-visibility:hidden;-webkit-backface-visibility:hidden;object-fit:cover}
+#cardbit-store .cbx-lp .cb-mini-scan .cbx-back{transform:rotateY(180deg)}
+#cardbit-store .cbx-lp .cb-pull-copy{align-self:auto}
+#cardbit-store .cbx-lp .cb-pull-name{font:800 .95rem/1.15 "Outfit",system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+#cardbit-store .cbx-lp .cb-pull-meta{font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:normal}
+#cardbit-store .cbx-lp .cb-pull-quote{font-size:.8rem}
+
+/* Tier glows */
+#cardbit-store .cbx-lp li.cbx-r1 .cb-mini-scan,#cardbit-store .cbx-lp li.cbx-r2 .cb-mini-scan{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--cbx-tc) 75%,transparent),0 0 12px -2px var(--cbx-tc)}
+#cardbit-store .cbx-lp li.cbx-r3 .cb-feed-card,#cardbit-store .cbx-lp li.cbx-r4 .cb-feed-card{border-color:color-mix(in srgb,var(--cbx-tc) 55%,#2c3f45)}
+#cardbit-store .cbx-lp li.cbx-r3 .cb-mini-scan,#cardbit-store .cbx-lp li.cbx-r4 .cb-mini-scan{box-shadow:0 0 0 2px var(--cbx-tc),0 0 22px var(--cbx-tc)}
+#cardbit-store .cbx-lp li.cbx-r3 .cb-mini-scan::after,#cardbit-store .cbx-lp li.cbx-r4 .cb-mini-scan::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,transparent 32%,rgba(255,255,255,.45) 46%,transparent 62%);background-size:260% 100%;mix-blend-mode:overlay;animation:cbx-sheen 2.4s linear infinite;pointer-events:none}
+@keyframes cbx-sheen{from{background-position:130% 0}to{background-position:-130% 0}}
+#cardbit-store .cbx-badge{position:absolute;top:-9px;left:50%;translate:-50% 0;z-index:3;font:800 .62rem/1 "Outfit",system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;background:var(--cbx-tc);color:#120a02;padding:5px 8px;border-radius:999px;white-space:nowrap}
+
+/* New pull: slide in, then flip face up */
+#cardbit-store .cbx-lp li.cbx-new{animation:cbx-enter .5s cubic-bezier(.2,1,.3,1) both}
+#cardbit-store .cbx-lp li.cbx-new .cb-mini-scan{animation:cbx-flip 1.05s cubic-bezier(.2,.9,.25,1.15) both}
+@keyframes cbx-enter{from{opacity:0;transform:translateX(-28px) scale(.92)}}
+@keyframes cbx-flip{0%,40%{transform:rotateY(180deg)}100%{transform:rotateY(0)}}
+
+/* Biggest Hit Today */
+#cardbit-store .cbx-hit{position:relative;overflow:hidden;isolation:isolate;border:1px solid #2c3f45;border-radius:14px;background:#08141a;min-height:300px}
+#cardbit-store .cbx-hit>a,#cardbit-store .cbx-hit{color:inherit;text-decoration:none}
+#cardbit-store .cbx-hit>a,#cardbit-store .cbx-hit:not(:has(>a)){display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:16px;height:100%;text-align:center}
+#cardbit-store .cbx-rays{position:absolute;left:50%;top:44%;width:560px;height:560px;translate:-50% -50%;z-index:-1;pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,color-mix(in srgb,var(--cbx-tc) 34%,transparent) 0 7deg,transparent 7deg 20deg);
+  -webkit-mask:radial-gradient(circle,#000 8%,transparent 62%);mask:radial-gradient(circle,#000 8%,transparent 62%);animation:cbx-spin 18s linear infinite}
+@keyframes cbx-spin{to{rotate:360deg}}
+#cardbit-store .cbx-hit img{width:min(58%,150px);aspect-ratio:5/7;object-fit:cover;border-radius:8px;box-shadow:0 0 0 2px var(--cbx-tc),0 0 36px var(--cbx-tc);animation:cbx-float 3.4s ease-in-out infinite}
+@keyframes cbx-float{50%{transform:translateY(-6px) rotate(-1deg)}}
+#cardbit-store .cbx-hit-label{font:800 .68rem/1 "Outfit",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--cbx-tc)}
+#cardbit-store .cbx-hit-name{font:800 1.05rem/1.15 "Outfit",system-ui,sans-serif;color:#f4f8f7}
+#cardbit-store .cbx-hit-meta,#cardbit-store .cbx-hit-when{font-size:.78rem;color:#b8c9ca}
+@media (max-width:760px){
+  #cardbit-store .cbx-hit{min-height:0}
+  #cardbit-store .cbx-hit>a,#cardbit-store .cbx-hit:not(:has(>a)){display:grid;grid-template-columns:88px minmax(0,1fr);grid-auto-rows:min-content;align-content:center;justify-items:start;column-gap:14px;row-gap:4px;text-align:left;padding:14px}
+  #cardbit-store .cbx-hit img{grid-column:1;grid-row:1/span 4;width:88px}
+  #cardbit-store .cbx-hit :is(.cbx-hit-label,.cbx-hit-name,.cbx-hit-meta,.cbx-hit-when){grid-column:2}
+  #cardbit-store .cbx-hit .cbx-rays{left:60px}
+}
+
+/* Big Hit spotlight */
+#cardbit-store .cbx-spot{position:absolute;inset:-6px;z-index:20;display:grid;place-items:center;border-radius:16px;overflow:hidden;isolation:isolate;background:rgba(3,9,11,.84);opacity:0;pointer-events:none;transition:opacity .3s}
+#cardbit-store .cbx-spot.on{opacity:1;pointer-events:auto;cursor:pointer}
+#cardbit-store .cbx-spot .cbx-rays{top:50%;width:760px;height:760px}
+#cardbit-store .cbx-spot-in{display:flex;flex-direction:column;align-items:center;gap:8px;transform:scale(.6);transition:transform .5s cubic-bezier(.2,1.6,.4,1);text-align:center;padding:0 16px}
+#cardbit-store .cbx-spot.on .cbx-spot-in{transform:none}
+#cardbit-store .cbx-spot img{width:140px;aspect-ratio:5/7;object-fit:cover;border-radius:9px;box-shadow:0 0 0 3px var(--cbx-tc),0 0 50px var(--cbx-tc)}
+#cardbit-store .cbx-spot strong{font:800 clamp(1.5rem,3.2vw,2rem)/1 "Outfit",system-ui,sans-serif;color:var(--cbx-tc);text-shadow:0 0 18px var(--cbx-tc)}
+#cardbit-store .cbx-spot span{font-size:.9rem;color:#eef7f8}
+
+@media (prefers-reduced-motion:reduce){
+  #cardbit-store .cbx-lp *,#cardbit-store .cbx-lp *::before,#cardbit-store .cbx-lp *::after,#cardbit-store .cbx-live::before{animation:none!important;transition:none!important}
+}
