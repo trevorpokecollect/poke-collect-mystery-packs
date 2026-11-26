@@ -194,8 +194,11 @@ function happySignature(c) {
   }
 }
 
-function emoteSvg(c, emote) {
-  const base = baseParts(c);
+// fit = { cx, cy, s }: re-centers the character (its measured visible center cx,cy) in the circle and scales it by s.
+// Used by the Rewards spin art; Pack Pass emotes pass nothing and are unchanged.
+function emoteSvg(c, emote, fit) {
+  const still = emote === "still"; // the starter icon's own face, no motion (locked spins)
+  const base = baseParts(still ? { ...c, strip: [] } : c);
   const cx = c.face.cx;
   let back = "", front = "", face = "", bodyCls = "", extraCss = "";
   const glitch = c.element === "crystal";
@@ -227,6 +230,8 @@ function emoteSvg(c, emote) {
       front = `<g class="alert" style="transform-origin:${cx + 52}px 56px"><g transform="translate(${cx + 52},40)"><rect x="-11" y="-14" width="22" height="40" rx="6" fill="${c.colors.rim}" stroke="#fff" stroke-width="2.5"/><rect x="-3" y="-8" width="6" height="18" rx="2" fill="#141820"/><rect x="-3" y="14" width="6" height="6" rx="2" fill="#141820"/></g></g>` +
         [0, 1].map((i) => `<g transform="translate(${cx - c.face.dx - 26 + i * 6},${c.face.eyeY - 18 + i * 14})"><g class="sweat" style="animation-delay:-${i * 0.5}s"><path d="M0,-7 C4,-1 6,2 6,5 A6,6 0 0 1 -6,5 C-6,2 -4,-1 0,-7 Z" fill="#7FD3FF" stroke="#fff" stroke-width="1"/></g></g>`).join("");
       back = burst(c, { n: 7, ox: cx, oy: 150, dist: 104, spread: 160, start: -90, cls: "zing", size: 1.05, delayStep: 0 });
+      break;
+    case "still":
       break;
     case "happy": {
       const h = happySignature(c);
@@ -336,7 +341,7 @@ function emoteSvg(c, emote) {
 @keyframes rain{0%{transform:translate(0,0) rotate(0);opacity:0}10%{opacity:1}85%{opacity:1}100%{transform:translate(var(--sway),calc(var(--h) * -1)) rotate(360deg);opacity:0}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}.fly,.zing,.pop,.rise,.tear,.twinkle,.echo,.gl-r,.gl-c,.flash,.strike,.ring,.rain{opacity:0!important}}
 ${extraCss}`;
-  const bodyInner = `${base.body}${patch(c)}<g class="face">${face}</g>`;
+  const bodyInner = `${base.body}${still ? "" : patch(c)}<g class="face">${face}</g>`;
   let bodyBlock = `<g class="body ${bodyCls}${ghost ? " ghost-a" : ""}">${bodyInner}</g>`;
   if (glitch && emote === "hype") {
     bodyBlock = `<g class="body ${bodyCls}"><g class="gl-r" style="filter:url(#tint-r)">${bodyInner}</g><g class="gl-c" style="filter:url(#tint-c)">${bodyInner}</g>${bodyInner}</g>`;
@@ -346,12 +351,12 @@ ${extraCss}`;
   }
   const tints = glitch ? `<filter id="tint-r"><feColorMatrix type="matrix" values="1 0 0 0 .3  0 0 0 0 0  0 0 .6 0 .2  0 0 0 1 0"/></filter><filter id="tint-c"><feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 .3  0 0 1 0 .3  0 0 0 1 0"/></filter>` : "";
   const clip = `<clipPath id="emote-clip"><circle cx="128" cy="128" r="128"/></clipPath>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${c.name} ${(EMOTES.find((e) => e.id === emote) || { name: "Happy" }).name}"><style>${css.replace(/\n+/g, "\n")}</style>
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${c.name} ${(EMOTES.find((e) => e.id === emote) || { name: still ? "" : "Happy" }).name}"><style>${css.replace(/\n+/g, "\n")}</style>
 <defs>${base.defs}${clip}${tints}</defs>
 <g clip-path="url(#emote-clip)">${base.bg}
-${back}
+${fit ? `<g transform="translate(128 128) scale(${fit.s}) translate(${-fit.cx} ${-fit.cy})">` : ""}${back}
 ${bodyBlock}
-${front}
+${front}${fit ? "</g>" : ""}
 </g></svg>`;
 }
 
