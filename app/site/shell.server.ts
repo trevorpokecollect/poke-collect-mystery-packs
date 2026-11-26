@@ -24,6 +24,7 @@ import siteLivePullsSource from "../../public/site/js/cardbit-site-live-pulls.js
 import siteLivePullsCssSource from "../../public/site/css/cardbit-site-live-pulls.css?raw";
 import siteDecodeSource from "../../public/site/js/cardbit-site-decode.js?raw";
 import siteDecodeCssSource from "../../public/site/css/cardbit-site-decode.css?raw";
+import siteUprightSource from "../../public/site/js/cardbit-site-upright.js?raw";
 import siteChatCssSource from "../../public/site/css/cardbit-site-chat.css?raw";
 import sitePulseSource from "../../public/site/js/cardbit-site-pulse.js?raw";
 import siteAdsSource from "../../public/site/js/cardbit-site-ads.js?raw";
@@ -49,6 +50,8 @@ const SITE_LIVE_PULLS_V = version(siteLivePullsSource);
 const SITE_LIVE_PULLS_CSS_V = version(siteLivePullsCssSource);
 const SITE_DECODE_V = version(siteDecodeSource);
 const SITE_DECODE_CSS_V = version(siteDecodeCssSource);
+/** Sideways (landscape) card scans shown upright everywhere (Trevor, Nov 25 2026). */
+const SITE_UPRIGHT_V = version(siteUprightSource);
 /** Signal Decode opening (Trevor approved Nov 25 2026). SITE_DECODE=off falls back to the previous player. */
 const decodeOn = () => process.env.SITE_DECODE !== "off";
 const SITE_CHAT_CSS_V = version(siteChatCssSource);
@@ -223,8 +226,9 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
         : `<script src="${assetUrl(name)}" defer></script>`,
   ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>` +
+    `\n    <script src="/site/js/cardbit-site-upright.js?v=${SITE_UPRIGHT_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-live-pulls.js?v=${SITE_LIVE_PULLS_V}" data-back="${assetUrl("cardbit-card-back-en.webp")}" defer></script>` +
-    (decodeOn() ? `\n    <script src="/site/js/cardbit-site-decode.js?v=${SITE_DECODE_V}" defer></script>` : "") +
+    (decodeOn() ? `\n    <script src="/site/js/cardbit-site-decode.js?v=${SITE_DECODE_V}" data-bits="${assetUrl("cardbit-bits-card-emblem.png")}" defer></script>` : "") +
     (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "") +
     (helpTags("site", assetUrl("cardbit-latch-cheer.webp")) ? `\n    ${helpTags("site", assetUrl("cardbit-latch-cheer.webp"))}` : "");
 

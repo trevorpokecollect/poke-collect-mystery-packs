@@ -20,6 +20,10 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const easeIO = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
   const easeOut = k => 1 - Math.pow(1 - k, 3);
+  // Cardbit value per card: the same buyback number the pool pages show (never retail).
+  const BITS_ICON = document.currentScript?.dataset.bits || '';
+  const bitsOf = c => { const v = Number(c?.buybackBits); return Number.isSafeInteger(v) && v > 0 ? v : 0; };
+  const fmtBits = n => Math.round(n).toLocaleString('en-US');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const hexA = (hex, a) => { const n = parseInt(String(hex).slice(1), 16) || 0; return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${clamp(a)})`; };
   const safeUrl = v => { try { const u = new URL(String(v || ''), location.href); return /^(https?|blob):$/.test(u.protocol) || /^data:image\//.test(String(v)) ? u.href : ''; } catch { return ''; } };
@@ -52,10 +56,42 @@
     const env = (gn, t, a, peak, d) => { gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(peak, t + a); gn.gain.exponentialRampToValueAtTime(.0001, t + a + d); };
     function tone(f, dur, { type = 'sine', peak = .2, at = 0, glide, wet = 0, attack = .008 } = {}) { const c = A(); if (!c) return; const t = c.currentTime + at, o = c.createOscillator(), gn = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur); env(gn, t, attack, peak, dur); o.connect(gn); out(gn, wet); o.start(t); o.stop(t + dur + attack + .05); }
     function noise(dur, f1, f2, { peak = .3, type = 'bandpass', q = 1, at = 0, wet = 0, attack = .006 } = {}) { const c = A(); if (!c) return; const t = c.currentTime + at, s = c.createBufferSource(); s.buffer = noiseBuf; s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f1, t); f.frequency.exponentialRampToValueAtTime(f2, t + dur); const gn = c.createGain(); env(gn, t, attack, peak, dur); s.connect(f).connect(gn); out(gn, wet); s.start(t, Math.random() * .5); s.stop(t + dur + attack + .05); }
-    let hum = null;
+    /* 8-bit music loop: an original 4-bar tune in A minor (Am F C G) at 140 BPM, made live with
+       square, triangle and noise voices. Low in the mix so the reveal sounds sit on top. */
+    const MEL = [76,-1,-1,79,-1,81,-1,79,76,-1,74,-1,72,-1,74,-1, 72,-1,-1,72,-1,74,-1,76,77,-1,76,-1,74,-1,72,-1,
+                 72,-1,-1,76,-1,79,-1,84,83,-1,79,-1,76,-1,79,-1, 79,-1,81,-1,83,-1,86,-1,83,-1,81,-1,79,-1,-1,-1];
+    const BASS = [45, 41, 48, 43], MINOR = [true, false, false, false];
+    const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+    let music = null, wanted = false;
+    function voice(c, bus, type, f, t, dur, peak) { const o = c.createOscillator(), gn = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); gn.gain.setValueAtTime(peak, t); gn.gain.exponentialRampToValueAtTime(.0001, t + dur); o.connect(gn).connect(bus); o.start(t); o.stop(t + dur + .02); return o; }
+    function hit(c, bus, t, dur, peak, freq, type = 'highpass') { const sN = c.createBufferSource(); sN.buffer = noiseBuf; const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; const gn = c.createGain(); gn.gain.setValueAtTime(peak, t); gn.gain.exponentialRampToValueAtTime(.0001, t + dur); sN.connect(f).connect(gn).connect(bus); sN.start(t, Math.random() * .5); sN.stop(t + dur + .02); }
+    function startMusic() {
+      const c = A(); if (!c || music) return;
+      const bus = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+      bus.gain.setValueAtTime(.0001, c.currentTime); bus.gain.exponentialRampToValueAtTime(.055, c.currentTime + .8);
+      bus.connect(lp).connect(master);
+      const STEP = 60 / 140 / 4; let step = 0, next = c.currentTime + .08;
+      const tick = () => {
+        while (next < c.currentTime + .15) {
+          const bar = Math.floor(step / 16) % 4, i = step % 16, root = BASS[bar], t = next;
+          const tones = MINOR[bar] ? [0, 3, 7, 12] : [0, 4, 7, 12];
+          voice(c, bus, 'square', hz(root + 24 + tones[i % 4]), t, STEP * .9, .18);                       // arpeggio
+          if (i % 2 === 0) voice(c, bus, 'triangle', hz(root + (i % 4 ? 12 : 0)), t, STEP * 1.8, .9);     // bass
+          const m = MEL[step % 64]; if (m > 0) voice(c, bus, 'square', hz(m), t, STEP * 1.7, .32);          // lead
+          if (i % 8 === 0) { const k = c.createOscillator(), kg = c.createGain(); k.type = 'triangle'; k.frequency.setValueAtTime(150, t); k.frequency.exponentialRampToValueAtTime(40, t + .12); kg.gain.setValueAtTime(1.2, t); kg.gain.exponentialRampToValueAtTime(.0001, t + .14); k.connect(kg).connect(bus); k.start(t); k.stop(t + .16); }
+          if (i % 8 === 4) hit(c, bus, t, .12, .5, 1800, 'bandpass');                                       // snare
+          if (i % 2 === 1) hit(c, bus, t, .03, .25, 7000);                                                  // hat
+          step++; next += STEP;
+        }
+      };
+      tick(); const iv = setInterval(tick, 25);
+      music = { stop() { clearInterval(iv); const t = c.currentTime; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(Math.max(.0001, bus.gain.value), t); bus.gain.exponentialRampToValueAtTime(.0001, t + .6); setTimeout(() => { try { bus.disconnect(); } catch {} }, 900); } };
+    }
     return {
-      humOn() { const c = A(); if (!c || hum) return; const t = c.currentTime, gn = c.createGain(); gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(.05, t + .8); const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.frequency.value = 55; o2.frequency.value = 110.6; o2.type = 'triangle'; const s = c.createBufferSource(); s.buffer = noiseBuf; s.loop = true; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 260; const ng = c.createGain(); ng.gain.value = .5; s.connect(f).connect(ng).connect(gn); o1.connect(gn); o2.connect(gn); out(gn); o1.start(); o2.start(); s.start(); hum = { stop() { const t2 = c.currentTime; gn.gain.cancelScheduledValues(t2); gn.gain.setValueAtTime(Math.max(.0001, gn.gain.value), t2); gn.gain.exponentialRampToValueAtTime(.0001, t2 + .5); [o1, o2, s].forEach(x => { try { x.stop(t2 + .6); } catch {} }); } }; },
-      humOff() { if (hum) { hum.stop(); hum = null; } },
+      musicOn() { wanted = true; startMusic(); },
+      musicOff() { wanted = false; if (music) { music.stop(); music = null; } },
+      musicPause() { if (music) { music.stop(); music = null; } },
+      get musicWanted() { return wanted; },
       tick(i = 0) { tone(900 + i * 120, .05, { type: 'square', peak: .05 }); },
       coin(i = 0) { tone(1500 + i * 50, .05, { type: 'triangle', peak: .06 }); tone(2250 + i * 50, .05, { peak: .04, at: .03 }); },
       charge() { tone(110, .9, { type: 'sawtooth', peak: .05, glide: 440, attack: .2 }); noise(.9, 200, 1800, { peak: .08, attack: .3 }); },
@@ -76,6 +112,7 @@
     };
   }
 
+  const upright = im => (window.CardbitUpright?.image ? window.CardbitUpright.image(im) : im);
   const imgCache = new Map();
   function loadImg(src) {
     if (!src) return Promise.resolve(null);
@@ -130,7 +167,7 @@
     const soundBtn = root.querySelector('[data-cbd=sound]'), motionBtn = root.querySelector('[data-cbd=motion]'), skipBtn = root.querySelector('[data-cbd=skip]');
     const syncButtons = () => { soundBtn.textContent = S.sound ? 'Sound On' : 'Sound Off'; soundBtn.setAttribute('aria-pressed', S.sound); motionBtn.setAttribute('aria-pressed', S.reduced); root.classList.toggle('cbd-calm', S.reduced); };
     syncButtons();
-    on(soundBtn, 'click', () => { S.sound = !S.sound; saveSound(S.sound); syncButtons(); if (S.sound) { audio(true); sfx.tick(3); if (W.platform > .5 && !done) sfx.humOn(); } else sfx.humOff(); });
+    on(soundBtn, 'click', () => { S.sound = !S.sound; saveSound(S.sound); syncButtons(); if (S.sound) { audio(true); sfx.tick(3); if (sfx.musicWanted && !done) sfx.musicOn(); } else sfx.musicPause(); });
     on(motionBtn, 'click', () => { S.reduced = !S.reduced; syncButtons(); });
     on(skipBtn, 'click', () => finish(true));
 
@@ -240,7 +277,7 @@
     }
     const startLoop = () => { if (!running && !S.destroyed) { running = true; requestAnimationFrame(frame); } };
     const io = new IntersectionObserver(es => { visible = es[0].isIntersecting; if (visible) startLoop(); }); io.observe(stage);
-    on(document, 'visibilitychange', () => { if (!document.hidden) startLoop(); });
+    on(document, 'visibilitychange', () => { if (!document.hidden) { startLoop(); if (sfx.musicWanted && !done) sfx.musicOn(); } else sfx.musicPause(); });
     const rs = new ResizeObserver(resize); rs.observe(stage); resize(); startLoop();
 
     const sparks = (x, y, c, n, spd = 1, gy = .06) => { if (S.reduced) return; for (let i = 0; i < n && W.sparks.length < 240; i++) { const a = Math.random() * Math.PI * 2, v = (1 + Math.random() * 5) * spd; W.sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, gy, life: 0, max: 30 + Math.random() * 45, s: 2 + Math.random() * 3, c: Math.random() < .3 ? '#fff' : c }); } };
@@ -276,22 +313,30 @@
       readout(sample ? 'DEMO PACK IN BAY' : 'PACK IN BAY');
       const btn = document.createElement('button');
       btn.type = 'button'; btn.className = 'cbd-hold';
-      btn.innerHTML = '<i></i><span>Hold to Open</span>';
+      btn.innerHTML = '<i></i><span>Tap or Hold to Open</span>';
       stage.append(btn);
+      setHint('');
       await new Promise((res, rej) => {
-        let t0 = 0, held = false, last = -1, af = 0; const fill = btn.querySelector('i'), HOLD = S.reduced ? 300 : 700;
-        const step = now => { if (!held) return; if (!ctx.alive()) return rej(ABORT); const k = clamp((now - t0) / HOLD); fill.style.transform = `scaleX(${k})`; W.platform = k * .6; const tk = Math.floor(k * 7); if (tk !== last) { last = tk; sfx.tick(tk); } if (k >= 1) { held = false; holdAction = null; vib(25); res(); return; } af = requestAnimationFrame(step); };
-        const start = e => { e?.preventDefault?.(); if (held) return; audio(S.sound); held = true; last = -1; t0 = performance.now(); af = requestAnimationFrame(step); };
-        const stop = () => { if (!held) return; held = false; cancelAnimationFrame(af); fill.style.transform = 'scaleX(0)'; W.platform = 0; };
-        on(btn, 'pointerdown', start); on(window, 'pointerup', stop); on(btn, 'pointerleave', stop); on(btn, 'pointercancel', stop);
-        on(btn, 'keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); e.stopPropagation(); start(); } });
-        on(btn, 'keyup', e => { if (e.key === 'Enter' || e.key === ' ') stop(); });
-        // Keyboard on the stage, or a quick tap with assistive tech, opens without holding.
-        holdAction = () => { holdAction = null; res(); };
-        on(btn, 'click', e => { if (e.detail === 0) { holdAction = null; res(); } });
+        // Tap or hold anywhere on the stage. A tap opens right away (the meter races to full);
+        // a drag of more than a few pixels, or the browser taking the touch for a scroll, cancels.
+        let t0 = 0, held = false, last = -1, af = 0, sx = 0, sy = 0, pid = null, fast = false, closed = false;
+        const fill = btn.querySelector('i'), HOLD = S.reduced ? 300 : 700, MOVE = 12;
+        const finish = () => { held = false; closed = true; holdAction = null; vib(25); res(); };
+        const step = now => { if (!held) return; if (!ctx.alive()) return rej(ABORT); const k = clamp((now - t0) / (fast ? 220 : HOLD)); fill.style.transform = `scaleX(${k})`; W.platform = k * .6; const tk = Math.floor(k * 7); if (tk !== last) { last = tk; sfx.tick(tk); } if (k >= 1) { finish(); return; } af = requestAnimationFrame(step); };
+        const begin = () => { if (held || closed || !ctx.alive()) return; audio(S.sound); held = true; fast = false; last = -1; t0 = performance.now(); sfx.musicOn(); af = requestAnimationFrame(step); };
+        const stop = () => { if (!held) return; held = false; pid = null; cancelAnimationFrame(af); fill.style.transform = 'scaleX(0)'; W.platform = 0; };
+        const tapFinish = () => { if (!held) return; const k = clamp((performance.now() - t0) / HOLD); fast = true; t0 = performance.now() - k * 220; };
+        on(stage, 'pointerdown', e => { if (e.button > 0 || e.target.closest('button:not(.cbd-hold),a')) return; pid = e.pointerId; sx = e.clientX; sy = e.clientY; if (e.target === btn) e.preventDefault(); begin(); });
+        on(window, 'pointermove', e => { if (held && e.pointerId === pid && Math.hypot(e.clientX - sx, e.clientY - sy) > MOVE) stop(); });
+        on(window, 'pointerup', e => { if (held && e.pointerId === pid) { pid = null; tapFinish(); } });
+        on(window, 'pointercancel', stop); on(window, 'scroll', stop, { passive: true, capture: true });
+        on(btn, 'keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); e.stopPropagation(); begin(); tapFinish(); } });
+        // Keyboard on the stage, or assistive tech clicking the button, opens without holding.
+        holdAction = () => { holdAction = null; closed = true; sfx.musicOn(); res(); };
+        on(btn, 'click', e => { if (e.detail === 0 && !closed) { holdAction = null; closed = true; sfx.musicOn(); res(); } });
       });
       btn.remove();
-      sfx.humOn(); sfx.charge(); readout(sample ? 'CHARGING · DEMO' : 'CHARGING');
+      sfx.musicOn(); sfx.charge(); readout(sample ? 'CHARGING · DEMO' : 'CHARGING');
       // Cardbits stream from the wallet into the bay (a demo spends none, so nothing flies).
       const wallet = document.querySelector('.cb-wallet-link .cb-balance');
       if (!sample && wallet && !S.reduced) { const s = stage.getBoundingClientRect(), r = wallet.getBoundingClientRect(); const fx = clamp(r.left - s.left + r.width / 2, 0, Wd), fy = Math.max(-40, r.top - s.top + r.height / 2); for (let i = 0; i < 44; i++) W.flies.push({ sx: fx + (Math.random() - .5) * 30, sy: fy, tx: L.cx + (Math.random() - .5) * L.pw * .7, ty: L.cy + (Math.random() - .5) * L.ph * .6, dur: 34 + Math.random() * 12, delay: i * 1.1, curve: (Math.random() - .5) * 140, s: 3 + Math.random() * 3, c: i % 4 ? CY : '#fff', life: 0 }); for (let i = 0; i < 8; i++) setTimeout(() => sfx.coin(i), i * 90); }
@@ -347,16 +392,34 @@
       else { await ctx.wait(260); await ctx.tween(R, 'scale', .15, 320, k => k * k); R.a = 0; }
       W.core.r *= 1.6; await ctx.wait(80); W.core.a = 0; wave(L.cx, L.cy, '#fff', L.ch); tierlab.classList.remove('on');
     }
+    function bitsChip(cls) { return '<span class="' + cls + '">' + (BITS_ICON ? '<img alt="" src="' + esc(BITS_ICON) + '">' : '') + '<em>0</em><small>Cardbits</small></span>'; }
+    // Animated count-up with coin ticks; ends with a tier-colored pop.
+    function countUp(node, from, to, ms, rank = 0, quiet = false) {
+      const em = node.querySelector('em') || node;
+      if (S.reduced || ms <= 0) { em.textContent = fmtBits(to); node.classList.add('pop'); return Promise.resolve(); }
+      node.classList.remove('pop'); node.classList.add('counting');
+      return new Promise(res => {
+        const t0 = performance.now(); let lastTick = 0, i = 0;
+        const f = now => {
+          if (S.destroyed || !node.isConnected) return res();
+          const k = clamp((now - t0) / ms); em.textContent = fmtBits(lerp(from, to, easeOut(k)));
+          if (!quiet && now - lastTick > 75 && k < 1) { lastTick = now; sfx.coin(Math.min(12, i++)); }
+          if (k < 1) requestAnimationFrame(f);
+          else { node.classList.remove('counting'); void node.offsetWidth; node.classList.add('pop'); if (!quiet) sfx.tick(rank); res(); }
+        };
+        requestAnimationFrame(f);
+      });
+    }
     function cardNode(c, flash) {
       const n = document.createElement('div');
       n.className = 'cbd-card r' + c.rank; n.style.setProperty('--tc', tc(c.tier || 'Common'));
       n.innerHTML = '<div class="cbd-face">' + (c.image ? '<img alt="' + esc(c.name) + '" src="' + esc(c.image) + '">' : '<span class="cbd-noimg">' + esc(c.name) + '</span>') + '<i class="cbd-sheen"></i></div>' + (flash ? '<div class="cbd-flash"></div>' : '') +
-        '<div class="cbd-tag"><span class="cbd-pill"></span><b></b></div>';
+        '<div class="cbd-tag"><span class="cbd-tagrow"><span class="cbd-pill"></span>' + (bitsOf(c) ? bitsChip('cbd-bits') : '') + '</span><b></b></div>';
       place(n); stage.append(n); return n;
     }
     async function print(ctx, c) {
       const rk = c.rank, col = tc(c.tier || 'Common'); readout('PRINTING');
-      W.raster = { im: await loadImg(c.image), line: 0, color: col, glitch: 0 }; const R = W.raster; const dur = [560, 680, 820, 1150, 1550][rk]; sfx.print(dur / 1000, rk);
+      W.raster = { im: upright(await loadImg(c.image)), line: 0, color: col, glitch: 0 }; const R = W.raster; const dur = [560, 680, 820, 1150, 1550][rk]; sfx.print(dur / 1000, rk);
       const lineFx = setInterval(() => { if (!S.reduced && W.raster) sparks(L.cx - L.cw / 2 + Math.random() * L.cw, L.cy - L.ch / 2 + L.ch * R.line, col, 2, .5, .02); }, 40);
       try {
         if (rk >= 3) { await ctx.tween(R, 'line', .42, dur * .4, k => k); R.glitch = 1; sfx.glitch(); W.shake = 5; await ctx.wait(110); R.line = .34; R.glitch = 0; await ctx.tween(R, 'line', .72, dur * .3, k => k); R.glitch = 1; sfx.glitch(); await ctx.wait(90); R.glitch = 0; await ctx.tween(R, 'line', 1, dur * .3, k => k); }
@@ -367,6 +430,8 @@
       sfx.stinger(rk); sparks(L.cx, L.cy, col, [8, 18, 36, 70, 130][rk], [.6, .8, 1, 1.3, 1.7][rk]); if (rk >= 2) wave(L.cx, L.cy, col, L.ch * 1.3);
       if (rk >= 3) { vib(rk === 4 ? [60, 40, 120] : 60); banner.style.setProperty('--tc', col); banner.className = 'cbd-banner'; void banner.offsetWidth; banner.classList.add('on'); scramble(banner, rk === 4 ? 'LEGENDARY PULL' : 'EPIC PULL', 480); }
       readout((c.tier || 'CARD').toUpperCase() + ' · DECODED');
+      const chip = n.querySelector('.cbd-bits');
+      if (chip) setTimeout(() => { if (S.destroyed || !chip.isConnected) return; chip.classList.add('on'); countUp(chip, 0, bitsOf(c), [520, 650, 800, 1100, 1400][rk], rk).then(() => { if (!S.reduced && chip.isConnected) { const p = center(chip); sparks(p.x, p.y, col, [6, 8, 12, 20, 32][rk], .6, .02); } }); }, S.reduced ? 0 : 420);
       return n;
     }
     async function toRow(ctx, n, i, c) {
@@ -400,21 +465,32 @@
     /* ---------- results ---------- */
     function finish(instant) {
       if (done || S.destroyed) return; done = true; RUN++; tapRes = null; holdAction = null;
-      sfx.humOff(); Object.assign(W, { dim: 0, beams: 0, raster: null, packAlpha: 0, scanOn: false }); W.core.a = 0; W.ring.a = 0; W.bits.length = 0;
+      sfx.musicOff(); Object.assign(W, { dim: 0, beams: 0, raster: null, packAlpha: 0, scanOn: false }); W.core.a = 0; W.ring.a = 0; W.bits.length = 0;
       stage.querySelectorAll('.cbd-card,.cbd-hold').forEach(n => n.remove()); tierlab.classList.remove('on'); setHint(''); rowEl.replaceChildren(); ro.textContent = '';
       skipBtn.hidden = true;
       const box = document.createElement('div'); box.className = 'cbd-summary';
-      box.innerHTML = '<h2>Your ' + esc(name) + ' Pulls</h2><div class="cbd-pulls"></div><div class="cbd-rewards"></div><div class="cbd-acts"></div>';
+      const total = cards.reduce((a, c) => a + bitsOf(c), 0);
+      box.innerHTML = '<h2>Your ' + esc(name) + ' Pulls</h2><div class="cbd-pulls"></div>' + (total ? '<div class="cbd-total"><span>Total Cardbit Value</span>' + bitsChip('cbd-bits cbd-sum') + '</div>' : '') + '<div class="cbd-rewards"></div><div class="cbd-acts"></div>';
       stage.append(box); void box.offsetWidth; box.classList.add('on');
       const pulls = box.querySelector('.cbd-pulls');
       cards.forEach((c, i) => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'cbd-pull'; b.style.setProperty('--tc', tc(c.tier || 'Common'));
-        b.innerHTML = (c.image ? '<img alt="" src="' + esc(c.image) + '">' : '<span class="cbd-noimg"></span>') + '<span><b>' + esc(c.tier || '') + '</b>' + esc(c.name || 'Card') + '</span>';
-        b.setAttribute('aria-label', [c.name, c.tier].filter(Boolean).join(', '));
+        const v = bitsOf(c);
+        b.innerHTML = (c.image ? '<img alt="" src="' + esc(c.image) + '">' : '<span class="cbd-noimg"></span>') + (v ? '<i class="cbd-pv">' + (BITS_ICON ? '<img alt="" src="' + esc(BITS_ICON) + '">' : '') + fmtBits(v) + '</i>' : '') + '<span><b>' + esc(c.tier || '') + '</b>' + esc(c.name || 'Card') + '</span>';
+        b.setAttribute('aria-label', [c.name, c.tier, v ? fmtBits(v) + ' Cardbits' : ''].filter(Boolean).join(', '));
         if (options.onInspect) on(b, 'click', () => options.onInspect(c)); else b.disabled = true;
         pulls.append(b);
         if (instant || S.reduced) b.classList.add('in'); else setTimeout(() => { if (!S.destroyed) { b.classList.add('in'); sfx.tick(c.rank); } }, 120 + i * 110);
       });
+      // The total tallies up as the pulls land, then pops with a burst.
+      const sum = box.querySelector('.cbd-sum');
+      if (sum) {
+        if (instant || S.reduced) { sum.querySelector('em').textContent = fmtBits(total); sum.classList.add('pop'); }
+        else {
+          const top = Math.max(0, ...cards.map(c => c.rank));
+          setTimeout(() => { if (S.destroyed || !sum.isConnected) return; countUp(sum, 0, total, Math.min(2200, 700 + cards.length * 160), top).then(() => { if (S.destroyed || !sum.isConnected) return; const p = center(sum); sparks(p.x, p.y, tc(TIERS[top] || 'Common'), 34, 1, .02); sfx.stinger(Math.min(2, top)); }); }, 160 + cards.length * 110);
+        }
+      }
       // Server-side XP and Sparks for this opening (the site's own component).
       let rewards = null; try { rewards = options.onSpread?.() || null; } catch { rewards = null; }
       if (rewards) {
@@ -441,7 +517,7 @@
     start();
 
     const player = {
-      destroy() { if (S.destroyed) return; S.destroyed = true; RUN++; sfx.humOff(); events.abort(); io.disconnect(); rs.disconnect(); root.remove(); },
+      destroy() { if (S.destroyed) return; S.destroyed = true; RUN++; sfx.musicOff(); events.abort(); io.disconnect(); rs.disconnect(); root.remove(); },
       skip() { finish(true); }
     };
     return player;

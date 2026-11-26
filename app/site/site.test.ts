@@ -40,7 +40,8 @@ describe("Cardbit site pages", () => {
     // Live Pulls presentation layer (flip-in, tier glows, Big Hit spotlight, Biggest Hit Today).
     expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-live-pulls\.js\?v=\w+" data-back="\/site\/assets\/cardbit-card-back-en\.webp\?v=\w+" defer>/);
     expect(home).toContain("/site/css/cardbit-site-live-pulls.css?v=");
-    expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-decode\.js\?v=\w+" defer>/);
+    expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-decode\.js\?v=\w+" data-bits="[^"]*cardbit-bits-card-emblem[^"]*" defer>/);
+    expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-upright\.js\?v=\w+" defer>/);
     expect(home).toContain("/site/css/cardbit-site-decode.css?v=");
     expect(home.indexOf("cardbit-opening.js")).toBeLessThan(home.indexOf("cardbit-site-decode.js"));
     for (const path of ["open/cobalt", "welcome"]) expect((await splat(args(path)) as Response).status).toBe(200);

@@ -18,7 +18,7 @@
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const reduced = () => motion.matches;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const safeSrc = v => { try { const u = new URL(String(v || ''), location.href); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch { return ''; } };
+  const safeSrc = v => { try { const u = new URL(String(v || ''), location.href); return /^(?:https?|blob):$/.test(u.protocol) ? u.href : ''; } catch { return ''; } };
 
   function rankOf(text) {
     const k = String(text || '').trim().toLowerCase();
