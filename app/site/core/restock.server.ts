@@ -90,7 +90,25 @@ export async function currentPoolVersion(tx: Tx, packId: string) {
 
 // ---------- Pool rules (Trevor, Nov 25 2026) ----------
 
-type RulePack = { languages: unknown; eras: unknown; minValueBits: number | null; maxValueBits: number | null; typeCaps: unknown };
+type RulePack = { languages: unknown; eras: unknown; minValueBits: number | null; maxValueBits: number | null; typeCaps: unknown; id?: string; kind?: string };
+
+// ---------- Prize pools (Trevor, Nov 26 2026) ----------
+// Daily Spin pools (kind "spin", id "spin-<tier>") and the Spark Shop (kind "sparks") use every pack-pool tool,
+// but they're never sold, so they have no price or EV. Instead, Fill Rules keep about N cards in each value range.
+
+/** Official Rules C4: maximum value of one card prize per Daily Spin (Cardbits). Mirrors rewards/spin-pools.server.ts. */
+export const SPIN_CAPS: Record<string, number> = { "spin-basic": 500, "spin-bronze": 750, "spin-silver": 1000, "spin-gold": 2500, "spin-cobalt": 5000, "spin-holo": 10000 };
+export const isPrizePool = (p: { kind?: string | null }) => p.kind != null && p.kind !== "pack";
+export type FillTarget = { minBits: number; maxBits: number | null; count: number };
+/** Saved Fill Rules, lowest range first. Bad rows are dropped. */
+export function fillTargets(raw: unknown): FillTarget[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => ({ minBits: Number(r?.minBits), maxBits: r?.maxBits == null || r?.maxBits === "" ? null : Number(r.maxBits), count: Number(r?.count) }))
+    .filter((r) => Number.isInteger(r.minBits) && r.minBits >= 0 && (r.maxBits === null || (Number.isInteger(r.maxBits) && r.maxBits >= r.minBits)) && Number.isInteger(r.count) && r.count > 0)
+    .sort((a, b) => a.minBits - b.minBits);
+}
+export const inRange = (v: number, t: FillTarget) => v >= t.minBits && (t.maxBits == null || v <= t.maxBits);
 const TYPES = ["English", "Japanese", "Modern", "Vintage"] as const;
 type Mix = Record<string, number>;
 
@@ -100,6 +118,9 @@ export function ruleBreak(pack: RulePack, c: Pick<SiteCopy, "language" | "era" |
   if ((pack.minValueBits != null || pack.maxValueBits != null) && (value == null || value <= 0)) return "No price yet, so it can't be checked against this pack's value range.";
   if (pack.minValueBits != null && value! < pack.minValueBits) return `Below this pack's minimum value (${pack.minValueBits.toLocaleString("en-US")} Cardbits).`;
   if (pack.maxValueBits != null && value! > pack.maxValueBits) return `Above this pack's maximum value (${pack.maxValueBits.toLocaleString("en-US")} Cardbits).`;
+  const cap = pack.kind === "spin" && pack.id ? SPIN_CAPS[pack.id] : undefined;
+  if (cap != null && (value == null || value <= 0)) return "No price yet, so it can't be checked against this spin's prize cap.";
+  if (cap != null && value! > cap) return `Above this spin's maximum card prize in the Official Rules (${cap.toLocaleString("en-US")} Cardbits).`;
   return null;
 }
 const caps = (pack: RulePack): Mix => {
@@ -387,7 +408,7 @@ export function routeCard(value: number, card: Pick<SiteCopy, "language" | "era"
   let best: { st: PoolState; score: number } | null = null;
   for (const st of states) {
     const p = st.pack;
-    if (p.targetEvPct == null || ruleBreak(p, card, value)) continue;
+    if (isPrizePool(p) || p.targetEvPct == null || ruleBreak(p, card, value)) continue;
     if (st.mix && capBreak(p, addType(st.mix, card), st.cards + 1)) continue;
     const before = evPct(st.retail, st.cards, p);
     const after = evPct(st.retail + value, st.cards + 1, p)!;
@@ -455,7 +476,7 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
   const none = { routed: 0, held: 0, drafts: 0, versions: [] as { packId: string; version: number }[] };
   if (!claimed.length) return { ran: false, ...none, retiered: 0 };
   const retiered = await dailyTiers(db, now);
-  const draftPacks = await db.sitePack.count({ where: { autoDrafts: true, targetEvPct: { not: null } } });
+  const draftPacks = await db.sitePack.count({ where: { autoDrafts: true, OR: [{ targetEvPct: { not: null } }, { kind: { not: "pack" } }] } });
   const listedBefore = new Date(now.getTime() - DRAFT_HOLD_MIN * 60_000);
   const free = { status: "DRAFT", ownerId: null, restockId: null } as const;
   const waiting = await db.siteCopy.findMany({
@@ -500,6 +521,35 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
     const kept = [...buybacks, ...(listed.length ? trimToBand(st.pack, withBuybacks, listed).map((x) => x.c) : [])];
     if (kept.length) plan.set(packId, kept);
     else plan.delete(packId);
+  }
+  // Prize pools with Auto-Fill on (Daily Spins, Spark Shop): top up each Fill Rule range from whatever no pack took,
+  // oldest listing first. Packs always get first pick.
+  const taken = new Set([...plan.values()].flat().map((c) => c.id));
+  const prizePools = [...states.values()].filter((st) => isPrizePool(st.pack) && st.pack.autoDrafts && fillTargets(st.pack.fillTargets).length);
+  if (prizePools.length) {
+    const pooledNow = await db.siteCopy.findMany({ where: { status: "POOLED", packId: { in: prizePools.map((st) => st.pack.id) } }, select: { packId: true, printingKey: true, condition: true, retailBits: true } });
+    const pooledVals = await retailOf(db, pooledNow);
+    const byAge = [...waiting].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    for (const st of prizePools) {
+      const mine = pooledNow.map((c, i) => ({ c, v: pooledVals[i] })).filter((x) => x.c.packId === st.pack.id);
+      for (const t of fillTargets(st.pack.fillTargets)) {
+        let need = t.count - mine.filter((x) => x.v != null && inRange(x.v, t)).length;
+        for (const c of byAge) {
+          if (need <= 0) break;
+          const v = valueOf.get(c.id) ?? 0;
+          if (taken.has(c.id) || !v || !inRange(v, t) || ruleBreak(st.pack, c, v)) continue;
+          if (!c.autoRestock && c.demo) continue;
+          if (st.mix && capBreak(st.pack, addType(st.mix, c), st.cards + 1)) continue;
+          taken.add(c.id);
+          need--;
+          st.cards++;
+          if (st.mix) st.mix = addType(st.mix, c);
+          mine.push({ c: { packId: st.pack.id, printingKey: c.printingKey, condition: c.condition, retailBits: c.retailBits }, v });
+          plan.set(st.pack.id, [...(plan.get(st.pack.id) ?? []), c]);
+          if (c.autoRestock) held = Math.max(0, held - 1);
+        }
+      }
+    }
   }
   const versions: { packId: string; version: number }[] = [];
   let routed = 0,
@@ -653,11 +703,22 @@ export async function stagedRestocks(db: PrismaClient) {
       };
       const nowOdds = await odds(now);
       const projected = autoTierRules(await retailOf(db, after), tierMix(p.tierMix), p.topTierMin);
+      const prize = isPrizePool(p);
+      const nowValues = prize ? await retailOf(db, now) : [];
+      const targets = fillTargets(p.fillTargets);
+      const fill = prize
+        ? targets.map((t) => ({ ...t, have: nowValues.filter((v) => v != null && inRange(v, t)).length }))
+        : null;
       const band = p.targetEvPct == null ? null : { lo: p.targetEvPct - p.evBandPct, hi: p.targetEvPct + p.evBandPct };
       const needsRestock = Boolean(band && nowOdds.evPct != null && (nowOdds.evPct < band.lo || nowOdds.evPct > band.hi));
       // Suggestions: eligible Draft cards that move EV toward target the most (internal, staff only).
-      const suggestions =
-        p.targetEvPct == null || nowOdds.evPct == null
+      const suggestions = prize
+        ? drafts
+            .map((c, i) => ({ c, v: draftValues[i] }))
+            .filter(({ c, v }) => v && v > 0 && !ruleBreak(p, c, v) && (fill ?? []).some((t) => t.have < t.count && inRange(v, t)))
+            .slice(0, 10)
+            .map(({ c, v }) => ({ id: c.id, title: c.title, condition: c.condition, retailBits: v!, evAfterPct: null as number | null, slot: c.slot, pocket: c.pocket }))
+        : p.targetEvPct == null || nowOdds.evPct == null
           ? []
           : drafts
               .map((c, i) => ({ c, v: draftValues[i] }))
@@ -670,6 +731,8 @@ export async function stagedRestocks(db: PrismaClient) {
       return {
         packId: p.id,
         title: p.title,
+        kind: p.kind,
+        fill,
         cardsPerPack: p.cardsPerPack,
         priceBits: p.priceBits,
         ev: { targetPct: p.targetEvPct, bandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, needsRestock, autoDrafts: p.autoDrafts },
@@ -695,7 +758,7 @@ export async function stagedRestocks(db: PrismaClient) {
         history: (history.get(p.id) ?? []).map((h) => ({ ...h, evPct: evRows.find((e) => e.packId === p.id && e.version === h.version)?.evPct ?? null })),
         autoWaiting: waiting,
         // Listed Drafts this pack's rules accept (what Auto-Fill From Drafts may pick from, before the EV band check).
-        draftsFit: drafts.filter((c, i) => !c.autoRestock && !c.demo && (draftValues[i] ?? 0) > 0 && !ruleBreak(p, c, draftValues[i])).length,
+        draftsFit: drafts.filter((c, i) => !c.autoRestock && !c.demo && (draftValues[i] ?? 0) > 0 && !ruleBreak(p, c, draftValues[i]) && (!prize || targets.some((t) => inRange(draftValues[i]!, t)))).length,
         draftHoldMin: DRAFT_HOLD_MIN,
       };
     }),
@@ -716,7 +779,32 @@ export async function savePackEv(db: PrismaClient, packId: string, b: Record<str
     if (!Array.isArray(v) || v.some((x) => !allowed.includes(x))) throw new RestockError(`${label}: choose from ${allowed.join(", ")}.`);
     return [...new Set(v as string[])];
   };
+  const pack = await packOrThrow(db, packId);
+  const prize = isPrizePool(pack);
   const data: Prisma.SitePackUpdateInput = {};
+  if (prize && "targetEvPct" in b && b.targetEvPct !== null && b.targetEvPct !== undefined && b.targetEvPct !== "")
+    throw new RestockError("Prize pools aren't sold, so they have no EV. Use Fill Rules instead.");
+  if ("fillTargets" in b) {
+    if (!prize) throw new RestockError("Fill Rules are for prize pools (Daily Spins and the Spark Shop).");
+    const raw = Array.isArray(b.fillTargets) ? b.fillTargets : [];
+    if (raw.length > 12) throw new RestockError("Use 12 Fill Rule ranges or fewer.");
+    const rows = raw.map((r: { minBits?: unknown; maxBits?: unknown; count?: unknown }) => ({
+      minBits: int(r?.minBits, 0, 100_000_000, "Range minimum") ?? 0,
+      maxBits: int(r?.maxBits, 1, 100_000_000, "Range maximum"),
+      count: int(r?.count, 1, 5000, "Cards to keep") ?? 0,
+    }));
+    for (const r of rows) {
+      if (!r.count) throw new RestockError("Each Fill Rule needs how many cards to keep.");
+      if (r.maxBits != null && r.maxBits < r.minBits) throw new RestockError("Each range's minimum must be at or below its maximum.");
+    }
+    const sorted = rows.sort((a, b2) => a.minBits - b2.minBits);
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      if (prev.maxBits == null || prev.maxBits >= sorted[i].minBits) throw new RestockError("Fill Rule ranges can't overlap.");
+    }
+    data.fillTargets = sorted.length ? sorted : Prisma_DbNull;
+    if (!sorted.length && !("autoDrafts" in b)) data.autoDrafts = false;
+  }
   // Only the fields a form sends change (the EV form and the Pool Rules form save separately).
   if ("targetEvPct" in b) {
     data.targetEvPct = int(b.targetEvPct, 10, 500, "Target EV");
@@ -754,11 +842,20 @@ export async function savePackEv(db: PrismaClient, packId: string, b: Record<str
   }
   if ("topTierMin" in b) data.topTierMin = int(b.topTierMin, 1, 100_000_000, "Top-tier minimum value");
   if (data.autoDrafts === true) {
-    const target = "targetEvPct" in b ? data.targetEvPct : (await packOrThrow(db, packId)).targetEvPct;
-    if (target == null) throw new RestockError("Set a Target EV before turning on Auto-Fill From Drafts.");
+    if (prize) {
+      const rules = "fillTargets" in b ? data.fillTargets : pack.fillTargets;
+      if (!fillTargets(rules === Prisma_DbNull ? null : rules).length) throw new RestockError("Add Fill Rules before turning on Auto-Fill From Drafts.");
+    } else {
+      const target = "targetEvPct" in b ? data.targetEvPct : pack.targetEvPct;
+      if (target == null) throw new RestockError("Set a Target EV before turning on Auto-Fill From Drafts.");
+    }
   }
-  // Clearing the Target EV also turns Auto-Fill From Drafts off (it can't run without one).
-  if ("targetEvPct" in b && data.targetEvPct == null) data.autoDrafts = false;
+  // Clearing the Target EV also turns Auto-Fill From Drafts off for a pack (it can't run without one).
+  if (!prize && "targetEvPct" in b && data.targetEvPct == null) data.autoDrafts = false;
+  if (prize && "targetEvPct" in b) {
+    delete data.targetEvPct;
+    delete data.evBandPct;
+  }
   const saved = await db.sitePack.update({ where: { id: packId }, data });
   // New mix or top-tier minimum: re-rank the pool now so staff see the effect.
   if ("tierMix" in b || "topTierMin" in b)

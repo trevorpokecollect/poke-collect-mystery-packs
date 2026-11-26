@@ -704,6 +704,7 @@ export async function metrics(db: PrismaClient, input: { from?: unknown; to?: un
       FROM "SitePack" p
       LEFT JOIN "SiteCopy" c ON c."packId" = p.id AND c.status = 'POOLED' AND NOT c.demo
       LEFT JOIN "SitePrice" sp ON sp."printingKey" = c."printingKey"
+      WHERE p.kind = 'pack'
       GROUP BY p.id ORDER BY p.active DESC, p."sortOrder", p.title`,
     db.$queryRaw<{ status: string; n: bigint; value: bigint; holders: bigint }[]>`
       SELECT c.status, count(*) n, coalesce(sum(${value}), 0) value, count(DISTINCT c."ownerId") holders

@@ -3,7 +3,8 @@
  * streak raises the chance of a real card. Prize features stay off until official rules, a free
  * entry method and Trevor's approval exist.
  */
-export type Slice = { kind: "card" | "sparks" | "xp"; amount?: number; weight: number };
+/** `amount` is the prize (or the low end of a range); `max` above it makes a range, rolled evenly per spin. */
+export type Slice = { kind: "card" | "sparks" | "xp"; amount?: number; max?: number; weight: number };
 export type SpinTable = Record<string, Slice[]>;
 
 /** Weights are relative. Card slices draw the next committed copy from that tier's Daily Spin pool. */
@@ -61,7 +62,8 @@ export function validTable(value: unknown): value is SpinTable {
           ["card", "sparks", "xp"].includes(s.kind) &&
           Number.isSafeInteger(s.weight) &&
           s.weight >= 0 &&
-          (s.kind === "card" || (Number.isSafeInteger(s.amount) && s.amount > 0 && s.amount <= 10_000)),
+          (s.kind === "card" || (Number.isSafeInteger(s.amount) && s.amount > 0 && s.amount <= 10_000)) &&
+          (s.max === undefined || s.max === null || (s.kind !== "card" && Number.isSafeInteger(s.max) && s.max >= s.amount && s.max <= 10_000)),
       ) &&
       slices.some((s) => s.weight > 0) &&
       // A non-card slice is the fallback when the tier's Daily Spin pool is empty.
@@ -87,8 +89,27 @@ export function pickSlice(slices: Slice[], ticket: number) {
 }
 export const totalWeight = (slices: Slice[]) => slices.reduce((n, s) => n + s.weight, 0);
 
-/** Odds shown to customers, as whole-number percentages of the current table. */
+/** Odds shown to customers, as percentages of the current table (one decimal). `max` is set for ranges. */
 export function displayOdds(slices: Slice[]) {
   const total = totalWeight(slices);
-  return slices.map((s) => ({ kind: s.kind, amount: s.amount ?? null, percent: total ? Math.round((s.weight / total) * 1000) / 10 : 0 }));
+  return slices.map((s) => ({
+    kind: s.kind,
+    amount: s.amount ?? null,
+    max: s.max != null && s.amount != null && s.max > s.amount ? s.max : null,
+    percent: total ? Math.round((s.weight / total) * 1000) / 10 : 0,
+  }));
+}
+
+/** The prize amount for a non-card slice: fixed, or an even roll across its range (`rand(n)` = integer in [0, n)). */
+export function rollAmount(s: Slice, rand: (n: number) => number) {
+  const lo = s.amount!;
+  const hi = s.max != null && s.max > lo ? s.max : lo;
+  return hi > lo ? lo + rand(hi - lo + 1) : lo;
+}
+
+/** Highest-paying Sparks slice (by top of range), else highest non-card slice: the result when a card can't be awarded. */
+export function fallbackSlice(slices: Slice[]) {
+  const top = (s: Slice) => s.max ?? s.amount ?? 0;
+  const sparks = slices.filter((s) => s.kind === "sparks").sort((a, b) => top(b) - top(a))[0];
+  return sparks ?? slices.filter((s) => s.kind !== "card").sort((a, b) => top(b) - top(a))[0];
 }

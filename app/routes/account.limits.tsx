@@ -55,7 +55,7 @@ async function page(customerId: string, flash?: { ok?: string; error?: string })
       : "";
   const pause = s.pause
     ? `<div class="sum" role="status"><span>${s.pause.kind === "self_exclusion" ? "Self-Exclusion" : "Cool-Off"} Active</span><b>Until ${esc(fmtDate(s.pause.until))}</b></div>
-       <p class="fine">Top-ups, pack and single purchases, Daily Spins and subscriptions are paused. You can still view your Vault, ship cards and sell cards back. A break can't be shortened.</p>`
+       <p class="fine">Top-ups, pack and single purchases, Daily Spins, Spark Shop redemptions and subscriptions are paused. You can still view your Vault, ship cards and sell cards back. A break can't be shortened.</p>`
     : "";
 
   const limitBlocks = KINDS.map((kind) => {

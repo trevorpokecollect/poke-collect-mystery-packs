@@ -56,7 +56,7 @@ describe("Ask Latch basics", () => {
 
   it("knows the whole site from the code that runs it, without card values", () => {
     const closed = siteFacts(false);
-    for (const want of ["Level 50", "Mythic", "Prism Spin (Level 40)", "+70%", "5% of the difference", "250 Sparks", "1-800-GAMBLER", "HMAC-SHA256", "top 10", "after 24 hours", "30 days", "5 years"])
+    for (const want of ["Level 50", "Mythic", "Prism Spin (Level 40)", "+70%", "5% of the difference", "cardbit.com/sparks", "1,000 Sparks", "1-800-GAMBLER", "HMAC-SHA256", "top 10", "after 24 hours", "30 days", "5 years"])
       expect(closed).toContain(want);
     expect(closed).toContain("coming soon");
     expect(closed).not.toContain("$24.99");

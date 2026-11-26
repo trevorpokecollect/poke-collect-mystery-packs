@@ -1,4 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Official Rules C4 is read from the live prize table; this suite has no database, so use the default table.
+vi.mock("./rewards/spin-rules.server", async (orig) => {
+  const real = await orig<typeof import("./rewards/spin-rules.server")>();
+  const { DEFAULT_SPIN_TABLE } = await import("../lib/cardbit-spinner");
+  return { ...real, siteSpinRulesHtml: async () => real.spinRulesHtml(DEFAULT_SPIN_TABLE, null) };
+});
 import { readFileSync } from "node:fs";
 import { loader as splat } from "../routes/$";
 import { loader as policies } from "../routes/policies";
@@ -38,6 +45,8 @@ describe("Cardbit site pages", () => {
     expect(page2.status).toBe(200);
     const rulesHtml = await page2.text();
     expect(rulesHtml).not.toMatch(/Counsel|NOT IN EFFECT/);
+    expect(rulesHtml).toContain("<td>Prism</td>\n<td>22.0%</td>"); // C4 prize table filled in
+    expect(rulesHtml).not.toContain("<!--spin-prizes-->");
     // Rules page wears the site header and footer, and uses the support address.
     expect(rulesHtml).toContain('class="cb-nav"');
     expect(rulesHtml).toContain('class="cb-footer"');

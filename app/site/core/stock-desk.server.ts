@@ -241,7 +241,9 @@ export async function savePack(db: PrismaClient, id: string, price: unknown, car
   const priceBits = bits(price, "Pack price");
   const n = Number(cardsPerPack);
   if (!priceBits || !Number.isInteger(n) || n < 1 || n > 20) throw new DeskError("Check the pack price and cards per pack.");
-  if (!(await db.sitePack.findUnique({ where: { id } }))) throw new DeskError("Unknown pack.");
+  const pack = await db.sitePack.findUnique({ where: { id } });
+  if (!pack) throw new DeskError("Unknown pack.");
+  if (pack.kind !== "pack") throw new DeskError("Prize pools (Daily Spins, Spark Shop) aren't sold, so they have no price or On Sale switch.");
   return db.sitePack.update({ where: { id }, data: { priceBits, cardsPerPack: n, active } });
 }
 
@@ -284,7 +286,7 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
     value: await stockValue(db), // ignores filters
     packs: packs.map((p) => {
       const pooled = poolCounts.find((c) => c.packId === p.id)?._count._all ?? 0;
-      return { id: p.id, title: p.title, priceBits: p.priceBits, cardsPerPack: p.cardsPerPack, active: p.active, pooled, packsAvailable: Math.floor(pooled / p.cardsPerPack) };
+      return { id: p.id, title: p.title, kind: p.kind, priceBits: p.priceBits, cardsPerPack: p.cardsPerPack, active: p.active, pooled, packsAvailable: Math.floor(pooled / p.cardsPerPack) };
     }),
     copies: page.map((r) => {
       const p = prices.get(priceKey(r.printingKey, r.condition));

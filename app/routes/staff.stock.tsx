@@ -86,8 +86,8 @@ export async function action({ request }: ActionFunctionArgs) {
     const cardsPerPack = Number(fd.get("cardsPerPack"));
     if (!priceBits || Number.isNaN(priceBits) || !Number.isInteger(cardsPerPack) || cardsPerPack < 1 || cardsPerPack > 20) note = "Check the pack price and cards per pack.";
     else {
-      await prisma.sitePack.update({ where: { id }, data: { priceBits, cardsPerPack, active: fd.get("active") === "on" } });
-      note = "Pack saved.";
+      const n = await prisma.sitePack.updateMany({ where: { id, kind: "pack" }, data: { priceBits, cardsPerPack, active: fd.get("active") === "on" } });
+      note = n.count ? "Pack saved." : "Prize pools aren't sold, so they have no price.";
     }
   }
   const u = new URL(back, "http://x");

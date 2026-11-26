@@ -3,7 +3,7 @@
 // Never includes card values, tier value cutoffs, EV or retail prices (internal only).
 import type { PrismaClient } from "@prisma/client";
 import { ICONS, MAX_LEVEL, RANKS, SPINNER_TIERS, XP_RULES, xpForLevel } from "../../lib/cardbit-levels";
-import { SPARK_RATE_PERCENT, SPARK_TIERS } from "../../lib/cardbit-sparks";
+import { SPARK_RATE_PERCENT, SPARKS_PER_CARDBIT } from "../../lib/cardbit-sparks";
 import { STREAK_CARD_BONUS } from "../../lib/cardbit-spinner";
 import { PLAN } from "../play/plan-brand";
 import { COOL_OFF_HOURS, EXCLUSION_MONTHS, RAISE_DELAY_MS } from "../play/limits.server";
@@ -29,7 +29,7 @@ export function siteFacts(plansOpen: boolean): string {
     "",
     "## Daily Spins (cardbit.com/rewards)",
     `- Every spin you've unlocked is free once per Cardbit day. Spins unlock by level: ${SPINNER_TIERS.map((t) => `${t.name} (Level ${t.minLevel})`).join(", ")}. Leveling up adds more free spins each day; higher spins have better prizes.`,
-    "- Prizes can be a real card from that spin's pool, Sparks, or XP. The exact odds for each spin are shown on the Rewards page under What You Can Win; send people there rather than quoting numbers.",
+    "- Prizes can be a real card from that spin's own prize pool, Sparks, or XP; some Sparks and XP prizes are a range (like 25 to 50 Sparks). The exact odds for each spin are shown on the Rewards page under What You Can Win; send people there rather than quoting numbers.",
     `- Check-in streak: each day in a row adds ${STREAK_CARD_BONUS.perDay * 100}% to the chance of a card prize, up to ${STREAK_CARD_BONUS.maxDays} days (+${Math.round(STREAK_CARD_BONUS.perDay * STREAK_CARD_BONUS.maxDays * 100)}%). Missing a day resets it.`,
     "- No purchase necessary; the Official Rules describe the free mail-in method.",
     "",
@@ -39,13 +39,14 @@ export function siteFacts(plansOpen: boolean): string {
     "## Sparks and the Spark Shop",
     `- When a paid pack's pulled sell-back value is below the Cardbits paid, you earn Sparks equal to ${SPARK_RATE_PERCENT}% of the difference. Daily Spins can also give Sparks.`,
     "- Sparks have no cash value, can't be transferred, and are spent only in the Spark Shop.",
-    `- Spark Shop cards come in price levels: ${SPARK_TIERS.map((t) => `${n(t.sparks)} Sparks`).join(", ")}, depending on the card.`,
+    `- The Spark Shop is at cardbit.com/sparks (also the Sparks balance in the header). Each card has its own price: about ${n(SPARKS_PER_CARDBIT * 100)} Sparks for every $1 of the card's Cardbit price (${SPARKS_PER_CARDBIT} Sparks per Cardbit), so a 200-Cardbit card costs ${n(200 * SPARKS_PER_CARDBIT)} Sparks. Prices follow card prices and are shown before you confirm.`,
+    "- A Spark Shop card goes to My Vault and can be kept, shipped or sold back like any other card. A redemption is final (Sparks aren't returned). Stock is limited and changes as staff restock it.",
     "",
     "## Limits and Breaks (cardbit.com/account/limits, signed in)",
     "- Anyone signed in can set daily, weekly or monthly limits on top-ups ($1 to $10,000) and on spending (100 to 1,000,000 Cardbits).",
     `- Lowering a limit works right away. Raising or removing one takes effect after ${RAISE_DELAY_MS / 3_600_000} hours.`,
     `- Cool-off breaks: ${COOL_OFF_HOURS.map(hours).join(", ")}. Self-exclusion: ${EXCLUSION_MONTHS.map(months).join(", ")}. Neither can be shortened or canceled once started.`,
-    "- During a break, top-ups, pack and single purchases, Daily Spins and subscriptions are paused. The Vault, shipping and sell-backs stay available. To also close the account, email support.",
+    "- During a break, top-ups, pack and single purchases, Daily Spins, Spark Shop redemptions and subscriptions are paused. The Vault, shipping and sell-backs stay available. To also close the account, email support.",
     "- Free, confidential help: call or text 1-800-GAMBLER (1-800-426-2537).",
     "",
     "## Redeem a Code (cardbit.com/redeem, signed in; also My Account › Redeem a Code)",

@@ -110,7 +110,7 @@
       if (o.kind === 'card') {
         const cards = tier.cards.length ? tier.cards : [{ title: 'Mystery Card', imageUrl: null, rarity: 'Rare' }];
         for (let i = 0; i < Math.max(n, 8); i++) { const c = cards[i % cards.length]; out.push({ kind: 'card', title: c.title, imageUrl: c.imageUrl, rarity: c.rarity }); }
-      } else for (let i = 0; i < n; i++) out.push({ kind: o.kind, amount: o.amount });
+      } else for (let i = 0; i < n; i++) out.push({ kind: o.kind, amount: o.max ? o.amount + Math.floor(Math.random() * (o.max - o.amount + 1)) : o.amount });
     }
     return out.length ? out : [{ kind: 'xp', amount: 25 }];
   }
@@ -243,7 +243,8 @@
     requestAnimationFrame(() => { track.style.transform = 'translateX(' + (wrap.clientWidth / 2 - TILE() * 12 + 6 - TILE() / 2) + 'px)'; });
   }
   function oddsList(t) {
-    const label = (o) => (o.kind === 'card' ? 'A Real Card' : o.kind === 'sparks' ? fmt(o.amount) + ' Sparks' : fmt(o.amount) + ' XP');
+    const amt = (o) => (o.max ? fmt(o.amount) + '\u2013' + fmt(o.max) : fmt(o.amount));
+    const label = (o) => (o.kind === 'card' ? 'A Real Card' : o.kind === 'sparks' ? amt(o) + ' Sparks' : amt(o) + ' XP');
     $('[data-rw-odds]').replaceChildren(...t.odds.map((o) => { const li = el('li', 'is-' + o.kind); li.append(el('span', null, label(o)), el('b', null, o.percent + '%')); return li; }));
     const box = $('[data-rw-contents]');
     box.replaceChildren(...t.cards.slice(0, 18).map((c) => { const f = el('figure'); if (c.imageUrl) f.append(img(c.imageUrl, 72, 100)); f.append(el('figcaption', null, c.title)); return f; }));

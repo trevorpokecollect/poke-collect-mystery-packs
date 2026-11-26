@@ -66,7 +66,7 @@ export async function giveDemoPacks(db: PrismaClient, actor: string, email: stri
   return db.$transaction(
     async (tx) => {
       const pack = await tx.sitePack.findUnique({ where: { id: packId || "" } });
-      if (!pack) throw new DemoError("Choose a pack.");
+      if (!pack || pack.kind !== "pack") throw new DemoError("Choose a pack.");
       await lockKey(tx, `site-pack:${pack.id}`);
       const pool = await tx.siteCopy.findMany({ where: { packId: pack.id, status: "POOLED", demo: true, ownerId: null }, orderBy: { id: "asc" } });
       if (pool.length < pack.cardsPerPack * n)

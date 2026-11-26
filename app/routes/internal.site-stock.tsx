@@ -15,12 +15,17 @@
 //      {intent:"relink", copyId, product:{game,setName,number,finish,language,name,title,tcgplayerId,image}, priceBits?, buybackBits?}
 //      switches an unsold Draft/Active copy to the right TCGplayer product (same set/number/finish/language), logged
 //      {intent:"boxes"} cards and slots used per box (Card Broker box claiming)
+//      Prize pools (Trevor, Nov 26): Daily Spin pools (kind "spin") and the Spark Shop (kind "sparks") come back from
+//      "restocks" with kind + fill; "pack-ev" also takes fillTargets [{minBits, maxBits|null, count}] for them.
+//      {intent:"spin-table"} → Daily Spin prize table (results, odds, pool size, card cap per spin)
+//      {intent:"spin-table-save", tier, results:[{kind:"card"|"sparks"|"xp", min?, max?, weight}]} saves one spin
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
 import { DeskError, boxSummary, listStock, moveToSlot, movePool, relinkCopy, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
 import { RestockError, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
 import { applyBrokerPrice, intakePrice, priceKey } from "../site/core/stock.server";
+import { SpinTableError, saveSiteSpinTier, siteSpinTableView } from "../site/rewards/spin-table.server";
 
 const deny = () => Response.json({ error: "Unavailable." }, { status: 403, headers: { "Cache-Control": "no-store" } });
 
@@ -87,7 +92,7 @@ export async function action({ request }: ActionFunctionArgs) {
       }
       case "pack-ev": {
         const p = await savePackEv(db, String(b.packId || ""), b);
-        return Response.json({ ok: true, pack: { id: p.id, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, autoDrafts: p.autoDrafts } });
+        return Response.json({ ok: true, pack: { id: p.id, kind: p.kind, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, autoDrafts: p.autoDrafts, fillTargets: p.fillTargets } });
       }
       case "remove":
         return Response.json({ ok: true, ...(await removeCopies(db, actor, b.copyIds, b.reason)) });
@@ -101,13 +106,17 @@ export async function action({ request }: ActionFunctionArgs) {
         if (price) await applyBrokerPrice(db, priceKey(r.printingKey, r.condition), price);
         return Response.json({ ok: true, ...r });
       }
+      case "spin-table":
+        return Response.json({ ok: true, ...(await siteSpinTableView(db)) }, { headers: { "Cache-Control": "no-store" } });
+      case "spin-table-save":
+        return Response.json({ ok: true, ...(await saveSiteSpinTier(db, b.tier, b.results)) });
       case "auto-restock-run":
         return Response.json({ ok: true, ...(await runAutoRestock(db, { force: true })) });
       default:
         return Response.json({ error: "Unknown intent." }, { status: 422 });
     }
   } catch (e) {
-    if (e instanceof DeskError || e instanceof RestockError) return Response.json({ error: e.message }, { status: 422 });
+    if (e instanceof DeskError || e instanceof RestockError || e instanceof SpinTableError) return Response.json({ error: e.message }, { status: 422 });
     throw e;
   }
 }

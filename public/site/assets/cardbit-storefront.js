@@ -213,7 +213,7 @@
     const ordered=(root.dataset.order||'cobalt,prism,gold,ember,amethyst').split(',').map(poolKey);
     return [...(state.packs||[])].sort((a,b)=>(ordered.includes(a.id)?ordered.indexOf(a.id):99)-(ordered.includes(b.id)?ordered.indexOf(b.id):99));
   }
-  /* SITE */ function sparksPill(){const raw=site()?account()?.sparks:null;if(raw==null)return '';const n=window.CardbitRevealRewards?.shownSparks?.(raw)??raw;const v=number(n);return '<a class="cb-sparks-link" href="/rewards" aria-label="Sparks, Balance '+v+'"><img alt="" width="20" height="20" src="'+esc(asset('sparks.svg'))+'"><span data-sparks-balance>'+v+'</span></a>';}
+  /* SITE */ function sparksPill(){const raw=site()?account()?.sparks:null;if(raw==null)return '';const n=window.CardbitRevealRewards?.shownSparks?.(raw)??raw;const v=number(n);return '<a class="cb-sparks-link" href="/sparks" aria-label="Sparks, Balance '+v+'"><img alt="" width="20" height="20" src="'+esc(asset('sparks.svg'))+'"><span data-sparks-balance>'+v+'</span></a>';}
   function header(route){
     const nav=(to,label)=>link(to,'<span class="cb-nav-icon cb-nav-'+to+'" aria-hidden="true"></span><span>'+label+'</span>','cb-navlink',route===to||route.startsWith(to+'/')?'aria-current="page"':'');
     const walletBalance=account()?.bits ?? walletBalanceLive ?? (/* SITE */ site() && state && !account() ? 0 : root.hasAttribute('data-member-signed-in') || isDemoShopper() ? null : 0);

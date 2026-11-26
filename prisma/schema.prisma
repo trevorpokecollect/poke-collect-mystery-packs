@@ -539,6 +539,8 @@ model CardbitSpin {
   prizeKind  String
   amount     Int?
   pullId     String?  @unique
+  copyId     String?  @unique // standalone site: the SiteCopy won from the spin's prize pool
+  valueBits  Int? // card prizes: the card's Cardbit retail when won (Official Rules ARV caps)
   createdAt  DateTime @default(now())
   @@unique([shop, customerId, day, tier])
 }
@@ -1432,6 +1434,7 @@ model SiteCopy {
   sealedType  String? // sealed: Booster Box | Elite Trainer Box | Booster Pack | Collection Box | Tin | ...
   weightOz    Float? // shipping weight of this one item when it differs from a sleeved card (slabs, sealed)
   photos      Json? // ["https://…front", "https://…back"] photos of this exact item (stock image stays in `image`)
+  acquiredVia String? // how the owner got it when not a pack or Card Shop buy: "spin" | "sparks" (Spark Shop cards can't be sold back)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@unique([slot, pocket])
@@ -1521,7 +1524,11 @@ model SitePack {
   tierMix      Json? // [{name, pct}] lowest first; null = pyramid 50/25/15/8/2
   topTierMin   Int? // minimum value for the top tier (else the pool is flagged Needs Restock)
   tiersAt      DateTime? // last automatic tier recompute
-  autoDrafts   Boolean  @default(false) // hourly auto-restock may also pool listed Draft cards (needs a Target EV)
+  autoDrafts   Boolean  @default(false) // hourly auto-restock may also pool listed Draft cards (needs a Target EV, or Fill Rules for prize pools)
+  // Prize pools (Trevor, Nov 26): "pack" is sold as a pack; "spin" is one Daily Spin's card prizes (id spin-<tier>);
+  // "sparks" is the Spark Shop. Prize pools are never sold for Cardbits and have no EV.
+  kind         String   @default("pack")
+  fillTargets  Json? // prize pools: [{minBits, maxBits, count}] keep about `count` cards in each value range (auto-fill)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

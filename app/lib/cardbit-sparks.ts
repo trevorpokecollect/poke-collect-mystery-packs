@@ -12,7 +12,17 @@ export function sparksForOpening(paidCardbits: number, pulledValueCardbits: numb
   return gap > 0 ? Math.floor((gap * SPARK_RATE_PERCENT) / 100) : 0;
 }
 
-/** Spark Shop tiers, about 5 Sparks per Cardbit of the card's value. Pricier cards are not eligible. */
+/**
+ * Standalone site Spark Shop (Trevor, Nov 26 2026): about 500 Sparks per $1 of card value, i.e. 5 Sparks per
+ * Cardbit of the card's Cardbit price (its Card Shop retail). Every card has its own price.
+ */
+export const SPARKS_PER_CARDBIT = 5;
+export function siteSparkPrice(valueCardbits: number | null) {
+  if (valueCardbits == null || !Number.isSafeInteger(valueCardbits) || valueCardbits <= 0) return null;
+  return valueCardbits * SPARKS_PER_CARDBIT;
+}
+
+/** Shopify Spark Shop tiers, about 5 Sparks per Cardbit of the card's value. Pricier cards are not eligible. */
 export const SPARK_TIERS = [
   { tier: 1, maxValueCardbits: 50, sparks: 250 },
   { tier: 2, maxValueCardbits: 100, sparks: 500 },

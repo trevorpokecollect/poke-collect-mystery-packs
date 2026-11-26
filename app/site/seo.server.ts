@@ -50,7 +50,7 @@ export function robotsTxt(host: string, env: NodeJS.ProcessEnv = process.env) {
 
 export function sitemapXml(env: NodeJS.ProcessEnv = process.env, lastmod = new Date().toISOString().slice(0, 10)) {
   const origin = siteOrigin(env);
-  const paths = ["/", "/packs", "/chase", "/shop", "/help", "/rewards", "/leaderboard", "/welcome", "/policies", "/official-rules"];
+  const paths = ["/", "/packs", "/chase", "/shop", "/help", "/rewards", "/leaderboard", "/sparks", "/welcome", "/policies", "/official-rules"];
   const url = (p: string) => `  <url><loc>${origin}${p === "/" ? "/" : p}</loc><lastmod>${lastmod}</lastmod></url>`;
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map(url).join("\n")}\n</urlset>\n`;
 }
