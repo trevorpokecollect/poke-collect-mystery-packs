@@ -65,6 +65,11 @@ const PATCHES = {
     // Pack Pass: frame around members' icons (public/site/js/cardbit-site-pass.js).
     ["  function face(node, r) {\n", "  function face(node, r) { /* SITE */ siteFace(node, r); window.CardbitPass?.frame(node, r && r.tier, { small: !node.classList.contains('cbr-pod-avatar') }); }\n  function siteFace(node, r) {\n"],
   ],
+  'cardbit-share-pull.js': [
+    // Share This Pull: TCGplayer's image CDN sends no CORS header, so the export canvas read every card as missing
+    // ("Artwork Unavailable for 5 of 5"). Read those pictures through cardbit.com's same-origin copy (/api/card-image).
+    ["    if (!src) return Promise.resolve(null);\n", "    if (!src) return Promise.resolve(null);\n    /* SITE */ if (/^https:\\/\\/(product-images|tcgplayer-cdn)\\.tcgplayer\\.com\\//.test(src)) src = '/api/card-image?u=' + encodeURIComponent(src);\n"],
+  ],
   'cardbit-value-view.js': [
     // Standalone prices: the Cardbit logo replaces the word (Trevor, Nov 26 2026); screen readers still hear "Cardbits".
     ["        span.append(img,document.createTextNode(m[0]));fragment.append(span);position=m.index+m[0].length;\n", "        /* SITE */ const alone=root.CardbitStore?.site && text.trim()===m[0];\n        span.append(img,document.createTextNode(alone?m[0].replace(/ (?:test )?Cardbits$/,''):m[0]));if(alone){const unit=document.createElement('span');unit.className='cb-unit';unit.textContent=' Cardbits';span.append(unit);}fragment.append(span);position=m.index+m[0].length;\n"],

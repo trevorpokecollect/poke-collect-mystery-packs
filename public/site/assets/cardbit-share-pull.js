@@ -4,6 +4,7 @@
   const W = 1080, H = 1920;
   function photo(src) {
     if (!src) return Promise.resolve(null);
+    /* SITE */ if (/^https:\/\/(product-images|tcgplayer-cdn)\.tcgplayer\.com\//.test(src)) src = '/api/card-image?u=' + encodeURIComponent(src);
     return new Promise(resolve => {
       const im = new Image();
       if (!/^(data:|blob:|file:)/i.test(src)) im.crossOrigin = 'anonymous';

@@ -525,7 +525,7 @@
       const n = cardNode(c, true); W.raster = null;
       scramble(n.querySelector('.cbd-pill'), (c.tier || '').toUpperCase(), 360); scramble(n.querySelector('b'), c.name || 'Card', 520);
       revealBurst(rk); sfx.stinger(rk); sparks(L.cx, L.cy, col, [8, 18, 36, 70, 130][rk], [.6, .8, 1, 1.3, 1.7][rk]); if (rk >= 2) wave(L.cx, L.cy, col, L.ch * 1.3);
-      if (rk >= 3) { vib(rk === 4 ? [60, 40, 120] : 60); banner.style.setProperty('--tc', col); banner.className = 'cbd-banner'; void banner.offsetWidth; banner.classList.add('on'); scramble(banner, rk === 4 ? 'LEGENDARY PULL' : 'EPIC PULL', 480); }
+      if (rk >= 3) { vib(rk === 4 ? [60, 40, 120] : 60); const bt = rk === 4 ? 'LEGENDARY PULL' : 'EPIC PULL'; banner.style.setProperty('--tc', col); banner.style.setProperty('--chars', bt.length); banner.className = 'cbd-banner'; banner.textContent = bt; void banner.offsetWidth; banner.classList.add('on'); scramble(banner, bt, 480); }
       readout((c.tier || 'CARD').toUpperCase() + ' · DECODED');
       const chip = n.querySelector('.cbd-bits');
       if (chip) setTimeout(() => { if (S.destroyed || !chip.isConnected) return; chip.classList.add('on'); countUp(chip, 0, bitsOf(c), [520, 650, 800, 1100, 1400][rk], rk).then(() => { if (!S.reduced && chip.isConnected) { const p = center(chip); sparks(p.x, p.y, col, [6, 8, 12, 20, 32][rk], .6, .02); } }); }, S.reduced ? 0 : 420);
