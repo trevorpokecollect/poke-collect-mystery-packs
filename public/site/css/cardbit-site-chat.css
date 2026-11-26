@@ -1,41 +1,142 @@
-/* Cardbit standalone site: live chat (site-only). */
+/* Cardbit standalone site: live chat (site-only). Closed by default; the bottom-left "Chat" toggle opens a
+   full-height rail on the LEFT. Wide screens: the page shifts right to make room. Phones: the rail covers it. */
 .cb-chat,.cb-chat *{box-sizing:border-box}
-.cb-chat{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));z-index:900;font-family:"Atkinson Hyperlegible Next",system-ui,sans-serif}
+.cb-chat{--ch-w:340px;--ch-bg:#0d1517;--ch-panel:#111b1e;--ch-card:#16232690;--ch-line:#24363b;--ch-text:#f6faf9;--ch-dim:#a9b9bb;--ch-faint:#76898c;
+  --ch-cyan:#00e6e1;--ch-cyan-2:#7df3ea;--ch-focus:#FFB65C;font-family:"Atkinson Hyperlegible Next","Cardbit Atkinson",system-ui,sans-serif;color:var(--ch-text)}
+.cb-chat :focus-visible{outline:3px solid var(--ch-focus);outline-offset:2px}
 body:has(dialog[open]) .cb-chat{display:none}
-.cb-chat-btn{display:grid;place-items:center;width:58px;height:58px;border-radius:50%;border:2px solid #4057F5;background:#17213B;color:#FAF8F3;box-shadow:0 10px 30px #0008;cursor:pointer;padding:0}
-.cb-chat-btn:focus-visible,.cb-chat-panel :focus-visible{outline:3px solid #FFB65C;outline-offset:2px}
-.cb-chat-panel{position:absolute;left:0;bottom:70px;width:min(360px,calc(100vw - 32px));height:min(70vh,560px);display:flex;flex-direction:column;padding:14px;border-radius:16px;background:#151b28;border:1px solid #48546c;color:#FAF8F3;box-shadow:0 25px 80px #020307b8}
-.cb-chat-panel[hidden]{display:none}
-.cb-chat-panel header{display:flex;justify-content:space-between;align-items:center}
-.cb-chat-panel h2{margin:0;font:800 1.25rem "Cardbit Outfit",system-ui,sans-serif}
-.cb-chat-x{border:0;background:none;color:#c7cbd6;font-size:1.6rem;line-height:1;cursor:pointer;padding:0 4px}
-.cb-chat-tabs{display:flex;gap:6px;margin:10px 0 8px}
-.cb-chat-tabs button{flex:1;padding:7px;border-radius:9px;border:1px solid #48546c;background:transparent;color:#c7cbd6;font:800 .9rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer}
-.cb-chat-tabs button[aria-selected="true"]{background:#4057F5;border-color:#4057F5;color:#fff}
-.cb-chat-body{flex:1;min-height:0;display:flex;flex-direction:column}
-.cb-chat-list{flex:1;min-height:0;overflow:auto;list-style:none;margin:0;padding:0 2px}
-.cb-chat-list li{display:flex;gap:9px;padding:7px 0;border-bottom:1px solid #222b3e}
-.cb-chat-list li>div{min-width:0;flex:1}
-.cb-chat-av{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;object-fit:cover;font:800 .7rem "Cardbit Outfit",system-ui,sans-serif}
-.cb-chat-who{display:flex;align-items:center;gap:6px;margin:0;font-size:.82rem}
-.cb-chat-who b{font-family:"Cardbit Outfit",system-ui,sans-serif}
-.cb-chat-who time{margin-left:auto;color:#8d96ab;font-size:.75rem}
-.cb-chat-badge{padding:1px 7px;border-radius:999px;font-size:.68rem;font-weight:800;background:#2a3550;color:#c7cbd6}
-.cb-chat-badge-staff{background:#FFB65C;color:#17213B}
-.cb-chat-badge-plus{background:#2b3a8f;color:#dfe4ff}
-.cb-chat-badge-pro{background:#4057F5;color:#fff}
-.cb-chat-badge-ultimate{background:linear-gradient(90deg,#B98CFF,#FFB65C);color:#17213B}
-.cb-chat-text{margin:2px 0 0;overflow-wrap:anywhere;font-size:.92rem;line-height:1.35}
-.cb-chat-mod{display:flex;gap:8px;margin-top:3px}
-.cb-chat-mod button{border:0;background:none;color:#ff9b9b;font-size:.75rem;cursor:pointer;padding:0;text-decoration:underline}
-.cb-chat-empty{justify-content:center;color:#8d96ab}
-.cb-chat-form{display:flex;gap:6px;margin-top:8px}
-.cb-chat-form input{flex:1;min-width:0;padding:10px;border-radius:10px;border:1px solid #48546c;background:#0f1420;color:#FAF8F3;font:inherit}
-.cb-chat-form button,.cb-chat-cta{padding:10px 14px;border:0;border-radius:10px;background:#4057F5;color:#fff;font:800 .95rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer;text-decoration:none;text-align:center}
-.cb-chat-cta{display:block;margin-top:8px}
-.cb-chat-form button:disabled{opacity:.6;cursor:wait}
-.cb-chat-note{color:#c7cbd6}
-.cb-chat-err{margin:6px 0 0;color:#ffb3b3;font-size:.85rem}
-.cb-chat-fine{margin:8px 0 0;color:#8d96ab;font-size:.75rem}
-.cb-chat-fine a{color:#FFB65C}
+:where(.cb-chat) :where(button){font:inherit;color:inherit}
+
+/* Toggle */
+.cb-chat-btn{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));z-index:900;display:flex;align-items:center;gap:8px;
+  height:46px;padding:0 12px 0 14px;border-radius:999px;border:1.5px solid var(--ch-cyan);background:linear-gradient(135deg,#123236,#0d1517);color:var(--ch-text);
+  box-shadow:0 10px 30px #000a,0 0 18px #00e6e133;cursor:pointer;font:800 1rem "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-btn:hover{border-color:var(--ch-cyan-2)}
+.cb-chat-btn>svg:first-child{color:var(--ch-cyan)}
+.cb-chat-btn>svg:last-of-type{transition:transform .2s;transform:rotate(-90deg)}
+.cb-chat-btn-online{display:flex;align-items:center;gap:5px;color:var(--ch-dim);font-size:.82rem}
+.cb-chat-btn-online:empty{display:none}
+.cb-chat-unread{position:absolute;top:-7px;right:-7px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--ch-cyan);color:#062022;font:800 .75rem/22px "Cardbit Outfit",system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px #0008}
+.cb-chat-unread[hidden]{display:none}
+html.cb-chat-open .cb-chat-btn{display:none}
+
+/* Rail */
+.cb-chat-rail{position:fixed;left:0;top:0;bottom:0;z-index:950;width:var(--ch-w);max-width:100vw;display:flex;flex-direction:column;
+  background:var(--ch-panel);border-right:1px solid var(--ch-line);box-shadow:12px 0 40px #0007;animation:cb-chat-in .22s ease-out;
+  padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left)}
+.cb-chat-rail[hidden]{display:none}
+@keyframes cb-chat-in{from{transform:translateX(-100%)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.cb-chat-rail{animation:none}.cb-chat-btn>svg{transition:none}}
+@media (min-width:1180px){
+  html.cb-chat-open body{margin-left:340px!important;transition:margin-left .22s ease-out}
+  html.cb-chat-open .cb-chat-rail{box-shadow:none}
+}
+@media (max-width:640px){.cb-chat{--ch-w:100vw}.cb-chat-rail{border-right:0}}
+
+.cb-chat-head{position:relative;display:flex;align-items:center;gap:8px;padding:12px 10px 10px 14px;border-bottom:1px solid var(--ch-line);background:linear-gradient(180deg,#14292c,#111b1e)}
+.cb-chat-head h2{margin:0;font:800 1.2rem/1 "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-room{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:36px;padding:0 8px 0 12px;border-radius:10px;border:1px solid var(--ch-line);background:#0d1517;cursor:pointer;font:800 .92rem "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-room span{flex:1;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-chat-room[aria-expanded="true"]{border-color:var(--ch-cyan)}
+.cb-chat-room[aria-expanded="true"] svg{transform:rotate(180deg)}
+.cb-chat-room em,.cb-chat-rooms em{display:flex;align-items:center;gap:5px;font-style:normal;font-family:"Atkinson Hyperlegible Next",system-ui,sans-serif;font-weight:700;font-size:.8rem;color:var(--ch-dim)}
+.cb-chat-dot{width:7px;height:7px;border-radius:50%;background:#3ee08a;box-shadow:0 0 6px #3ee08a}
+.cb-chat-x{display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:10px;background:none;color:var(--ch-dim);cursor:pointer}
+.cb-chat-x:hover{background:#ffffff10;color:var(--ch-text)}
+
+.cb-chat-pop{position:absolute;z-index:5;background:#0f191c;border:1px solid var(--ch-line);border-radius:14px;box-shadow:0 18px 50px #000c}
+.cb-chat-rooms{left:62px;right:54px;top:54px;padding:6px}
+.cb-chat-rooms button{width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border:0;border-radius:10px;background:none;cursor:pointer;text-align:left}
+.cb-chat-rooms button:hover,.cb-chat-rooms button[aria-checked="true"]{background:#00e6e114}
+.cb-chat-rooms button[aria-checked="true"]{box-shadow:inset 3px 0 0 var(--ch-cyan)}
+.cb-chat-rooms span{flex:1;font:800 .95rem "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-rooms small{display:block;font:400 .74rem "Atkinson Hyperlegible Next",system-ui,sans-serif;color:var(--ch-faint)}
+.cb-chat-rooms svg{vertical-align:-1px;color:var(--ch-dim)}
+
+.cb-chat-body{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;padding:0 10px}
+.cb-chat-list{flex:1;min-height:0;overflow:auto;list-style:none;margin:0;padding:8px 0;display:flex;flex-direction:column;gap:6px;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#2a3b40 transparent}
+.cb-chat-msg{position:relative;padding:8px 10px;border-radius:12px;background:var(--ch-card);border:1px solid #1d2c30}
+.cb-chat-msg.is-staff{border-color:#00e6e155;background:#0f2a2b}
+.cb-chat-row{display:flex;gap:10px}
+.cb-chat-main{min-width:0;flex:1}
+.cb-chat-av{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;object-fit:cover;font:800 .72rem "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-who{display:flex;align-items:center;gap:6px;margin:0;font-size:.84rem;min-width:0}
+.cb-chat-who b{font-family:"Cardbit Outfit",system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-chat-who time{margin-left:auto;flex:none;color:var(--ch-faint);font-size:.72rem}
+.cb-chat-lv{flex:none;min-width:22px;height:18px;padding:0 5px;border-radius:6px;background:#1d3a3d;border:1px solid #2e5a5d;color:var(--ch-cyan-2);font:800 .68rem/16px "Cardbit Outfit",system-ui,sans-serif;text-align:center}
+.cb-chat-badge{flex:none;padding:1px 7px;border-radius:999px;font:800 .66rem/1.5 "Cardbit Outfit",system-ui,sans-serif;background:#22363a;color:var(--ch-dim)}
+.cb-chat-badge-staff{background:var(--ch-cyan);color:#062022}
+.cb-chat-badge-plus{background:#16424a;color:#bff7f2}
+.cb-chat-badge-pro{background:#0f6b6c;color:#fff}
+.cb-chat-badge-ultimate{background:linear-gradient(90deg,#7df3ea,#b98cff);color:#0b1a1c}
+.cb-chat-text{margin:2px 0 0;overflow-wrap:anywhere;font-size:.92rem;line-height:1.38}
+.cb-chat-quote{display:flex;align-items:center;gap:6px;margin:0 0 5px 4px;padding-left:8px;border-left:2px solid #2e5a5d;color:var(--ch-faint);font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-chat-quote b{color:var(--ch-dim)}
+.cb-chat-quote svg{flex:none;transform:scaleX(-1)}
+.cb-chat-acts{position:absolute;right:6px;top:-12px;display:none;gap:2px;padding:2px;border-radius:9px;background:#0f191c;border:1px solid var(--ch-line);box-shadow:0 6px 16px #0009}
+.cb-chat-msg:hover .cb-chat-acts,.cb-chat-msg:focus-within .cb-chat-acts{display:flex}
+.cb-chat-acts button{display:grid;place-items:center;min-width:28px;height:26px;padding:0 6px;border:0;border-radius:7px;background:none;color:var(--ch-dim);cursor:pointer;font-size:.74rem;font-weight:700}
+.cb-chat-acts button:hover{background:#ffffff12;color:var(--ch-text)}
+.cb-chat-acts .cb-chat-danger{color:#ffa8a8}
+
+.cb-chat-pull{display:flex;gap:10px;align-items:center;padding:9px 10px;border-radius:12px;background:linear-gradient(110deg,#2a1d0c,#141f22 70%);border:1px solid #f0a33c66}
+.cb-chat-pull-epic{background:linear-gradient(110deg,#231738,#141f22 70%);border-color:#b98cff66}
+.cb-chat-pull>div{flex:1;min-width:0}
+.cb-chat-pull p{margin:0}
+.cb-chat-pull-k{font:800 .8rem "Cardbit Outfit",system-ui,sans-serif;color:#ffc46b;text-transform:uppercase;letter-spacing:.05em}
+.cb-chat-pull-epic .cb-chat-pull-k{color:#d3b6ff}
+.cb-chat-pull-n{font:800 .95rem/1.2 "Cardbit Outfit",system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-chat-pull-s{font-size:.74rem;color:var(--ch-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-chat-pull-t{font-size:.7rem;color:var(--ch-faint);margin-top:2px!important}
+.cb-chat-pull img{flex:none;width:44px;height:61px;object-fit:cover;border-radius:4px;box-shadow:0 4px 12px #0009;transform:rotate(4deg)}
+
+.cb-chat-empty{align-self:center;margin:auto 0;color:var(--ch-faint)}
+.cb-chat-jump{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:2;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:0;background:var(--ch-cyan);color:#062022;font:800 .8rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 18px #000a}
+.cb-chat-jump[hidden]{display:none}
+.cb-chat-replying{display:flex;align-items:center;gap:7px;margin-top:6px;padding:6px 8px;border-radius:9px;background:#0f2a2b;color:var(--ch-dim);font-size:.78rem}
+.cb-chat-replying span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cb-chat-replying b{color:var(--ch-text)}
+.cb-chat-replying button{border:0;background:none;cursor:pointer;font-size:1.2rem;line-height:1;color:var(--ch-dim)}
+.cb-chat-form{display:flex;gap:6px;margin:8px 0 10px}
+.cb-chat-form input{flex:1;min-width:0;height:42px;padding:0 12px;border-radius:11px;border:1px solid var(--ch-line);background:#0b1214;color:var(--ch-text);font:inherit;font-size:16px}
+.cb-chat-form input:focus{border-color:var(--ch-cyan);outline:none}
+.cb-chat-emo-btn{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:11px;border:1px solid var(--ch-line);background:#0b1214;color:var(--ch-dim)!important;cursor:pointer}
+.cb-chat-emo-btn[aria-expanded="true"]{border-color:var(--ch-cyan);color:var(--ch-cyan)!important}
+.cb-chat-send,.cb-chat-cta{height:42px;padding:0 16px;border:0;border-radius:11px;background:var(--ch-cyan);color:#062022!important;font:800 .95rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer;text-decoration:none;display:inline-grid;place-items:center}
+.cb-chat-send:disabled{opacity:.6;cursor:wait}
+.cb-chat-emoji{left:10px;right:10px;bottom:62px;display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:8px}
+.cb-chat-emoji button{height:38px;border:0;border-radius:9px;background:none;font-size:1.3rem;cursor:pointer}
+.cb-chat-emoji button:hover{background:#ffffff12}
+.cb-chat-gate{margin:auto 0;padding:18px 8px;text-align:center}
+.cb-chat-gate .cb-chat-cta{margin-top:6px}
+.cb-chat-note{color:var(--ch-dim);margin:12px 0}
+.cb-chat-foot-note{margin:8px 0 12px;font-size:.88rem}
+.cb-chat-err{margin:6px 0 0;color:#ffc89a;font-size:.84rem}
+
+.cb-chat-tools{display:flex;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--ch-line)}
+.cb-chat-tools button{display:flex;align-items:center;gap:6px;padding:6px 10px;border:0;border-radius:9px;background:none;color:var(--ch-dim);cursor:pointer;font:700 .8rem "Atkinson Hyperlegible Next",system-ui,sans-serif}
+.cb-chat-tools button:hover,.cb-chat-tools button[aria-expanded="true"]{background:#ffffff10;color:var(--ch-text)}
+.cb-chat-sheet{left:10px;right:10px;bottom:52px;max-height:70%;overflow:auto;padding:12px 14px 14px}
+.cb-chat-sheet header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cb-chat-sheet h3{margin:0;font:800 1.02rem "Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-sheet h4{margin:14px 0 6px;font:800 .86rem "Cardbit Outfit",system-ui,sans-serif;color:var(--ch-dim)}
+.cb-chat-sheet header button{border:0;background:none;cursor:pointer;font-size:1.4rem;line-height:1;color:var(--ch-dim)}
+.cb-chat-sheet ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.cb-chat-sheet li{font-size:.84rem;color:var(--ch-dim);line-height:1.35}
+.cb-chat-sheet li b{display:block;color:var(--ch-text);font-family:"Cardbit Outfit",system-ui,sans-serif}
+.cb-chat-sheet>p{margin:12px 0 0;font-size:.78rem;color:var(--ch-faint)}
+.cb-chat-sheet a{color:var(--ch-cyan-2)}
+.cb-chat-switch{display:flex;align-items:center;gap:12px;cursor:pointer;font-weight:700;font-size:.9rem}
+.cb-chat-switch span{flex:1}
+.cb-chat-switch small{display:block;font-weight:400;font-size:.76rem;color:var(--ch-faint)}
+.cb-chat-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.cb-chat-switch i{flex:none;position:relative;width:42px;height:24px;border-radius:999px;background:#2a3b40;transition:background .15s}
+.cb-chat-switch i::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s}
+.cb-chat-switch input:checked+i{background:var(--ch-cyan)}
+.cb-chat-switch input:checked+i::after{transform:translateX(18px)}
+.cb-chat-switch input:focus-visible+i{outline:3px solid var(--ch-focus);outline-offset:2px}
+.cb-chat-hidden li{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--ch-text)!important}
+.cb-chat-hidden button{border:1px solid var(--ch-line);background:none;border-radius:8px;padding:3px 9px;cursor:pointer;font-size:.76rem;color:var(--ch-dim)}
+.cb-chat-muted{margin:0;font-size:.8rem;color:var(--ch-faint)}
 .cb-chat-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.cb-chat-msg:focus{outline:none}

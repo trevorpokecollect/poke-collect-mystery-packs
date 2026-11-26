@@ -1,14 +1,14 @@
 // GET/POST /api/chat: Cardbit site live chat (see app/site/play/chat.server.ts). 404 unless
 // CARDBIT_SITE=on and SITE_CHAT=on.
 //   GET ?room=main|club            -> { access, messages }
-//   POST {action:"send", room, body}
+//   POST {action:"send", room, body, replyTo?}   (replyTo = a message id in the same room)
 //   POST {action:"delete", id}               (staff)
 //   POST {action:"mute", id, hours}          (staff; mutes the message's author)
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { currentCustomer } from "../site/core/auth.server";
 import { json, sameOriginJson, siteOn } from "../site/store/http.server";
-import { ChatError, MUTE_HOURS, chatAccess, chatOn, deleteMessage, isRoom, listMessages, muteAuthor, sendMessage } from "../site/play/chat.server";
+import { ChatError, MUTE_HOURS, chatAccess, chatOn, deleteMessage, isRoom, listMessages, markSeen, muteAuthor, onlineCounts, sendMessage } from "../site/play/chat.server";
 import { gateApi } from "../site/waitlist/gate.server";
 
 const off = () => !siteOn() || !chatOn();
@@ -17,8 +17,10 @@ async function view(customer: Awaited<ReturnType<typeof currentCustomer>>, room:
   const r = isRoom(room) ? room : "main";
   const access = await chatAccess(db, customer);
   const messages = await listMessages(db, access, r);
+  if (access.canRead && customer) markSeen(customer.id, r);
   return {
     room: r,
+    online: access.canRead ? onlineCounts() : null,
     access: access.canRead
       ? { canRead: true, staff: access.staff, club: access.club, mutedUntil: access.mutedUntil?.toISOString() ?? null, muteHours: access.staff ? MUTE_HOURS : undefined }
       : access,
@@ -39,11 +41,11 @@ export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST" || !sameOriginJson(request)) return json({ error: "Method not allowed." }, 405);
   const customer = await currentCustomer(db, request);
   if (!customer) return json({ error: "Sign In to chat.", code: "sign_in" }, 401);
-  const input = (await request.json().catch(() => null)) as { action?: unknown; room?: unknown; body?: unknown; id?: unknown; hours?: unknown } | null;
+  const input = (await request.json().catch(() => null)) as { action?: unknown; room?: unknown; body?: unknown; id?: unknown; hours?: unknown; replyTo?: unknown } | null;
   try {
     if (input?.action === "send") {
       if (!isRoom(input.room)) return json({ error: "Choose a room." }, 400);
-      await sendMessage(db, customer, input.room, input.body);
+      await sendMessage(db, customer, input.room, input.body, process.env, input.replyTo);
       return json(await view(customer, input.room));
     }
     if (input?.action === "delete") {

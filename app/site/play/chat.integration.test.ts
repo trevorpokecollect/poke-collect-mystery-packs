@@ -5,7 +5,7 @@ import { confirmAge } from "../../lib/cardbit-age.server";
 import { SITE_SHOP } from "../rewards/rewards.server";
 import { startCoolOff } from "./limits.server";
 import { startSubscription, creditSubscriptionPayment } from "./subscriptions.server";
-import { ChatError, chatAccess, cleanBody, deleteMessage, listMessages, muteAuthor, sendMessage } from "./chat.server";
+import { ChatError, chatAccess, cleanBody, deleteMessage, listMessages, markSeen, muteAuthor, onlineCounts, sendMessage } from "./chat.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -17,6 +17,17 @@ describe("chat message rules", () => {
     for (const bad of ["see https://x.io", "www.example.org", "join discord.gg/abc", "buy at cards.shop", "me@mail.com", "call 256-555-0100", "", "x".repeat(281)])
       expect(() => cleanBody(bad), bad).toThrow(ChatError);
     expect(cleanBody("Pulled a Charizard ex 199/165!")).toBe("Pulled a Charizard ex 199/165!");
+  });
+});
+
+describe("chat online counts", () => {
+  it("counts readers seen in the last minute, per room", () => {
+    const t = 1_000_000_000_000;
+    markSeen("on-1", "main", t);
+    markSeen("on-2", "club", t);
+    markSeen("on-3", "main", t - 61_000);
+    expect(onlineCounts(t)).toMatchObject({ main: 2, club: 1 });
+    expect(onlineCounts(t + 61_000)).toMatchObject({ main: 0, club: 0 });
   });
 });
 
@@ -93,5 +104,22 @@ describe.skipIf(!url)("live chat", () => {
     expect(await chatAccess(db, b, env)).toMatchObject({ canRead: false, reason: "paused" });
     await sendMessage(db, staff, "main", "Be kind, everyone.", env);
     expect((await listMessages(db, await chatAccess(db, staff, env), "main"))[0]).toMatchObject({ name: "Cardbit Staff", badge: "staff" });
+  });
+
+  it("quotes replies, stamps levels, and hides a quote once staff remove the original", async () => {
+    await db.cardbitProfile.create({ data: { shop: SITE_SHOP, customerId: a.id, xp: 5000 } });
+    await sendMessage(db, a, "main", "Pulled a Snorlax!", env);
+    const [orig] = await listMessages(db, await chatAccess(db, b, env), "main");
+    expect(orig.level).toBeGreaterThan(1);
+    expect(orig.reply).toBeNull();
+    await sendMessage(db, b, "main", "Nice one", env, orig.id);
+    let rows = await listMessages(db, await chatAccess(db, b, env), "main");
+    expect(rows[1]).toMatchObject({ body: "Nice one", level: 1, reply: { id: orig.id, name: orig.name, body: "Pulled a Snorlax!" } });
+    await expect(sendMessage(db, b, "club", "x", env, orig.id)).rejects.toThrow(ChatError);
+    await deleteMessage(db, staff, orig.id, env);
+    rows = await listMessages(db, await chatAccess(db, b, env), "main");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reply).toMatchObject({ removed: true, body: null });
+    await expect(new Promise((r) => setTimeout(r, 3100)).then(() => sendMessage(db, b, "main", "again", env, orig.id))).rejects.toMatchObject({ code: "reply_gone" });
   });
 });

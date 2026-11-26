@@ -8,7 +8,7 @@
 // - Staff (SITE_STAFF_EMAILS) can delete any message and mute an author; muted accounts can read only.
 // Customer ids are never sent to the browser: staff act on a message id and the server finds the author.
 import type { PrismaClient } from "@prisma/client";
-import { AVATAR_COLORS, defaultColor } from "../../lib/cardbit-levels";
+import { AVATAR_COLORS, defaultColor, levelForXp } from "../../lib/cardbit-levels";
 import { ageConfirmed } from "../../lib/cardbit-age.server";
 import { PlayPaused, assertNotPaused } from "./limits.server";
 import { activeTier } from "./subscriptions.server";
@@ -27,6 +27,24 @@ const PER_MINUTE = 10;
 export const MUTE_HOURS = [1, 24, 168, 720] as const;
 
 export const chatOn = (env: NodeJS.ProcessEnv = process.env) => env.SITE_CHAT === "on";
+
+// Who's here: readers seen polling in the last minute, per room. In memory (one app-site instance);
+// it only drives the "N online" counts, so a restart just resets them.
+const ONLINE_MS = 60_000;
+const seen = new Map<string, { room: Room; at: number }>();
+export function markSeen(customerId: string, room: Room, now = Date.now()) {
+  seen.set(customerId, { room, at: now });
+  if (seen.size > 5_000) for (const [k, v] of seen) if (now - v.at > ONLINE_MS) seen.delete(k);
+}
+export function onlineCounts(now = Date.now()) {
+  let main = 0, club = 0;
+  for (const [k, v] of seen) {
+    if (now - v.at > ONLINE_MS) { seen.delete(k); continue; }
+    main++;
+    if (v.room === "club") club++;
+  }
+  return { main, club };
+}
 
 export class ChatError extends Error {
   constructor(
@@ -87,15 +105,21 @@ export async function listMessages(db: Db, access: Access, room: Room) {
     where: { room, deletedAt: null },
     orderBy: { createdAt: "desc" },
     take: HISTORY,
-    select: { id: true, name: true, iconId: true, iconColor: true, badge: true, body: true, createdAt: true },
+    select: { id: true, name: true, iconId: true, iconColor: true, badge: true, level: true, body: true, replyToId: true, replyName: true, replyBody: true, createdAt: true },
   });
-  return rows.reverse().map(({ iconColor, ...r }) => {
+  // A quote of a message staff removed shows as removed, never the removed text.
+  const quoted = [...new Set(rows.map((r) => r.replyToId).filter((x): x is string => !!x))];
+  const live = new Set(
+    quoted.length ? (await db.siteChatMessage.findMany({ where: { id: { in: quoted }, deletedAt: null }, select: { id: true } })).map((r) => r.id) : [],
+  );
+  return rows.reverse().map(({ iconColor, replyToId, replyName, replyBody, ...r }) => {
     const c = AVATAR_COLORS.find((x) => x.id === iconColor) ?? AVATAR_COLORS[0];
-    return { ...r, bg: c.bg, fg: c.fg, createdAt: r.createdAt.toISOString(), canModerate: staff };
+    const reply = replyToId ? (live.has(replyToId) ? { id: replyToId, name: replyName, body: replyBody } : { id: replyToId, name: null, body: null, removed: true }) : null;
+    return { ...r, reply, bg: c.bg, fg: c.fg, createdAt: r.createdAt.toISOString(), canModerate: staff };
   });
 }
 
-export async function sendMessage(db: Db, v: Viewer, room: Room, raw: unknown, env: NodeJS.ProcessEnv = process.env) {
+export async function sendMessage(db: Db, v: Viewer, room: Room, raw: unknown, env: NodeJS.ProcessEnv = process.env, replyTo?: unknown) {
   const access = await chatAccess(db, v, env);
   if (!access.canRead) throw new ChatError(access.reason, "You can't use chat right now.", 403);
   if (!roomAllowed(access, room)) throw new ChatError("club_only", `The ${PLAN.short} room is for ${PLAN.name} members.`, 403);
@@ -114,6 +138,10 @@ export async function sendMessage(db: Db, v: Viewer, room: Room, raw: unknown, e
     if (recent.some((r) => r.body.toLowerCase() === body.toLowerCase())) throw new ChatError("repeat", "You just sent that.", 429);
     const profile = await tx.cardbitProfile.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId: v.id } } });
     const iconId = profile?.iconId && (!profile.iconId.endsWith("-club") || access.tier) ? profile.iconId : null;
+    const target = typeof replyTo === "string" && replyTo
+      ? await tx.siteChatMessage.findFirst({ where: { id: replyTo, room, deletedAt: null }, select: { id: true, name: true, body: true } })
+      : null;
+    if (replyTo && !target) throw new ChatError("reply_gone", "That message is gone.", 404);
     return tx.siteChatMessage.create({
       data: {
         room,
@@ -122,7 +150,9 @@ export async function sendMessage(db: Db, v: Viewer, room: Room, raw: unknown, e
         iconId,
         iconColor: profile?.iconColor ?? defaultColor(v.id),
         badge: access.staff ? "staff" : access.tier,
+        level: access.staff ? null : levelForXp(profile?.xp ?? 0),
         body,
+        ...(target ? { replyToId: target.id, replyName: target.name, replyBody: [...target.body].slice(0, 90).join("") } : {}),
       },
       select: { id: true },
     });

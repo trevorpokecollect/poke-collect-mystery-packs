@@ -1671,7 +1671,11 @@ model SiteChatMessage {
   iconId     String?
   iconColor  String?
   badge      String? // staff | plus | pro | ultimate
+  level      Int? // author's level when sent
   body       String
+  replyToId  String? // quoted message; snapshot below, hidden once the original is removed
+  replyName  String?
+  replyBody  String?
   createdAt  DateTime  @default(now())
   deletedAt  DateTime?
   deletedBy  String?
