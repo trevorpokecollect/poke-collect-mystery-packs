@@ -84,6 +84,9 @@ const PATCHES = {
     ["esc([p.tracking.company,'Tracking Number '+p.tracking.number]", "esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number]"],
   ],
   'cardbit-storefront.js': [
+    // Pack Pass links in the header and footer (site only, Trevor Nov 25).
+    ["nav('help','How It Works')+'</nav><nav aria", "nav('help','How It Works')+/* SITE */(site() ? '<a class=\"cb-navlink cb-nav-passlink\" href=\"/pass\"><span class=\"cb-nav-icon cb-nav-pass\" aria-hidden=\"true\"></span><span>Pack Pass</span></a>' : '')+'</nav><nav aria"],
+    ["link('help','How It Works')+welcomeLink+", "link('help','How It Works')+/* SITE */(site() ? '<a href=\"/pass\">Pack Pass</a>' : '')+welcomeLink+"],
     // Site: the home feed is called Live Pulls.
     ["'<h2 id=\"cb-feed-title\">Just Pulled</h2>'+", "'<h2 id=\"cb-feed-title\">'+(/* SITE */ site() ? 'Live Pulls' : 'Just Pulled')+'</h2>'+"],
     ["toggle.setAttribute('aria-label',(paused?'Play':'Pause')+' Just Pulled');", "toggle.setAttribute('aria-label',(paused?'Play':'Pause')+(/* SITE */ site() ? ' Live Pulls' : ' Just Pulled'));"],

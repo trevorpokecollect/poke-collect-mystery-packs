@@ -145,3 +145,10 @@
   10%{transform:none;box-shadow:0 8px 22px #000a,0 0 0 12px #00e6e100}
 }
 @media (prefers-reduced-motion:reduce){.cbg-shortcut{animation:none!important}}
+
+/* Pack Pass nav icon (ticket), site only. */
+.cb-nav-pass{--nav-art:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linejoin='round'%3E%3Cpath d='M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z'/%3E%3Cpath d='M14 7v10' stroke-dasharray='2 2'/%3E%3C/svg%3E")}
+@keyframes cb-nav-ticket{40%{transform:translateY(-2px) rotate(-10deg)}72%{transform:rotate(6deg)}}
+@media(prefers-reduced-motion:no-preference){.cb-nav-pass{--cb-move:cb-nav-ticket}}
+/* Phones: the header row has room for four links; Pack Pass stays in the footer. */
+@media(max-width:640px){#cardbit-store .cb-nav .cb-nav-passlink,.cb-nav .cb-nav-passlink{display:none}}
