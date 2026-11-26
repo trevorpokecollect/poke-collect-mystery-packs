@@ -101,21 +101,21 @@ body:has(.cb-launch.is-open) .cb-help{display:none}
 .cb-lr-tile.tier-bronze{--t:#e08a4a;--t2:#7a3f16}
 .cb-lr-tile.tier-silver{--t:#d6e1ea;--t2:#6f8091}
 .cb-lr-tile.tier-gold{--t:#ffcc4d;--t2:#8a5a00}
-.cb-lr-tile.tier-cobalt{--t:#6f86ff;--t2:#2235b8}
+.cb-lr-tile.tier-basic{--t:#4be07a;--t2:#1e7a3e}
+.cb-lr-tile.tier-cobalt{--t:#ff4d6d;--t2:#a8183a}
 .cb-lr-tile.tier-holo{--t:#c48cff;--t2:#5a2fa8}
 .cb-lr-tile.tier-holo::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;background:conic-gradient(from 0deg,#00e6e1,#4057F5,#b26bff,#ff6fb1,#FFB65C,#00e6e1);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.9;pointer-events:none}
-.cb-lr-tile-art{display:grid;place-items:center;width:60px;height:60px}
-.cb-lr-tile-art img{width:60px;height:60px;border-radius:50%;object-fit:contain;filter:drop-shadow(0 4px 10px color-mix(in srgb,var(--t) 50%,transparent))}
+.cb-lr-tile-art{display:grid;place-items:center;width:54px;height:54px}
+.cb-lr-tile-art img{width:54px;height:54px;object-fit:contain;border-radius:50%;box-shadow:0 0 0 2px color-mix(in srgb,var(--t) 55%,transparent),0 4px 12px color-mix(in srgb,var(--t) 35%,transparent)}
 .cb-lr-tile-name{font:800 .88rem/1.1 var(--lr-d)}
 .cb-lr-tile-state{display:inline-flex;align-items:center;justify-content:center;gap:4px;max-width:100%;font-size:.7rem;font-weight:700;color:var(--lr-mute)}
 .cb-lr-prize{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cb-lr-tile.is-ready{box-shadow:0 0 0 1px color-mix(in srgb,var(--t) 60%,transparent),0 0 20px color-mix(in srgb,var(--t) 40%,transparent);animation:cb-lr-glow 2.2s ease-in-out infinite}
 .cb-lr-tile.is-ready .cb-lr-tile-state{padding:3px 9px;border-radius:999px;background:var(--t);color:#0a1517;font:800 .7rem/1 var(--lr-d);letter-spacing:.04em;text-transform:uppercase}
-.cb-lr-tile.is-ready .cb-lr-tile-art img{animation:cb-lr-bob 2s ease-in-out infinite}
 .cb-lr-tile.is-ready:hover{transform:translateY(-2px)}
 .cb-lr-tile.is-done .cb-lr-tile-state{color:#7fe0a0}
 .cb-lr-tile.is-locked{background:#0b1719;border-color:#1c3236}
-.cb-lr-tile.is-locked .cb-lr-tile-art img{filter:grayscale(.85) brightness(.55)}
+.cb-lr-tile.is-locked .cb-lr-tile-art img{filter:grayscale(.85) brightness(.55);box-shadow:0 0 0 2px #1c3236}
 .cb-lr-tile.is-done .cb-lr-tile-art img{opacity:.6}
 .cb-lr-tile.is-locked .cb-lr-tile-name{color:#b9c8ca}
 .cb-lr-tiles.is-preview .cb-lr-tile.is-locked .cb-lr-tile-art img{filter:grayscale(.3) brightness(.85)}
