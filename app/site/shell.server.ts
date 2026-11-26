@@ -29,6 +29,7 @@ import { signInProviders } from "./core/oauth.server";
 import { CLUB_ICON_URLS } from "./play/club-icons";
 import { planClientJson, withPlanCopy } from "./play/plan-brand";
 import { subscriptionsReady } from "./payments/coinflow-subscriptions.server";
+import { helpTags } from "./help/tag.server";
 
 const files = manifest as Record<string, string>;
 // Cache-busting versions for the site's own files (not part of the theme port).
@@ -210,7 +211,8 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
         : `<script src="${assetUrl(name)}" defer></script>`,
   ).join("\n    ") + `\n    <script src="/site/js/cardbit-site-auth.js?v=${SITE_AUTH_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>` +
-    (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "");
+    (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "") +
+    (helpTags("site", assetUrl("cardbit-icon-latch.webp")) ? `\n    ${helpTags("site", assetUrl("cardbit-icon-latch.webp"))}` : "");
 
   return `<!doctype html>
 <html lang="en">
