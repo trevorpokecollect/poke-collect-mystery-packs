@@ -143,6 +143,7 @@ export async function muteAuthor(db: Db, staff: Viewer, id: unknown, hours: unkn
   const msg = typeof id === "string" ? await db.siteChatMessage.findUnique({ where: { id }, select: { customerId: true } }) : null;
   if (!msg) throw new ChatError("bad_id", "That message is gone.", 404);
   if (msg.customerId === staff.id) throw new ChatError("self", "You can't mute yourself.");
+  if (msg.customerId.startsWith("staff:")) throw new ChatError("staff", "Staff messages can't be muted.");
   const until = new Date(Date.now() + h * 3_600_000);
   await db.siteChatMute.upsert({
     where: { customerId: msg.customerId },
