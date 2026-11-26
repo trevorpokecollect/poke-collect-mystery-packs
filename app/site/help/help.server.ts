@@ -18,6 +18,7 @@ import { ageConfirmed } from "../../lib/cardbit-age.server";
 import { PlayPaused, assertNotPaused } from "../play/limits.server";
 import { SITE_SHOP } from "../rewards/rewards.server";
 import { knowledge } from "./knowledge.server";
+import { packFacts } from "./facts.server";
 import { staffEmails } from "../shipping/staff.server";
 
 type Db = PrismaClient;
@@ -31,7 +32,7 @@ const PER_HOUR = 20;
 const PER_DAY = 60;
 const PER_IP_HOUR = 40;
 export const RETENTION_DAYS = 90;
-export const DEFAULT_MODEL = "claude-opus-5-5";
+export const DEFAULT_MODEL = "claude-haiku-5-5"; // Trevor chose Haiku (Nov 25 2026); CARDBIT_HELP_MODEL overrides
 
 // SITE_HELP=on: everyone. SITE_HELP=staff: only signed-in staff (SITE_STAFF_EMAILS), for testing on the live site.
 export const helpOn = (env: NodeJS.ProcessEnv = process.env) => (env.SITE_HELP === "on" || env.SITE_HELP === "staff") && !!(env.ANTHROPIC_API_KEY || "").trim();
@@ -122,10 +123,14 @@ const contextNote = (mode: Mode, signedIn: boolean, now: Date) =>
     signedIn ? "The visitor is signed in (you still can't see their account)." : "The visitor is not signed in.",
   ].join(" ");
 
-export function buildSystem(mode: Mode, signedIn: boolean, now = new Date()): Anthropic.Beta.BetaTextBlockParam[] {
+/** Cached block (rules + pages + site facts), then the uncached per-request part (visitor context + live packs). */
+export function buildSystem(mode: Mode, signedIn: boolean, now = new Date(), packs = ""): Anthropic.Beta.BetaTextBlockParam[] {
+  const live = mode === "site" && packs
+    ? `\n\n<live_packs note="What the pack pages show right now (refreshed every few minutes). Use these for pack prices, packs left, tier chances and which top cards are in a pool. Never state card values or tier value ranges.">\n${packs}\n</live_packs>`
+    : "";
   return [
     { type: "text", text: `${RULES}\n\n<reference_pages>\n${knowledge()}\n</reference_pages>`, cache_control: { type: "ephemeral", ttl: "1h" } },
-    { type: "text", text: contextNote(mode, signedIn, now) },
+    { type: "text", text: contextNote(mode, signedIn, now) + live },
   ];
 }
 
@@ -136,7 +141,10 @@ export type Ask = (args: { system: Anthropic.Beta.BetaTextBlockParam[]; messages
 
 let client: Anthropic | null = null;
 
-/** Real call: Claude, low effort (short support answers), server-side fallback on a refusal. */
+// Server-side refusal fallback exists for Opus/Sonnet/Fable, not Haiku (a Haiku refusal just shows FALLBACK).
+export const fallbackFor = (model: string) => /^claude-(opus|sonnet|fable)-/.test(model);
+
+/** Real call: Claude at medium effort (Haiku) / low (bigger models), server-side fallback where the model has one. */
 export const claudeAsk: Ask = async ({ system, messages }) => {
   client ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 45_000, maxRetries: 1 });
   const model = helpModel();
@@ -146,9 +154,8 @@ export const claudeAsk: Ask = async ({ system, messages }) => {
       max_tokens: 3000,
       system,
       messages,
-      output_config: { effort: "low" },
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      output_config: { effort: model.startsWith("claude-haiku-") ? "medium" : "low" },
+      ...(fallbackFor(model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     });
     const usage = { model: res.model, inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens, cacheReadTokens: res.usage.cache_read_input_tokens ?? undefined };
     if (res.stop_reason === "refusal") return { text: FALLBACK, ...usage, error: "refusal" };
@@ -239,7 +246,8 @@ export async function askHelp(db: Db, input: AskInput, ask: Ask = claudeAsk, env
     ...history.map((m) => ({ role: m.role === "assistant" ? ("assistant" as const) : ("user" as const), content: m.body })),
     { role: "user", content: question },
   ];
-  const reply = await ask({ system: buildSystem(input.mode, Boolean(input.customer), now), messages });
+  const packs = input.mode === "site" ? await packFacts(db) : "";
+  const reply = await ask({ system: buildSystem(input.mode, Boolean(input.customer), now, packs), messages });
   const text = tidyReply(reply.text);
   const handoff = text.toLowerCase().includes(SUPPORT_EMAIL);
   await db.$transaction([

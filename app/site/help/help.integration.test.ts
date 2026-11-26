@@ -7,6 +7,8 @@ import { startCoolOff } from "../play/limits.server";
 import { htmlToText, knowledge } from "./knowledge.server";
 import { type Ask, HelpError, askHelp, helpAllowed, buildSystem, cleanQuestion, helpConversation, helpList, helpMark, helpOn, purgeOld, tidyReply } from "./help.server";
 import { helpTags } from "./tag.server";
+import { packFacts, resetPackFacts, siteFacts } from "./facts.server";
+import { DEFAULT_MODEL, fallbackFor } from "./help.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -50,6 +52,32 @@ describe("Ask Latch basics", () => {
     expect(stable.text).not.toContain("2026-11-26");
     expect(ctx.text).toContain("NOT launched");
     expect(buildSystem("site", true)[1].text).toContain("signed in");
+  });
+
+  it("knows the whole site from the code that runs it, without card values", () => {
+    const closed = siteFacts(false);
+    for (const want of ["Level 50", "Mythic", "Holo Spin (Level 40)", "+70%", "5% of the difference", "250 Sparks", "1-800-GAMBLER", "HMAC-SHA256", "top 10", "after 24 hours", "30 days", "5 years"])
+      expect(closed).toContain(want);
+    expect(closed).toContain("coming soon");
+    expect(closed).not.toContain("$24.99");
+    expect(siteFacts(true)).toContain("Ultimate: $199.99/month");
+    expect(knowledge()).toContain("SITE FACTS");
+    expect(knowledge()).not.toContain("{{PLAN_NAME}}");
+    expect(knowledge()).not.toMatch(/maxValueCardbits|min: \d/);
+  });
+
+  it("puts live pack numbers after the cache point, only on the open site", () => {
+    const [stable, ctx] = buildSystem("site", false, new Date(), "- Gold Pack: 3,500 Cardbits");
+    expect(stable.text).not.toContain("Gold Pack: 3,500");
+    expect(ctx.text).toContain("<live_packs");
+    expect(ctx.text).toContain("Gold Pack: 3,500");
+    expect(buildSystem("waitlist", false, new Date(), "- Gold Pack")[1].text).not.toContain("live_packs");
+  });
+
+  it("uses Haiku by default and only asks for a refusal fallback where one exists", () => {
+    expect(DEFAULT_MODEL).toBe("claude-haiku-5-5");
+    expect(fallbackFor("claude-haiku-5-5")).toBe(false);
+    expect(fallbackFor("claude-opus-5-5")).toBe(true);
   });
 
   it("strips markdown from replies", () => {
@@ -156,3 +184,38 @@ describe.skipIf(!url)("Ask Latch conversations", () => {
     await expect(helpConversation(db, out.conversationId)).rejects.toMatchObject({ code: "not_found" });
   });
 });
+
+describe.skipIf(!url)("Ask Latch live pack facts", () => {
+  const PACK = "help-pack-facts";
+  const wipe = async () => {
+    await db.siteCopy.deleteMany({ where: { receiptKey: { startsWith: "helpfacts:" } } });
+    await db.sitePack.deleteMany({ where: { id: PACK } });
+  };
+  beforeAll(() => {
+    execFileSync("npx", ["prisma", "migrate", "deploy"], { env: { ...process.env, DATABASE_URL: url }, stdio: "ignore" });
+  });
+  afterAll(wipe);
+
+  it("shows price, packs left, tier chances and top cards, never values", async () => {
+    await wipe();
+    await db.sitePack.create({ data: { id: PACK, title: "Help Test Pack", priceBits: 3500, cardsPerPack: 1, active: true, sortOrder: 999 } });
+    const cards: [string, number][] = [["Charizard ex", 20000], ["Pidgey", 100], ["Rattata", 120], ["Caterpie", 90]];
+    for (const [i, [name, retail]] of cards.entries())
+      await db.siteCopy.create({
+        data: {
+          receiptKey: `helpfacts:${i}`, printingKey: `helpfacts-p${i}`, title: name, game: "pokemon", setName: "Obsidian Flames", number: `${i}`,
+          name, finish: "Holofoil", language: "English", condition: "Near Mint", lookKey: `hf${i}`, faceKey: `hf${i}`,
+          status: "POOLED", packId: PACK, retailBits: retail,
+        },
+      });
+    resetPackFacts();
+    const text = await packFacts(db);
+    expect(text).toContain("Help Test Pack: 3,500 Cardbits ($35.00), 1 card per pack, 4 packs left.");
+    expect(text).toContain("Legendary 25%");
+    expect(text).toContain("Common 75%");
+    expect(text).toContain("Charizard ex (Obsidian Flames) [Legendary]");
+    expect(text).not.toContain("Pidgey");
+    expect(text).not.toMatch(/20,?000/);
+  });
+});
+

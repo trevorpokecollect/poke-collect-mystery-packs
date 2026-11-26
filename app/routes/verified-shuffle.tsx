@@ -5,6 +5,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { currentCustomer } from "../site/core/auth.server";
 import { esc, htmlResponse, simplePage } from "../site/core/simple-page";
+import { SHUFFLE_HOW } from "../site/play/shuffle-copy";
 import { FairInputError, fairView, rotateSeed, setClientSeed } from "../site/play/fair.server";
 
 const on = () => process.env.CARDBIT_SITE === "on";
@@ -21,15 +22,6 @@ function sameOrigin(request: Request) {
   }
 }
 
-const HOW = `<h2>How It Works</h2>
-<ol class="steps">
-  <li><b>Before you open,</b> we lock in a secret <em>server seed</em> and show you its fingerprint (SHA-256 hash). Once shown, it can't change.</li>
-  <li><b>You can add your own</b> <em>client seed</em>, so we can't know the full input in advance.</li>
-  <li><b>Each opening</b> lists the pack's remaining cards in a fixed order and picks from them with your seeds and an opening number (<em>nonce</em>). Each card is drawn once.</li>
-  <li><b>Pools change only at a published restock.</b> Each restock saves a numbered pool version with every card ID and a SHA-256 hash, listed on the pack page. Each opening records the version it drew from, and its pool must be that version minus cards already pulled.</li>
-  <li><b>Reveal any time.</b> Press Reveal &amp; New Seed and we show the old secret seed. Then Verify recomputes every opening right here in your browser.</li>
-</ol>
-<p class="fine">Formula: pick <i>i</i> = HMAC-SHA256(server seed, "client seed:nonce:i"), first 13 hex digits as a number, mod the cards left. The card at that spot is removed before the next pick. Card values never change the draw.</p>`;
 
 function verifierScript() {
   // Browser re-check with Web Crypto. Mirrors fairIndex()/fairDraw() in fair.server.ts.
@@ -74,7 +66,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
   if (!customerId) {
     return simplePage(
       "Verified Shuffle",
-      `${css}<h1>Verified Shuffle</h1><p class="sub">Every pack opening can be checked by you.</p>${HOW}
+      `${css}<h1>Verified Shuffle</h1><p class="sub">Every pack opening can be checked by you.</p>${SHUFFLE_HOW}
        <a class="btn" href="/sign-in?return_to=${encodeURIComponent(PATH)}">Sign In to See Your Seeds</a>`,
     );
   }
@@ -103,7 +95,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
        <button class="mini" name="op" value="client">Save</button></div></form>
      <form method="post"><button class="btn" name="op" value="rotate">Reveal &amp; New Seed</button>
        <p class="fine">Shows the current secret seed so you can verify past openings, then starts a fresh one.</p></form>
-     <h2>Your Openings</h2>${ops}${HOW}<p class="fine"><a href="/">Back to Cardbit</a></p>${verifierScript()}`,
+     <h2>Your Openings</h2>${ops}${SHUFFLE_HOW}<p class="fine"><a href="/">Back to Cardbit</a></p>${verifierScript()}`,
   );
 }
 

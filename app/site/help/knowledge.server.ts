@@ -4,6 +4,9 @@
 import howItWorks from "../partials/how-it-works.html?raw";
 import policies from "../partials/policies.html?raw";
 import { waitlistPage } from "../waitlist/page.server";
+import { subscriptionsReady } from "../payments/coinflow-subscriptions.server";
+import { withPlanCopy } from "../play/plan-brand";
+import { siteFacts } from "./facts.server";
 
 const optional = import.meta.glob("../partials/official-rules.html", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
 const officialRules = optional["../partials/official-rules.html"] ?? "";
@@ -50,9 +53,11 @@ let cached: string | null = null;
 /** All reference text, stable byte-for-byte within a deploy (so the prompt cache hits). */
 export function knowledge(): string {
   if (cached) return cached;
+  const plans = subscriptionsReady();
   const parts = [
-    ["HOW IT WORKS AND FAQ (cardbit.com/help)", htmlToText(howItWorks)],
-    ["POLICIES (cardbit.com/policies)", htmlToText(policies)],
+    ["HOW IT WORKS AND FAQ (cardbit.com/help)", htmlToText(withPlanCopy(howItWorks, plans))],
+    ["SITE FACTS (from the systems that run cardbit.com: rewards, leaderboard, Sparks, limits, Verified Shuffle, plans)", siteFacts(plans)],
+    ["POLICIES (cardbit.com/policies)", htmlToText(withPlanCopy(policies, plans))],
     ["OFFICIAL RULES (cardbit.com/official-rules)", officialRules ? htmlToText(officialRules) : ""],
     ["COMING-SOON WAITLIST PAGE (cardbit.com before launch)", `${htmlToText(waitlistPage())}\n\n${WAITLIST_NOTE}`],
   ].filter(([, text]) => text);
