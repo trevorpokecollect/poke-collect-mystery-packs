@@ -81,10 +81,10 @@
       if (!openings().length) return empty('No Packs Yet','Your Saved Packs and Openings Will Appear Here.','Explore Packs','packs','pack');
       return '<div class="cc-ledger">' + openings().map(o => {
         const title = packTitle({id:o.packId});
-        const sub = plural(o.cardCount || o.cards.length,'card') + ' · ' + date(o.at);
+        const sub = (o.reversed ? 'Reversed · Cardbits Returned' : plural(o.cardCount || o.cards.length,'card')) + ' · ' + date(o.at);
         return '<div class="cc-pack-row"><img src="' + esc(wrapper({id:o.packId})) + '" alt="" width="36" height="64">' +
           '<span><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span>' +
-          (o.sealed ? openButton(o) : action('openings/' + enc(o.id),'View Result','cb-secondary')) + '</div>';
+          (o.reversed ? chip('Reversed') : o.sealed ? openButton(o) : action('openings/' + enc(o.id),'View Result','cb-secondary')) + '</div>';
       }).join('') + '</div>';
     }
     function dashboard(tab) {
@@ -92,7 +92,7 @@
       if (tab === 'openings') return page(nav('account/openings') + start('My Packs') + packHistory());
       const sealed = openings().find(o => o.sealed);
       const parcels = parcelRecords();
-      const recent = openings().find(o => !o.sealed);
+      const recent = openings().find(o => !o.sealed && !o.reversed);
       let hero;
       if (sealed) {
         const pack = {id:sealed.packId};
@@ -117,6 +117,10 @@
         (ctx.welcomeAccount?.() || '') +
         (recent ? '<section class="cb-separated">' + sectionHd('Recently Opened','account/openings','All Packs') +
           accordionLink('openings/' + enc(recent.id),packTitle({id:recent.packId}),date(recent.at),'View Result') + '</section>' : ''));
+    }
+    function reversedPage(o) {
+      return page(nav('account/openings') + start(packTitle({id:o.packId}),date(o.at)) +
+        empty('This Pack Was Reversed','Cardbit Support Returned Your Cardbits, and These Cards Went Back Into Stock.','View My Vault','vault','pack'));
     }
     function sealedPage(o) {
       return page(nav('account/openings') + start('Unopened Pack') +
@@ -149,6 +153,7 @@
       const opening = scope === 'opening' && byId(openings(),openingId);
       if (scope === 'opening' && !opening) return page(nav('vault') + empty('Opening Unavailable','Choose an Opening from Your Account.','My Packs','account/openings'));
       if (opening?.sealed) return sealedPage(opening);
+      if (opening?.reversed) return reversedPage(opening);
       const detail = opening ? packTitle({id:opening.packId}) + ' · ' + date(opening.at) : 'Your Individual Cards and Their Current Status.';
       const demo = get().mode==='shopper-test';
       if(demo && !scope) scope='held';
@@ -361,7 +366,7 @@
       }
       return false;
     }
-    return {dashboard, sealedPage, vault, shipments, parcelState, orders, compare, compareLink, detailsForPack, guideBody, metadata, language,
+    return {dashboard, sealedPage, reversedPage, vault, shipments, parcelState, orders, compare, compareLink, detailsForPack, guideBody, metadata, language,
       variantList, click, input, clearSearch:() => {vaultSearch = '';}, vaultLabel};
   }
   root.CardbitCollectorPages = Object.freeze({create});

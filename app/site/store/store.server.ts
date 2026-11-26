@@ -169,7 +169,8 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
     singles,
     binder: owned.filter((c) => !c.openingId || !sealed.has(c.openingId)).map((c) => ({ ...copyView(c, prices), tier: null })),
     openings: openings.map((o) => {
-      const cards = openingCopies.filter((c) => c.openingId === o.id);
+      // A staff reversal returns the copies to stock, so they no longer belong to this opening's owner.
+      const cards = o.reversedAt ? [] : openingCopies.filter((c) => c.openingId === o.id);
       return {
         id: o.id,
         packId: o.packId,

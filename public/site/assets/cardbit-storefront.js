@@ -1607,7 +1607,7 @@
       else if(base==='help'||base==='policies'){body=helpPage(base==='policies');title=base==='policies'?'Policies':'How It Works';}
       else if((base==='vault'||base==='openings')&&!account()){body='<div class="cb-wrap cb-page cb-narrow">'+loginForm()+'</div>';title='Sign In';}
       else if(base==='vault'&&id){const c=known(state.binder,id)||(state.openings||[]).flatMap(o=>o.cards).find(c=>String(c.id)===id);body=c?copyDetail(c):missing();title=c?cardName(c):'Unavailable Copy';}
-      else if(base==='openings'&&id){const o=known(state.openings,id);body=o?(o.sealed?pages.sealedPage(o):sub==='reveal'&&window.CardbitOpening?'<div data-theater></div>':resultPage(o)):missing();title='Saved Pack Opening';}
+      else if(base==='openings'&&id){const o=known(state.openings,id);body=o?(o.sealed?pages.sealedPage(o):o.reversed?pages.reversedPage(o):sub==='reveal'&&window.CardbitOpening?'<div data-theater></div>':resultPage(o)):missing();title='Saved Pack Opening';}
       else {body=missing();title='Page Unavailable';}
     }catch(e){body='<div class="cb-wrap cb-page">'+empty('View Unavailable','Please Retry Loading the Storefront.','','','clock')+btn('retry','Reload','cb-secondary')+'</div>';title='Unavailable';console.warn('Cardbit Page Unavailable',e);}
     detachBrand();

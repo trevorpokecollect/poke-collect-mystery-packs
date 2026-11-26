@@ -113,7 +113,8 @@ describe.skipIf(!url)("staff tools", () => {
       expect(copy).toMatchObject({ status: "DRAFT", ownerId: null, autoRestock: true });
       const after = await storeState(db, customer);
       expect(after.account?.level?.xp).toBe(20);
-      expect(after.openings.find((o) => o.id === o1.openingId)).toMatchObject({ reversed: true });
+      expect(after.openings.find((o) => o.id === o1.openingId)).toMatchObject({ reversed: true, cards: [] });
+      expect(after.binder.some((c) => c.id === copy.id)).toBe(false);
       expect((await listOrders(db, { type: "PACK" })).orders.find((o) => o.id === o1.openingId)?.status).toBe("Reversed");
 
       // Sold back first: reversal refused, staff use Adjust Balance.
