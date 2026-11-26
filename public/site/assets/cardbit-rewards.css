@@ -232,3 +232,28 @@ html.cbr-lock-scroll{overflow:hidden}
   .cbr .cbr-spin-card.is-locked .cbr-sm{display:inline}
 }
 @media (max-width:480px){.cbr .cbr-top .cbr-hero-main{flex-direction:row;align-items:center}.cbr .cbr-spin-grid{grid-template-columns:1fr}.cbr .cbr-spin-art{width:52px;height:52px}}
+/* SITE: Rewards page fits phone width (Nov 26 2026). Grid cards and fieldsets default to min-content width, so the
+   Pack Pass character row (12 buttons) stretched the whole page and iOS zoomed out. Children may now shrink, and on
+   phones long sets (icons, characters, emotes, sleeves, reveal effects) become one horizontal swipe row each. */
+.cbr .cbr-card>*,.cbr fieldset,#cardbit-store.cbr .cbp-panel,#cardbit-store.cbr .cbp-panel>*,#cardbit-store.cbr .cbp-style,#cardbit-store.cbr .cbp-style>*{min-width:0;max-width:100%}
+.cbr fieldset{min-inline-size:0}
+@media (max-width:760px){
+  #cardbit-store.cbr :is([data-rw-icons],[data-rw-colors],.cbp-chars,.cbp-emotes,.cbp-sleeves,.cbp-fxs){display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:none;width:auto;margin-inline:-16px;padding:4px 16px 8px;scroll-padding-inline:16px}
+  #cardbit-store.cbr :is([data-rw-icons],[data-rw-colors],.cbp-chars,.cbp-emotes,.cbp-sleeves,.cbp-fxs)::-webkit-scrollbar{display:none}
+  #cardbit-store.cbr :is([data-rw-icons],[data-rw-colors],.cbp-chars,.cbp-emotes,.cbp-sleeves,.cbp-fxs)>*{flex:none;scroll-snap-align:start}
+  #cardbit-store.cbr [data-rw-icons]>*{width:84px}
+  #cardbit-store.cbr .cbp-emotes>*{width:96px}
+  #cardbit-store.cbr .cbp-emote img{width:68px;height:68px}
+  #cardbit-store.cbr .cbp-sleeves>*{width:84px}
+  #cardbit-store.cbr .cbp-sleeve img,#cardbit-store.cbr .cbp-sleeve .cbp-none{width:60px}
+  #cardbit-store.cbr .cbp-fxs>*{white-space:nowrap}
+  #cardbit-store.cbr .cbp-panel{margin:16px -4px 0;padding:14px 16px;overflow:hidden}
+  #cardbit-store.cbr .cbp-panel>p{margin-bottom:10px;font-size:14px}
+  #cardbit-store.cbr .cbp-style h3{margin-top:18px!important}
+  #cardbit-store.cbr .cbp-panel h4{margin:12px 0 4px}
+  #cardbit-store.cbr .cbr-card:has([data-rw-icons]){overflow:hidden}
+  #cardbit-store.cbr :is(.cbr-icons,.cbr-colors){max-width:none;margin-inline:-16px;padding-inline:0}
+  #cardbit-store.cbr :is(.cbr-icons,.cbr-colors)>legend{padding-inline:16px}
+  #cardbit-store.cbr :is([data-rw-icons],[data-rw-colors]){margin-inline:0}
+}
+.cbr .cbr-earn li{display:grid;grid-template-columns:64px minmax(0,1fr);gap:8px;align-items:baseline}
