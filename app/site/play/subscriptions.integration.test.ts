@@ -7,7 +7,7 @@ import { cancelPlan } from "../core/admin-desk.server";
 import { topupCentsSince } from "./limits.server";
 import { sendPlanCanceledEmail, sendPlanPaymentEmail } from "./plan-emails.server";
 import { PLAN, withPlanCopy } from "./plan-brand";
-import { activeTier, monthlyCredit, requestCancel, subscriberBonusForOpening, subscriptionView, tierById, TIERS } from "./subscriptions.server";
+import { activeTier, activeTiers, monthlyCredit, requestCancel, subscriberBonusForOpening, subscriptionView, tierById, TIERS } from "./subscriptions.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
@@ -71,6 +71,19 @@ describe.skipIf(!url)("Pack Pass subscriptions", () => {
     expect(s.status).toBe("ACTIVE");
     // Two months paid: period ends about two months out.
     expect(s.currentPeriodEnd!.getTime() - Date.now()).toBeGreaterThan(55 * 86_400_000);
+  });
+
+  it("looks up many members' tiers at once and drops lapsed plans right away", async () => {
+    await created();
+    await settled("pay_1");
+    const other = (await db.siteCustomer.create({ data: { email: "o@sub.test" } })).id;
+    let tiers = await activeTiers(db, [customerId, other]);
+    expect(tiers.get(customerId)?.id).toBe("pro");
+    expect(tiers.has(other)).toBe(false);
+    await db.siteSubscription.updateMany({ where: { customerId }, data: { status: "CANCELED", currentPeriodEnd: new Date(Date.now() - 60_000) } });
+    tiers = await activeTiers(db, [customerId]);
+    expect(tiers.size).toBe(0);
+    expect(await activeTier(db, customerId)).toBeNull();
   });
 
   it("rejects a wrong amount and ignores unknown subscriptions", async () => {

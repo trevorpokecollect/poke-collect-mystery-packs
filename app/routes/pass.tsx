@@ -57,7 +57,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
     const total = t.monthlyBits + t.bonusBits;
     return `<section class="plan t-${t.id}${mine ? " is-mine" : ""}" aria-labelledby="plan-${t.id}">
       ${look.tag ? `<span class="tag">${look.tag}</span>` : ""}
-      <div class="plan-top"><img class="plan-icon" src="/site/img/club/cardbit-icon-${look.icon}-club.svg" alt="" width="72" height="72">
+      <div class="plan-top"><img class="plan-icon" src="/site/img/pass/emotes/${look.icon}.svg" alt="" width="72" height="72">
         <div><h2 id="plan-${t.id}">${esc(t.name)}</h2><p class="price">${usd(t.cents)}<small>/month</small></p></div></div>
       <div class="bits"><img src="/site/assets/cardbit-bits-card-emblem.png" alt="" width="34" height="34">
         <div><b>${fmt(total)}</b><span>Cardbits every month</span></div></div>
@@ -65,8 +65,10 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
       <ul class="perks">
         <li>${ICON.xp}<span><b>+${t.xpBonusPct}% XP</b> on every paid pack</span></li>
         <li>${ICON.spark}<span><b>+${t.sparksBonusPct}% Sparks</b> on every paid pack</span></li>
-        <li>${ICON.star}<span>Animated Latch &amp; Friends icons</span></li>
-        <li>${ICON.chat}<span><b>${esc(PLAN.short)} ${esc(t.name)}</b> badge + members' chat room</span></li>
+        <li>${ICON.star}<span><b>${esc(t.name)} portrait frame</b> around your icon</span></li>
+        ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Animated emotes:</b> 4 for every Latch &amp; Friends character</span></li>`}
+        ${t.id === "ultimate" ? `<li>${ICON.star}<span><b>Legendary emotes</b>, only on Ultimate</span></li>` : ""}
+        <li>${ICON.chat}<span>Members' chat room</span></li>
       </ul>${cta}</section>`;
   }).join("");
   const status = live && v.current
@@ -80,7 +82,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
     PLAN.name,
     `<style>${PASS_CSS}</style>
      <header class="hero">
-       <div class="orbit" aria-hidden="true">${["latch", "latch-holo", "latch-gold", "zappix", "blazebit"].map((i, n) => `<img class="o o${n}" src="/site/img/club/cardbit-icon-${i}-club.svg" alt="" width="64" height="64">`).join("")}</div>
+       <div class="orbit" aria-hidden="true">${["latch-hype", "latch-holo-love", "latch-gold-legend", "zappix-hype", "blazebit-lol"].map((i, n) => `<img class="o o${n}" src="/site/img/pass/emotes/${i}.svg" alt="" width="64" height="64">`).join("")}</div>
        <p class="kicker">${ready ? "Monthly Plan" : "Coming Soon"}</p>
        <h1 class="title">${esc(PLAN.name)}</h1>
        <p class="sub">Cardbits every month with a bonus on top, faster levels, extra Sparks and member-only perks.</p>
@@ -99,9 +101,9 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
 }
 
 const TIER_LOOK: Record<TierId, { icon: string; tag?: string }> = {
-  plus: { icon: "latch" },
-  pro: { icon: "latch-holo", tag: "Most Popular" },
-  ultimate: { icon: "latch-gold", tag: "Best Value" },
+  plus: { icon: "latch-love" },
+  pro: { icon: "latch-holo-hype", tag: "Most Popular" },
+  ultimate: { icon: "latch-gold-legend", tag: "Best Value" },
 };
 
 const svg = (d: string) => `<svg class="pi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${d}</svg>`;

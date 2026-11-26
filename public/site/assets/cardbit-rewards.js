@@ -123,6 +123,7 @@
   function render(data) {
     state = data;
     avatar($('[data-rw-avatar]'), data);
+    /* SITE */ window.CardbitPass?.frame($('[data-rw-avatar]'), data.pass && data.pass.tier, { small: false });
     $('[data-rw-rank]').textContent = data.rank || 'Rookie';
     $('[data-rw-level]').textContent = 'Level ' + data.level;
     const bar = $('[data-rw-bar]'), pct = data.nextLevelXp ? Math.min(100, (data.levelXp / data.nextLevelXp) * 100) : 100;
@@ -181,6 +182,7 @@
       if (i.unlocked) b.addEventListener('click', () => save({ iconId: i.id }));
       return b;
     }));
+    /* SITE */ window.CardbitPass?.picker(root, data, (iconId) => save({ iconId }));
     const r = data.rules;
     $('[data-rw-earn]').replaceChildren(...[
       [Math.round(r.perCardbitsSpent * 100) + ' XP', 'For Every 100 Cardbits Spent on Packs'],
@@ -197,7 +199,7 @@
   async function save(body) {
     if (busy) return; busy = true;
     const note = $('[data-rw-icon-status]'); note.textContent = 'Saving…';
-    try { const saved = await call({ action: 'avatar', ...body }); render(saved); note.textContent = 'Icon Saved'; /* SITE */ savedFlash(note); window.CardbitRewardsNav?.update({ level: saved.level, avatar: saved.avatar }); }
+    try { const saved = await call({ action: 'avatar', ...body }); render(saved); note.textContent = 'Icon Saved'; /* SITE */ savedFlash(note); window.CardbitRewardsNav?.update({ level: saved.level, avatar: saved.avatar, pass: saved.pass }); }
     catch (e) { note.textContent = friendly(e, "We Couldn't Save Your Icon. Please Try Again."); }
     finally { busy = false; }
   }

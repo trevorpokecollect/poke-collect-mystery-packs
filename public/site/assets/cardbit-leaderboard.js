@@ -28,7 +28,8 @@
   }
   setInterval(tick, 1000); tick();
 
-  function face(node, r) {
+  function face(node, r) { /* SITE */ siteFace(node, r); window.CardbitPass?.frame(node, r && r.tier, { small: !node.classList.contains('cbr-pod-avatar') }); }
+  function siteFace(node, r) {
     if (r && r.iconId && iconUrls[r.iconId]) { const i = new Image(); i.src = iconUrls[r.iconId]; i.alt = ''; node.append(i); node.style.background = '#17213B'; return; }
     const [bg, fg] = COLORS[r?.color] || ['#202b2e', '#b6c4c5'];
     node.style.background = bg; node.style.color = fg;

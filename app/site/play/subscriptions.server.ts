@@ -1,5 +1,5 @@
 // Cardbit Club subscriptions (standalone site). Trevor, Nov 24 2026: Boxed.gg-style monthly plans that
-// give guaranteed Cardbits + a bonus each month, faster XP, bonus Sparks, animated icons and a chat perk.
+// give guaranteed Cardbits + a bonus each month, faster XP, bonus Sparks, portrait frames (all tiers), animated emotes (Pro+; Legendary on Ultimate) and a chat perk.
 //
 // Guardrails:
 // - OFF unless SITE_SUBSCRIPTIONS=on. Sign-ups also need Coinflow plans (SITE_COINFLOW_PLAN_<TIER>)
@@ -70,6 +70,23 @@ export async function activeTier(db: Db, customerId: string, now = new Date()): 
   if (!s?.currentPeriodEnd) return null;
   const until = s.currentPeriodEnd.getTime() + (s.status === "PAST_DUE" ? GRACE_MS : 0);
   return until > now.getTime() ? tierById(s.tier) : null;
+}
+
+/** activeTier for many customers at once (leaderboard): customerId -> tier, only for those with perks now. */
+export async function activeTiers(db: Db, customerIds: string[], now = new Date()): Promise<Map<string, Tier>> {
+  const out = new Map<string, Tier>();
+  if (!subscriptionsOn() || !customerIds.length) return out;
+  const rows = await db.siteSubscription.findMany({
+    where: { customerId: { in: customerIds }, status: { in: ["ACTIVE", "PAST_DUE", "CANCELED"] }, currentPeriodEnd: { gt: new Date(now.getTime() - GRACE_MS) } },
+    orderBy: { currentPeriodEnd: "desc" },
+  });
+  for (const s of rows) {
+    if (out.has(s.customerId) || !s.currentPeriodEnd) continue;
+    const until = s.currentPeriodEnd.getTime() + (s.status === "PAST_DUE" ? GRACE_MS : 0);
+    const tier = until > now.getTime() ? tierById(s.tier) : null;
+    if (tier) out.set(s.customerId, tier);
+  }
+  return out;
 }
 
 /** Record a sign-up started with the processor (first payment then confirms it via webhook). */
