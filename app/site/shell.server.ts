@@ -66,6 +66,7 @@ export function adPixels(env: NodeJS.ProcessEnv = process.env) {
     tiktok: pick(env.CARDBIT_SITE_TIKTOK_PIXEL_ID, /^[A-Z0-9]{10,30}$/i),
     gads: pick(env.CARDBIT_SITE_GOOGLE_ADS_ID, /^AW-\d{6,15}$/),
     gadsPurchase: pick(env.CARDBIT_SITE_GOOGLE_ADS_PURCHASE_LABEL, /^[A-Za-z0-9_-]{4,40}$/),
+    gadsLead: pick(env.CARDBIT_SITE_GOOGLE_ADS_LEAD_LABEL, /^[A-Za-z0-9_-]{4,40}$/),
   };
 }
 
@@ -73,7 +74,7 @@ export function adPixels(env: NodeJS.ProcessEnv = process.env) {
 export function adsTag(env: NodeJS.ProcessEnv = process.env) {
   const p = adPixels(env);
   if (!p.meta && !p.tiktok && !p.gads) return "";
-  return `<script src="/site/js/cardbit-site-ads.js?v=${SITE_ADS_V}" data-meta="${p.meta}" data-tiktok="${p.tiktok}" data-gads="${p.gads}" data-gads-purchase="${p.gadsPurchase}" defer></script>`;
+  return `<script src="/site/js/cardbit-site-ads.js?v=${SITE_ADS_V}" data-meta="${p.meta}" data-tiktok="${p.tiktok}" data-gads="${p.gads}" data-gads-purchase="${p.gadsPurchase}" data-gads-lead="${p.gadsLead}" defer></script>`;
 }
 
 /** First-party analytics beacon (Card Broker Analytics tab) plus the ad consent script. Every customer page includes it. */

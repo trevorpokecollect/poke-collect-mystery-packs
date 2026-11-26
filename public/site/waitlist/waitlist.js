@@ -391,7 +391,13 @@
           if (data.status === 'joined') {
             if (window.fbq) window.fbq('track', 'Lead', { content_name: 'Cardbit Waitlist' });
             if (window.ttq) window.ttq.track('SubmitForm', { content_name: 'Cardbit Waitlist' });
-            if (window.gtag) window.gtag('event', 'generate_lead', { event_category: 'waitlist' });
+            if (window.gtag) {
+              window.gtag('event', 'generate_lead', { event_category: 'waitlist' });
+              // Google Ads "Waitlist Signup" conversion (label from CARDBIT_SITE_GOOGLE_ADS_LEAD_LABEL via the ads script tag).
+              const ads = document.querySelector('script[data-gads-lead]');
+              const aw = ads && ads.dataset.gads, label = ads && ads.dataset.gadsLead;
+              if (aw && label) window.gtag('event', 'conversion', { send_to: aw + '/' + label, value: 1.0, currency: 'USD' });
+            }
           }
         } catch { /* never block signup on a pixel */ }
       } catch {
