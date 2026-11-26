@@ -158,6 +158,30 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     expect(mailer.sent.map((m) => m.subject)).toEqual(["Shipment Requested: 2 Cards"]);
   });
 
+  it("Pack Pass: Pro ships one shipment free each month, Ultimate every shipment, and the claim is recorded", async () => {
+    let perk: "monthly" | "unlimited" | null = "monthly";
+    const claimed: string[] = [];
+    const passDeps: ShippingDeps = {
+      ...deps,
+      passShip: {
+        available: async () => (perk ? { kind: perk, tier: perk === "monthly" ? "pro" : "ultimate" } : null),
+        claim: async (_tx, _c, shipmentId) => { claimed.push(shipmentId); return true; },
+      },
+    };
+    const first = await createShipment(passDeps, base({ idempotencyKey: "pass-1" }));
+    expect(first.shipment).toMatchObject({ feeKind: "FREE", feeBits: 0 });
+    expect(balances.get("u1")).toBe(1000);
+    expect(claimed).toEqual([first.shipment.id]);
+    perk = null; // used for the month
+    const second = await createShipment(passDeps, base({ idempotencyKey: "pass-2", copyIds: ["c3"] }));
+    expect(second.shipment).toMatchObject({ feeKind: "CARDBITS", feeBits: 600 });
+    // A lost race (claim refused) undoes the whole shipment.
+    perk = "monthly";
+    const refusing: ShippingDeps = { ...passDeps, passShip: { ...passDeps.passShip!, claim: async () => false } };
+    await expect(createShipment(refusing, base({ idempotencyKey: "pass-3", copyIds: ["c4"] }))).rejects.toMatchObject({ code: "PASS_SHIP_USED" });
+    expect(await statusOf("c4")).toBe("VAULTED");
+  });
+
   it("ships 30 or more cards free", async () => {
     const ids = Array.from({ length: 30 }, (_, i) => `c${i + 1}`);
     const { shipment } = await createShipment(deps, base({ copyIds: ids }));
