@@ -6,6 +6,8 @@
 /* Floating Daily Rewards launcher (home page only) */
 .cb-launch{--lr-bg:#0a1517;--lr-card:#102326;--lr-line:#1f3c40;--lr-cyan:#00e6e1;--lr-cyan2:#7df3ea;--lr-ink:#f3faf9;--lr-mute:#9fb6b8;--lr-apricot:#FFB65C;--lr-d:"Cardbit Outfit",var(--cb-display,system-ui),sans-serif;position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:900;color:var(--lr-ink);font-family:"Cardbit Atkinson","Atkinson Hyperlegible Next",system-ui,sans-serif}
 body:has(dialog[open]) .cb-launch{display:none}
+/* Ask Latch docks above the bubble; step it aside while the Daily Rewards panel is open so it never covers the panel. */
+body:has(.cb-launch.is-open) .cb-help{display:none}
 .cb-launch *,.cb-launch *::before,.cb-launch *::after{box-sizing:border-box}
 .cb-launch :focus-visible{outline:3px solid var(--lr-apricot);outline-offset:2px}
 

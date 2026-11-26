@@ -174,7 +174,7 @@
 
   function render() {
     let root = document.querySelector('.cb-launch');
-    if (!rw || !onHome()) { if (root) { open = false; clearInterval(timer); root.remove(); } return; }
+    if (!rw || !onHome()) { if (root) { open = false; clearInterval(timer); root.remove(); window.dispatchEvent(new Event('resize')); } return; }
     if (!root) {
       root = document.createElement('div');
       root.className = 'cb-launch';
@@ -184,6 +184,8 @@
         '<b class="cb-launch-badge" hidden></b></button>' +
         '<section class="cb-launch-panel" id="cb-launch-panel" role="dialog" aria-labelledby="cb-launch-title" hidden></section>';
       document.body.append(root);
+      // Let Ask Latch re-measure and dock above the bubble (it listens for resize).
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
       root.querySelector('.cb-launch-btn').addEventListener('click', () => toggle());
       root.addEventListener('click', onClick);
     }
