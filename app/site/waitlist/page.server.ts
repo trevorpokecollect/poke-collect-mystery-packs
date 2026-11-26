@@ -4,6 +4,7 @@
 import { createHash } from "node:crypto";
 import { assetUrl, pulseTag, shareMeta, SITE_SECURITY_HEADERS } from "../shell.server";
 import { robotsTags } from "../seo.server";
+import { helpTags } from "../help/tag.server";
 import { FOUNDING, FOUNDING_TOTAL } from "./waitlist.server";
 import cssSource from "../../../public/site/waitlist/waitlist.css?raw";
 import jsSource from "../../../public/site/waitlist/waitlist.js?raw";
@@ -140,6 +141,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
   <link rel="stylesheet" href="/site/waitlist/waitlist.css?v=${CSS_V}">
   <script>window.CardbitWaitlist = ${JSON.stringify({ packs: PACKS.map((p) => pack(p.id)), rips: PACKS.map((p) => RIPS[p.id].map(cardUrl)), backs: PACKS.map((p) => assetUrl(BACK[p.id] || "cardbit-card-back-en.webp")) }).replace(/</g, "\\u003c")};</script>
   <script src="/site/waitlist/waitlist.js?v=${JS_V}" defer></script>
+  ${helpTags("waitlist", assetUrl("cardbit-icon-latch.webp"), env)}
   ${pulseTag()}
 </head>
 <body class="wl">

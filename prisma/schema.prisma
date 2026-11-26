@@ -1866,3 +1866,41 @@ model SiteDiscordPost {
   createdAt  DateTime @default(now())
   @@index([customerId])
 }
+
+// Ask Latch: AI help chat on cardbit.com (app/site/help). Answers only from published site pages.
+// Kept 90 days for staff review (Card Broker), then deleted. visitorKey = "c:<customerId>" or "v:<random cookie>".
+model SiteHelpConversation {
+  id           String            @id @default(cuid())
+  customerId   String?
+  visitorKey   String
+  ipHash       String?
+  page         String // waitlist | site
+  messageCount Int               @default(0)
+  handoff      Boolean           @default(false) // the bot pointed the visitor to support@cardbit.com
+  flagged      Boolean           @default(false) // staff flag
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  messages     SiteHelpMessage[]
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([visitorKey, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model SiteHelpMessage {
+  id              String               @id @default(cuid())
+  conversationId  String
+  conversation    SiteHelpConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            String // user | assistant
+  body            String
+  model           String?
+  inputTokens     Int?
+  outputTokens    Int?
+  cacheReadTokens Int?
+  error           String?
+  createdAt       DateTime             @default(now())
+  @@index([conversationId, createdAt])
+  @@index([createdAt])
+}
