@@ -323,7 +323,7 @@ export async function exportCustomer(db: PrismaClient, actor: string, input: { c
   const reason = reasonOf(input.reason);
   const c = await customerOrThrow(db, String(input.customerId));
   const where = { customerId: c.id };
-  const [marketing, ledger, topups, openings, shipments, vault, wants, visits, play, subs, chat] = await Promise.all([
+  const [marketing, ledger, topups, openings, shipments, vault, wants, visits, play, subs, chat, help] = await Promise.all([
     db.siteMarketing.findUnique({ where }),
     db.siteLedger.findMany({ where, orderBy: { createdAt: "asc" } }),
     db.siteTopup.findMany({ where, orderBy: { createdAt: "asc" }, select: { id: true, createdAt: true, cents: true, baseBits: true, bonusBits: true, status: true, provider: true, billingState: true, billingZip: true, ip: true, ipRegion: true } }),
@@ -335,6 +335,7 @@ export async function exportCustomer(db: PrismaClient, actor: string, input: { c
     db.sitePlayControl.findUnique({ where }),
     db.siteSubscription.findMany({ where }),
     db.siteChatMessage.findMany({ where, select: { createdAt: true, room: true, body: true } }),
+    db.siteHelpMessage.findMany({ where: { conversation: where }, orderBy: { createdAt: "asc" }, select: { createdAt: true, role: true, body: true } }),
   ]);
   if (!(await priorAction(db, requestId)))
     await db.siteStaffAction.create({ data: { action: "export", actor, customerId: c.id, reason, requestId } });
@@ -353,6 +354,7 @@ export async function exportCustomer(db: PrismaClient, actor: string, input: { c
     playLimits: play,
     subscriptions: subs.map((s) => ({ tier: s.tier, status: s.status, createdAt: s.createdAt, canceledAt: s.canceledAt })),
     chatMessages: chat,
+    helpChat: help,
   };
 }
 
@@ -388,6 +390,7 @@ export async function eraseCustomer(db: PrismaClient, actor: string, input: { cu
     await tx.siteDiscordLink.deleteMany({ where }); // Discord rank role and pulls feed link
     await tx.siteVisit.updateMany({ where, data: { customerId: null } });
     await tx.siteChatMessage.updateMany({ where, data: { name: "Former Member", body: "[removed]", deletedAt: new Date(), deletedBy: actor } });
+    await tx.siteHelpConversation.deleteMany({ where }); // Ask Latch transcripts (messages cascade)
     await tx.siteTopup.updateMany({ where, data: { ip: null, userAgent: null, deviceId: null } });
     await tx.siteStaffAction.create({ data: { action: "erase", actor, customerId: c.id, reason, requestId } });
   });
