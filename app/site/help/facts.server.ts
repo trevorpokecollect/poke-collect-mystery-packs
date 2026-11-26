@@ -30,7 +30,7 @@ export function siteFacts(plansOpen: boolean): string {
     "## Daily Spins (cardbit.com/rewards)",
     `- Every spin you've unlocked is free once per Cardbit day. Spins unlock by level: ${SPINNER_TIERS.map((t) => `${t.name} (Level ${t.minLevel})`).join(", ")}. Leveling up adds more free spins each day; higher spins have better prizes.`,
     "- Prizes can be a real card from that spin's own prize pool, Sparks, or XP; some Sparks and XP prizes are a range (like 25 to 50 Sparks). The exact odds for each spin are shown on the Rewards page under What You Can Win; send people there rather than quoting numbers.",
-    `- Check-in streak: each day in a row adds ${STREAK_CARD_BONUS.perDay * 100}% to the chance of a card prize, up to ${STREAK_CARD_BONUS.maxDays} days (+${Math.round(STREAK_CARD_BONUS.perDay * STREAK_CARD_BONUS.maxDays * 100)}%). Missing a day resets it.`,
+    `- Check-in streak: each day in a row adds ${STREAK_CARD_BONUS.perDay * 100}% to the chance of a card prize, up to ${STREAK_CARD_BONUS.maxDays} days (+${Math.round(STREAK_CARD_BONUS.perDay * STREAK_CARD_BONUS.maxDays * 100)}%). Missing a day resets it. The streak bonus applies ONLY to Daily Spins: it never changes pack odds, pack pulls, the Spark Shop or any other prize.`,
     "- No purchase necessary; the Official Rules describe the free mail-in method.",
     "",
     "## Weekly Leaderboard (cardbit.com/leaderboard)",

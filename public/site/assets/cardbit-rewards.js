@@ -143,13 +143,13 @@
     const sb = data.streakBonus || START.streakBonus, days = Math.min(data.streak || 0, sb.maxDays);
     $('[data-rw-streak-count]').textContent = String(data.streak || 0);
     $('[data-rw-flames]').replaceChildren(...Array.from({ length: sb.maxDays }, (_, i) => { const li = el('li'); if (i < days) li.className = 'is-lit'; return li; }));
-    $('[data-rw-bonus]').textContent = /* SITE */ days ? 'Card Prizes ' + Math.round(days * sb.perDay * 100) + '% More Likely' : 'No Streak Boost Yet';
+    $('[data-rw-bonus]').textContent = /* SITE */ days ? 'Daily Spin Card Prizes ' + Math.round(days * sb.perDay * 100) + '% More Likely' : 'No Streak Boost Yet';
     const btn = $('[data-rw-checkin]');
     btn.disabled = data.checkedInToday;
     btn.textContent = data.checkedInToday ? 'Checked In Today' : 'Check In · +' + data.rules.dailyCheckIn + ' XP';
     $('[data-rw-streak-note]').textContent = data.checkedInToday
       ? 'Come Back Tomorrow to Keep Your Streak Going.'
-      : /* SITE */ 'Check In Every Day. Each Day in a Row Makes Card Prizes on Your Daily Spins ' + Math.round(sb.perDay * 100) + '% More Likely, Up to ' + sb.maxDays + ' Days.';
+      : /* SITE */ 'Check In Every Day. Each Day in a Row Makes Card Prizes on Your Daily Spins ' + Math.round(sb.perDay * 100) + '% More Likely, Up to ' + sb.maxDays + ' Days. Packs Aren\'t Affected.';
 
     // Daily Spins grid
     $('[data-rw-spins]').replaceChildren(...spins.map((t) => {
