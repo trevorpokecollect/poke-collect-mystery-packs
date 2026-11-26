@@ -1807,6 +1807,34 @@ model SitePromoCode {
   updatedAt      DateTime  @updatedAt
 }
 
+// Redeem codes (Trevor 2026-11-26): single-use codes that add a fixed number of promotional Cardbits on their own,
+// with no purchase. First campaign: PCBF = Poke-Collect Black Friday ($200+ orders Nov 27-30 earn 1,000 Cardbits;
+// Poke-Collect emails each qualifying customer one code). One code per account per campaign.
+model SiteRedeemCampaign {
+  key       String    @id // code prefix, e.g. PCBF
+  name      String // customer-facing, e.g. "Poke-Collect Black Friday"
+  bits      Int // Cardbits each code adds (BONUS)
+  expiresAt DateTime? // last moment a code can be redeemed (null = no end date)
+  active    Boolean   @default(true)
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model SiteRedeemCode {
+  code       String    @id // PCBF-XXXXXXXX as handed out
+  compact    String    @unique // upper case, dashes and spaces removed (what a customer's entry is matched on)
+  campaign   String
+  batch      String // when and by whom the codes were made, for the CSV
+  redeemedBy String? // SiteCustomer.id
+  redeemedAt DateTime?
+  voidedAt   DateTime?
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+  @@unique([campaign, redeemedBy]) // one code per account per campaign (NULLs don't collide)
+  @@index([campaign, createdAt])
+}
+
 // Staff notes on one order (Card Broker order page), Shopify-style. orderType + orderRef match the Orders feed row.
 model SiteOrderNote {
   id         String   @id @default(cuid())

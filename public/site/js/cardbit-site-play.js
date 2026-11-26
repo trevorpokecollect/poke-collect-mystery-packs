@@ -1,6 +1,6 @@
 /*
  * Cardbit standalone site: safer-play extras (site-only, not part of the theme port).
- * - Adds "Discord" and "Limits & Breaks" links next to Sign Out on My Account, and footer links to it and Verified Shuffle.
+ * - Adds "Redeem a Code", "Discord" and "Limits & Breaks" links next to Sign Out on My Account, and footer links to it and Verified Shuffle.
  * - Shows a banner while a cool-off or self-exclusion is active (GET /api/play).
  * - Floating Daily Rewards launcher (GET/POST /api/rewards): a Cardbit emblem bubble with a badge for
  *   today's unclaimed check-in and spins, opening a drawer with level, streak, check-in, spins and the
@@ -25,6 +25,11 @@
     d.className = 'cb-play-link cb-ghost';
     d.textContent = 'Discord';
     a.insertAdjacentElement('beforebegin', d);
+    const r = document.createElement('a');
+    r.href = '/redeem';
+    r.className = 'cb-play-link cb-ghost';
+    r.textContent = 'Redeem a Code';
+    d.insertAdjacentElement('beforebegin', r);
   }
   function addFooterLink() {
     const foot = document.querySelector('footer');
