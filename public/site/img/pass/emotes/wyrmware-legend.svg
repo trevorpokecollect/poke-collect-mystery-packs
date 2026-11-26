@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Wyrmware Legendary"><style>
+.body{transform-origin:128px 226px}
+.jump{animation:jump 2.4s cubic-bezier(.3,0,.3,1) infinite}
+@keyframes jump{0%,100%{transform:translateY(0) scale(1,1)}8%{transform:translateY(4px) scale(1.06,.92)}22%{transform:translateY(-22px) scale(.96,1.05)}36%{transform:translateY(0) scale(1.05,.94)}44%{transform:translateY(0) scale(1)}52%{transform:translateY(3px) scale(1.05,.93)}64%{transform:translateY(-16px) scale(.97,1.04)}76%{transform:translateY(0) scale(1.04,.95)}84%{transform:translateY(0) scale(1)}}
+.sway{animation:sway 2.4s ease-in-out infinite}
+@keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.shake{animation:shake 0.3s linear infinite}
+@keyframes shake{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-3px,-2px) rotate(-3deg)}50%{transform:translate(0,-4px) rotate(0)}75%{transform:translate(3px,-2px) rotate(3deg)}}
+.jolt{animation:jolt 2.4s cubic-bezier(.2,.9,.3,1) infinite}
+@keyframes jolt{0%{transform:translateY(0) scale(1)}6%{transform:translateY(-18px) scale(.94,1.08)}12%{transform:translateY(-14px) scale(1.02,.98)}14%,18%,22%{transform:translate(-2px,-14px)}16%,20%{transform:translate(2px,-14px)}70%{transform:translateY(-14px)}84%,100%{transform:translateY(0)}}
+.chomp{animation:chomp 0.6s ease-in-out infinite}
+@keyframes chomp{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.6)}}
+.laugh{animation:chomp 0.3s ease-in-out infinite}
+.gasp{animation:gasp 2.4s ease-out infinite}
+@keyframes gasp{0%{transform:scale(.4)}10%,70%{transform:scale(1.25)}84%,100%{transform:scale(1)}}
+.pupil{animation:pupil 2.4s steps(1) infinite}
+@keyframes pupil{0%,8%{r:3.6px}9%,70%{r:2px}71%,100%{r:3.6px}}
+.beat{animation:beat 0.7999999999999999s ease-in-out infinite}
+@keyframes beat{0%,100%{transform:scale(1)}15%{transform:scale(1.28)}30%{transform:scale(.96)}45%{transform:scale(1.14)}}
+.blush{animation:blush 2.4s ease-in-out infinite}
+@keyframes blush{0%,100%{opacity:.5}50%{opacity:.95}}
+.fly{animation:fly 2.4s ease-out infinite;opacity:0}
+@keyframes fly{0%{transform:translate(0,0) rotate(0) scale(.3);opacity:0}12%{opacity:1}70%{opacity:1}100%{transform:translate(var(--dx),var(--dy)) rotate(var(--r)) scale(1);opacity:0}}
+.zing{animation:zing 2.4s cubic-bezier(.15,.8,.3,1) infinite;opacity:0}
+@keyframes zing{0%,4%{transform:translate(0,0) scale(.2);opacity:0}8%{opacity:1}40%{transform:translate(var(--dx),var(--dy)) scale(1);opacity:1}60%,100%{transform:translate(var(--dx),var(--dy)) scale(1);opacity:0}}
+.pop{animation:popk 1.2s ease-out infinite;opacity:0}
+@keyframes popk{0%{transform:translate(0,0) scale(.2);opacity:0}20%{opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(1);opacity:0}}
+.twinkle{animation:twinkle 2.4s ease-in-out infinite}
+@keyframes twinkle{0%,100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0}30%{transform:translate(var(--dx),var(--dy)) scale(1) rotate(45deg);opacity:1}60%{transform:translate(var(--dx),var(--dy)) scale(0) rotate(90deg);opacity:0}}
+.still{transform:translate(var(--dx),var(--dy))}
+.rise{animation:rise 2.4s ease-out infinite;opacity:0}
+@keyframes rise{0%{transform:translate(0,0) scale(.3);opacity:0}15%{opacity:1;transform:translate(calc(var(--sway) * -1),calc(var(--h) * .2)) scale(1)}50%{transform:translate(var(--sway),calc(var(--h) * .55)) scale(1.05)}80%{opacity:1}100%{transform:translate(0,var(--h)) scale(.8);opacity:0}}
+.tear{animation:tear 1.2s ease-in infinite;opacity:0}
+.tear.t2{animation-delay:-0.6s}
+@keyframes tear{0%{transform:translate(0,0) scale(.4);opacity:0}15%{opacity:1}100%{transform:translate(var(--tx),34px) scale(1.1);opacity:0}}
+.sweat{animation:sweat 2.4s ease-in infinite}
+@keyframes sweat{0%,10%{transform:translateY(0);opacity:0}20%{opacity:1}80%{transform:translateY(16px);opacity:1}100%{transform:translateY(22px);opacity:0}}
+.alert{animation:alert 2.4s cubic-bezier(.2,1.6,.4,1) infinite}
+@keyframes alert{0%,4%{transform:scale(0) rotate(-20deg)}14%{transform:scale(1.2) rotate(8deg)}22%,70%{transform:scale(1) rotate(0)}78%{transform:scale(1.1)}90%,100%{transform:scale(0)}}
+.quake{animation:quake 0.6s steps(2) infinite}
+@keyframes quake{0%{opacity:1}50%{opacity:.25}}
+.flash{animation:flash 2.4s steps(1) infinite;opacity:0}
+@keyframes flash{0%,18%{opacity:0}20%,24%{opacity:1}26%,62%{opacity:0}64%,66%{opacity:1}68%,100%{opacity:0}}
+.strike{animation:strike 2.4s steps(1) infinite;opacity:0}
+.strike.s2{animation-delay:-1.08s}
+@keyframes strike{0%,18%{opacity:0}20%,30%{opacity:1}32%,100%{opacity:0}}
+.flare{animation:flare 1.2s ease-in-out infinite}
+@keyframes flare{0%,100%{transform:scale(.85,.8);opacity:.75}50%{transform:scale(1.1,1.25);opacity:1}}
+.ring{animation:ring 1.2s ease-out infinite;transform-origin:132px 222px;opacity:0}
+.ring.r2{animation-delay:-0.6s}
+@keyframes ring{0%{transform:scale(.4);opacity:1}100%{transform:scale(2.2);opacity:0}}
+.spin{animation:spin 4.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.frost{animation:frost 2.4s linear infinite;transform-origin:132px 140px}
+@keyframes frost{0%{transform:rotate(0) scale(.96);opacity:.5}50%{transform:rotate(30deg) scale(1.04);opacity:1}100%{transform:rotate(60deg) scale(.96);opacity:.5}}
+.gust{animation:gust 1.2s linear infinite}
+@keyframes gust{0%{transform:translateX(-30px);opacity:0}30%{opacity:1}100%{transform:translateX(30px);opacity:0}}
+.fan{animation:fan 1.2s ease-in-out infinite}
+@keyframes fan{0%,100%{transform:scale(.9);opacity:.7}50%{transform:scale(1.08);opacity:1}}
+.rgb{animation:rgb 0.7999999999999999s steps(1) infinite}
+@keyframes rgb{0%{transform:translate(0,0)}30%{transform:translate(-3px,1px)}60%{transform:translate(3px,-1px)}}
+.glitch .body{animation-name:jump}
+.gl-r,.gl-c{mix-blend-mode:screen;opacity:0;animation:glc 1.2s steps(1) infinite}
+.gl-c{animation-delay:-0.48s}
+@keyframes glc{0%,60%{opacity:0;transform:translate(0,0)}62%{opacity:.7;transform:translate(-6px,0)}68%{opacity:.7;transform:translate(5px,2px)}74%,100%{opacity:0}}
+.ghost-a{animation:ghosta 2.4s ease-in-out infinite}
+@keyframes ghosta{0%,100%{opacity:1}40%{opacity:.35}60%{opacity:1}}
+.echo{opacity:0;animation:echo 2.4s ease-out infinite}
+.echo.e2{animation-delay:-0.7999999999999999s}
+@keyframes echo{0%{opacity:.45;transform:translate(0,0)}100%{opacity:0;transform:translate(0,-30px) scale(1.1)}}
+.float{animation:float 2.4s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.crown{animation:crownb 2.4s ease-in-out infinite}
+@keyframes crownb{0%,100%{transform:translateY(0) rotate(0)}25%{transform:translateY(-12px) rotate(-4deg)}50%{transform:translateY(-10px) rotate(0)}75%{transform:translateY(-12px) rotate(4deg)}}
+.halo{animation:spin 7.199999999999999s linear infinite}
+.aura{animation:aura 2.4s ease-in-out infinite}
+@keyframes aura{0%,100%{opacity:.1}50%{opacity:.26}}
+.rain{animation:rain 2.4s linear infinite;opacity:0}
+@keyframes rain{0%{transform:translate(0,0) rotate(0);opacity:0}10%{opacity:1}85%{opacity:1}100%{transform:translate(var(--sway),calc(var(--h) * -1)) rotate(360deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}.fly,.zing,.pop,.rise,.tear,.twinkle,.echo,.gl-r,.gl-c,.flash,.strike,.ring,.rain{opacity:0!important}}
+</style>
+<defs><radialGradient id="bg-wyrmware" cx="50%" cy="38%" r="70%"><stop offset="0" stop-color="#5a1424"/><stop offset="1" stop-color="#140d1a"/></radialGradient>
+<linearGradient id="face-wyrmware" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b303b"/><stop offset="1" stop-color="#17191f"/></linearGradient>
+<filter id="glow-wyrmware" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<pattern id="grid-wyrmware" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#FF4D6D" stroke-opacity=".10" stroke-width="1"/></pattern>
+<clipPath id="c-wyrmware"><circle cx="128" cy="128" r="128"/></clipPath><clipPath id="emote-clip"><circle cx="128" cy="128" r="128"/></clipPath></defs>
+<g clip-path="url(#emote-clip)"><rect width="256" height="256" fill="url(#bg-wyrmware)"/><rect width="256" height="256" fill="url(#grid-wyrmware)"/>
+
+<g class="halo" style="transform-origin:132px 130px"><circle cx="132" cy="130" r="98" fill="none" stroke="#FFC94D" stroke-width="5" stroke-dasharray="2 12" stroke-linecap="round"/></g>
+<circle class="aura" cx="132" cy="140" r="78" fill="#FFC94D" opacity=".18"/><g transform="translate(132,130)"><g class="twinkle" style="--dx:-52px;--dy:90px;--r:-150deg;animation-delay:-0.00s"><g transform="scale(1)"><polygon points="0,-9 2.2,-2.2 9,0 2.2,2.2 0,9 -2.2,2.2 -9,0 -2.2,-2.2" fill="#FFF1B8"/></g></g></g>
+<g transform="translate(132,130)"><g class="twinkle" style="--dx:-104px;--dy:0px;--r:-90deg;animation-delay:-0.40s"><g transform="scale(1)"><polygon points="0,-9 2.2,-2.2 9,0 2.2,2.2 0,9 -2.2,2.2 -9,0 -2.2,-2.2" fill="#FFF1B8"/></g></g></g>
+<g transform="translate(132,130)"><g class="twinkle" style="--dx:-52px;--dy:-90px;--r:-30deg;animation-delay:-0.80s"><g transform="scale(1)"><polygon points="0,-9 2.2,-2.2 9,0 2.2,2.2 0,9 -2.2,2.2 -9,0 -2.2,-2.2" fill="#FFF1B8"/></g></g></g>
+<g transform="translate(132,130)"><g class="twinkle" style="--dx:52px;--dy:-90px;--r:30deg;animation-delay:-1.20s"><g transform="scale(1)"><polygon points="0,-9 2.2,-2.2 9,0 2.2,2.2 0,9 -2.2,2.2 -9,0 -2.2,-2.2" fill="#FFF1B8"/></g></g></g>
+<g transform="translate(132,130)"><g class="twinkle" style="--dx:104px;--dy:0px;--r:90deg;animation-delay:-1.60s"><g transform="scale(1)"><polygon points="0,-9 2.2,-2.2 9,0 2.2,2.2 0,9 -2.2,2.2 -9,0 -2.2,-2.2" fill="#FFF1B8"/></g></g></g>
+<g transform="translate(132,130)"><g class="twinkle" style="--dx:52px;--dy:90px;--r:150deg;animation-delay:-2.00s"><g transform="scale(1)"><polygon points="0,-9 2.2,-2.2 9,0 2.2,2.2 0,9 -2.2,2.2 -9,0 -2.2,-2.2" fill="#FFF1B8"/></g></g></g>
+<g class="body float"><ellipse cx="128" cy="226" rx="60" ry="9" fill="#000" opacity=".3"/>
+<g stroke="#FF4D6D" stroke-width="3" fill="none" stroke-linejoin="round" filter="url(#glow-wyrmware)" opacity=".9"><polygon points="80,132 34,86 50,150"/><path d="M80,132 L50,150 M34,86 L62,118"/><polygon points="184,132 230,86 214,150"/><path d="M184,132 L214,150 M230,86 L202,118"/><path d="M106,60 L94,30 L118,56 M158,60 L170,30 L146,56"/></g><rect x="104" y="202" width="16" height="14" fill="#2a2e36"/><rect x="97" y="214" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="97" y="222" width="30" height="5" rx="2" fill="#FF4D6D"/><rect x="144" y="202" width="16" height="14" fill="#2a2e36"/><rect x="137" y="214" width="30" height="10" rx="3" fill="#e7eaef"/><rect x="137" y="222" width="30" height="5" rx="2" fill="#FF4D6D"/><polygon points="132,52 178,82 184,150 160,200 104,200 80,150 86,82" fill="url(#face-wyrmware)" stroke="#FF4D6D" stroke-width="7" stroke-linejoin="round" filter="url(#glow-wyrmware)"/><g stroke="#FF4D6D" stroke-width="2" opacity=".45" fill="none"><path d="M132,52 V96 M86,82 L132,96 L178,82 M80,150 L132,186 L184,150 M132,186 V200"/></g><g class="face"><g class=""><g class="beat" style="transform-origin:112px 129px"><polygon transform="translate(112,129) scale(1.1)" points="0,-11 3,-3.5 11,-3.5 4.5,1.5 7,10 0,5 -7,10 -4.5,1.5 -11,-3.5 -3,-3.5" fill="#FFD24D" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></g><g class="beat" style="transform-origin:152px 129px"><polygon transform="translate(152,129) scale(1.1)" points="0,-11 3,-3.5 11,-3.5 4.5,1.5 7,10 0,5 -7,10 -4.5,1.5 -11,-3.5 -3,-3.5" fill="#FFD24D" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></g></g><g class="chomp" style="transform-origin:132px 165px"><path d="M119,162 H145 Q145,180 132,180 Q119,180 119,162 Z" fill="#3a0d1c" stroke="#fff" stroke-width="3.5" stroke-linejoin="round"/>
+<path d="M126,175 Q132,169 138,175 Q132,179 126,175 Z" fill="#FF6F91"/></g></g></g>
+<g class="crown" style="transform-origin:132px 52px"><g transform="translate(132,38) rotate(-8)">
+<path d="M-24,14 L-28,-8 L-12,3 L0,-14 L12,3 L28,-8 L24,14 Z" fill="#FFC94D" stroke="#5a3a00" stroke-width="2.4" stroke-linejoin="round"/>
+<path d="M-24,14 H24 V19 H-24 Z" fill="#E09A1A" stroke="#5a3a00" stroke-width="2"/>
+<circle cy="-12" r="3.6" fill="#FF4D8D" stroke="#5a3a00" stroke-width="1.2"/><circle cx="-27" cy="-7" r="3" fill="#7DF3EA" stroke="#5a3a00" stroke-width="1"/><circle cx="27" cy="-7" r="3" fill="#7DF3EA" stroke="#5a3a00" stroke-width="1"/>
+<path d="M-16,2 L-10,8" stroke="#FFF1B8" stroke-width="2.5" stroke-linecap="round"/></g></g><g transform="translate(52,-10)"><g class="rain" style="--h:-230px;--sway:-8px;animation-delay:-0.00s"><g transform="scale(1.1)"><circle r="8" fill="#FFC94D" stroke="#9A6A10" stroke-width="2"/><path d="M-2,-4 H2 M0,-4 V4 M-2,4 H2" stroke="#9A6A10" stroke-width="2"/></g></g></g>
+<g transform="translate(210,-10)"><g class="rain" style="--h:-230px;--sway:8px;animation-delay:-0.60s"><g transform="scale(1.1)"><circle r="8" fill="#FFC94D" stroke="#9A6A10" stroke-width="2"/><path d="M-2,-4 H2 M0,-4 V4 M-2,4 H2" stroke="#9A6A10" stroke-width="2"/></g></g></g>
+<g transform="translate(92,-10)"><g class="rain" style="--h:-230px;--sway:-8px;animation-delay:-1.20s"><g transform="scale(1.1)"><circle r="8" fill="#FFC94D" stroke="#9A6A10" stroke-width="2"/><path d="M-2,-4 H2 M0,-4 V4 M-2,4 H2" stroke="#9A6A10" stroke-width="2"/></g></g></g>
+<g transform="translate(176,-10)"><g class="rain" style="--h:-230px;--sway:8px;animation-delay:-1.80s"><g transform="scale(1.1)"><circle r="8" fill="#FFC94D" stroke="#9A6A10" stroke-width="2"/><path d="M-2,-4 H2 M0,-4 V4 M-2,4 H2" stroke="#9A6A10" stroke-width="2"/></g></g></g>
+</g></svg>

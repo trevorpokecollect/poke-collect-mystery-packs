@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Pack Pass Pro frame">
+<style>.holo{animation:spin 6s linear infinite;transform-origin:128px 120px}.gem{animation:gem 2.4s ease-in-out infinite}.gem.g2{animation-delay:-.8s}.gem.g3{animation-delay:-1.6s}
+.shine{animation:shine 3s ease-in-out infinite}
+@keyframes spin{to{transform:rotate(360deg)}}@keyframes gem{0%,100%{opacity:.75}50%{opacity:1;filter:brightness(1.4)}}
+@keyframes shine{0%,55%{opacity:0}70%{opacity:1}85%,100%{opacity:0}}@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style>
+<defs>
+<linearGradient id="pr-a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7DF3EA"/><stop offset=".35" stop-color="#B98CFF"/><stop offset=".65" stop-color="#FF6FD8"/><stop offset="1" stop-color="#FFE07A"/></linearGradient>
+<mask id="pr-ring"><circle cx="128" cy="120" r="96" fill="#fff"/><circle cx="128" cy="120" r="87" fill="#000"/></mask>
+<filter id="pr-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3.2"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<path d="M36,110 L12,86 L20,120 L8,146 L36,134 Z" fill="#2a1450" stroke="#B98CFF" stroke-width="3" stroke-linejoin="round"/>
+<path d="M220,110 L244,86 L236,120 L248,146 L220,134 Z" fill="#2a1450" stroke="#FF6FD8" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="128" cy="120" r="92" fill="none" stroke="#B98CFF" stroke-width="12" opacity=".35" filter="url(#pr-glow)"/>
+<g mask="url(#pr-ring)"><g class="holo"><rect x="28" y="20" width="200" height="200" fill="url(#pr-a)"/></g></g>
+<circle cx="128" cy="120" r="96" fill="none" stroke="#1a0c33" stroke-width="2"/><circle cx="128" cy="120" r="87" fill="none" stroke="#1a0c33" stroke-width="2.5"/>
+<g class="shine"><path d="M68,50 A91,91 0 0 1 148,30" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" opacity=".8"/></g>
+<g class="gem"><polygon points="128,17 135.7,28 128,39 120.3,28" fill="#FF6FD8" stroke="#1a0c33" stroke-width="1.6"/></g>
+<g class="gem g2"><polygon points="62,51 66.9,58 62,65 57.1,58" fill="#7DF3EA" stroke="#1a0c33" stroke-width="1.6"/></g><g class="gem g3"><polygon points="194,51 198.9,58 194,65 189.1,58" fill="#FFE07A" stroke="#1a0c33" stroke-width="1.6"/></g>
+<g class="gem g3"><polygon points="56,168 60.2,174 56,180 51.8,174" fill="#B98CFF" stroke="#1a0c33" stroke-width="1.6"/></g><g class="gem g2"><polygon points="200,168 204.2,174 200,180 195.8,174" fill="#B98CFF" stroke="#1a0c33" stroke-width="1.6"/></g>
+<defs><linearGradient id="pr-plate" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4B2A9A"/><stop offset="1" stop-color="#8a2a7a"/></linearGradient></defs>
+<g><rect x="91" y="206" width="74" height="30" rx="15" fill="url(#pr-plate)" stroke="#FF9AE6" stroke-width="3"/></g>
+<path transform="translate(108.82,227.5) scale(0.0170)" d="M205 -254V-387H345Q371 -387 392.5 -397.5Q414 -408 427.0 -429.0Q440 -450 440 -481Q440 -512 427.0 -533.5Q414 -555 392.5 -565.5Q371 -576 345 -576H205V-709H376Q444 -709 499.0 -681.5Q554 -654 586.0 -603.5Q618 -553 618 -481Q618 -411 586.0 -359.5Q554 -308 499.0 -281.0Q444 -254 376 -254ZM63 0V-709H242V0Z" fill="#ffffff"/><path transform="translate(120.90,227.5) scale(0.0170)" d="M205 -287V-415H340Q384 -415 407.5 -436.5Q431 -458 431 -495Q431 -531 407.5 -553.5Q384 -576 340 -576H205V-709H365Q437 -709 491.5 -682.0Q546 -655 577.0 -608.0Q608 -561 608 -498Q608 -435 576.5 -387.5Q545 -340 489.0 -313.5Q433 -287 358 -287ZM63 0V-709H242V0ZM447 0 241 -304 402 -343 654 0Z" fill="#ffffff"/><path transform="translate(133.37,227.5) scale(0.0170)" d="M408 13Q326 13 257.0 -15.0Q188 -43 136.5 -93.0Q85 -143 56.0 -210.5Q27 -278 27 -356Q27 -434 55.5 -500.5Q84 -567 135.0 -617.0Q186 -667 255.0 -694.5Q324 -722 406 -722Q488 -722 557.0 -694.5Q626 -667 677.0 -617.0Q728 -567 756.5 -500.0Q785 -433 785 -355Q785 -277 756.5 -210.0Q728 -143 677.0 -92.5Q626 -42 557.5 -14.5Q489 13 408 13ZM406 -147Q466 -147 510.0 -173.0Q554 -199 578.0 -246.0Q602 -293 602 -356Q602 -402 588.5 -440.0Q575 -478 549.0 -505.5Q523 -533 487.0 -548.0Q451 -563 406 -563Q346 -563 302.0 -537.5Q258 -512 234.0 -465.0Q210 -418 210 -356Q210 -308 223.5 -269.5Q237 -231 263.0 -203.5Q289 -176 325.0 -161.5Q361 -147 406 -147Z" fill="#ffffff"/>
+</svg>
