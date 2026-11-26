@@ -17,6 +17,7 @@ import { activeTier } from "./subscriptions.server";
 import { SITE_SHOP, alias } from "../rewards/rewards.server";
 import { staffEmails } from "../shipping/staff.server";
 import { PLAN } from "./plan-brand";
+import { shownIcon } from "./pass-icons";
 import { type FilterHit, filterMessage } from "./chat-filter.server";
 import { type Classifier, aiOn, claudeClassify, recordAiHide, recordAiReview, recordFilterBlock } from "./chat-moderation.server";
 
@@ -181,7 +182,7 @@ export async function sendMessage(
     const now = Date.now();
     assertPace(await recentFor(tx, v.id, now), body, now);
     const profile = await tx.cardbitProfile.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId: v.id } } });
-    const iconId = profile?.iconId && (!profile.iconId.endsWith("-club") || access.tier) ? profile.iconId : null;
+    const iconId = shownIcon(profile?.iconId, access.tier); // Pass emotes only while the plan allows them
     return tx.siteChatMessage.create({
       data: {
         room,

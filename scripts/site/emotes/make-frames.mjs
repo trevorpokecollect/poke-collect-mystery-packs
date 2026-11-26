@@ -31,7 +31,7 @@ function plate(label, { fill, stroke, textFill, w = 92, glow }) {
 ${text(label, cx, y + 21.5, 17, `fill="${textFill}"`, 1.2)}`;
 }
 
-const PLUS = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Pack Pass Plus frame">
+const PLUS = (small) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Pack Pass Plus frame">
 <style>.orbit{animation:spin 14s linear infinite;transform-origin:${cx}px ${cy}px}.pulse{animation:pulse 2.4s ease-in-out infinite}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}${RM}</style>
 <defs><linearGradient id="pl-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7DF3EA"/><stop offset="1" stop-color="#2EA8F0"/></linearGradient>
@@ -41,10 +41,10 @@ const PLUS = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256
 <circle cx="${cx}" cy="${cy}" r="${r + 5}" fill="none" stroke="url(#pl-ring)" stroke-width="7"/>
 <circle cx="${cx}" cy="${cy}" r="${r + 0.5}" fill="none" stroke="#07202a" stroke-width="2.5"/>
 ${diamond(cx, cy - r - 6, 9, "#7DF3EA", "#07202a")}${diamond(cx - r - 6, cy, 7, "#7DF3EA", "#07202a")}${diamond(cx + r + 6, cy, 7, "#7DF3EA", "#07202a")}
-${plate("PLUS", { fill: "#0b2a33", stroke: "#2EE6F0", textFill: "#BFF7F2", w: 84 })}
+${small ? "" : plate("PLUS", { fill: "#0b2a33", stroke: "#2EE6F0", textFill: "#BFF7F2", w: 84 })}
 </svg>`;
 
-const PRO = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Pack Pass Pro frame">
+const PRO = (small) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Pack Pass Pro frame">
 <style>.holo{animation:spin 6s linear infinite;transform-origin:${cx}px ${cy}px}.gem{animation:gem 2.4s ease-in-out infinite}.gem.g2{animation-delay:-.8s}.gem.g3{animation-delay:-1.6s}
 .shine{animation:shine 3s ease-in-out infinite}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes gem{0%,100%{opacity:.75}50%{opacity:1;filter:brightness(1.4)}}
@@ -64,7 +64,7 @@ const PRO = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
 <g class="gem g2">${diamond(cx - 66, cy - 62, 7, "#7DF3EA", "#1a0c33")}</g><g class="gem g3">${diamond(cx + 66, cy - 62, 7, "#FFE07A", "#1a0c33")}</g>
 <g class="gem g3">${diamond(cx - 72, cy + 54, 6, "#B98CFF", "#1a0c33")}</g><g class="gem g2">${diamond(cx + 72, cy + 54, 6, "#B98CFF", "#1a0c33")}</g>
 <defs><linearGradient id="pr-plate" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4B2A9A"/><stop offset="1" stop-color="#8a2a7a"/></linearGradient></defs>
-${plate("PRO", { fill: "url(#pr-plate)", stroke: "#FF9AE6", textFill: "#ffffff", w: 74 })}
+${small ? "" : plate("PRO", { fill: "url(#pr-plate)", stroke: "#FF9AE6", textFill: "#ffffff", w: 74 })}
 </svg>`;
 
 // Ultimate: gold crown, laurel wings, animated shimmer and twinkles. Exclusive to Ultimate.
@@ -80,7 +80,7 @@ function laurel(side) {
   }
   return leaves.join("");
 }
-const ULTIMATE = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Pack Pass Ultimate frame">
+const ULTIMATE = (small) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Pack Pass Ultimate frame">
 <style>.sweep{animation:sweep 2.8s ease-in-out infinite}.tw{animation:tw 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}.tw.t2{animation-delay:-.8s}.tw.t3{animation-delay:-1.6s}
 .aura{animation:aura 2.4s ease-in-out infinite}.crown{animation:crown 2.4s ease-in-out infinite;transform-origin:${cx}px 30px}
 @keyframes sweep{0%{transform:translateX(-200px)}60%,100%{transform:translateX(200px)}}
@@ -104,11 +104,13 @@ ${diamond(cx, 31, 6, "#B98CFF", "#5a3a00")}</g>
 <g mask="url(#ul-mask)"><g class="sweep"><rect x="0" y="0" width="60" height="256" fill="url(#ul-sh)" transform="skewX(-20)"/></g></g>
 <g class="tw">${star(cx - 92, cy - 70, 9, "#FFF1B8")}</g><g class="tw t2">${star(cx + 96, cy - 58, 7, "#FFF1B8")}</g><g class="tw t3">${star(cx + 84, cy + 74, 8, "#FFF1B8")}</g><g class="tw t2">${star(cx - 88, cy + 66, 6, "#FFF1B8")}</g>
 <defs><linearGradient id="ul-plate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2400"/><stop offset="1" stop-color="#1e1300"/></linearGradient></defs>
-${plate("ULTIMATE", { fill: "url(#ul-plate)", stroke: "#FFC94D", textFill: "#FFE38A", w: 128 })}
+${small ? "" : plate("ULTIMATE", { fill: "url(#ul-plate)", stroke: "#FFC94D", textFill: "#FFE38A", w: 128 })}
 </svg>`;
 
 mkdirSync(OUT, { recursive: true });
-writeFileSync(`${OUT}/plus.svg`, PLUS());
-writeFileSync(`${OUT}/pro.svg`, PRO());
-writeFileSync(`${OUT}/ultimate.svg`, ULTIMATE());
-console.log("wrote 3 frames to " + OUT);
+// Full frames carry a name plate; the -sm versions (no plate) are for avatars under 48px, like chat.
+for (const [id, make] of [["plus", PLUS], ["pro", PRO], ["ultimate", ULTIMATE]]) {
+  writeFileSync(`${OUT}/${id}.svg`, make(false));
+  writeFileSync(`${OUT}/${id}-sm.svg`, make(true));
+}
+console.log("wrote 6 frames to " + OUT);

@@ -10,7 +10,7 @@ import { SpinError, dailySpin } from "../lib/cardbit-spinner.server";
 import { AGE_REQUIRED, ageConfirmed, confirmAge } from "../lib/cardbit-age.server";
 import { PlayPaused, assertNotPaused } from "../site/play/limits.server";
 import { activeTier } from "../site/play/subscriptions.server";
-import { CLUB_SUFFIX, clubIcons, isClubIcon } from "../site/play/club-icons";
+import { isPassIcon, passIconAllowed, passPicker, shownIcon } from "../site/play/pass-icons";
 import { SITE_SHOP, siteLeaderboardOn, siteLevelsOn, siteWeeklyStandings } from "../site/rewards/rewards.server";
 import { gateApi } from "../site/waitlist/gate.server";
 import { PLAN } from "../site/play/plan-brand";
@@ -25,17 +25,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({ signedIn: true, ...(await viewWithClub(customer.id)), leaderboard });
 }
 
-// Rewards view plus the animated Club icons (unlocked while a Club plan's perks apply).
+// Rewards view plus the Pack Pass emotes and frame (emotes unlock while a plan's perks apply).
 async function viewWithClub(customerId: string) {
   const [view, tier] = await Promise.all([rewardsView(db, SITE_SHOP, customerId), activeTier(db, customerId)]);
-  // Perks ended: fall back to the regular version of the same character if it's unlocked.
-  if (!tier && isClubIcon(view.avatar.iconId)) {
-    const base = view.avatar.iconId.slice(0, -CLUB_SUFFIX.length);
-    const iconId = view.icons.some((i) => i.id === base && i.unlocked) ? base : null;
-    await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId } }, data: { iconId } });
-    view.avatar.iconId = iconId;
+  // Perks ended (or dropped below Ultimate): fall back to the regular version of the same character if it's unlocked.
+  const shown = shownIcon(view.avatar.iconId, tier?.id, (base) => view.icons.some((i) => i.id === base && i.unlocked));
+  if (shown !== view.avatar.iconId) {
+    await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId } }, data: { iconId: shown } });
+    view.avatar.iconId = shown;
   }
-  return { ...view, icons: [...view.icons, ...clubIcons(Boolean(tier))] };
+  return { ...view, pass: passPicker(tier?.id) };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -67,8 +66,11 @@ export async function action({ request }: ActionFunctionArgs) {
         ...(await viewWithClub(customer.id)),
       });
     }
-    if (input?.action === "avatar" && isClubIcon(input.iconId)) {
-      if (!(await activeTier(db, customer.id))) return json({ error: `${PLAN.short} icons are for ${PLAN.name} members.` }, 403);
+    if (input?.action === "avatar" && isPassIcon(input.iconId)) {
+      const tier = await activeTier(db, customer.id);
+      if (!passIconAllowed(input.iconId, tier?.id)) {
+        return json({ error: tier ? `Legendary emotes are for ${PLAN.name} Ultimate members.` : `${PLAN.short} emotes are for ${PLAN.name} members.` }, 403);
+      }
       await setAvatar(db, SITE_SHOP, customer.id, { color: input.color ?? undefined });
       await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: customer.id } }, data: { iconId: input.iconId } });
       return json(await viewWithClub(customer.id));

@@ -59,6 +59,7 @@ export function siteFacts(plansOpen: boolean): string {
         (t) =>
           `- ${t.name}: $${(t.cents / 100).toFixed(2)}/month. Each paid month adds ${n(t.monthlyBits)} Cardbits + ${n(t.bonusBits)} bonus Cardbits, +${t.xpBonusPct}% XP from packs and +${t.sparksBonusPct}% Sparks.`,
       ),
+      `- Cosmetic perks: every plan puts a ${PLAN.name} portrait frame (Plus, Pro or Ultimate) around the member's icon and opens the members' chat room. Pro and Ultimate unlock 4 animated emotes (Hype, Love, LOL, Shocked) for every Latch & Friends character, picked on the Rewards page. Ultimate also gets Legendary emotes. Emotes switch back to the regular icon when the plan ends.`,
       `- ${PLAN.name} never adds Daily Spins, giveaway entries or leaderboard points. Cancel any time; perks last until the paid month ends. A break (cool-off or self-exclusion) stops renewal.`,
     );
   } else {

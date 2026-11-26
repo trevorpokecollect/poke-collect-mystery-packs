@@ -15,6 +15,7 @@
   const icons = () => window.CardbitRewardIcons || {};
   const PLAN = Object.assign({ name: 'Pack Pass', short: 'Pass', path: '/pass' }, window.cardbitPlan || {});
   const BADGE = { staff: 'Staff', plus: PLAN.short + ' Plus', pro: PLAN.short + ' Pro', ultimate: PLAN.short + ' Ultimate' };
+  const PASS_TIERS = { plus: 1, pro: 1, ultimate: 1 };
   const ROOM_NAME = { main: 'Everyone', club: PLAN.short };
   const BIG = { Legendary: 1, Epic: 1 };
   const REASON = {
@@ -77,12 +78,15 @@
   function avatar(m) {
     const url = m.iconId && icons()[m.iconId];
     const style = ' style="background:' + esc(m.bg) + ';color:' + esc(m.fg) + '"';
-    return url
+    const face = url
       ? '<img class="cb-chat-av" alt="" width="32" height="32"' + style + ' src="' + esc(url) + '">'
       : '<span class="cb-chat-av"' + style + '>' + esc(initials(m.name)) + '</span>';
+    // Pack Pass members: portrait frame around the icon instead of a text tag.
+    const frame = PASS_TIERS[m.badge] && window.CardbitPass ? window.CardbitPass.html(m.badge, true) : '';
+    return frame ? '<span class="cbp-mini">' + face + frame + '</span>' : face;
   }
   function messageHtml(m) {
-    const badge = m.badge ? '<span class="cb-chat-badge cb-chat-badge-' + esc(m.badge) + '">' + esc(BADGE[m.badge] || m.badge) + '</span>' : '';
+    const badge = m.badge && !(PASS_TIERS[m.badge] && window.CardbitPass) ? '<span class="cb-chat-badge cb-chat-badge-' + esc(m.badge) + '">' + esc(BADGE[m.badge] || m.badge) + '</span>' : '';
     const level = m.level ? '<span class="cb-chat-lv" title="Level ' + esc(m.level) + '">' + esc(m.level) + '</span>' : '';
     const quote = m.reply
       ? '<p class="cb-chat-quote">' + svg(I.reply, 12) + (m.reply.removed ? '<i>Message removed</i>' : '<b>' + esc(m.reply.name) + '</b> ' + esc(m.reply.body)) + '</p>'

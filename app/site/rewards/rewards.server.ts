@@ -8,6 +8,8 @@ import { awardPackXp, levelsEnabled, reverseXp } from "../../lib/cardbit-levels.
 import { defaultColor, levelProgress } from "../../lib/cardbit-levels";
 import { sparksForOpening } from "../../lib/cardbit-sparks";
 import { WEEKLY_PRIZES, weekWindow } from "../../lib/cardbit-leaderboard.server";
+import { activeTiers } from "../play/subscriptions.server";
+import { shownIcon } from "../play/pass-icons";
 
 type Tx = Prisma.TransactionClient;
 export const SITE_SHOP = SITE_REWARDS_SHOP;
@@ -140,6 +142,8 @@ export async function siteWeeklyStandings(db: PrismaClient, viewerId?: string | 
         select: { customerId: true, iconId: true, iconColor: true },
       })
     : [];
+  // Pack Pass: frame for members, and an emote whose plan ended shows as the regular character right away.
+  const tiers = await activeTiers(db, top.map((r) => r.customerId), at);
   const mine = viewerId ? ranked.findIndex((r) => r.customerId === viewerId) : -1;
   return {
     start: start.toISOString(),
@@ -147,7 +151,8 @@ export async function siteWeeklyStandings(db: PrismaClient, viewerId?: string | 
     prizes: WEEKLY_PRIZES,
     top: top.map((r, i) => {
       const p = profiles.find((x) => x.customerId === r.customerId);
-      return { rank: i + 1, name: alias(r.customerId), iconId: p?.iconId ?? null, color: p?.iconColor ?? defaultColor(r.customerId), score: r.score, you: r.customerId === viewerId };
+      const tier = tiers.get(r.customerId)?.id ?? null;
+      return { rank: i + 1, name: alias(r.customerId), iconId: shownIcon(p?.iconId, tier), tier, color: p?.iconColor ?? defaultColor(r.customerId), score: r.score, you: r.customerId === viewerId };
     }),
     you: mine >= 0 ? { rank: mine + 1, score: ranked[mine].score } : null,
   };

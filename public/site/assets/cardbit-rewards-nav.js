@@ -17,7 +17,8 @@
     if (p) u.searchParams.set('preview_theme_id', p);
     return u.href;
   }
-  function badge() {
+  function badge() { /* SITE */ const t = data.pass && data.pass.tier, f = t && window.CardbitPass ? window.CardbitPass.html(t, true) : ''; return f ? '<span class="cbp-mini">' + siteBadge() + f + '</span>' : siteBadge(); }
+  function siteBadge() {
     const c = data.colors.find((x) => x.id === data.avatar.color) || data.colors[0];
     const url = data.avatar.iconId && icons[data.avatar.iconId];
     return url

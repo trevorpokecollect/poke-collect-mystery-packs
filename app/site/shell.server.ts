@@ -20,6 +20,7 @@ import siteAuthCssSource from "../../public/site/css/cardbit-site-auth.css?raw";
 import sitePlaySource from "../../public/site/js/cardbit-site-play.js?raw";
 import sitePlayCssSource from "../../public/site/css/cardbit-site-play.css?raw";
 import siteChatSource from "../../public/site/js/cardbit-site-chat.js?raw";
+import sitePassSource from "../../public/site/js/cardbit-site-pass.js?raw";
 import siteLivePullsSource from "../../public/site/js/cardbit-site-live-pulls.js?raw";
 import siteLivePullsCssSource from "../../public/site/css/cardbit-site-live-pulls.css?raw";
 import siteDecodeSource from "../../public/site/js/cardbit-site-decode.js?raw";
@@ -31,7 +32,7 @@ import siteAdsSource from "../../public/site/js/cardbit-site-ads.js?raw";
 const chatOn = () => process.env.SITE_CHAT === "on"; // same flag as app/site/play/chat.server.ts
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
-import { CLUB_ICON_URLS } from "./play/club-icons";
+import { PASS_ICON_URLS, passClientJson } from "./play/pass-icons";
 import { planClientJson, withPlanCopy } from "./play/plan-brand";
 import { subscriptionsReady } from "./payments/coinflow-subscriptions.server";
 import { helpTags } from "./help/tag.server";
@@ -46,6 +47,9 @@ const SITE_AUTH_CSS_V = version(siteAuthCssSource);
 const SITE_PLAY_V = version(sitePlaySource);
 const SITE_PLAY_CSS_V = version(sitePlayCssSource);
 const SITE_CHAT_V = version(siteChatSource);
+const SITE_PASS_V = version(sitePassSource);
+/** Pack Pass frames + emote picker helper (public/site/js/cardbit-site-pass.js). Loads before the scripts that draw avatars. */
+export const passTag = () => `<script>window.cardbitPass=${passClientJson()}</script><script src="/site/js/cardbit-site-pass.js?v=${SITE_PASS_V}" defer></script>`;
 const SITE_LIVE_PULLS_V = version(siteLivePullsSource);
 const SITE_LIVE_PULLS_CSS_V = version(siteLivePullsCssSource);
 const SITE_DECODE_V = version(siteDecodeSource);
@@ -143,7 +147,7 @@ function rewardIcons(): string {
   // Latch & Friends icons for the header Rewards badge (same files as the Rewards page).
   const map: Record<string, string> = {};
   for (const id of ICON_IDS) map[id] = assetUrl(`cardbit-icon-${id}${id.startsWith("latch") ? ".webp" : ".svg"}`);
-  Object.assign(map, CLUB_ICON_URLS); // animated Cardbit Club icons (site only)
+  Object.assign(map, PASS_ICON_URLS); // Pack Pass emotes (site only)
   return JSON.stringify(map).replace(/</g, "\\u003c");
 }
 
@@ -258,6 +262,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
       window.CardbitRewardIcons = ${rewardIcons()};
       window.cardbitPlan = ${planClientJson()};
     </script>
+    ${passTag()}
     ${protectionScript()}
     ${scripts}
     ${pulseTag()}
