@@ -115,7 +115,7 @@ describe.skipIf(!url)("Pack Pass subscriptions", () => {
     await handleCoinflowSubscriptionEvent(db, { eventType: "Settled", data: { id: "pay_1", subtotal: { cents: 4999 }, subscription: { id: "sub_1" } } }, env, hooks);
     expect(paid).toEqual(["pay_1"]);
     const sent: string[] = [];
-    const deps = { db, mailer: { send: async (m: { subject: string }) => (sent.push(m.subject), { id: "m" }) }, env: {} };
+    const deps = { db, mailer: { live: true, send: async (m: { subject: string }) => (sent.push(m.subject), { id: "m" }) }, env: {} };
     await sendPlanPaymentEmail(db, "pay_1", deps);
     await sendPlanPaymentEmail(db, "pay_1", deps);
     expect(sent).toEqual([`Welcome to ${PLAN.name} Pro`]);

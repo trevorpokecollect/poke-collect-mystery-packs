@@ -49,40 +49,116 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
       : !customerId
       ? `<a class="btn" href="/sign-in?return_to=${encodeURIComponent(PATH)}">Sign In to Join</a>`
       : mine
-        ? `<p class="note">Your Plan</p>`
+        ? `<p class="mine">✓ Your Plan</p>`
         : live || !ready
           ? `<button class="btn" disabled>${ready ? "Cancel Your Plan to Switch" : "Coming Soon"}</button>`
           : `<button class="btn" form="join" name="tier" value="${t.id}">Join ${esc(t.name)}</button>`;
-    return `<section class="plan${t.id === "pro" ? " pop" : ""}">${t.id === "pro" ? '<span class="tag">Popular</span>' : t.id === "ultimate" ? '<span class="tag">Best Value</span>' : ""}
-      <h2>${esc(t.name)}</h2><p class="price">${usd(t.cents)}<small>/month</small></p>
-      <ul><li><b>${fmt(t.monthlyBits)} + ${fmt(t.bonusBits)} Bonus Cardbits</b> every month</li>
-      <li>+${t.xpBonusPct}% XP on every pack</li><li>+${t.sparksBonusPct}% Sparks</li>
-      <li>Animated Latch &amp; Friends icons</li><li>${esc(PLAN.short)} badge + members' chat room</li></ul>${cta}</section>`;
+    const look = TIER_LOOK[t.id];
+    const total = t.monthlyBits + t.bonusBits;
+    return `<section class="plan t-${t.id}${mine ? " is-mine" : ""}" aria-labelledby="plan-${t.id}">
+      ${look.tag ? `<span class="tag">${look.tag}</span>` : ""}
+      <div class="plan-top"><img class="plan-icon" src="/site/img/club/cardbit-icon-${look.icon}-club.svg" alt="" width="72" height="72">
+        <div><h2 id="plan-${t.id}">${esc(t.name)}</h2><p class="price">${usd(t.cents)}<small>/month</small></p></div></div>
+      <div class="bits"><img src="/site/assets/cardbit-bits-card-emblem.png" alt="" width="34" height="34">
+        <div><b>${fmt(total)}</b><span>Cardbits every month</span></div></div>
+      <p class="bits-split">${fmt(t.monthlyBits)} + <em>${fmt(t.bonusBits)} bonus</em></p>
+      <ul class="perks">
+        <li>${ICON.xp}<span><b>+${t.xpBonusPct}% XP</b> on every paid pack</span></li>
+        <li>${ICON.spark}<span><b>+${t.sparksBonusPct}% Sparks</b> on every paid pack</span></li>
+        <li>${ICON.star}<span>Animated Latch &amp; Friends icons</span></li>
+        <li>${ICON.chat}<span><b>${esc(PLAN.short)} ${esc(t.name)}</b> badge + members' chat room</span></li>
+      </ul>${cta}</section>`;
   }).join("");
   const status = live && v.current
-    ? `<div class="sum"><span>Your Plan</span><b>${esc(tierById(v.current.tier)?.name || v.current.tier)} · ${esc(v.current.status === "PAST_DUE" ? "Payment Retrying" : v.current.status === "PENDING" ? "Activating" : "Active")}</b></div>
+    ? `<div class="mybox"><div class="sum"><span>Your Plan</span><b>${esc(tierById(v.current.tier)?.name || v.current.tier)} · ${esc(v.current.status === "PAST_DUE" ? "Payment Retrying" : v.current.status === "PENDING" ? "Activating" : "Active")}</b></div>
        ${v.current.currentPeriodEnd ? `<p class="fine">Renews ${esc(fmtDate(new Date(v.current.currentPeriodEnd)))}.</p>` : ""}
-       <form method="post"><button class="btn ghost" name="op" value="cancel">Cancel Renewal</button></form><p class="fine">Perks last until the end of the month you paid for.</p>`
+       <form method="post"><button class="btn ghost" name="op" value="cancel">Cancel Renewal</button></form><p class="fine">Perks last until the end of the month you paid for.</p></div>`
     : v.current?.status === "CANCELED" && v.perksTier && v.current.currentPeriodEnd
       ? `<p class="note">Your ${esc(tierById(v.perksTier)?.name || "")} perks last until ${esc(fmtDate(new Date(v.current.currentPeriodEnd)))}.</p>`
       : "";
   return simplePage(
     PLAN.name,
-    `<style>main{max-width:980px}.plans{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:16px}
-     .plan{position:relative;border:1px solid var(--line);border-radius:14px;padding:18px}.plan.pop{border-color:var(--accent)}
-     .plan h2{margin:0;font:800 1.3rem 'Cardbit Outfit',system-ui,sans-serif}.price{font:800 2rem 'Cardbit Outfit',system-ui,sans-serif;margin:6px 0}.price small{font-size:.9rem;color:var(--muted)}
-     .plan ul{padding-left:1.1rem;margin:10px 0}.plan li{margin:5px 0}.tag{position:absolute;top:12px;right:12px;font-size:.75rem;font-weight:800;color:var(--on-accent);background:var(--accent);border-radius:999px;padding:2px 10px}
-     .bill{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:520px}.btn[disabled]{opacity:.55;cursor:not-allowed}.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent)}
-     .agree{display:flex;gap:10px;align-items:flex-start;max-width:720px;margin:14px 0 0;font-size:.95rem;font-weight:400;line-height:1.45}.agree input{margin-top:4px;width:18px;height:18px;flex:none}</style>
-     <h1>${esc(PLAN.name)}</h1><p class="sub">Monthly Cardbits with a bonus, faster levels and member perks.${ready ? "" : " Coming soon."}</p>${msg}${status}
-     ${customerId && ready && !live ? `<form method="post" id="join"><input type="hidden" name="op" value="join"><div class="bill"><div><label for="state">Billing State</label><select id="state" name="state" required><option value="">Choose…</option>${allowedStates.map((st) => `<option>${st}</option>`).join("")}</select></div>
+    `<style>${PASS_CSS}</style>
+     <header class="hero">
+       <div class="orbit" aria-hidden="true">${["latch", "latch-holo", "latch-gold", "zappix", "blazebit"].map((i, n) => `<img class="o o${n}" src="/site/img/club/cardbit-icon-${i}-club.svg" alt="" width="64" height="64">`).join("")}</div>
+       <p class="kicker">${ready ? "Monthly Plan" : "Coming Soon"}</p>
+       <h1 class="title">${esc(PLAN.name)}</h1>
+       <p class="sub">Cardbits every month with a bonus on top, faster levels, extra Sparks and member-only perks.</p>
+       <ul class="steps" aria-label="How it works">
+         <li><span>1</span>Pick a plan</li><li><span>2</span>Cardbits land every month</li><li><span>3</span>Cancel any time</li>
+       </ul>
+     </header>${msg}${status}
+     ${customerId && ready && !live ? `<form method="post" id="join" class="joinbox"><input type="hidden" name="op" value="join"><div class="bill"><div><label for="state">Billing State</label><select id="state" name="state" required><option value="">Choose…</option>${allowedStates.map((st) => `<option>${st}</option>`).join("")}</select></div>
        <div><label for="zip">Billing ZIP Code</label><input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" maxlength="5" required></div></div>
        <label class="agree"><input type="checkbox" name="renew_ok" value="yes" required> ${RENEW_CONSENT}</label></form>` : ""}
      <div class="plans">${cards}</div>
+     <p class="free">${ICON.gift}<span>Daily Spins, giveaway entries and the leaderboard stay <b>free for everyone</b>. A plan never adds spins, entries or points.</span></p>
      <p class="fine">Renews automatically every month at the plan's price, charged to the card you use at checkout, until you cancel. Cancel any time on this page or by emailing Support@cardbit.com, at least a day before your renewal date to avoid the next charge; perks last through the month you paid for. Monthly charges are final once the month's Cardbits are added, except as the <a href="/policies#refund-policy">Refund Policy</a> says. Plan Cardbits are store credit (100 = $1), never cash, and follow the Terms. Bonus Cardbits are promotional. Plan charges count toward your Top-Up Limits.
-     A plan never adds Daily Spins, giveaway entries or leaderboard points; those stay free for everyone. Not available in ${EXCLUDED_STATES.join(", ")}. 18+. <a href="/policies#terms">Terms</a> · <a href="/">Back to Cardbit</a></p>`,
+     Not available in ${EXCLUDED_STATES.join(", ")}. 18+. <a href="/policies#terms">Terms</a> · <a href="/">Back to Cardbit</a></p>`,
   );
 }
+
+const TIER_LOOK: Record<TierId, { icon: string; tag?: string }> = {
+  plus: { icon: "latch" },
+  pro: { icon: "latch-holo", tag: "Most Popular" },
+  ultimate: { icon: "latch-gold", tag: "Best Value" },
+};
+
+const svg = (d: string) => `<svg class="pi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${d}</svg>`;
+const ICON = {
+  xp: svg('<path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/>'),
+  spark: svg('<path d="M12 2l2.2 6.3L20 10l-5.8 1.7L12 18l-2.2-6.3L4 10l5.8-1.7z" fill="currentColor"/><circle cx="19" cy="19" r="2" fill="currentColor"/>'),
+  star: svg('<path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="currentColor"/>'),
+  chat: svg('<path d="M4 5h16v10H9l-5 4z" fill="currentColor"/>'),
+  gift: svg('<path d="M3 10h18v4H3zM5 14h14v7H5zM11 10h2v11h-2zM12 10c-2-4-6-4-6-1.5S10 10 12 10c2 0 6-.5 6-1.5S14 6 12 10z" fill="currentColor"/>'),
+};
+
+const PASS_CSS = `
+body{place-items:start center;padding:24px 16px 48px}
+main{max-width:1040px;background:radial-gradient(700px 320px at 50% -60px,#00e6e12e,transparent 70%),linear-gradient(180deg,#172326 0%,var(--panel) 260px);overflow:hidden}
+.hero{position:relative;text-align:center;padding:8px 0 6px}
+.orbit{position:relative;height:84px;margin:0 auto 4px;max-width:420px}
+.o{position:absolute;top:10px;width:64px;height:64px;border-radius:50%;filter:drop-shadow(0 8px 18px #0009);animation:float 4.5s ease-in-out infinite}
+.o0{left:2%;width:52px;height:52px;top:20px;animation-delay:-1s}.o1{left:21%;animation-delay:-2.2s}.o2{left:calc(50% - 40px);width:80px;height:80px;top:0;animation-delay:-.4s}.o3{right:21%;animation-delay:-3s}.o4{right:2%;width:52px;height:52px;top:20px;animation-delay:-1.6s}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.kicker{display:inline-block;margin:0 0 6px;padding:4px 12px;border-radius:999px;border:1px solid #00e6e166;background:#00e6e114;color:var(--accent);font:800 .75rem 'Cardbit Outfit',system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase}
+.title{font:800 clamp(2.4rem,7vw,3.6rem)/1.05 'Cardbit Outfit',system-ui,sans-serif;margin:0 0 8px;background:linear-gradient(100deg,#7ffcf8 0%,#00e6e1 35%,#6f86ff 65%,#ffb65c 100%);-webkit-background-clip:text;background-clip:text;color:transparent;background-size:200% 100%;animation:sheen 8s ease-in-out infinite}
+@keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.hero .sub{max-width:560px;margin:0 auto 16px;font-size:1.05rem}
+.steps{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 18px;list-style:none;padding:0;margin:0 0 6px;color:#d3dbe0;font-size:.92rem}
+.steps li{display:flex;align-items:center;gap:8px}.steps span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#00e6e122;color:var(--accent);font:800 .8rem 'Cardbit Outfit',system-ui,sans-serif}
+.joinbox,.mybox{max-width:720px;margin:18px auto 0;padding:16px;border:1px solid var(--line);border-radius:14px;background:#0d1416aa}
+.bill{display:grid;grid-template-columns:1fr 1fr;gap:12px}.bill label{margin-top:0}
+.agree{display:flex;gap:10px;align-items:flex-start;margin:14px 0 0;font-size:.95rem;font-weight:400;line-height:1.45;color:var(--ink)}.agree input{margin-top:4px;width:18px;height:18px;min-height:0;flex:none;accent-color:#00e6e1}
+.plans{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-top:22px;align-items:stretch}
+.plan{--c1:#00e6e1;--c2:#00a9b5;--glow:#00e6e133;position:relative;display:flex;flex-direction:column;border-radius:18px;padding:20px 18px 18px;background:linear-gradient(180deg,#1b282b,#121a1c) padding-box,linear-gradient(160deg,var(--c1),var(--c2) 45%,#2b3a3e 80%) border-box;border:2px solid transparent;box-shadow:0 18px 50px -20px var(--glow);transition:transform .2s ease,box-shadow .2s ease}
+.plan:hover{transform:translateY(-4px);box-shadow:0 26px 60px -18px var(--glow)}
+.plan::before{content:"";position:absolute;inset:0;border-radius:16px;background:radial-gradient(260px 140px at 80% -20px,var(--glow),transparent 70%);pointer-events:none}
+.t-pro{--c1:#7ffcf8;--c2:#6f86ff;--glow:#6f86ff55}
+.t-pro::after{content:"";position:absolute;inset:-2px;border-radius:18px;padding:2px;background:conic-gradient(from var(--a,0deg),#00e6e1,#6f86ff,#c77dff,#ffb65c,#00e6e1);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:spin 6s linear infinite;pointer-events:none}
+@property --a{syntax:'<angle>';inherits:false;initial-value:0deg}@keyframes spin{to{--a:360deg}}
+.t-ultimate{--c1:#ffd59a;--c2:#ffb65c;--glow:#ffb65c4d}
+.tag{position:absolute;z-index:2;top:-12px;left:50%;transform:translateX(-50%);white-space:nowrap;font:800 .72rem 'Cardbit Outfit',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#062022;background:linear-gradient(90deg,var(--c1),var(--c2));border-radius:999px;padding:4px 12px;box-shadow:0 6px 18px -6px var(--glow)}
+.plan-top{display:flex;align-items:center;gap:12px}
+.plan-icon{width:72px;height:72px;border-radius:50%;background:radial-gradient(circle,var(--glow),transparent 70%);flex:none}
+.plan h2{margin:0;font:800 1.45rem 'Cardbit Outfit',system-ui,sans-serif;color:var(--c1)}
+.price{font:800 2.1rem/1.1 'Cardbit Outfit',system-ui,sans-serif;margin:2px 0 0}.price small{font-size:.9rem;color:var(--muted);margin-left:2px}
+.bits{display:flex;align-items:center;gap:10px;margin:16px 0 2px;padding:10px 12px;border-radius:12px;background:linear-gradient(90deg,var(--glow),transparent);border:1px solid #ffffff14}
+.bits img{flex:none}.bits b{display:block;font:800 1.55rem/1.1 'Cardbit Outfit',system-ui,sans-serif}.bits span{font-size:.85rem;color:var(--muted)}
+.bits-split{margin:4px 2px 10px;font-size:.85rem;color:var(--muted)}.bits-split em{font-style:normal;color:var(--c1);font-weight:700}
+.perks{list-style:none;padding:0;margin:4px 0 14px;display:grid;gap:9px;flex:1}
+.perks li{display:flex;gap:10px;align-items:flex-start;font-size:.95rem;line-height:1.35}
+.pi{width:20px;height:20px;flex:none;color:var(--c1);margin-top:1px}
+.plan .btn{margin-top:auto;background:linear-gradient(90deg,var(--c1),var(--c2));color:#062022;box-shadow:0 10px 24px -12px var(--glow)}
+.plan .btn[disabled]{background:#2a3639;color:#b6c4c5;box-shadow:none;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent)}
+.mine{margin:auto 0 0;text-align:center;font:800 1rem 'Cardbit Outfit',system-ui,sans-serif;color:var(--c1);padding:12px;border:2px dashed var(--c1);border-radius:10px}
+.is-mine{box-shadow:0 0 0 3px var(--glow),0 18px 50px -20px var(--glow)}
+.free{display:flex;gap:10px;align-items:center;justify-content:center;margin:22px auto 4px;max-width:640px;padding:10px 14px;border-radius:12px;background:#00e6e10f;border:1px solid #00e6e133;font-size:.92rem;text-align:left}.free .pi{color:var(--accent)}
+.fine{margin-top:14px}
+@media (max-width:560px){.bill{grid-template-columns:1fr}.orbit{height:70px}.o{width:48px;height:48px}.o2{width:64px;height:64px}}
+@media (prefers-reduced-motion:reduce){.o,.title,.t-pro::after{animation:none}.plan,.plan:hover{transition:none;transform:none}}
+`;
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!on()) return new Response("Not found", { status: 404 });
