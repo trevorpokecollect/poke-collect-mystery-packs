@@ -8,6 +8,7 @@
   const endpoint = root.dataset.endpoint;
   const iconUrls = JSON.parse(root.dataset.icons || '{}');
   const spinArt = JSON.parse(root.dataset.spinArt || '{}');
+  /* SITE */ const spinStill = JSON.parse(root.dataset.spinStill || '{}'); // locked spins show the still character; the happy animation unlocks with the spin
   const sparksArt = root.dataset.sparksArt;
   const first = root.dataset.first || '', last = root.dataset.last || '';
   const initials = ((first.trim()[0] || '') + (last.trim()[0] || '')).toUpperCase() || '?';
@@ -16,8 +17,8 @@
   const status = $('[data-rw-status]'), content = $('[data-rw-content]');
   let state = null, busy = false;
 
-  const TIERS = [['basic', 'Basic Spin', 1], ['bronze', 'Bronze Spin', 5], ['silver', 'Silver Spin', 10],
-    ['gold', 'Gold Spin', 20], ['cobalt', 'Cobalt Spin', 30], ['holo', 'Holo Spin', 40]];
+  const TIERS = [['basic', 'Sprout Spin', 1], ['bronze', 'Ember Spin', 5], ['silver', 'Frost Spin', 10],
+    ['gold', 'Gold Rush Spin', 20], ['cobalt', 'Dragon Spin', 30], ['holo', 'Prism Spin', 40]];
   const BASE_ODDS = { basic: [5, 50, 2], bronze: [7, 75, 3], silver: [10, 100, 4], gold: [15, 150, 8], cobalt: [20, 250, 15], holo: [30, 400, 22] };
   const ICONS = [['latch', 'Latch', 1], ['blazebit', 'Blazebit', 1], ['driplink', 'Driplink', 1], ['mossbit', 'Mossbit', 1],
     ['zappix', 'Zappix', 5], ['cryobyte', 'Cryobyte', 5], ['glitchog', 'Glitchog', 10], ['phantab', 'Phantab', 10],
@@ -132,7 +133,7 @@
     bar.setAttribute('aria-valuetext', fmt(data.xp) + ' XP');
     $('[data-rw-fill]').style.width = pct + '%';
     $('[data-rw-xp]').textContent = data.nextLevelXp ? fmt(data.levelXp) + ' / ' + fmt(data.nextLevelXp) + ' XP' : fmt(data.xp) + ' XP';
-    $('[data-rw-next]').textContent = data.nextLevelXp ? 'Level ' + (data.level + 1) : 'Max Level';
+    $('[data-rw-next]').textContent = data.nextLevelXp ? /* SITE */ fmt(Math.max(0, data.nextLevelXp - data.levelXp)) + ' XP to Level ' + (data.level + 1) : 'Max Level';
     $('[data-rw-total]').textContent = fmt(data.xp);
     $('[data-rw-month]').textContent = fmt(data.monthXp);
     const spins = data.spins || START.spins.map((t) => ({ ...t, unlocked: data.level >= t.minLevel }));
@@ -153,15 +154,15 @@
     // Daily Spins grid
     $('[data-rw-spins]').replaceChildren(...spins.map((t) => {
       const card = el('article', 'cbr-spin-card is-' + t.id + (t.unlocked ? '' : ' is-locked') + (t.result ? ' is-done' : ''));
-      const art = el('div', 'cbr-spin-art'); art.append(img(spinArt[t.id], 160, 160));
+      const art = el('div', 'cbr-spin-art'); art.append(img((t.unlocked ? spinArt[t.id] : spinStill[t.id]) || spinArt[t.id], 160, 160));
       if (!t.unlocked) art.append(el('span', 'cbr-lock', 'Lv ' + t.minLevel));
-      const name = el('h3', null, t.name);
-      const sub = el('p', 'cbr-muted', t.result ? 'Won ' + prizeName(resultPrize(t.result)) : t.unlocked ? (t.cards.length ? t.cards.length + ' Cards in the Spin' : 'Free Once a Day') : 'Unlocks at Level ' + t.minLevel);
-      const b = el('button', t.unlocked && !t.result ? 'cb-primary cbr-cta' : 'cb-secondary', t.result ? 'View Spin' : t.unlocked ? 'Spin' : 'Level ' + t.minLevel + ' Required');
+      const copy = el('div', 'cbr-spin-copy');
+      copy.append(el('h3', null, t.name), el('p', 'cbr-muted', t.result ? 'Won ' + prizeName(resultPrize(t.result)) : t.unlocked ? (t.cards.length ? t.cards.length + ' Cards in the Spin' : 'Free Once a Day') : 'Unlocks at Level ' + t.minLevel));
+      const b = el('button', t.unlocked && !t.result ? 'cb-primary cbr-cta' : 'cb-secondary');
       b.type = 'button';
-      if (!t.unlocked) b.disabled = true;
-      else b.addEventListener('click', () => openSpin(t.id));
-      card.append(art, name, sub, b);
+      if (!t.unlocked) { b.disabled = true; b.append(el('span', 'cbr-lg', 'Level ' + t.minLevel), el('span', 'cbr-sm', 'Lv ' + t.minLevel)); b.setAttribute('aria-label', 'Unlocks at Level ' + t.minLevel); }
+      else { b.textContent = t.result ? 'View Spin' : 'Spin'; b.addEventListener('click', () => openSpin(t.id)); }
+      card.append(art, copy, b);
       return card;
     }));
 

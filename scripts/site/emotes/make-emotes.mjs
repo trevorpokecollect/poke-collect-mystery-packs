@@ -165,6 +165,35 @@ function hypeSignature(c) {
   }
 }
 
+// ---------- Daily Spin mascots ----------
+// "happy" is the Rewards page spin art (not a Pack Pass emote): a calm, cheerful loop themed per element.
+function happySignature(c) {
+  const cx = c.face.cx;
+  switch (c.element) {
+    case "grass": // leaves and petals drift up while Mossbit sways
+      return { body: "sway", back: burst(c, { n: 5, ox: cx, oy: 120, dist: 96, cls: "twinkle", size: 0.7, delayStep: 0.48, shape: () => sparkle(c.colors.accent) }),
+        front: rise(c, { n: 4, xs: [cx - 78, cx + 74, cx - 58, cx + 56], y0: 214, h: 150, size: 1.2 }) };
+    case "fire": // head flares, embers rise
+      return { body: "hop", back: `<g class="flare" style="transform-origin:${cx}px 110px"><g transform="translate(${cx},70) scale(2.6)">${PARTICLE.fire(c)}</g></g>`,
+        front: rise(c, { n: 5, xs: [cx - 70, cx + 66, cx - 52, cx + 50], y0: 200, h: 170, size: 0.9 }) };
+    case "ice": // frost ring turns, snowflakes fall
+      return { body: "sway", back: `<g class="frost"><circle cx="${cx}" cy="140" r="96" fill="none" stroke="${c.colors.accent}" stroke-width="3" stroke-dasharray="4 10"/></g>`,
+        front: rise(c, { n: 5, xs: [cx - 80, cx + 76, cx - 40, cx + 42, cx + 4], y0: -14, h: 260, size: 0.9, cls: "rain" }) };
+    case "gold": // coins pop up and glints twinkle
+      return { body: "hop", back: burst(c, { n: 5, ox: cx, oy: 120, dist: 100, cls: "twinkle", size: 0.9, delayStep: 0.48, shape: () => sparkle(c.colors.pop) }) +
+        burst(c, { n: 6, ox: cx, oy: 212, dist: 160, spread: 130, start: -90, cls: "fly", size: 1.1 }), front: "" };
+    case "dragon": // proud wing-flap float with dragon fire puffs
+      return { body: "float", back: `<g class="flare" style="transform-origin:${cx}px 130px">${[-1, 1].map((s) => `<g transform="translate(${cx + s * 86},120) rotate(${s * 24}) scale(1.6)">${PARTICLE.dragon(c)}</g>`).join("")}</g>` +
+        rise(c, { n: 4, xs: [cx - 76, cx + 74, cx - 50, cx + 50], y0: 196, h: 160, size: 0.85 }), front: "" };
+    case "holo": // rainbow halo turns, holo prisms twinkle
+      return { body: "float", back: `<defs><linearGradient id="holo-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF6FD8"/><stop offset=".33" stop-color="#FFE07A"/><stop offset=".66" stop-color="#7DF3EA"/><stop offset="1" stop-color="#B98CFF"/></linearGradient></defs>
+<g class="halo" style="transform-origin:${cx}px 132px"><circle cx="${cx}" cy="132" r="100" fill="none" stroke="url(#holo-ring)" stroke-width="5" stroke-dasharray="18 10" stroke-linecap="round" opacity=".9"/></g>`,
+        front: burst(c, { n: 6, ox: cx, oy: 128, dist: 98, cls: "twinkle", size: 1, delayStep: 0.4 }) };
+    default:
+      return { body: "hop", back: burst(c, { n: 5, ox: cx, oy: 128, dist: 98, cls: "twinkle", size: 1, delayStep: 0.48 }), front: "" };
+  }
+}
+
 function emoteSvg(c, emote) {
   const base = baseParts(c);
   const cx = c.face.cx;
@@ -199,6 +228,17 @@ function emoteSvg(c, emote) {
         [0, 1].map((i) => `<g transform="translate(${cx - c.face.dx - 26 + i * 6},${c.face.eyeY - 18 + i * 14})"><g class="sweat" style="animation-delay:-${i * 0.5}s"><path d="M0,-7 C4,-1 6,2 6,5 A6,6 0 0 1 -6,5 C-6,2 -4,-1 0,-7 Z" fill="#7FD3FF" stroke="#fff" stroke-width="1"/></g></g>`).join("");
       back = burst(c, { n: 7, ox: cx, oy: 150, dist: 104, spread: 160, start: -90, cls: "zing", size: 1.05, delayStep: 0 });
       break;
+    case "happy": {
+      const h = happySignature(c);
+      bodyCls = h.body;
+      const excited = ["fire", "gold", "dragon"].includes(c.element);
+      face = eyes("happy", c) + (excited ? mouth("open", c, "chomp") : mouth("smile", c)) + blush(c);
+      back = h.back;
+      front = h.front;
+      extraCss = `.hop{animation:hop ${LOOP}s cubic-bezier(.3,0,.3,1) infinite}
+@keyframes hop{0%,50%,100%{transform:translateY(0) scale(1,1)}12%{transform:translateY(3px) scale(1.04,.95)}26%{transform:translateY(-12px) scale(.98,1.03)}40%{transform:translateY(0) scale(1.03,.97)}}`;
+      break;
+    }
     case "legend": {
       bodyCls = "float";
       const cyw = c.face.crownY;
@@ -306,7 +346,7 @@ ${extraCss}`;
   }
   const tints = glitch ? `<filter id="tint-r"><feColorMatrix type="matrix" values="1 0 0 0 .3  0 0 0 0 0  0 0 .6 0 .2  0 0 0 1 0"/></filter><filter id="tint-c"><feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 .3  0 0 1 0 .3  0 0 0 1 0"/></filter>` : "";
   const clip = `<clipPath id="emote-clip"><circle cx="128" cy="128" r="128"/></clipPath>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${c.name} ${EMOTES.find((e) => e.id === emote).name}"><style>${css.replace(/\n+/g, "\n")}</style>
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="${c.name} ${(EMOTES.find((e) => e.id === emote) || { name: "Happy" }).name}"><style>${css.replace(/\n+/g, "\n")}</style>
 <defs>${base.defs}${clip}${tints}</defs>
 <g clip-path="url(#emote-clip)">${base.bg}
 ${back}
@@ -315,6 +355,8 @@ ${front}
 </g></svg>`;
 }
 
+import { pathToFileURL } from "node:url";
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 mkdirSync(OUT, { recursive: true });
 const only = process.argv.slice(2);
 let n = 0;
@@ -326,4 +368,5 @@ for (const c of CHARACTERS) {
   }
 }
 console.log(`wrote ${n} emotes to ${OUT}`);
+}
 export { emoteSvg };

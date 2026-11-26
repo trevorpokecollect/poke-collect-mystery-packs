@@ -168,3 +168,67 @@ html.cbr-lock-scroll{overflow:hidden}
 @media (max-width:480px){.cbr .cbr-hero-main{flex-direction:column;align-items:flex-start}.cbr .cbr-avatar{width:88px;height:88px}.cbr .cbr-spin-grid{grid-template-columns:repeat(2,1fr)}.cbr .cbr-spin-art{width:104px;height:104px}.cbr .cbr-tile{width:104px;height:170px}.cbr .cbr-tile-card{width:86px;height:120px}.cbr .cbr-reel{height:232px}}
 @media (prefers-reduced-motion:reduce){.cbr *{animation:none!important}.cbr .cbr-bar span{transition:none}}
 .cbr .cbr-legal{margin:0;font-size:13px;color:var(--cbr-muted)}.cbr .cbr-legal a{color:var(--cbr-ice);font-weight:700}
+/* SITE: condensed Rewards layout (Nov 26 2026). Level card + streak side by side on desktop, stacked on phones;
+   Daily Spins as one row of character tiles on desktop and compact rows on phones. */
+#cardbit-store.cbr [data-rw-content]{display:grid;gap:16px}
+#cardbit-store.cbr [data-rw-content]>*{min-width:0}
+.cbr .cbr-top{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:stretch}
+.cbr .cbr-top .cbr-hero{display:grid;grid-template-columns:1fr;gap:12px;min-height:0;padding:20px;align-content:center}
+.cbr .cbr-top .cbr-hero-main{gap:16px}
+.cbr .cbr-top .cbr-avatar{width:84px;height:84px;border-radius:22px;font-size:32px}
+.cbr .cbr-top .cbr-hero-copy{gap:4px}
+#cardbit-store.cbr .cbr-top .cbr-level-title{font-size:clamp(30px,4vw,42px);line-height:1}
+.cbr .cbr-xp{display:grid;gap:6px}
+.cbr .cbr-top .cbr-bar{height:10px}
+.cbr .cbr-top .cbr-stats{display:grid;grid-template-columns:repeat(3,minmax(0,170px));gap:8px}
+.cbr .cbr-top .cbr-stats div{min-width:0;padding:8px 12px;border-radius:12px}
+.cbr .cbr-top .cbr-stats dt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cbr .cbr-top .cbr-stats dd{font-size:20px}
+.cbr .cbr-top .cbr-streak{grid-template-columns:1fr;gap:10px;align-content:center;padding:18px}
+.cbr .cbr-streak-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+#cardbit-store.cbr .cbr-streak-head h2{font-size:22px;line-height:1.1}
+.cbr .cbr-top .cbr-flames{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;max-width:280px}
+.cbr .cbr-top .cbr-flames li{width:auto;height:28px}
+.cbr .cbr-top .cbr-streak .cbr-muted{font-size:13px}
+.cbr .cbr-top .cbr-streak .cbr-cta{width:100%;min-width:0}
+.cbr .cbr-spin-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.cbr .cbr-spin-card{gap:4px;padding:14px 10px}
+.cbr .cbr-spin-art{width:96px;height:96px}
+.cbr .cbr-spin-art img{border-radius:50%;box-shadow:0 0 0 2px rgba(0,230,225,.35),0 8px 22px rgba(0,0,0,.35)}
+.cbr .cbr-spin-card:not(.is-locked):not(.is-done) .cbr-spin-art img{animation:none}
+.cbr .cbr-spin-card.is-locked .cbr-spin-art img{filter:grayscale(.85) brightness(.55);box-shadow:0 0 0 2px var(--cbr-line)}
+.cbr .cbr-spin-card.is-done .cbr-spin-art img{opacity:.85}
+.cbr .cbr-spin-copy{display:grid;gap:2px;min-width:0}
+.cbr .cbr-spin-card h3{font-size:16px;line-height:1.15;margin-top:6px}
+.cbr .cbr-spin-card .cbr-muted{font-size:12px;min-height:0}
+.cbr .cbr-spin-card button{margin-top:8px;padding-block:10px}
+.cbr .cbr-lock{inset:auto 0 -6px;white-space:nowrap}
+.cbr .cbr-sm{display:none}
+@media (max-width:1000px){.cbr .cbr-spin-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:760px){
+  .cbr .cbr-top{grid-template-columns:1fr;gap:12px}
+  .cbr .cbr-top .cbr-hero{padding:16px;gap:10px}
+  .cbr .cbr-top .cbr-hero-main{flex-direction:row;align-items:center;gap:14px}
+  .cbr .cbr-top .cbr-avatar{width:60px;height:60px;border-radius:18px;font-size:24px}
+  .cbr .cbr-top .cbr-kicker{font-size:11px}
+  #cardbit-store.cbr .cbr-top .cbr-level-title{font-size:32px}
+  .cbr .cbr-top .cbr-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .cbr .cbr-top .cbr-stats dt{font-size:11px}
+  .cbr .cbr-top .cbr-stats dd{font-size:18px}
+  .cbr .cbr-top .cbr-streak{padding:14px 16px}
+  #cardbit-store.cbr .cbr-streak-head h2{font-size:20px}
+  .cbr .cbr-spins{gap:10px}
+  .cbr .cbr-section-head h2{font-size:22px}
+  .cbr .cbr-section-head .cbr-muted{display:none}
+  .cbr .cbr-spin-grid{grid-template-columns:1fr;gap:8px}
+  .cbr .cbr-spin-card{grid-template-columns:52px minmax(0,1fr) auto;justify-items:stretch;align-items:center;gap:12px;text-align:left;padding:8px 10px 8px 8px;border-radius:16px}
+  .cbr .cbr-spin-card:not(.is-locked):hover{transform:none}
+  .cbr .cbr-spin-art{width:52px;height:52px}
+  .cbr .cbr-spin-card .cbr-lock{display:none}
+  .cbr .cbr-spin-card h3{margin-top:0}
+  .cbr .cbr-spin-card button{width:auto;margin-top:0;padding:9px 14px;font-size:13px}
+  #cardbit-store.cbr .cbr-spin-card.is-locked button{min-height:0;padding:7px 10px;border-radius:999px;border:1px solid var(--cbr-line);background:#0b1114;color:var(--cbr-apricot);opacity:1;font:800 12px/1 var(--cbr-display)}
+  .cbr .cbr-spin-card.is-locked .cbr-lg{display:none}
+  .cbr .cbr-spin-card.is-locked .cbr-sm{display:inline}
+}
+@media (max-width:480px){.cbr .cbr-top .cbr-hero-main{flex-direction:row;align-items:center}.cbr .cbr-spin-grid{grid-template-columns:1fr}.cbr .cbr-spin-art{width:52px;height:52px}}

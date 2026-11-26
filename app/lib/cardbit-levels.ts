@@ -51,12 +51,12 @@ export type SpinnerTier = { id: string; name: string; minLevel: number };
 /** Daily Spinner tiers by level. Prize tables live in the Daily Spin pool, not here. */
 /** Every unlocked tier spins once per Cardbit day, so leveling up adds more free spins. */
 export const SPINNER_TIERS: SpinnerTier[] = [
-  { id: "basic", name: "Basic Spin", minLevel: 1 },
-  { id: "bronze", name: "Bronze Spin", minLevel: 5 },
-  { id: "silver", name: "Silver Spin", minLevel: 10 },
-  { id: "gold", name: "Gold Spin", minLevel: 20 },
-  { id: "cobalt", name: "Cobalt Spin", minLevel: 30 },
-  { id: "holo", name: "Holo Spin", minLevel: 40 },
+  { id: "basic", name: "Sprout Spin", minLevel: 1 },
+  { id: "bronze", name: "Ember Spin", minLevel: 5 },
+  { id: "silver", name: "Frost Spin", minLevel: 10 },
+  { id: "gold", name: "Gold Rush Spin", minLevel: 20 },
+  { id: "cobalt", name: "Dragon Spin", minLevel: 30 },
+  { id: "holo", name: "Prism Spin", minLevel: 40 },
 ];
 export const spinnerFor = (level: number) =>
   [...SPINNER_TIERS].reverse().find((t) => level >= t.minLevel)!;

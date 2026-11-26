@@ -84,7 +84,7 @@
   const levelForXp = xp => { let l = 1; while (l < 50 && xp >= xpForLevel(l + 1)) l++; return l; };
   const packXp = bits => Math.round((Number(bits) || 0) * 0.02);
   const ranks = [[50, 'Mythic'], [40, 'Legend'], [30, 'Vaultkeeper'], [20, 'Archivist'], [10, 'Curator'], [5, 'Collector'], [1, 'Rookie']];
-  const spins = [[5, 'Bronze Spin'], [10, 'Silver Spin'], [20, 'Gold Spin'], [30, 'Cobalt Spin'], [40, 'Holo Spin']];
+  const spins = [[5, 'Ember Spin'], [10, 'Frost Spin'], [20, 'Gold Rush Spin'], [30, 'Dragon Spin'], [40, 'Prism Spin']];
   const ppNum = n => Number(n || 0).toLocaleString('en-US');
   const escText = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   window.CardbitPlayerPanel = Object.freeze({
