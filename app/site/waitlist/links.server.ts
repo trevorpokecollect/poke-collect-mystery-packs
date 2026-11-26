@@ -66,7 +66,7 @@ export function linksPage(env: NodeJS.ProcessEnv = process.env): string {
   <main>
     <a href="/" class="lk-logo" aria-label="cardbit home"><img src="${assetUrl("cardbit-brand-lockup.webp")}" alt="cardbit" width="150" height="30"></a>
     <img class="lk-latch" src="/site/waitlist/latch-cheer.webp?v=1" alt="" width="150" height="159">
-    <h1>Rip Real Pokémon Packs Online</h1>
+    <h1>Buy Real Pokémon Cards Online</h1>
     <p class="lk-lede">Founding Collectors get <b>${n(FOUNDING_TOTAL)} Cardbits</b> at launch.</p>
     <ul class="lk-list">
         <li><a class="wl-btn wl-btn--primary" href="/?utm_source=instagram&amp;utm_medium=bio&amp;utm_campaign=links#join"><span>Join the Waitlist</span><small>cardbit.com</small></a></li>

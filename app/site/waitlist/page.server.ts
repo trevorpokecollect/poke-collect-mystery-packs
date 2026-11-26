@@ -116,7 +116,7 @@ const tags = (t: string[]) => t.map((x) => `<span>${x}</span>`).join("");
 
 export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
   const share = {
-    title: "cardbit · Launching Soon. Rip Real Pokémon Packs Online.",
+    title: "cardbit · Launching Soon. Buy Real Pokémon Cards Online.",
     description: `Open real Pokémon card packs online, keep every pull in your Vault, ship it home or sell it back for Cardbits. Join the waitlist: Founding Collectors get ${n(FOUNDING_TOTAL)} Cardbits.`,
     image: "cardbit-share.png",
     path: "/",
@@ -172,7 +172,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
       <div class="wl-aurora" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="wl-hero__copy">
         <p class="wl-eyebrow" data-wl-rise>Founding Collectors Wanted</p>
-        <h1 id="wl-h1" class="wl-h1" data-wl-split>Rip Real Pokémon Packs Online.</h1>
+        <h1 id="wl-h1" class="wl-h1" data-wl-split>Buy Real Pokémon Cards Online.</h1>
         <p class="wl-lede" data-wl-rise>Open a pack in seconds, see your pull instantly, and own the real card. Keep it in your Vault, ship it to your door, or sell it back for Cardbits.</p>
         <div class="wl-offer" data-wl-rise>
           <div class="wl-offer__coin" aria-hidden="true"><img src="${fastUrl("bits-card-emblem.webp")}" alt="" width="60" height="70"></div>
