@@ -178,7 +178,15 @@
       core: { a: 0, r: 0, color: CY }, ring: { a: 0, scale: 1, locked: 0, seek: -Math.PI / 2, seekOn: false, flicker: -1, final: null, shatter: 0 },
       raster: null, bits: [], flies: [], sparks: [], waves: [], dust: [] };
     for (let i = 0; i < 46; i++) W.dust.push({ x: Math.random(), y: Math.random(), z: .3 + Math.random() * .7, p: Math.random() * 6 });
-    function layout() { const narrow = Wd < 560; L.cx = Wd / 2; L.cy = Ht * (narrow ? .42 : .44); L.ph = Math.min(Ht * .52, Wd * .62 * 1520 / 842); L.pw = L.ph * 842 / 1520; L.ch = Math.min(Ht * (narrow ? .42 : .5), Wd * .62 * 7 / 5); L.cw = L.ch * 5 / 7; L.R = Math.min(L.ch * .4, Wd * .34); L.floor = Ht * .73; }
+    function layout() { const narrow = Wd < 560; L.cx = Wd / 2; L.cy = Ht * (narrow ? .42 : .44); L.ph = Math.min(Ht * .52, Wd * .62 * 1520 / 842); L.pw = L.ph * 842 / 1520; L.ch = Math.min(Ht * (narrow ? .42 : .5), Wd * .62 * 7 / 5); L.cw = L.ch * 5 / 7; fitCard(); L.R = Math.min(L.ch * .4, Wd * .34); L.floor = Ht * .73; }
+    // Keep the card, its tier/Cardbits/name tag and the hint pill from overlapping on short stages.
+    function fitCard() {
+      const hintTop = Ht - (Ht * .11 + 24) - 42, tagH = Ht * .014 + 62, top = 50;
+      const maxBottom = hintTop - tagH - 6;
+      if (L.cy + L.ch / 2 <= maxBottom) return;
+      L.ch = Math.max(120, Math.min(L.ch, maxBottom - top)); L.cw = L.ch * 5 / 7;
+      L.cy = Math.min(L.cy, maxBottom - L.ch / 2);
+    }
     function resize() { const r = stage.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1); Wd = r.width; Ht = r.height; cv.width = Math.round(Wd * dpr); cv.height = Math.round(Ht * dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0); layout(); const card = stage.querySelector('.cbd-card'); if (card) place(card); }
     const rrect = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
     function drawBg(t) {
@@ -295,7 +303,12 @@
         tween(obj, key, to, ms, ease = easeIO) { const from = obj[key]; if (S.reduced) ms = Math.min(ms, 120); return new Promise((res, rej) => { const t0 = performance.now(); const f = now => { if (id !== RUN || S.destroyed) return rej(ABORT); const k = clamp((now - t0) / ms); obj[key] = from + (to - from) * ease(k); if (k < 1) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); }); }
       };
     }
-    on(stage, 'click', e => { if (e.target.closest('button,a,.cbd-card')) return; tapRes?.(); });
+    // Taps count anywhere on the page (not just the stage, which can sit partly off screen), except on
+    // controls, links, form fields, the header and the chat. Only while the opening is mostly in view.
+    const IGNORE = 'button,a,input,textarea,select,label,summary,[role=button],[contenteditable],header,nav,dialog,.cb-chat,[class*="cb-chat"]';
+    const inView = () => { if (!root.isConnected) return false; const r = stage.getBoundingClientRect(); const vis = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0); return vis > Math.min(r.height, innerHeight) * .35; };
+    const pageTap = e => !S.destroyed && !e.target.closest?.(IGNORE) && (stage.contains(e.target) || inView());
+    on(document, 'click', e => { if (tapRes && e.button === 0 && pageTap(e)) tapRes(); });
     on(stage, 'keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; if (e.target !== stage) return; e.preventDefault(); if (holdAction) holdAction(); else tapRes?.(); });
     on(stage, 'pointermove', e => { if (S.reduced) return; const n = stage.querySelector('.cbd-card'); if (!n || n.getAnimations().length) return; const r = n.getBoundingClientRect(); const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; n.style.transform = `rotateY(${x * 18}deg) rotateX(${-y * 14}deg)`; const sh = n.querySelector('.cbd-sheen'); if (sh) sh.style.backgroundPosition = `${50 + x * 140}% 0`; });
     const setHint = h => { hint.innerHTML = h || ''; };
@@ -323,13 +336,13 @@
         const fill = btn.querySelector('i'), HOLD = S.reduced ? 300 : 700, MOVE = 12;
         const finish = () => { held = false; closed = true; holdAction = null; vib(25); res(); };
         const step = now => { if (!held) return; if (!ctx.alive()) return rej(ABORT); const k = clamp((now - t0) / (fast ? 220 : HOLD)); fill.style.transform = `scaleX(${k})`; W.platform = k * .6; const tk = Math.floor(k * 7); if (tk !== last) { last = tk; sfx.tick(tk); } if (k >= 1) { finish(); return; } af = requestAnimationFrame(step); };
-        const begin = () => { if (held || closed || !ctx.alive()) return; audio(S.sound); held = true; fast = false; last = -1; t0 = performance.now(); sfx.musicOn(); af = requestAnimationFrame(step); };
+        const begin = () => { if (held || closed || !ctx.alive()) return; audio(S.sound); held = true; fast = false; last = -1; t0 = performance.now(); af = requestAnimationFrame(step); };
         const stop = () => { if (!held) return; held = false; pid = null; cancelAnimationFrame(af); fill.style.transform = 'scaleX(0)'; W.platform = 0; };
         const tapFinish = () => { if (!held) return; const k = clamp((performance.now() - t0) / HOLD); fast = true; t0 = performance.now() - k * 220; };
-        on(stage, 'pointerdown', e => { if (e.button > 0 || e.target.closest('button:not(.cbd-hold),a')) return; pid = e.pointerId; sx = e.clientX; sy = e.clientY; if (e.target === btn) e.preventDefault(); begin(); });
+        on(document, 'pointerdown', e => { if (e.button > 0 || closed) return; if (e.target !== btn && !btn.contains(e.target) && !pageTap(e)) return; pid = e.pointerId; sx = e.clientX; sy = e.clientY; if (btn.contains(e.target)) e.preventDefault(); begin(); });
         on(window, 'pointermove', e => { if (held && e.pointerId === pid && Math.hypot(e.clientX - sx, e.clientY - sy) > MOVE) stop(); });
         on(window, 'pointerup', e => { if (held && e.pointerId === pid) { pid = null; tapFinish(); } });
-        on(window, 'pointercancel', stop); on(window, 'scroll', stop, { passive: true, capture: true });
+        on(window, 'pointercancel', e => { if (e.pointerId === pid) stop(); }); on(window, 'scroll', stop, { passive: true }); // page scroll only, not chat/feeds scrolling themselves
         on(btn, 'keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); e.stopPropagation(); begin(); tapFinish(); } });
         // Keyboard on the stage, or assistive tech clicking the button, opens without holding.
         holdAction = () => { holdAction = null; closed = true; sfx.musicOn(); res(); };
@@ -392,7 +405,7 @@
       else { await ctx.wait(260); await ctx.tween(R, 'scale', .15, 320, k => k * k); R.a = 0; }
       W.core.r *= 1.6; await ctx.wait(80); W.core.a = 0; wave(L.cx, L.cy, '#fff', L.ch); tierlab.classList.remove('on');
     }
-    function bitsChip(cls) { return '<span class="' + cls + '">' + (BITS_ICON ? '<img alt="" src="' + esc(BITS_ICON) + '">' : '') + '<em>0</em><small>Cardbits</small></span>'; }
+    function bitsChip(cls) { return '<span class="' + cls + '">' + (BITS_ICON ? '<img alt="Cardbits" src="' + esc(BITS_ICON) + '">' : '<small>Cardbits</small>') + '<em>0</em></span>'; }
     // Animated count-up with coin ticks; ends with a tier-colored pop.
     function countUp(node, from, to, ms, rank = 0, quiet = false) {
       const em = node.querySelector('em') || node;

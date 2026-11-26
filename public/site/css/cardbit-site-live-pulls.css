@@ -11,7 +11,8 @@
 #cardbit-store .cbx-rail{min-width:0}
 
 /* Card-forward pulls */
-#cardbit-store .cbx-lp .cb-feed-items{grid-auto-columns:clamp(140px,15vw,164px);gap:12px;padding:12px 3px 10px;perspective:900px}
+/* Cards stretch evenly to fill the row on wide screens (no empty gap on the right); phones scroll. */
+#cardbit-store .cbx-lp .cb-feed-items{grid-auto-columns:minmax(clamp(140px,15vw,164px),1fr);gap:12px;padding:12px 3px 10px;perspective:900px}
 #cardbit-store .cbx-lp .cb-feed-card{display:flex;flex-direction:column;gap:6px;min-height:0;height:100%;padding:10px;position:relative;border-color:#2c3f45;background:linear-gradient(170deg,#16252b,#0f191d 80%);transition:border-color .2s,transform .2s}
 #cardbit-store .cbx-lp .cb-feed-card:hover{transform:translateY(-2px);background:linear-gradient(170deg,#1a2d33,#11201f 80%)}
 #cardbit-store .cbx-lp .cb-mini-scan{width:100%;transform-style:preserve-3d;border-radius:7px;background:#1c2b2f;box-shadow:0 0 0 1px rgba(255,255,255,.08)}
@@ -70,3 +71,4 @@
 @media (prefers-reduced-motion:reduce){
   #cardbit-store .cbx-lp *,#cardbit-store .cbx-lp *::before,#cardbit-store .cbx-lp *::after,#cardbit-store .cbx-live::before{animation:none!important;transition:none!important}
 }
+@media (max-width:760px){#cardbit-store .cbx-lp .cb-feed-items{grid-auto-columns:clamp(140px,40vw,164px)}}
