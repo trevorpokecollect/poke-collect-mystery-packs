@@ -45,8 +45,17 @@ export function lookKey(r: Pick<SiteIntake, "game" | "setName" | "number">) {
 }
 export const faceKey = (name: string) =>
   digest(fold(name).normalize("NFKD").replace(/[^\p{L}\p{N}]/gu, ""));
-export const printingKey = (r: Pick<SiteIntake, "game" | "setName" | "number" | "finish" | "language">) =>
+/**
+ * One printing = one TCGplayer product in one finish and language. Set + number + finish + language alone is not enough
+ * (Trevor, Nov 25 2026): TCGplayer lists "Snorlax - 051" and "Snorlax - 051 (Pokemon Center Exclusive)" as separate
+ * products with the same set, number and finish, and the stamped one is worth ~12x more. Keying them together gave the
+ * regular copies the stamped price. So the TCGplayer product id is part of the key whenever Card Broker sends it.
+ * Copies without a product id keep the older set/number/finish/language key.
+ */
+export const legacyPrintingKey = (r: Pick<SiteIntake, "game" | "setName" | "number" | "finish" | "language">) =>
   digest([lookKey(r), fold(r.finish), fold(r.language)]);
+export const printingKey = (r: Pick<SiteIntake, "game" | "setName" | "number" | "finish" | "language" | "tcgplayerId">) =>
+  r.tcgplayerId ? digest([legacyPrintingKey(r), r.tcgplayerId]) : legacyPrintingKey(r);
 
 /** Price identity: printing AND condition (NM and LP copies are priced separately). */
 export const priceKey = (printing: string, condition: string) => `${printing}|${fold(condition)}`;

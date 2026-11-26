@@ -1,5 +1,7 @@
 // Card Broker → site price feed. Card Broker owns retail prices and buyback offers.
-// POST {prices:[{game, setName, number, finish, language, condition, priceBits|null, buybackBits|null}]} (≤1000)
+// POST {prices:[{game, setName, number, finish, language, tcgplayerId?, condition, priceBits|null, buybackBits|null}]} (≤1000)
+// tcgplayerId picks the exact TCGplayer product (a Pokémon Center stamped promo shares set, number and finish with the
+// regular one); without it the price applies to copies received without a product id.
 // → {updated, skipped:[{index, error}]}. Same auth as intake. Printings with no site copies are
 // still stored, so a price is ready when the first copy arrives.
 import type { ActionFunctionArgs } from "react-router";
@@ -29,7 +31,9 @@ export async function action({ request }: ActionFunctionArgs) {
         if (typeof v !== "string" || !v.trim() || v.length > 350) throw new IntakeRejected(`Missing ${k}.`, 422);
         return v;
       };
-      const id = { game: str("game"), setName: str("setName"), number: str("number"), finish: str("finish"), language: str("language") };
+      const tcg = p?.tcgplayerId;
+      if (tcg != null && (!Number.isSafeInteger(tcg) || (tcg as number) < 1)) throw new IntakeRejected("Invalid tcgplayerId.", 422);
+      const id = { game: str("game"), setName: str("setName"), number: str("number"), finish: str("finish"), language: str("language"), tcgplayerId: (tcg as number | null | undefined) ?? null };
       const price = intakePrice(p);
       if (!price) throw new IntakeRejected("Missing priceBits/buybackBits.", 422);
       await applyBrokerPrice(db, priceKey(printingKey(id), str("condition")), price);

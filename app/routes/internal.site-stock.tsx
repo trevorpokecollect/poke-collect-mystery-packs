@@ -12,12 +12,15 @@
 //      {intent:"auto-restock-run"} runs the hourly automatic restock now (buybacks + listed Drafts for Auto-Fill packs)
 //      {intent:"remove", copyIds, reason} deletes unsold Draft/Active copies (→ REMOVED, pocket freed, logged)
 //      {intent:"slot", copyId, slot, pocket?} moves one copy to a chosen slot (10001+) and pocket
+//      {intent:"relink", copyId, product:{game,setName,number,finish,language,name,title,tcgplayerId,image}, priceBits?, buybackBits?}
+//      switches an unsold Draft/Active copy to the right TCGplayer product (same set/number/finish/language), logged
 //      {intent:"boxes"} cards and slots used per box (Card Broker box claiming)
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
-import { DeskError, boxSummary, listStock, moveToSlot, movePool, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
+import { DeskError, boxSummary, listStock, moveToSlot, movePool, relinkCopy, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
 import { RestockError, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
+import { applyBrokerPrice, intakePrice, priceKey } from "../site/core/stock.server";
 
 const deny = () => Response.json({ error: "Unavailable." }, { status: 403, headers: { "Cache-Control": "no-store" } });
 
@@ -92,6 +95,12 @@ export async function action({ request }: ActionFunctionArgs) {
         return Response.json({ ok: true, boxes: await boxSummary(db) }, { headers: { "Cache-Control": "no-store" } });
       case "slot":
         return Response.json({ ok: true, ...(await moveToSlot(db, actor, b.copyId, b.slot, b.pocket)) });
+      case "relink": {
+        const r = await relinkCopy(db, actor, b.copyId, b.product as Record<string, unknown> | undefined);
+        const price = intakePrice(b);
+        if (price) await applyBrokerPrice(db, priceKey(r.printingKey, r.condition), price);
+        return Response.json({ ok: true, ...r });
+      }
       case "auto-restock-run":
         return Response.json({ ok: true, ...(await runAutoRestock(db, { force: true })) });
       default:

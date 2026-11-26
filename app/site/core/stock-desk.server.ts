@@ -1,6 +1,6 @@
 // Stock desk operations shared by /staff/stock (site staff) and /internal/site-stock (Card Broker).
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { POCKETS_PER_SLOT, ROWS_PER_BOX, SITE_FIRST_SLOT, SLOTS_PER_ROW, priceKey, shelfAddress, shelfLabel } from "./stock.server";
+import { POCKETS_PER_SLOT, ROWS_PER_BOX, SITE_FIRST_SLOT, SLOTS_PER_ROW, faceKey, legacyPrintingKey, lookKey, priceKey, printingKey, shelfAddress, shelfLabel } from "./stock.server";
 import { RestockError, stageRestock } from "./restock.server";
 
 export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
@@ -136,6 +136,61 @@ export async function removeCopies(db: PrismaClient, actor: string, copyIds: unk
  * Moves one copy to a chosen slot (and pocket, or the first free one). Same rules as receiving: slots 10001 and up,
  * 20 pockets, and a slot holds one copy of a printing and one card per name, so lookalikes never share a slot.
  */
+/**
+ * Fix a copy listed under the wrong TCGplayer product (Trevor, Nov 25 2026: regular Nidorina 101 and Flutter Mane 097
+ * copies were listed as their Pokémon Center Exclusive lookalikes). Card Broker sends the right catalog product; it must
+ * be the same set, number, finish and language, so the copy stays the same physical card in the same slot. Only unsold
+ * Draft or Active copies outside any pool or restock. The copy takes the new product's price key (Card Broker's next
+ * price sync, or the price sent here, sets its price). Logged.
+ */
+export async function relinkCopy(
+  db: PrismaClient,
+  actor: string,
+  copyId: unknown,
+  product: Record<string, unknown> | null | undefined,
+) {
+  const id = typeof copyId === "string" && copyId.length <= 60 ? copyId : "";
+  if (!id) throw new DeskError("Choose a card first.");
+  const p = product ?? {};
+  const text = (k: string, max: number) => {
+    const v = p[k];
+    if (typeof v !== "string" || !v.trim() || v.length > max) throw new DeskError(`Missing ${k}.`);
+    return v.trim();
+  };
+  const tcgplayerId = p.tcgplayerId;
+  if (!Number.isSafeInteger(tcgplayerId) || (tcgplayerId as number) < 1) throw new DeskError("Choose the TCGplayer product.");
+  const image = p.image == null || p.image === "" ? null : p.image;
+  if (image !== null && (typeof image !== "string" || !/^https:\/\//.test(image) || image.length > 2000)) throw new DeskError("Image must be an https URL.");
+  const next = {
+    game: text("game", 40), setName: text("setName", 350), number: text("number", 60), finish: text("finish", 80), language: text("language", 60),
+    name: text("name", 350), title: text("title", 500), tcgplayerId: tcgplayerId as number, image: image as string | null,
+  };
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;
+    const c = await tx.siteCopy.findUnique({ where: { id } });
+    if (!c) throw new DeskError("That card isn't in cardbit.com stock.");
+    if (!["DRAFT", "FOR_SALE"].includes(c.status) || c.ownerId || c.orderId || c.packId || c.restockId)
+      throw new DeskError("Only unsold Draft or Active cards outside pack pools and restocks can be switched. Unpool it first.");
+    if (lookKey(c) !== lookKey(next) || legacyPrintingKey(c) !== legacyPrintingKey(next))
+      throw new DeskError("The new product must be the same set, number, finish and language as the card on the shelf.");
+    if (c.tcgplayerId === next.tcgplayerId && c.name === next.name) return { id: c.id, switched: false, printingKey: c.printingKey, condition: c.condition };
+    const face = faceKey(next.name);
+    if (c.slot != null && face !== c.faceKey) {
+      const twin = await tx.siteCopy.findFirst({ where: { slot: c.slot, faceKey: face, id: { not: c.id } }, select: { id: true } });
+      if (twin) throw new DeskError(`${shelfLabel(c.slot)} already holds a ${next.name}. Move this card to another slot first.`);
+    }
+    const key = printingKey(next);
+    await tx.siteCopy.update({
+      where: { id: c.id },
+      data: { tcgplayerId: next.tcgplayerId, name: next.name, title: next.title, image: next.image, faceKey: face, printingKey: key },
+    });
+    await tx.siteCopyEvent.create({
+      data: { copyId: c.id, fromStatus: c.status, toStatus: c.status, actor, reason: `switched product from TCGplayer ${c.tcgplayerId ?? "none"} "${c.name}" to ${next.tcgplayerId} "${next.name}"`.slice(0, 500) },
+    });
+    return { id: c.id, switched: true, printingKey: key, condition: c.condition };
+  });
+}
+
 export async function moveToSlot(db: PrismaClient, actor: string, copyId: unknown, slotIn: unknown, pocketIn: unknown) {
   const id = typeof copyId === "string" && copyId.length <= 60 ? copyId : "";
   if (!id) throw new DeskError("Choose a card first.");

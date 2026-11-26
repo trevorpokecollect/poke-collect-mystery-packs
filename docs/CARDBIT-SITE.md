@@ -65,6 +65,13 @@ its own queue, only when `CARDBIT_SITE_INTAKE=on`. The existing Shopify flush is
 Unchanged sources: retail and buyback come from Poke-Collect's per-card buylist lookup
 (`buylist.server.ts`), which does not depend on Cardbit's Shopify store.
 
+One printing = one TCGplayer product (Nov 25 2026, migration `20261126003000_site_product_printing_key`): `printingKey`
+includes the copy's `tcgplayerId`, so prices (`SitePrice`), shop singles, want lists and shipping swaps never mix a
+regular promo with its Pokémon Center / stamped lookalike (same set, number and finish; regular Snorlax 051 copies had
+shown the Pokemon Center Exclusive's $265). Card Broker sends `tcgplayerId` on receipts and on `/internal/site-prices`;
+copies without one keep the older set/number/finish/language key. `/internal/site-stock` intent `relink` switches an
+unsold Draft/Active copy to the right product (same set/number/finish/language), logged as a copy event.
+
 ## Open items
 
 - Coinflow sandbox keys (Trevor).
