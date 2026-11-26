@@ -127,7 +127,18 @@ describe("link previews and reveal rewards", () => {
     expect(site).toContain("Photo Coming Soon");
     expect(site).toContain("window.CardbitPlayerPanel");
     const play = readFileSync(new URL("../../public/site/js/cardbit-site-play.js", import.meta.url), "utf8");
-    expect(play).toContain("asset('spin-gold.svg')");
+    expect(play).toContain("asset('icon-latch.webp')");
     expect(play).not.toContain("'cardbit-brand-emblem.png'");
+  });
+
+  it("Daily Rewards launcher: home page only, tier spin tiles, rules line, reduced motion", () => {
+    const play = readFileSync(new URL("../../public/site/js/cardbit-site-play.js", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../../public/site/css/cardbit-site-play.css", import.meta.url), "utf8");
+    expect(play).toContain("const onHome = () => location.pathname === '/'");
+    expect(play).toContain("if (!rw || !onHome())");
+    expect(play).toContain("asset('spin-' + id + '.svg')");
+    expect(play).toContain("No purchase necessary \\u00b7 <a href=\"/official-rules\">Official Rules</a>");
+    for (const tier of ["bronze", "silver", "gold", "cobalt", "holo"]) expect(css).toContain(`.cb-lr-tile.tier-${tier}`);
+    expect(css).toMatch(/prefers-reduced-motion:reduce\)\{\.cb-launch \*/);
   });
 });
