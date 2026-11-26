@@ -176,8 +176,8 @@
     $('[data-rw-icons]').replaceChildren(...data.icons.map((i) => {
       const b = el('button', 'cbr-icon'); b.type = 'button'; b.disabled = !i.unlocked;
       b.setAttribute('aria-pressed', String(data.avatar.iconId === i.id));
-      b.append(img(iconUrls[i.id], 64, 64), el('span', null, i.name), el('small', null, i.unlocked ? '' : /* SITE */ i.club ? 'Club' : 'Level ' + i.minLevel));
-      b.setAttribute('aria-label', i.unlocked ? i.name : i.name + (/* SITE */ i.club ? ', For Cardbit Club Members' : ', Unlocks at Level ' + i.minLevel));
+      b.append(img(iconUrls[i.id], 64, 64), el('span', null, i.name), el('small', null, i.unlocked ? '' : /* SITE */ i.club ? ((window.cardbitPlan || {}).short || 'Pass') : 'Level ' + i.minLevel));
+      b.setAttribute('aria-label', i.unlocked ? i.name : i.name + (/* SITE */ i.club ? ', For ' + ((window.cardbitPlan || {}).name || 'Pack Pass') + ' Members' : ', Unlocks at Level ' + i.minLevel));
       if (i.unlocked) b.addEventListener('click', () => save({ iconId: i.id }));
       return b;
     }));

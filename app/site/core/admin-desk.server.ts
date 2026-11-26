@@ -314,6 +314,40 @@ export async function reopenAccount(db: PrismaClient, actor: string, input: { cu
   return { replay: false };
 }
 
+// ---------- Pack Pass: staff cancel ----------
+
+/**
+ * Stop a customer's Pack Pass renewal on their request (or for fraud). Cancels at the processor first;
+ * if the processor refuses, the plan is still marked canceled here and the result says staff must also
+ * cancel it in the Coinflow dashboard. Perks last until the paid month ends. Refunds are separate:
+ * use Adjust Balance / the processor's refund, which claws back the month's Cardbits.
+ */
+export async function cancelPlan(
+  db: PrismaClient,
+  actor: string,
+  input: { customerId: unknown; reason: unknown; requestId: unknown },
+  cancelAtProcessor: (s: import("@prisma/client").SiteSubscription) => Promise<void>,
+) {
+  const requestId = requestOf(input.requestId);
+  const reason = reasonOf(input.reason);
+  if (await priorAction(db, requestId)) return { replay: true, processorCanceled: true };
+  const c = await customerOrThrow(db, String(input.customerId));
+  const s = await db.siteSubscription.findFirst({ where: { customerId: c.id, status: { in: ["PENDING", "ACTIVE", "PAST_DUE"] } }, orderBy: { createdAt: "desc" } });
+  if (!s) throw new AdminError("This customer has no plan that renews.");
+  let processorCanceled = true;
+  try {
+    await cancelAtProcessor(s);
+  } catch (e) {
+    processorCanceled = false;
+    console.error("[site] staff plan cancel: processor refused", s.id, (e as Error).message);
+  }
+  await db.$transaction(async (tx) => {
+    await tx.siteSubscription.update({ where: { id: s.id }, data: { status: "CANCELED", canceledAt: new Date(), cancelReason: processorCanceled ? "staff" : "staff_processor_cancel_failed" } });
+    await tx.siteStaffAction.create({ data: { action: "cancel-plan", actor, customerId: c.id, reason, requestId, detail: { subscriptionId: s.id, tier: s.tier, processorCanceled } } });
+  });
+  return { replay: false, processorCanceled, subscriptionId: s.id, perksUntil: s.currentPeriodEnd?.toISOString() ?? null };
+}
+
 const ERASED_DOMAIN = "erased.cardbit.invalid";
 export const isErased = (c: Pick<SiteCustomer, "email">) => c.email.endsWith("@" + ERASED_DOMAIN);
 

@@ -8,7 +8,8 @@
   'use strict';
   const esc = v => String(v ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
   const icons = () => window.CardbitRewardIcons || {};
-  const BADGE = { staff: 'Staff', plus: 'Club Plus', pro: 'Club Pro', ultimate: 'Club Ultimate' };
+  const PLAN = Object.assign({ name: 'Pack Pass', short: 'Pass', path: '/pass' }, window.cardbitPlan || {});
+  const BADGE = { staff: 'Staff', plus: PLAN.short + ' Plus', pro: PLAN.short + ' Pro', ultimate: PLAN.short + ' Ultimate' };
   const REASON = {
     sign_in: 'Sign In to join the chat.',
     age: 'Confirm you are 18 or older on the Rewards page to join the chat.',
@@ -40,7 +41,7 @@
     const a = data && data.access;
     const tabs = '<div class="cb-chat-tabs" role="tablist">' +
       '<button type="button" role="tab" data-chat-room="main" aria-selected="' + (room === 'main') + '">Everyone</button>' +
-      '<button type="button" role="tab" data-chat-room="club" aria-selected="' + (room === 'club') + '">Club</button></div>';
+      '<button type="button" role="tab" data-chat-room="club" aria-selected="' + (room === 'club') + '">' + esc(PLAN.short) + '</button></div>';
     let body;
     if (!a) body = '<p class="cb-chat-note">Loading\u2026</p>';
     else if (!a.canRead) {
@@ -48,7 +49,7 @@
         (a.reason === 'sign_in' ? '<a class="cb-chat-cta" href="/sign-in?return_to=' + encodeURIComponent(location.pathname) + '">Sign In</a>' : '') +
         (a.reason === 'paused' ? '<a class="cb-chat-cta" href="/account/limits">Limits &amp; Breaks</a>' : '');
     } else if (room === 'club' && !a.club) {
-      body = '<p class="cb-chat-note">The Club room is for Cardbit Club members.</p><a class="cb-chat-cta" href="/club">See Cardbit Club</a>';
+      body = '<p class="cb-chat-note">The ' + esc(PLAN.short) + ' room is for ' + esc(PLAN.name) + ' members.</p><a class="cb-chat-cta" href="' + esc(PLAN.path) + '">See ' + esc(PLAN.name) + '</a>';
     } else {
       const list = data.messages.length ? data.messages.map(messageHtml).join('') : '<li class="cb-chat-empty">No messages yet. Say hi!</li>';
       const form = a.mutedUntil

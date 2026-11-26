@@ -14,6 +14,7 @@ import { PlayPaused, assertNotPaused } from "./limits.server";
 import { activeTier } from "./subscriptions.server";
 import { SITE_SHOP, alias } from "../rewards/rewards.server";
 import { staffEmails } from "../shipping/staff.server";
+import { PLAN } from "./plan-brand";
 
 type Db = PrismaClient;
 export const ROOMS = ["main", "club"] as const;
@@ -97,7 +98,7 @@ export async function listMessages(db: Db, access: Access, room: Room) {
 export async function sendMessage(db: Db, v: Viewer, room: Room, raw: unknown, env: NodeJS.ProcessEnv = process.env) {
   const access = await chatAccess(db, v, env);
   if (!access.canRead) throw new ChatError(access.reason, "You can't use chat right now.", 403);
-  if (!roomAllowed(access, room)) throw new ChatError("club_only", "The Club room is for Cardbit Club members.", 403);
+  if (!roomAllowed(access, room)) throw new ChatError("club_only", `The ${PLAN.short} room is for ${PLAN.name} members.`, 403);
   if (access.mutedUntil) throw new ChatError("muted", "You're muted in chat for now.", 403);
   const body = cleanBody(raw);
   return db.$transaction(async (tx) => {

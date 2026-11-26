@@ -27,6 +27,8 @@ const chatOn = () => process.env.SITE_CHAT === "on"; // same flag as app/site/pl
 import { createHash } from "node:crypto";
 import { signInProviders } from "./core/oauth.server";
 import { CLUB_ICON_URLS } from "./play/club-icons";
+import { planClientJson, withPlanCopy } from "./play/plan-brand";
+import { subscriptionsReady } from "./payments/coinflow-subscriptions.server";
 
 const files = manifest as Record<string, string>;
 // Cache-busting versions for the site's own files (not part of the theme port).
@@ -231,6 +233,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
       window.cardbitAssets = ${assetMap()};
       window.cardbitValueIcon = window.cardbitAssets["bits-card-emblem.png"];
       window.CardbitRewardIcons = ${rewardIcons()};
+      window.cardbitPlan = ${planClientJson()};
     </script>
     ${protectionScript()}
     ${scripts}
@@ -244,7 +247,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
       </div>
     </div>
     <noscript><p>Enable JavaScript to Browse the Cards or Open a Pack.</p><a href="mailto:Support@cardbit.com">Support@cardbit.com</a></noscript>
-    ${howItWorks}
+    ${withPlanCopy(howItWorks, subscriptionsReady())}
     ${giveaway.replace(/src="\/site\/assets\/([^"?]+)"/g, (m, name) => (files[name] ? `src="${assetUrl(name)}"` : m))}
   </body>
 </html>`;

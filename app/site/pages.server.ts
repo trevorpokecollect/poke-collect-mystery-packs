@@ -6,6 +6,8 @@ import { robotsTags } from "./seo.server";
 import { STYLES, SITE_CSS_V, assetUrl, shareMeta, pulseTag } from "./shell.server";
 import rewardsIn from "./partials/rewards-in.html?raw";
 import { withClubIconUrls } from "./play/club-icons";
+import { planClientJson, withPlanCopy } from "./play/plan-brand";
+import { subscriptionsReady } from "./payments/coinflow-subscriptions.server";
 import rewardsOut from "./partials/rewards-out.html?raw";
 import leaderboardIn from "./partials/leaderboard-in.html?raw";
 import leaderboardOut from "./partials/leaderboard-out.html?raw";
@@ -40,7 +42,7 @@ export function policiesPage(): string {
   return page(
     "Policies",
     "Cardbit Terms of Service, Refund, Shipping and Privacy policies: Cardbits, packs, vault storage, buybacks and shipping.",
-    policies,
+    withPlanCopy(policies, subscriptionsReady()),
     ["cardbit-policy-page.css"],
     "/policies",
   );
@@ -97,7 +99,7 @@ const rewardStyles = [...STYLES, "cardbit-rewards.css"];
 const script = (name: string) => `<script src="${assetUrl(name)}" defer></script>`;
 
 export function rewardsPage(customer: { name: string | null; email: string } | null): string {
-  const body = withChrome(member(withClubIconUrls(customer ? rewardsIn : rewardsOut), customer)) + walletScript + (customer ? script("cardbit-rewards.js") : "");
+  const body = withChrome(member(withClubIconUrls(customer ? rewardsIn : rewardsOut), customer)) + walletScript + (customer ? `<script>window.cardbitPlan=${planClientJson()}</script>` + script("cardbit-rewards.js") : "");
   return page("Rewards", "Cardbit Rewards: levels, XP, daily check-in streaks, free Daily Spins and Latch & Friends icons.", body, rewardStyles, "/rewards");
 }
 

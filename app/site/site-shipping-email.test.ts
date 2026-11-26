@@ -114,6 +114,8 @@ const samples: { [K in EmailKind]: EmailData[K] } = {
   },
   shipment_shipped: { shipmentId: "shp_1", cards: ["Aipom 026"], carrier: "usps", trackingNumber: "9400100000000000000000", trackingUrl: "https://tools.usps.com/x" },
   shipment_delivered: { shipmentId: "shp_1", cardCount: 2, trackingUrl: null },
+  plan_payment: { paymentId: "pay_1", first: true, tierName: "Pro", paidCents: 4999, bits: 4999, bonusBits: 376, balanceBits: 5375, renewsAt: "2026-12-25T18:00:00Z" },
+  plan_canceled: { tierName: "Pro", perksUntil: "2026-12-25T18:00:00Z", byBreak: false },
 };
 
 describe("email templates", () => {
@@ -132,6 +134,20 @@ describe("email templates", () => {
     const r = renderEmail("pack_opened", samples.pack_opened, {});
     expect(r.html).toContain("Charizard &lt;ex&gt;");
     expect(r.html).toContain("4,800 Cardbits");
+  });
+  it("plan receipts carry the auto-renewal terms and how to cancel", () => {
+    const r = renderEmail("plan_payment", samples.plan_payment, { CARDBIT_SITE_URL: "https://site.test" });
+    expect(r.subject).toBe("Welcome to Pack Pass Pro");
+    for (const t of [r.html, r.text]) {
+      expect(t).toContain("renews automatically every month at $49.99");
+      expect(t).toContain("December 25, 2026");
+      expect(t).toContain("https://site.test/pass");
+      expect(t).toContain("Support@cardbit.com");
+    }
+    expect(renderEmail("plan_payment", { ...samples.plan_payment, first: false }, {}).subject).toBe("Receipt: Pack Pass Pro Renewed");
+    const c = renderEmail("plan_canceled", { ...samples.plan_canceled, byBreak: true }, {});
+    expect(c.text).toContain("Because you started a break");
+    expect(c.html).not.toContain("See Plans");
   });
   it("labels shipping fee per policy", () => {
     expect(renderEmail("shipment_created", { ...samples.shipment_created, feeKind: "FREE" }, {}).html).toContain("Free shipping");
