@@ -116,3 +116,16 @@ describe("Card Broker waitlist endpoint", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("waitlist source label", () => {
+  it("prefers UTMs, then ad click IDs, then the referring site", async () => {
+    const { sourceLabel } = await import("./waitlist.server");
+    expect(sourceLabel({ utm_source: "meta", utm_medium: "paid_social", utm_campaign: "waitlist", fbclid: "x" })).toBe("meta / paid_social / waitlist");
+    expect(sourceLabel({ fbclid: "x" })).toBe("meta (click id)");
+    expect(sourceLabel({ gclid: "x" })).toBe("google ads (click id)");
+    expect(sourceLabel({ ttclid: "x" })).toBe("tiktok (click id)");
+    expect(sourceLabel({ referrer: "android-app://com.google.android.gm/" })).toBe("gmail");
+    expect(sourceLabel({ referrer: "https://www.google.com/" })).toBe("google.com");
+    expect(sourceLabel({})).toBeNull();
+  });
+});

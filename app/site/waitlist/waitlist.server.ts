@@ -74,11 +74,24 @@ export type JoinResult = { status: "joined" | "updated" | "already"; phoneSaved:
 function cleanSource(raw: unknown) {
   if (!raw || typeof raw !== "object") return null;
   const out: Record<string, string> = {};
-  for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "referrer", "fbclid", "ttclid", "gclid"]) {
+  for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "referrer", "fbclid", "ttclid", "gclid", "landing"]) {
     const v = (raw as Record<string, unknown>)[k];
     if (typeof v === "string" && v.trim()) out[k] = v.trim().slice(0, 200);
   }
   return Object.keys(out).length ? out : null;
+}
+
+/** Short source label for the Card Broker Waitlist tab: UTM first, then ad click IDs, then the referring site. */
+export function sourceLabel(src: Record<string, string>): string | null {
+  if (src.utm_source) return [src.utm_source, src.utm_medium, src.utm_campaign].filter(Boolean).join(" / ");
+  if (src.fbclid) return "meta (click id)";
+  if (src.gclid) return "google ads (click id)";
+  if (src.ttclid) return "tiktok (click id)";
+  if (src.ref) return src.ref;
+  const r = src.referrer;
+  if (!r) return null;
+  if (/com\.google\.android\.gm|mail\.google\.com/.test(r)) return "gmail";
+  try { return new URL(r).hostname.replace(/^www\./, ""); } catch { return r.slice(0, 60); }
 }
 
 /** Add someone to the waitlist, or add a phone number to their existing spot. */
@@ -301,7 +314,7 @@ export async function waitlistList(db: PrismaClient, o: { q?: string; phone?: "y
         phone: r.phone,
         textConsent: !!r.smsConsentAt,
         claimed: !!r.customerId,
-        source: src.utm_source || src.ref || src.referrer || null,
+        source: sourceLabel(src),
         createdAt: r.createdAt.toISOString(),
       };
     }),

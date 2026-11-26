@@ -304,11 +304,23 @@
   const say = (msg) => { if (!toast) return; toast.textContent = msg; toast.classList.add('is-on'); clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove('is-on'), 2600); };
 
   /* ---------- signup ---------- */
+  // First-touch attribution: the first visit that carried UTMs, an ad click ID or an outside referrer is kept
+  // for 30 days, so a visitor who lands from an ad, browses /policies and comes back still credits the ad.
   const source = (() => {
-    const q = new URLSearchParams(location.search), out = {};
-    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'ttclid', 'gclid'].forEach((k) => { if (q.get(k)) out[k] = q.get(k); });
-    if (d.referrer && !d.referrer.startsWith(location.origin)) out.referrer = d.referrer.slice(0, 200);
-    return out;
+    const KEY = 'cardbit:first-touch', DAYS30 = 30 * 864e5;
+    const q = new URLSearchParams(location.search), now = {};
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'ttclid', 'gclid'].forEach((k) => { if (q.get(k)) now[k] = q.get(k).slice(0, 200); });
+    if (d.referrer && !d.referrer.startsWith(location.origin)) now.referrer = d.referrer.slice(0, 200);
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { /* private mode */ }
+    if (saved && (!saved.at || Date.now() - saved.at > DAYS30)) saved = null;
+    if (!saved && Object.keys(now).length) {
+      saved = { ...now, landing: location.pathname.slice(0, 100), at: Date.now() };
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch { /* private mode */ }
+    }
+    if (!saved) return now;
+    const { at, ...first } = saved;
+    return first;
   })();
   const joined = () => { try { return localStorage.getItem('cardbit:waitlist') === '1'; } catch { return false; } };
   const markJoined = () => { try { localStorage.setItem('cardbit:waitlist', '1'); } catch { /* private mode */ } };
