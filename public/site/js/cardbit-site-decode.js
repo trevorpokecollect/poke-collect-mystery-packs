@@ -201,6 +201,15 @@
     const W = { pack: null, packAlpha: 0, scan: 0, scanOn: false, platform: 0, dim: 0, beams: 0, beamColor: '#fff', shake: 0,
       core: { a: 0, r: 0, color: CY }, ring: { a: 0, scale: 1, locked: 0, seek: -Math.PI / 2, seekOn: false, flicker: -1, final: null, shatter: 0 },
       raster: null, bits: [], flies: [], sparks: [], waves: [], dust: [] };
+    // Pack Pass opening style (own openings only; looks only). Empty for guests and non-members.
+    const style = { sleeve: null, sleeveIm: null, reveal: null };
+    W.fx = [];
+    const sleeveSlots = () => { if (!style.sleeve) return; rowEl.querySelectorAll('.cbd-slot:not(.filled)').forEach(n => { n.classList.add('sleeved'); n.style.backgroundImage = 'url("' + style.sleeve.replace(/"/g, '') + '")'; }); };
+    fetch('/api/pass/style', { credentials: 'same-origin', headers: { Accept: 'application/json' } }).then(r => (r.ok ? r.json() : null)).then(d => {
+      if (!d || S.destroyed) return;
+      if (d.reveal && /^[a-z]+$/.test(d.reveal.element || '') && Array.isArray(d.reveal.colors)) style.reveal = { element: d.reveal.element, colors: d.reveal.colors.filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 3) };
+      const url = safeUrl(d.sleeve), u = url ? new URL(url) : null; if (u && u.origin === location.origin && u.pathname.startsWith('/site/img/pass/sleeves/')) { style.sleeve = url; loadImg(url).then(im => { style.sleeveIm = im; }); sleeveSlots(); }
+    }).catch(() => {});
     for (let i = 0; i < 46; i++) W.dust.push({ x: Math.random(), y: Math.random(), z: .3 + Math.random() * .7, p: Math.random() * 6 });
     function layout() { const narrow = Wd < 560; L.cx = Wd / 2; L.cy = Ht * (narrow ? .42 : .44); L.ph = Math.min(Ht * .52, Wd * .62 * 1520 / 842); L.pw = L.ph * 842 / 1520; L.ch = Math.min(Ht * (narrow ? .42 : .5), Wd * .62 * 7 / 5); L.cw = L.ch * 5 / 7; fitCard(); L.R = Math.min(L.ch * .4, Wd * .34); L.floor = Ht * .73; }
     // Keep the card, its tier/Cardbits/name tag and the hint pill from overlapping on short stages.
@@ -274,6 +283,7 @@
       g.fillStyle = 'rgba(69,227,236,.05)'; g.fillRect(x, y, w, h); g.strokeStyle = 'rgba(69,227,236,.16)'; g.lineWidth = 1;
       for (let i = 1; i < 10; i++) { g.beginPath(); g.moveTo(x + w * i / 10, y); g.lineTo(x + w * i / 10, y + h); g.stroke(); }
       for (let i = 1; i < 14; i++) { g.beginPath(); g.moveTo(x, y + h * i / 14); g.lineTo(x + w, y + h * i / 14); g.stroke(); }
+      if (style.sleeveIm && r.line < 1) { g.save(); g.beginPath(); g.rect(x, ly, w, y + h - ly); g.clip(); g.drawImage(style.sleeveIm, x, y, w, h); g.restore(); }
       if (r.im) { g.save(); g.beginPath(); g.rect(x, y, w, ly - y); g.clip();
         if (r.glitch > 0) { for (let s = 0; s < 6; s++) { const off = (Math.random() - .5) * w * .08; g.drawImage(r.im, 0, r.im.height * s / 6, r.im.width, r.im.height / 6, x + off, y + h * s / 6, w, h / 6); } } else g.drawImage(r.im, x, y, w, h);
         g.restore(); }
@@ -296,6 +306,56 @@
       for (let i = W.waves.length - 1; i >= 0; i--) { const r = W.waves[i]; r.r += (r.max - r.r) * .07 + 2; r.a -= .022; if (r.a <= 0) { W.waves.splice(i, 1); continue; } g.globalAlpha = r.a; g.strokeStyle = r.c; g.lineWidth = 3 * r.a + 1; g.beginPath(); g.arc(r.x, r.y, r.r, 0, 7); g.stroke(); }
       g.restore();
     }
+
+    /* ---------- Pack Pass reveal effect: a burst in the member's character's element, behind the card ---------- */
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    function revealBurst(rk) {
+      const rv = style.reveal; if (!rv || S.reduced) return;
+      const el = rv.element, cols = rv.colors.length ? rv.colors : [CY, CY, '#fff'], n = [16, 26, 40, 70, 110][rk] || 26;
+      for (let i = 0; i < n && W.fx.length < 260; i++) {
+        const a = rnd(0, Math.PI * 2), sp = rnd(1.5, 6) * (1 + rk * .12);
+        const p = { el, x: L.cx + Math.cos(a) * L.cw * .4, y: L.cy + Math.sin(a) * L.ch * .4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rnd(50, 90), age: 0, r: rnd(3, 8) * (L.ch / 400 + .5), rot: rnd(0, 6), vr: rnd(-.2, .2), col: cols[i % cols.length] };
+        if (el === 'fire' || el === 'dragon') { p.vy = -rnd(1.5, 5); p.vx = rnd(-2.5, 2.5); }
+        if (el === 'ghost') { p.vy = -rnd(.4, 1.6); p.vx = rnd(-1, 1); p.r *= 3; p.life = rnd(70, 110); }
+        if (el === 'ice') { p.vx *= .5; p.vy = rnd(-1, 1.5); p.life = rnd(80, 120); }
+        if (el === 'grass') { p.vx *= .7; p.vy = rnd(-3, 1); }
+        if (el === 'wind') { p.ang = a; p.rad = L.ch * rnd(.3, .5); p.spd = rnd(.05, .1); p.len = rnd(.3, .8); }
+        if (el === 'electric' && i % 4 === 0) { p.bolt = 1; p.life = rnd(10, 18); }
+        W.fx.push(p);
+      }
+      if (el === 'water' || el === 'crystal' || el === 'holo') wave(L.cx, L.cy, cols[0], L.ch * 1.2);
+      if (el === 'dragon' || el === 'electric') wave(L.cx, L.cy, cols[2] || cols[0], L.ch * 1.1);
+    }
+    function drawFx() {
+      if (!W.fx.length) return; g.save();
+      for (let i = W.fx.length - 1; i >= 0; i--) {
+        const p = W.fx[i]; p.age++; if (p.age >= p.life) { W.fx.splice(i, 1); continue; }
+        const k = p.age / p.life, al = 1 - k, el = p.el;
+        if (el === 'wind') p.ang += p.spd; else { p.x += p.vx; p.y += p.vy; p.rot += p.vr; }
+        if (el === 'gold' || el === 'water' || el === 'card' || el === 'holo' || el === 'crystal') p.vy += .12;
+        if (el === 'grass') { p.vy += .05; p.vx += Math.sin(p.age * .1) * .15; }
+        if (el === 'ice') p.vy += .02;
+        if (el === 'fire' || el === 'dragon') p.vx *= .98;
+        g.globalAlpha = al; g.fillStyle = g.strokeStyle = p.col;
+        if (el === 'wind') { g.lineWidth = 2.5; g.lineCap = 'round'; g.beginPath(); g.arc(L.cx, L.cy, p.rad + p.age * 2.4, p.ang, p.ang + p.len); g.stroke(); continue; }
+        if (p.bolt) { g.lineWidth = 3; g.beginPath(); let x = L.cx, y = L.cy; g.moveTo(x, y); for (let j = 0; j < 6; j++) { x += Math.cos(p.rot) * L.ch * .08 + rnd(-12, 12); y += Math.sin(p.rot) * L.ch * .08 + rnd(-12, 12); g.lineTo(x, y); } g.stroke(); continue; }
+        g.save(); g.translate(p.x, p.y); g.rotate(p.rot); const r = p.r;
+        switch (el) {
+          case 'card': g.fillRect(-r * .7, -r, r * 1.4, r * 2); break;
+          case 'gold': g.beginPath(); g.ellipse(0, 0, r, Math.max(.5, r * Math.abs(Math.cos(p.age * .2))), 0, 0, 7); g.fill(); break;
+          case 'holo': g.fillStyle = 'hsl(' + ((p.age * 8 + p.x) % 360) + ' 90% 72%)'; g.beginPath(); g.moveTo(0, -r); g.lineTo(r * .7, 0); g.lineTo(0, r); g.lineTo(-r * .7, 0); g.fill(); break;
+          case 'water': g.beginPath(); g.moveTo(0, -r * 1.4); g.quadraticCurveTo(r, r * .4, 0, r); g.quadraticCurveTo(-r, r * .4, 0, -r * 1.4); g.fill(); break;
+          case 'grass': g.beginPath(); g.ellipse(0, 0, r * 1.3, r * .55, 0, 0, 7); g.fill(); break;
+          case 'ice': g.lineWidth = 1.8; for (let j = 0; j < 3; j++) { g.rotate(Math.PI / 3); g.beginPath(); g.moveTo(-r, 0); g.lineTo(r, 0); g.stroke(); } break;
+          case 'crystal': g.beginPath(); g.moveTo(0, -r * 1.5); g.lineTo(r * .6, r); g.lineTo(-r * .6, r); g.fill(); break;
+          case 'ghost': { g.globalAlpha = al * .35; const gr = g.createRadialGradient(0, 0, 0, 0, 0, r); gr.addColorStop(0, p.col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, r, 0, 7); g.fill(); break; }
+          case 'electric': g.fillRect(-2, -2, 4, 4); break;
+          default: g.beginPath(); g.arc(0, 0, r * (1 - k * .6), 0, 7); g.fill(); // fire, dragon
+        }
+        g.restore();
+      }
+      g.restore();
+    }
     let visible = true, running = false;
     function frame(now) {
       if (S.destroyed) { running = false; return; }
@@ -303,7 +363,7 @@
       if (W.shake > 0 && !S.reduced) { g.translate((Math.random() - .5) * W.shake, (Math.random() - .5) * W.shake); W.shake *= .88; if (W.shake < .3) W.shake = 0; }
       drawBg(now); drawPlatform(now);
       if (W.dim > 0) { g.fillStyle = `rgba(0,0,0,${W.dim * .65})`; g.fillRect(-20, -20, Wd + 40, Ht + 40); }
-      drawBeams(now); drawPack(now); drawCore(now); drawRing(now); drawRaster(); drawParticles();
+      drawBeams(now); drawPack(now); drawCore(now); drawRing(now); drawRaster(); drawParticles(); drawFx();
       g.restore();
       if (visible && !document.hidden) requestAnimationFrame(frame); else running = false;
     }
@@ -464,7 +524,7 @@
       } finally { clearInterval(lineFx); }
       const n = cardNode(c, true); W.raster = null;
       scramble(n.querySelector('.cbd-pill'), (c.tier || '').toUpperCase(), 360); scramble(n.querySelector('b'), c.name || 'Card', 520);
-      sfx.stinger(rk); sparks(L.cx, L.cy, col, [8, 18, 36, 70, 130][rk], [.6, .8, 1, 1.3, 1.7][rk]); if (rk >= 2) wave(L.cx, L.cy, col, L.ch * 1.3);
+      revealBurst(rk); sfx.stinger(rk); sparks(L.cx, L.cy, col, [8, 18, 36, 70, 130][rk], [.6, .8, 1, 1.3, 1.7][rk]); if (rk >= 2) wave(L.cx, L.cy, col, L.ch * 1.3);
       if (rk >= 3) { vib(rk === 4 ? [60, 40, 120] : 60); banner.style.setProperty('--tc', col); banner.className = 'cbd-banner'; void banner.offsetWidth; banner.classList.add('on'); scramble(banner, rk === 4 ? 'LEGENDARY PULL' : 'EPIC PULL', 480); }
       readout((c.tier || 'CARD').toUpperCase() + ' · DECODED');
       const chip = n.querySelector('.cbd-bits');
@@ -477,7 +537,7 @@
       if (S.reduced) await n.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }).finished;
       else await n.animate([{ transform: 'none' }, { transform: `translate(${b.x - a.x}px,${b.y - a.y}px) scale(${b.h / a.h})`, opacity: .85 }], { duration: 400, easing: 'cubic-bezier(.5,0,.2,1)', fill: 'forwards' }).finished;
       if (!ctx.alive()) throw ABORT;
-      n.remove(); s.classList.add('filled'); s.style.setProperty('--tc', tc(c.tier || 'Common')); s.innerHTML = c.image ? '<img alt="" src="' + esc(c.image) + '">' : ''; sfx.tick(i);
+      n.remove(); s.classList.remove('sleeved'); s.style.backgroundImage = ''; s.classList.add('filled'); s.style.setProperty('--tc', tc(c.tier || 'Common')); s.innerHTML = c.image ? '<img alt="" src="' + esc(c.image) + '">' : ''; sfx.tick(i);
     }
     async function reform(ctx) {
       readout('RE-SYNC'); W.core.a = 1; W.core.r = 3; W.core.color = CY;
@@ -486,7 +546,7 @@
     }
     async function run(ctx) {
       rowEl.replaceChildren(...cards.map(() => Object.assign(document.createElement('div'), { className: 'cbd-slot' })));
-      await bay(ctx); await scanAndCompress(ctx);
+      sleeveSlots(); await bay(ctx); await scanAndCompress(ctx);
       for (let i = 0; i < cards.length; i++) {
         const c = cards[i];
         if (i > 0) { setHint(`<i>Tap</i> to Decode · ${i + 1} of ${cards.length}`); await ctx.tap(); setHint(''); await reform(ctx); }

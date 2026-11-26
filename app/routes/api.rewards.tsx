@@ -11,6 +11,7 @@ import { AGE_REQUIRED, ageConfirmed, confirmAge } from "../lib/cardbit-age.serve
 import { PlayPaused, assertNotPaused } from "../site/play/limits.server";
 import { activeTier } from "../site/play/subscriptions.server";
 import { isPassIcon, passIconAllowed, passPicker, shownIcon } from "../site/play/pass-icons";
+import { isRevealChoice, isSleeveId, sleeveAllowed, stylePicker } from "../site/play/pass-style";
 import { SITE_SHOP, siteLeaderboardOn, siteLevelsOn, siteWeeklyStandings } from "../site/rewards/rewards.server";
 import { gateApi } from "../site/waitlist/gate.server";
 import { PLAN } from "../site/play/plan-brand";
@@ -34,7 +35,11 @@ async function viewWithClub(customerId: string) {
     await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId } }, data: { iconId: shown } });
     view.avatar.iconId = shown;
   }
-  return { ...view, pass: passPicker(tier?.id) };
+  const saved = await db.cardbitProfile.findUnique({
+    where: { shop_customerId: { shop: SITE_SHOP, customerId } },
+    select: { sleeveId: true, revealFx: true },
+  });
+  return { ...view, pass: passPicker(tier?.id), style: stylePicker({ ...saved, iconId: view.avatar.iconId }, tier?.id) };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -46,7 +51,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!customer) return json({ error: "Sign In to Cardbit.", code: "sign_in" }, 401);
   if (customer.frozenAt) return json({ error: "This account is on hold. Contact Support@cardbit.com.", code: "account_frozen" }, 403);
   const input = (await request.json().catch(() => null)) as
-    | { action?: unknown; iconId?: unknown; color?: unknown; tier?: unknown }
+    | { action?: unknown; iconId?: unknown; color?: unknown; tier?: unknown; sleeve?: unknown; reveal?: unknown }
     | null;
   try {
     if (input?.action === "confirm-age") {
@@ -73,6 +78,24 @@ export async function action({ request }: ActionFunctionArgs) {
       }
       await setAvatar(db, SITE_SHOP, customer.id, { color: input.color ?? undefined });
       await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: customer.id } }, data: { iconId: input.iconId } });
+      return json(await viewWithClub(customer.id));
+    }
+    // My Opening Style: card sleeve and reveal effect (Pro and Ultimate; Gold Legendary sleeve is Ultimate only).
+    if (input?.action === "style") {
+      const tier = await activeTier(db, customer.id);
+      if (!(tier?.id === "pro" || tier?.id === "ultimate")) return json({ error: `Opening styles are for ${PLAN.name} Pro and Ultimate members.` }, 403);
+      const data: { sleeveId?: string | null; revealFx?: string | null } = {};
+      if ("sleeve" in input) {
+        if (input.sleeve !== null && !isSleeveId(input.sleeve)) return json({ error: "Unknown sleeve." }, 400);
+        if (input.sleeve !== null && !sleeveAllowed(input.sleeve, tier.id)) return json({ error: `The Gold Legendary sleeve is for ${PLAN.name} Ultimate members.` }, 403);
+        data.sleeveId = input.sleeve as string | null;
+      }
+      if ("reveal" in input) {
+        if (input.reveal !== null && !isRevealChoice(input.reveal)) return json({ error: "Unknown reveal effect." }, 400);
+        data.revealFx = input.reveal as string | null;
+      }
+      await setAvatar(db, SITE_SHOP, customer.id, {}); // makes sure the profile row exists
+      await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: customer.id } }, data });
       return json(await viewWithClub(customer.id));
     }
     if (input?.action === "avatar") {

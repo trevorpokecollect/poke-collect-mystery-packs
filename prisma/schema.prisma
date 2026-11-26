@@ -485,6 +485,8 @@ model CardbitProfile {
   xp             Int      @default(0)
   iconId         String?
   iconColor      String?
+  sleeveId       String? // Pack Pass card sleeve (site; shown only while perks apply)
+  revealFx       String? // Pack Pass reveal effect: character id, "off", or null = icon's character
   streak         Int      @default(0)
   lastCheckInDay String?
   updatedAt      DateTime @updatedAt

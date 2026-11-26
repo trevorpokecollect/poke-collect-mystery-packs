@@ -109,3 +109,4 @@
 @media (prefers-reduced-motion:reduce){
   .cbd *,.cbd *::before,.cbd *::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
 }
+.cbd-slot.sleeved{background-size:cover;background-position:center;border:1px solid rgba(255,255,255,.18)}

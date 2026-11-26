@@ -2,7 +2,8 @@
    window.cardbitPass = { frames, framesSm } comes from the server (app/site/play/pass-icons.ts).
    - CardbitPass.frame(node, tier): puts the member's frame around an avatar element (any size).
    - CardbitPass.html(tier, small): frame <img> markup for code that builds HTML strings (chat, header).
-   - CardbitPass.picker(root, data, choose): the "Pack Pass Emotes" panel on the Rewards page. */
+   - CardbitPass.picker(root, data, choose): the "Pack Pass Emotes" panel on the Rewards page, followed by
+     "My Opening Style" (card sleeve + reveal effect for the member's own openings; data.style from /api/rewards). */
 (() => {
   if (window.CardbitPass) return;
   const cfg = window.cardbitPass || { frames: {}, framesSm: {} };
@@ -31,6 +32,19 @@
     '.cbp-emote[aria-pressed="true"]{border-color:#2EE6F0;box-shadow:0 0 0 2px #2EE6F0 inset}',
     '.cbp-emote:disabled{cursor:not-allowed}.cbp-emote:disabled img{filter:grayscale(.85) brightness(.55)}',
     '.cbp-join{display:inline-flex;margin-top:14px}',
+    '.cbp-panel h4{margin:16px 0 8px;font:800 .95rem "Cardbit Outfit",system-ui,sans-serif;color:#cfe0e2}',
+    '.cbp-sleeves{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}',
+    '.cbp-sleeve{display:grid;justify-items:center;gap:5px;padding:8px 6px;border:1px solid #2b3d42;border-radius:14px;background:#0b1719;color:#e8f4f3;font:700 .8rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer}',
+    '.cbp-sleeve img{width:72px;aspect-ratio:600/837;border-radius:6px}',
+    '.cbp-sleeve .cbp-none{width:72px;aspect-ratio:600/837;border-radius:6px;border:1px dashed #3a5257;display:grid;place-items:center;color:#a8b3c7;font-size:.7rem}',
+    '.cbp-sleeve small{font:600 .68rem "Cardbit Outfit",system-ui,sans-serif;color:#a8b3c7}.cbp-sleeve.is-ult small{color:#FFC94D}',
+    ':is(#cardbit-store,body) .cbp-panel button.cbp-sleeve[aria-pressed="true"],:is(#cardbit-store,body) .cbp-panel button.cbp-fx[aria-pressed="true"]{border-color:#2EE6F0;background:#0f3138;box-shadow:0 0 0 2px #2EE6F0 inset}',
+    '.cbp-sleeve:disabled,.cbp-fx:disabled{cursor:not-allowed;opacity:.5}',
+    '.cbp-fxs{display:flex;flex-wrap:wrap;gap:6px}',':is(#cardbit-store,body) .cbp-panel button.cbp-fx,:is(#cardbit-store,body) .cbp-panel button.cbp-sleeve{border:1px solid #2b3d42}',':is(#cardbit-store,body) .cbp-panel button.cbp-fx{padding:6px 11px;background:#0b1719}',':is(#cardbit-store,body) .cbp-panel button.cbp-sleeve{padding:8px 6px;background:#0b1719}',
+    '.cbp-fx{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid #2b3d42;border-radius:999px;background:#0b1719;color:#e8f4f3;font:600 .8rem "Cardbit Outfit",system-ui,sans-serif;cursor:pointer}',
+    '.cbp-fx img{width:22px;height:22px;border-radius:50%}',
+    '.cbp-sleeve:focus-visible,.cbp-fx:focus-visible{outline:2px solid #2EE6F0;outline-offset:2px}',
+    '.cbp-note{margin:8px 0 0;color:#a8b3c7;font-size:.85rem}.cbp-err{color:#ff8a8a}',
   ].join('');
   document.head.append(css);
 
@@ -91,6 +105,57 @@
       if (e.unlocked) b.addEventListener('click', () => choose(e.id));
       list.append(b);
     }
+    if (data.style) stylePanel(panel, data.style, icons);
+  }
+
+  // My Opening Style: sleeve + reveal effect. Saves straight to /api/rewards and redraws this part only.
+  const ELEMENT = { card: 'Card Sparks', gold: 'Gold Coins', holo: 'Holo Prisms', fire: 'Flames', water: 'Splash', grass: 'Leaves', electric: 'Bolts', ice: 'Snowflakes', crystal: 'Crystal Shards', ghost: 'Ghost Wisps', wind: 'Gusts', dragon: 'Dragon Fire' };
+  function stylePanel(panel, st, icons) {
+    let box = panel.querySelector('.cbp-style');
+    if (!box) { box = document.createElement('div'); box.className = 'cbp-style'; }
+    panel.append(box);
+    const p = plan();
+    box.innerHTML = '<h3 style="margin-top:22px">My Opening Style</h3><p class="cbp-note">' + esc(st.unlocked
+      ? 'Your sleeve covers each card until it prints, and your reveal effect plays behind the card. Only in your own openings, and it never changes what you pull.'
+      : p.name + ' Pro and Ultimate Members Pick a Card Sleeve and Reveal Effect for Their Openings. Ultimate Adds the Gold Legendary Sleeve.') + '</p>' +
+      '<h4>Card Sleeve</h4><div class="cbp-sleeves" role="group" aria-label="Card sleeve"></div>' +
+      '<h4>Reveal Effect</h4><div class="cbp-fxs" role="group" aria-label="Reveal effect"></div><p class="cbp-note cbp-msg" aria-live="polite"></p>';
+    const msg = box.querySelector('.cbp-msg');
+    async function save(body) {
+      msg.textContent = 'Saving…'; msg.classList.remove('cbp-err');
+      try {
+        const r = await fetch('/api/rewards', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(Object.assign({ action: 'style' }, body)) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.style) throw new Error(d.error || 'Could Not Save. Try Again.');
+        stylePanel(panel, d.style, icons);
+        const m = panel.querySelector('.cbp-msg'); if (m) m.textContent = 'Saved.';
+      } catch (e) { msg.textContent = e.message; msg.classList.add('cbp-err'); }
+    }
+    const sl = box.querySelector('.cbp-sleeves');
+    const opt = (id, label, inner, extra, unlocked, pressed, cls) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.disabled = !unlocked;
+      b.setAttribute('aria-pressed', String(pressed)); b.innerHTML = inner;
+      b.setAttribute('aria-label', label + (extra ? ', ' + extra : ''));
+      return b;
+    };
+    const none = opt('', 'Standard', '<span class="cbp-none">None</span><span>Standard</span><small></small>', '', st.unlocked, !st.sleeve, 'cbp-sleeve');
+    none.addEventListener('click', () => save({ sleeve: null })); sl.append(none);
+    for (const s of st.sleeves) {
+      const lock = s.unlocked ? (s.ultimate ? 'Ultimate' : '') : s.ultimate ? 'Ultimate Only' : 'Pro and Ultimate';
+      const b = opt(s.id, s.name + ' sleeve', '<img alt="" src="' + esc(s.url) + '" loading="lazy"><span>' + esc(s.name) + '</span><small>' + esc(lock) + '</small>', s.unlocked ? '' : lock, s.unlocked, st.sleeve === s.id, 'cbp-sleeve' + (s.ultimate ? ' is-ult' : ''));
+      if (s.unlocked) b.addEventListener('click', () => save({ sleeve: s.id }));
+      sl.append(b);
+    }
+    const fx = box.querySelector('.cbp-fxs');
+    const autoName = st.autoReveal && (st.characters.find((c) => c.id === st.autoReveal) || {}).name;
+    const auto = opt('', 'Match My Icon', 'Match My Icon' + (autoName ? ' (' + esc(autoName) + ')' : ''), '', st.unlocked, st.reveal === null, 'cbp-fx');
+    auto.addEventListener('click', () => save({ reveal: null })); fx.append(auto);
+    for (const c of st.characters) {
+      const b = opt(c.id, c.name + ' ' + (ELEMENT[c.element] || ''), '<img alt="" src="' + esc(icons[c.id + '-hype'] || '') + '" loading="lazy">' + esc(c.name) + ' · ' + esc(ELEMENT[c.element] || ''), '', st.unlocked, st.reveal === c.id, 'cbp-fx');
+      b.addEventListener('click', () => save({ reveal: c.id })); fx.append(b);
+    }
+    const off = opt('', 'Off', 'Off', '', st.unlocked, st.reveal === 'off', 'cbp-fx');
+    off.addEventListener('click', () => save({ reveal: 'off' })); fx.append(off);
   }
 
   window.CardbitPass = { frame, html, picker, frames: cfg.frames, framesSm: cfg.framesSm };
