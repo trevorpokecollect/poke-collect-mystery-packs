@@ -18,6 +18,7 @@ describe.skipIf(!url)("Card Broker chat desk", () => {
     const ids = (await db.siteCustomer.findMany({ where: { email: { endsWith: "@desk.test" } }, select: { id: true } })).map((c) => c.id);
     await db.siteChatMessage.deleteMany({ where: { OR: [{ customerId: { in: ids } }, { customerId: { startsWith: "staff:mod@cardbit.test" } }] } });
     await db.siteChatMute.deleteMany({ where: { customerId: { in: ids } } });
+    await db.siteChatFlag.deleteMany({ where: { customerId: { in: ids } } });
     await db.cardbitAgeConfirmation.deleteMany({ where: { shop: SITE_SHOP, customerId: { in: ids } } });
     await db.siteCustomer.deleteMany({ where: { id: { in: ids } } });
   };
