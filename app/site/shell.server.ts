@@ -266,6 +266,10 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
       .cb-loading img { object-fit: contain; }
     </style>
     <script>
+      // iPhone: Web Audio is muted by the ringer switch unless the page's audio session is "playback" (Safari 17+).
+      // Trevor (Nov 26): opening music and sounds play even on silent. Set it when a sound engine starts, so
+      // the site's own Sound toggle still decides whether anything plays.
+      (function(){var s=navigator.audioSession,A=window.AudioContext||window.webkitAudioContext;if(!s||!A||A.cbPlayback)return;function P(o){try{s.type='playback'}catch(e){}return o===undefined?new A():new A(o)}P.prototype=A.prototype;P.cbPlayback=true;window.AudioContext=P;if(window.webkitAudioContext)window.webkitAudioContext=P})();
       window.cardbitAssets = ${assetMap()};
       window.cardbitValueIcon = window.cardbitAssets["bits-card-emblem.png"];
       window.CardbitRewardIcons = ${rewardIcons()};
