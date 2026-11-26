@@ -1683,6 +1683,33 @@ model SiteChatMessage {
   @@index([customerId, createdAt])
 }
 
+// Chat auto-moderation queue (Trevor 2026-11-26). One row per thing staff may want to see: a message the instant
+// filter or the AI check stopped (source filter|ai; the message never posted, body kept here), a posted message the AI
+// flagged for a look without hiding (ai, strike false), or a player's report of a posted message (report, one per
+// reporter per message). strike = counts toward automatic mutes until staff dismiss it.
+model SiteChatFlag {
+  id         String    @id @default(cuid())
+  source     String // filter | ai | report
+  status     String    @default("open") // open | dismissed | actioned
+  category   String // hate | threat | harassment | sexual | scam | off_platform | personal_info | spam | self_harm | other ...
+  severity   Int       @default(1) // 1 low, 2 medium, 3 high
+  strike     Boolean   @default(false)
+  hidden     Boolean   @default(false) // true when the message was stopped or auto-hidden
+  room       String
+  customerId String // author
+  messageId  String? // posted message, when there is one
+  body       String
+  reason     String?
+  reporterId String?
+  model      String?
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+  @@unique([messageId, reporterId])
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+}
+
 model SiteChatMute {
   customerId String   @id
   until      DateTime

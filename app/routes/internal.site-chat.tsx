@@ -4,11 +4,15 @@
 // POST {op:"mutes"} → {mutes:[{customerId, email, until, by, since}]}
 // POST {op:"remove"|"restore", id}            POST {op:"mute", id | customerId, hours}
 // POST {op:"unmute", customerId}              POST {op:"post", room, body}  (as "Cardbit Staff")
+// POST {op:"flags", status?:"open"|"dismissed"|"actioned", offset?, limit?} → {status, ai, stats, items, next}
+// POST {op:"resolve", flagIds:[...], decision:"dismiss"|"remove"|"mute"|"ban", hours?}
+// POST {op:"ban", id | customerId}             (unban = op "unmute")
+// POST {op:"check", body}                      → {filter, ai}  (try a message; nothing is posted or recorded)
 import type { ActionFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
 import { ChatError } from "../site/play/chat.server";
-import { chatDeskList, chatDeskMute, chatDeskMutes, chatDeskPost, chatDeskRemove, chatDeskRestore, chatDeskUnmute } from "../site/play/chat-desk.server";
+import { chatDeskBan, chatDeskCheck, chatDeskFlags, chatDeskList, chatDeskMute, chatDeskMutes, chatDeskPost, chatDeskRemove, chatDeskResolve, chatDeskRestore, chatDeskUnmute } from "../site/play/chat-desk.server";
 
 export const loader = () => new Response("Not found", { status: 404 });
 
@@ -41,6 +45,14 @@ export async function action({ request }: ActionFunctionArgs) {
         ? await chatDeskUnmute(db, b.customerId)
         : b.op === "post"
         ? await chatDeskPost(db, b.room, b.body, actor)
+        : b.op === "flags"
+        ? await chatDeskFlags(db, { status: str("status", 12), offset: Number(b.offset) || 0, limit: Number(b.limit) || undefined })
+        : b.op === "resolve"
+        ? await chatDeskResolve(db, { flagIds: b.flagIds, decision: b.decision, hours: b.hours }, actor)
+        : b.op === "ban"
+        ? await chatDeskBan(db, { id: b.id, customerId: b.customerId }, actor)
+        : b.op === "check"
+        ? await chatDeskCheck(b.body)
         : null;
     if (!r) return Response.json({ error: "Unknown op." }, { status: 422, headers });
     return Response.json(r, { headers });

@@ -26,10 +26,13 @@
   const RULES = [
     ['Be Kind', 'No harassment, hate or threats. Treat everyone with respect.'],
     ['No Links or Contact Details', 'Links, emails and phone numbers are blocked to stop scams.'],
-    ['Keep Trades on Cardbit', 'No buying, selling or trading off the site.'],
+    ['Keep Trades on Cardbit', 'No buying, selling, trading or payments off the site, and no “DM me”.'],
     ['No Spam', 'No repeated messages, codes or self-promotion.'],
     ['18+ Only', 'Chat is for verified adults. Staff will never ask for your password.'],
+    ['Automatic Moderation', 'Messages are checked automatically, including by AI, before they post. Breaking the rules can get you muted automatically.'],
+    ['See Something? Report It', 'Use the flag on a message to report it to staff.'],
   ];
+  const REPORT_REASONS = [['harassment', 'Harassment or Bullying'], ['hate', 'Hate Speech'], ['scam', 'Scam or Off-Site Trade'], ['spam', 'Spam'], ['personal_info', 'Personal Info'], ['sexual', 'Sexual Content'], ['other', 'Something Else']];
 
   // Per-browser preferences (never required: everything works if storage is blocked).
   const store = {
@@ -44,6 +47,8 @@
   let open = false, room = store.get('room', 'main'), data = null, timer = 0, busy = false, stopPeek = false;
   let menu = null; // 'rooms' | 'emoji' | 'rules' | 'settings' | null
   let replyTo = null; // { id, name, body }
+  let reportTarget = null; // { id, name, body } while the Report sheet is open
+  let notice = ''; // short confirmation under the composer (e.g. after a report)
   let pulls = [], pullsAt = 0;
   let seenId = session.get('seen') || null, unread = 0, unseenBelow = 0, lastId = null;
   let showPulls = store.get('pulls', true);
@@ -64,6 +69,7 @@
     gear: 'M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3.3h-4l-.4 2.7a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1a7.4 7.4 0 0 0 1.7 1l.4 2.7h4l.4-2.7a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z',
     down: 'M11 4h2v12l5.5-5.5 1.4 1.4L12 19.8 4.1 11.9l1.4-1.4L11 16z',
     lock: 'M12 2a5 5 0 0 1 5 5v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1V7a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v3h6V7a3 3 0 0 0-3-3z',
+    flag: 'M5 3h2v18H5zm3 1h10l-2 4 2 4H8z',
     smile: 'M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm-3.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm7 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7 14a5.5 5.5 0 0 0 10 0z',
   };
   const EMOJI = ['🔥', '😍', '😂', '🙌', '👏', '💎', '⚡', '🎉', '😭', '👀', '🤞', '❤️'];
@@ -84,6 +90,7 @@
     const canReply = data && data.access && data.access.canRead && !data.access.mutedUntil;
     const acts = '<span class="cb-chat-acts">' +
       (canReply ? '<button type="button" data-chat-reply="' + esc(m.id) + '" aria-label="Reply to ' + esc(m.name) + '" title="Reply">' + svg(I.reply, 15) + '</button>' : '') +
+      (m.badge !== 'staff' && !m.mine && data && data.access && data.access.canRead ? '<button type="button" data-chat-report="' + esc(m.id) + '" aria-label="Report message from ' + esc(m.name) + '" title="Report">' + svg(I.flag, 15) + '</button>' : '') +
       (m.badge !== 'staff' ? '<button type="button" data-chat-hide="' + esc(m.name) + '" aria-label="Hide messages from ' + esc(m.name) + '" title="Hide this user">' + svg(I.hide, 15) + '</button>' : '') +
       (m.canModerate ? '<button type="button" class="cb-chat-danger" data-chat-del="' + esc(m.id) + '" title="Delete for everyone">Delete</button>' +
         '<button type="button" class="cb-chat-danger" data-chat-mute="' + esc(m.id) + '" title="Mute this author for 24 hours">Mute 24h</button>' : '') +
@@ -123,6 +130,14 @@
     return '<div class="cb-chat-pop cb-chat-sheet"><header><h3>Chat Rules</h3><button type="button" data-chat-menu="" aria-label="Close rules">×</button></header><ul>' +
       RULES.map(([t, d]) => '<li><b>' + esc(t) + '</b>' + esc(d) + '</li>').join('') +
       '</ul><p>Breaking the rules can get you muted. <a href="/policies#terms">Full Terms</a></p></div>';
+  }
+  function reportPop() {
+    if (!reportTarget) return '';
+    return '<div class="cb-chat-pop cb-chat-sheet" role="dialog" aria-label="Report message"><header><h3>Report Message</h3><button type="button" data-chat-menu="" aria-label="Close report">×</button></header>' +
+      '<p class="cb-chat-quote"><b>' + esc(reportTarget.name) + '</b> ' + esc(reportTarget.body.slice(0, 120)) + '</p>' +
+      '<p>What’s wrong with it?</p><div class="cb-chat-reasons">' +
+      REPORT_REASONS.map(([k, t]) => '<button type="button" data-chat-reason="' + k + '">' + esc(t) + '</button>').join('') +
+      '</div><p class="cb-chat-muted">Staff review every report. Messages several people report are hidden until staff check them.</p></div>';
   }
   function settingsPop() {
     const list = hidden.length
@@ -165,9 +180,9 @@
           (menu === 'emoji' ? '<div class="cb-chat-pop cb-chat-emoji">' + EMOJI.map(e => '<button type="button" data-chat-emoji="' + e + '">' + e + '</button>').join('') + '</div>' : '');
       body = '<ol class="cb-chat-list" aria-live="polite">' + feedHtml() + '</ol>' +
         '<button type="button" class="cb-chat-jump"' + (unseenBelow ? '' : ' hidden') + '>' + svg(I.down, 14) + (unseenBelow > 0 ? unseenBelow + ' New' : 'Latest') + '</button>' +
-        '<p class="cb-chat-err" role="alert" hidden></p>' + form;
+        '<p class="cb-chat-err" role="alert" hidden></p>' + (notice ? '<p class="cb-chat-note cb-chat-ok" role="status">' + esc(notice) + '</p>' : '') + form;
     }
-    const pop = menu === 'rules' ? rulesPop() : menu === 'settings' ? settingsPop() : '';
+    const pop = menu === 'rules' ? rulesPop() : menu === 'settings' ? settingsPop() : menu === 'report' ? reportPop() : '';
     const tools = '<footer class="cb-chat-tools">' +
       '<button type="button" data-chat-menu="rules" aria-expanded="' + (menu === 'rules') + '" title="Chat rules">' + svg(I.rules, 16) + 'Rules</button>' +
       '<button type="button" data-chat-menu="settings" aria-expanded="' + (menu === 'settings') + '" title="Chat settings">' + svg(I.gear, 16) + 'Settings</button></footer>';
@@ -201,6 +216,7 @@
   function showError(msg) {
     const e = document.querySelector('.cb-chat-err');
     if (e) { e.textContent = msg; e.hidden = !msg; }
+    if (msg && notice) { notice = ''; const ok = document.querySelector('.cb-chat-ok'); if (ok) ok.remove(); }
   }
   function badge() {
     const b = document.querySelector('.cb-chat-unread');
@@ -362,6 +378,19 @@
         return;
       }
       if (t.closest('[data-chat-unreply]')) { replyTo = null; return paint(); }
+      const rpt = t.closest('[data-chat-report]');
+      if (rpt) {
+        const msg = data && data.messages.find(x => x.id === rpt.dataset.chatReport);
+        if (msg) { reportTarget = { id: msg.id, name: msg.name, body: msg.body }; menu = 'report'; notice = ''; paint(); const b = root.querySelector('[data-chat-reason]'); if (b) b.focus(); }
+        return;
+      }
+      const why = t.closest('[data-chat-reason]');
+      if (why && reportTarget) {
+        const id = reportTarget.id;
+        menu = null; reportTarget = null; paint();
+        if (await post({ action: 'report', id, reason: why.dataset.chatReason })) { notice = 'Thanks. Staff will take a look.'; paint(); setTimeout(() => { notice = ''; paint(); }, 5000); }
+        return;
+      }
       const hide = t.closest('[data-chat-hide]');
       if (hide) { const n = hide.dataset.chatHide; if (!hidden.includes(n)) hidden = hidden.concat(n).slice(-200); store.set('hidden', hidden); return paint(); }
       const un = t.closest('[data-chat-unhide]');

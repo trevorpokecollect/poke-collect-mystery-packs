@@ -166,3 +166,9 @@ html.cb-chat-open .cb-chat-btn{display:none}
 .cb-chat-muted{margin:0;font-size:.8rem;color:var(--ch-faint)}
 .cb-chat-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .cb-chat-msg:focus{outline:none}
+/* Report sheet (chat auto-moderation) */
+.cb-chat-reasons{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0 10px}
+.cb-chat-reasons button{min-height:40px;padding:8px 10px;border:1px solid var(--ch-line);border-radius:10px;background:#ffffff08;color:var(--ch-text);font:inherit;font-size:.84rem;font-weight:700;text-align:left;cursor:pointer}
+.cb-chat-reasons button:hover,.cb-chat-reasons button:focus-visible{border-color:var(--ch-cyan);background:#00e6e114}
+.cb-chat-ok{color:#8ff0c8}
+@media (max-width:380px){.cb-chat-reasons{grid-template-columns:1fr}}

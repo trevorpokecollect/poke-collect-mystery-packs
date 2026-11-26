@@ -3,8 +3,10 @@
 //
 // Safety rules (kept server-side so the UI can't skip them):
 // - Signed in, 18+ confirmed, not frozen/closed, not on a cool-off or self-exclusion (a break hides chat).
-// - Plain text, 1-280 characters, no links, emails or phone numbers (stops off-site trades and scams).
+// - Plain text, 1-280 characters, through the instant filter (chat-filter.server.ts: slurs, threats, links, contact
+//   details, payment apps and "DM me", spam, caps), then the AI check (chat-moderation.server.ts) when it's on.
 // - One message every 3 seconds, at most 10 a minute, no repeating the same message within a minute.
+// - Strikes from the filter and AI check auto-mute repeat offenders; readers can report messages.
 // - Staff (SITE_STAFF_EMAILS) can delete any message and mute an author; muted accounts can read only.
 // Customer ids are never sent to the browser: staff act on a message id and the server finds the author.
 import type { PrismaClient } from "@prisma/client";
@@ -15,6 +17,8 @@ import { activeTier } from "./subscriptions.server";
 import { SITE_SHOP, alias } from "../rewards/rewards.server";
 import { staffEmails } from "../shipping/staff.server";
 import { PLAN } from "./plan-brand";
+import { type FilterHit, filterMessage } from "./chat-filter.server";
+import { type Classifier, aiOn, claudeClassify, recordAiHide, recordAiReview, recordFilterBlock } from "./chat-moderation.server";
 
 type Db = PrismaClient;
 export const ROOMS = ["main", "club"] as const;
@@ -51,14 +55,11 @@ export class ChatError extends Error {
     readonly code: string,
     message: string,
     readonly status = 400,
+    readonly hit?: FilterHit,
   ) {
     super(message);
   }
 }
-
-const LINK = /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|gg|io|co|us|shop|store|xyz|me|ly|app|link|tv|live|site|info|biz)\b|discord\s*\.?\s*gg)/i;
-const EMAIL = /[^\s@]+@[^\s@]+\.[a-z]{2,}/i;
-const PHONE = /(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/;
 
 /** Normalizes a message, or throws ChatError with a customer-facing reason. */
 export function cleanBody(raw: unknown): string {
@@ -68,8 +69,8 @@ export function cleanBody(raw: unknown): string {
     .trim();
   if (!body) throw new ChatError("empty", "Type a message.");
   if ([...body].length > MAX_LEN) throw new ChatError("too_long", `Keep messages under ${MAX_LEN} characters.`);
-  if (LINK.test(body)) throw new ChatError("link", "Links aren't allowed in chat.");
-  if (EMAIL.test(body) || PHONE.test(body)) throw new ChatError("contact", "Contact details aren't allowed in chat. Keep trades on Cardbit.");
+  const hit = filterMessage(body);
+  if (hit) throw new ChatError(hit.category, hit.message, 400, hit);
   return body;
 }
 
@@ -98,50 +99,89 @@ export async function chatAccess(db: Db, v: Viewer | null, env: NodeJS.ProcessEn
 type Access = Awaited<ReturnType<typeof chatAccess>>;
 const roomAllowed = (a: Access, room: Room) => a.canRead && (room === "main" || ("club" in a && a.club));
 
-export async function listMessages(db: Db, access: Access, room: Room) {
+export async function listMessages(db: Db, access: Access, room: Room, viewerId?: string) {
   if (!roomAllowed(access, room)) return [];
   const staff = "staff" in access && access.staff;
   const rows = await db.siteChatMessage.findMany({
     where: { room, deletedAt: null },
     orderBy: { createdAt: "desc" },
     take: HISTORY,
-    select: { id: true, name: true, iconId: true, iconColor: true, badge: true, level: true, body: true, replyToId: true, replyName: true, replyBody: true, createdAt: true },
+    select: { id: true, customerId: true, name: true, iconId: true, iconColor: true, badge: true, level: true, body: true, replyToId: true, replyName: true, replyBody: true, createdAt: true },
   });
   // A quote of a message staff removed shows as removed, never the removed text.
   const quoted = [...new Set(rows.map((r) => r.replyToId).filter((x): x is string => !!x))];
   const live = new Set(
     quoted.length ? (await db.siteChatMessage.findMany({ where: { id: { in: quoted }, deletedAt: null }, select: { id: true } })).map((r) => r.id) : [],
   );
-  return rows.reverse().map(({ iconColor, replyToId, replyName, replyBody, ...r }) => {
+  return rows.reverse().map(({ customerId, iconColor, replyToId, replyName, replyBody, ...r }) => {
     const c = AVATAR_COLORS.find((x) => x.id === iconColor) ?? AVATAR_COLORS[0];
     const reply = replyToId ? (live.has(replyToId) ? { id: replyToId, name: replyName, body: replyBody } : { id: replyToId, name: null, body: null, removed: true }) : null;
-    return { ...r, reply, bg: c.bg, fg: c.fg, createdAt: r.createdAt.toISOString(), canModerate: staff };
+    return { ...r, reply, bg: c.bg, fg: c.fg, createdAt: r.createdAt.toISOString(), canModerate: staff, mine: !!viewerId && customerId === viewerId };
   });
 }
 
-export async function sendMessage(db: Db, v: Viewer, room: Room, raw: unknown, env: NodeJS.ProcessEnv = process.env, replyTo?: unknown) {
+const recentFor = (db: Pick<Db, "siteChatMessage">, customerId: string, now: number) =>
+  db.siteChatMessage.findMany({
+    where: { customerId, createdAt: { gte: new Date(now - 60_000) } },
+    orderBy: { createdAt: "desc" },
+    select: { body: true, createdAt: true },
+  });
+function assertPace(recent: { body: string; createdAt: Date }[], body: string, now: number) {
+  if (recent[0] && now - recent[0].createdAt.getTime() < GAP_MS) throw new ChatError("slow_down", "Slow down a little.", 429);
+  if (recent.length >= PER_MINUTE) throw new ChatError("slow_down", "You're sending messages too fast. Try again in a minute.", 429);
+  if (recent.some((r) => r.body.toLowerCase() === body.toLowerCase())) throw new ChatError("repeat", "You just sent that.", 429);
+}
+const mutedNote = (until: Date | null) => (until ? " You're muted in chat for now." : "");
+
+export async function sendMessage(
+  db: Db,
+  v: Viewer,
+  room: Room,
+  raw: unknown,
+  env: NodeJS.ProcessEnv = process.env,
+  replyTo?: unknown,
+  classify: Classifier = claudeClassify,
+) {
   const access = await chatAccess(db, v, env);
   if (!access.canRead) throw new ChatError(access.reason, "You can't use chat right now.", 403);
   if (!roomAllowed(access, room)) throw new ChatError("club_only", `The ${PLAN.short} room is for ${PLAN.name} members.`, 403);
   if (access.mutedUntil) throw new ChatError("muted", "You're muted in chat for now.", 403);
-  const body = cleanBody(raw);
-  return db.$transaction(async (tx) => {
+  let body: string;
+  try {
+    body = cleanBody(raw);
+  } catch (e) {
+    if (e instanceof ChatError && e.hit?.strike && !access.staff) {
+      const until = await recordFilterBlock(db, v.id, room, String(raw ?? "").slice(0, 1000), e.hit);
+      throw new ChatError(e.code, e.message + mutedNote(until), 400);
+    }
+    throw e;
+  }
+  // Cheap pace check first so spam never reaches the AI check; repeated inside the locked transaction below.
+  assertPace(await recentFor(db, v.id, Date.now()), body, Date.now());
+  const target = typeof replyTo === "string" && replyTo
+    ? await db.siteChatMessage.findFirst({ where: { id: replyTo, room, deletedAt: null }, select: { id: true, name: true, body: true } })
+    : null;
+  if (replyTo && !target) throw new ChatError("reply_gone", "That message is gone.", 404);
+
+  const verdict = access.staff || !aiOn(env)
+    ? null
+    : await classify({
+        body,
+        room,
+        replyTo: target ? { name: target.name, body: target.body } : null,
+        context: (await db.siteChatMessage.findMany({ where: { room, deletedAt: null }, orderBy: { createdAt: "desc" }, take: 4, select: { name: true, body: true } })).reverse(),
+      });
+  if (verdict?.action === "hide") {
+    const until = await recordAiHide(db, v.id, room, body, verdict);
+    throw new ChatError("held", "That message wasn't posted because it breaks the chat rules." + mutedNote(until), 422);
+  }
+
+  const created = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"site-chat:" + v.id}, 0))`;
     const now = Date.now();
-    const recent = await tx.siteChatMessage.findMany({
-      where: { customerId: v.id, createdAt: { gte: new Date(now - 60_000) } },
-      orderBy: { createdAt: "desc" },
-      select: { body: true, createdAt: true },
-    });
-    if (recent[0] && now - recent[0].createdAt.getTime() < GAP_MS) throw new ChatError("slow_down", "Slow down a little.", 429);
-    if (recent.length >= PER_MINUTE) throw new ChatError("slow_down", "You're sending messages too fast. Try again in a minute.", 429);
-    if (recent.some((r) => r.body.toLowerCase() === body.toLowerCase())) throw new ChatError("repeat", "You just sent that.", 429);
+    assertPace(await recentFor(tx, v.id, now), body, now);
     const profile = await tx.cardbitProfile.findUnique({ where: { shop_customerId: { shop: SITE_SHOP, customerId: v.id } } });
     const iconId = profile?.iconId && (!profile.iconId.endsWith("-club") || access.tier) ? profile.iconId : null;
-    const target = typeof replyTo === "string" && replyTo
-      ? await tx.siteChatMessage.findFirst({ where: { id: replyTo, room, deletedAt: null }, select: { id: true, name: true, body: true } })
-      : null;
-    if (replyTo && !target) throw new ChatError("reply_gone", "That message is gone.", 404);
     return tx.siteChatMessage.create({
       data: {
         room,
@@ -157,6 +197,8 @@ export async function sendMessage(db: Db, v: Viewer, room: Room, raw: unknown, e
       select: { id: true },
     });
   });
+  if (verdict?.action === "review") await recordAiReview(db, v.id, room, created.id, body, verdict);
+  return created;
 }
 
 export async function deleteMessage(db: Db, staff: Viewer, id: unknown, env: NodeJS.ProcessEnv = process.env) {

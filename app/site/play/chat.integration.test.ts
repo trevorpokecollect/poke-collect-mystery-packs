@@ -39,6 +39,7 @@ describe.skipIf(!url)("live chat", () => {
     const ids = (await db.siteCustomer.findMany({ where: { email: { endsWith: "@chat.test" } }, select: { id: true } })).map((c) => c.id);
     await db.siteChatMessage.deleteMany({ where: { customerId: { in: ids } } });
     await db.siteChatMute.deleteMany({ where: { customerId: { in: ids } } });
+    await db.siteChatFlag.deleteMany({ where: { customerId: { in: ids } } });
     await db.sitePlayEvent.deleteMany({ where: { customerId: { in: ids } } });
     await db.sitePlayControl.deleteMany({ where: { customerId: { in: ids } } });
     await db.siteSubscriptionPayment.deleteMany({ where: { customerId: { in: ids } } });
