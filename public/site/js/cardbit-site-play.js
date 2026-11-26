@@ -98,7 +98,8 @@
   function spinTile(t, paused) {
     const id = tierId(t);
     const label = esc(String(t.name || '').replace(/\s*Spin$/i, ''));
-    const icon = asset('spin-' + id + '.svg');
+    // Latch & Friends character per spin: animated once the spin is unlocked, a still (dimmed by CSS) while locked.
+    const icon = asset('spin-' + id + (t.unlocked ? '-happy' : '-still') + '.svg') || asset('spin-' + id + '.svg');
     let state, cls;
     if (!t.unlocked && t.minLevel <= 1) { cls = 'is-locked'; state = '<span class="cb-lr-tile-state">Free Daily</span>'; }
     else if (!t.unlocked) { cls = 'is-locked'; state = '<span class="cb-lr-tile-state">' + LOCK + ' Level ' + esc(t.minLevel) + '</span>'; }
@@ -122,8 +123,8 @@
       (latch ? '<img class="cb-lr-latch" alt="" width="104" height="110" src="' + esc(latch) + '">' : '') +
       '<p class="cb-lr-kicker">Free Every Day</p><h2 id="cb-launch-title">Daily Rewards</h2>' + (sub ? '<p class="cb-lr-sub">' + sub + '</p>' : '') + (extra || '') + '</header>';
     if (!rw || rw.signedIn === false) {
-      const preview = ['Basic', 'Bronze', 'Silver', 'Gold', 'Cobalt', 'Holo'].map((n, i) =>
-        spinTile({ id: n.toLowerCase(), name: n + ' Spin', minLevel: [1, 5, 10, 20, 30, 40][i], unlocked: false })).join('');
+      const preview = [['basic', 'Sprout'], ['bronze', 'Ember'], ['silver', 'Frost'], ['gold', 'Gold Rush'], ['cobalt', 'Dragon'], ['holo', 'Prism']].map(([id, n], i) =>
+        spinTile({ id, name: n + ' Spin', minLevel: [1, 5, 10, 20, 30, 40][i], unlocked: false })).join('');
       return hero('Check In, Build A Streak And Spin For Free Prizes.') +
         '<div class="cb-lr-body"><h3 class="cb-lr-h">Daily Spins</h3><ul class="cb-lr-tiles is-preview">' + preview + '</ul>' +
         '</div><div class="cb-lr-foot"><a class="cb-lr-cta" href="/sign-in?return_to=' + encodeURIComponent(location.pathname + location.search) + '"><span>Sign Up for 500 Cardbits</span></a>' + rules + '</div>';
