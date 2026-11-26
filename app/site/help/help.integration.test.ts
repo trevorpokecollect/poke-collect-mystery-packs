@@ -5,7 +5,7 @@ import { confirmAge } from "../../lib/cardbit-age.server";
 import { SITE_SHOP } from "../rewards/rewards.server";
 import { startCoolOff } from "../play/limits.server";
 import { htmlToText, knowledge } from "./knowledge.server";
-import { type Ask, HelpError, askHelp, buildSystem, cleanQuestion, helpConversation, helpList, helpMark, helpOn, purgeOld, tidyReply } from "./help.server";
+import { type Ask, HelpError, askHelp, helpAllowed, buildSystem, cleanQuestion, helpConversation, helpList, helpMark, helpOn, purgeOld, tidyReply } from "./help.server";
 import { helpTags } from "./tag.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -17,6 +17,12 @@ describe("Ask Latch basics", () => {
     expect(helpOn({ SITE_HELP: "on" } as NodeJS.ProcessEnv)).toBe(false);
     expect(helpOn({ SITE_HELP: "on", ANTHROPIC_API_KEY: "sk-x" } as NodeJS.ProcessEnv)).toBe(true);
     expect(helpTags("site", "/latch.webp", {} as NodeJS.ProcessEnv)).toBe("");
+    const staffEnv = { SITE_HELP: "staff", ANTHROPIC_API_KEY: "k", SITE_STAFF_EMAILS: "boss@help.test" } as NodeJS.ProcessEnv;
+    expect(helpAllowed(null, staffEnv)).toBe(false);
+    expect(helpAllowed({ email: "fan@help.test" }, staffEnv)).toBe(false);
+    expect(helpAllowed({ email: "Boss@help.test" }, staffEnv)).toBe(true);
+    expect(helpAllowed(null, { ...staffEnv, SITE_HELP: "on" })).toBe(true);
+    expect(helpTags("site", "/latch.webp", staffEnv)).toContain('data-staff="1"');
     expect(helpTags("waitlist", "/latch.webp", { SITE_HELP: "on", ANTHROPIC_API_KEY: "k" } as NodeJS.ProcessEnv)).toContain('data-mode="waitlist"');
   });
 

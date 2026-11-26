@@ -9,10 +9,10 @@ const JS_V = v(helpSource);
 const CSS_V = v(helpCssSource);
 
 // Same switch as help.server.ts helpOn(): the widget shows only when the API can answer.
-const on = (env: NodeJS.ProcessEnv) => env.SITE_HELP === "on" && !!(env.ANTHROPIC_API_KEY || "").trim();
+const on = (env: NodeJS.ProcessEnv) => (env.SITE_HELP === "on" || env.SITE_HELP === "staff") && !!(env.ANTHROPIC_API_KEY || "").trim();
 
 /** Widget tags, or "" when Ask Latch is off. iconUrl = Latch art; mode tells the widget which page it is on. */
 export function helpTags(mode: "site" | "waitlist", iconUrl: string, env: NodeJS.ProcessEnv = process.env): string {
   if (!on(env)) return "";
-  return `<link rel="stylesheet" href="/site/css/cardbit-site-help.css?v=${CSS_V}">\n    <script src="/site/js/cardbit-site-help.js?v=${JS_V}" data-mode="${mode}" data-icon="${iconUrl}" defer></script>`;
+  return `<link rel="stylesheet" href="/site/css/cardbit-site-help.css?v=${CSS_V}">\n    <script src="/site/js/cardbit-site-help.js?v=${JS_V}" data-mode="${mode}" data-icon="${iconUrl}"${env.SITE_HELP === "staff" ? ' data-staff="1"' : ""} defer></script>`;
 }

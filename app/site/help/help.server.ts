@@ -18,6 +18,7 @@ import { ageConfirmed } from "../../lib/cardbit-age.server";
 import { PlayPaused, assertNotPaused } from "../play/limits.server";
 import { SITE_SHOP } from "../rewards/rewards.server";
 import { knowledge } from "./knowledge.server";
+import { staffEmails } from "../shipping/staff.server";
 
 type Db = PrismaClient;
 
@@ -32,7 +33,11 @@ const PER_IP_HOUR = 40;
 export const RETENTION_DAYS = 90;
 export const DEFAULT_MODEL = "claude-opus-5-5";
 
-export const helpOn = (env: NodeJS.ProcessEnv = process.env) => env.SITE_HELP === "on" && !!(env.ANTHROPIC_API_KEY || "").trim();
+// SITE_HELP=on: everyone. SITE_HELP=staff: only signed-in staff (SITE_STAFF_EMAILS), for testing on the live site.
+export const helpOn = (env: NodeJS.ProcessEnv = process.env) => (env.SITE_HELP === "on" || env.SITE_HELP === "staff") && !!(env.ANTHROPIC_API_KEY || "").trim();
+export const helpStaffOnly = (env: NodeJS.ProcessEnv = process.env) => env.SITE_HELP === "staff";
+export const helpAllowed = (customer: { email: string | null } | null, env: NodeJS.ProcessEnv = process.env) =>
+  helpOn(env) && (!helpStaffOnly(env) || Boolean(customer?.email && staffEmails(env).has(customer.email.trim().toLowerCase())));
 export const helpModel = (env: NodeJS.ProcessEnv = process.env) => (env.CARDBIT_HELP_MODEL || "").trim() || DEFAULT_MODEL;
 const dailyCap = (env: NodeJS.ProcessEnv = process.env) => {
   const n = Number(env.SITE_HELP_DAILY_CAP);

@@ -195,5 +195,13 @@
   });
 
   const mount = () => { document.body.appendChild(root); if (state.log.length) btn.classList.add('has-chat'); };
-  if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+  // Staff test mode (SITE_HELP=staff): show the bubble only if the server says this visitor may use it.
+  const start = () => {
+    if (!(me && me.dataset.staff)) return mount();
+    fetch('/api/help', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) { access = d.access || null; mount(); } })
+      .catch(() => {});
+  };
+  if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
 })();

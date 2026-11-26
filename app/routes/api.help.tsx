@@ -8,7 +8,7 @@ import db from "../db.server";
 import { clientIp, cookieValue, currentCustomer, setCookie } from "../site/core/auth.server";
 import { json, sameOriginJson, siteOn } from "../site/store/http.server";
 import { gatePass } from "../site/waitlist/gate.server";
-import { HelpError, askHelp, hashIp, helpAccess, helpOn, newVisitorToken, visitorKeyOf } from "../site/help/help.server";
+import { HelpError, askHelp, hashIp, helpAccess, helpAllowed, helpOn, newVisitorToken, visitorKeyOf } from "../site/help/help.server";
 
 const VISITOR_COOKIE = "cb_help";
 const off = () => !siteOn() || !helpOn();
@@ -16,6 +16,7 @@ const off = () => !siteOn() || !helpOn();
 export async function loader({ request }: LoaderFunctionArgs) {
   if (off()) return new Response("Not found", { status: 404 });
   const customer = await currentCustomer(db, request);
+  if (!helpAllowed(customer)) return new Response("Not found", { status: 404 });
   return json({ access: await helpAccess(db, customer) });
 }
 
@@ -33,6 +34,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (input?.action !== "ask") return json({ error: "Unknown action." }, 400);
 
   const customer = await currentCustomer(db, request);
+  if (!helpAllowed(customer)) return new Response("Not found", { status: 404 });
   let token = cookieValue(request, VISITOR_COOKIE);
   if (!token || !/^[A-Za-z0-9_-]{16,40}$/.test(token)) token = null;
   const fresh = !customer && !token ? newVisitorToken() : null;
