@@ -1,62 +1,48 @@
-// Branded page loader for cardbit.com (Nov 26 2026). Inline SVG + CSS + a few lines of JS, so it adds no
-// requests and paints with the first bytes of HTML. The Cardbit "B" card draws itself, its pixel bits snap in,
-// and a foil shine sweeps across; while the page is still loading the bits keep pulsing.
+// Branded page loader for cardbit.com (Trevor, Nov 25 2026): Latch shuffling a deck, rendered in Blender from the
+// same rigged Latch, studio and lights as the pack-opening films (scene + script: see docs/CARDBIT-WAITLIST.md).
 //
-// It never holds the page back: it fades in only if the page is not ready after 150 ms (fast and cached loads
-// never see it), leaves the moment the page is ready, and is removed after `maxMs` no matter what.
-// Reduced motion: a still emblem, no movement.
-//
-// Ready signals: the page calls window.cbLoaderReady("<name>") for each name in `wait`. "dom" is sent
-// automatically at DOMContentLoaded.
+// Rules from Trevor: full screen, the same clip everywhere, at most once per visit, and only on slow loads.
+// - Fast loads never see it: the overlay stays invisible for the first 300 ms, and the clip is only requested
+//   once the overlay is about to show, so a fast page never downloads it.
+// - Once per visit: after it has shown, sessionStorage remembers it for the tab and later pages skip it.
+// - It never holds the page back: it leaves as soon as the page is ready, and is removed after `maxMs` regardless.
+// - Reduced motion: a still frame of Latch, no movement.
+// Ready signals: the page calls window.cbLoaderReady("<name>") for each name in `wait`; "dom" is sent at
+// DOMContentLoaded.
+import { fastUrl } from "./fast-assets";
 
-const EMBLEM = `<svg class="cbl__mark" viewBox="0 0 100 118" aria-hidden="true" focusable="false">
-  <defs>
-    <linearGradient id="cbl-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14222b"/><stop offset="1" stop-color="#0c151b"/></linearGradient>
-    <linearGradient id="cbl-s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#bffcff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-    <clipPath id="cbl-c"><path d="M12 4H76L96 24V104A10 10 0 0 1 86 114H12A10 10 0 0 1 2 104V14A10 10 0 0 1 12 4Z"/></clipPath>
-  </defs>
-  <path class="cbl__card" pathLength="100" d="M12 4H76L96 24V104A10 10 0 0 1 86 114H12A10 10 0 0 1 2 104V14A10 10 0 0 1 12 4Z" fill="url(#cbl-g)" stroke="#00e6e1" stroke-width="4" stroke-linejoin="round"/>
-  <g class="cbl__bits" fill="#00e6e1">
-    <rect style="--k:0" x="34" y="28" width="9" height="8" rx="1"/>
-    <rect style="--k:1" x="19" y="41" width="9" height="8" rx="1"/>
-    <rect style="--k:2" x="31" y="41" width="9" height="8" rx="1"/>
-    <rect style="--k:3" x="27" y="54" width="9" height="8" rx="1"/>
-    <rect style="--k:4" x="19" y="67" width="9" height="8" rx="1"/>
-  </g>
-  <path class="cbl__b" fill="#f6faf9" fill-rule="evenodd" d="M44 28H66C77 28 83 34 83 43C83 49 80 53 75 55C82 57 86 62 86 70C86 81 78 88 65 88H38L41 76H44V40ZM56 39V52H64C68 52 70 50 70 45.5C70 41 68 39 64 39ZM56 63V77H65C70 77 72 75 72 70C72 65 70 63 65 63Z"/>
-  <g fill="#9fb3b8" opacity=".7"><path d="M66 104l5-8h4l-5 8zM74 104l5-8h4l-5 8zM82 104l5-8h4l-5 8z"/></g>
-  <g clip-path="url(#cbl-c)"><rect class="cbl__shine" x="-60" y="0" width="40" height="118" fill="url(#cbl-s)" transform="skewX(-18)"/></g>
-</svg>`;
+const SHOW_AFTER_MS = 300;
+const SEEN_KEY = "cb-loader-seen";
 
-const CSS = `.cbl{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:radial-gradient(60% 50% at 50% 45%,#10262b 0,#0b1114 70%);opacity:0;pointer-events:none;animation:cbl-in .2s ease-out .15s forwards}
-.cbl__box{display:grid;justify-items:center;gap:18px}
-.cbl__mark{width:84px;height:auto;overflow:visible;filter:drop-shadow(0 0 18px rgba(0,230,225,.28))}
-.cbl__card{stroke-dasharray:100;stroke-dashoffset:100;fill-opacity:0;animation:cbl-draw .5s cubic-bezier(.2,.8,.2,1) .15s forwards,cbl-fill .3s ease-out .45s forwards}
-.cbl__bits rect{opacity:0;transform:translateX(-26px);animation:cbl-bit .32s cubic-bezier(.34,1.56,.64,1) forwards,cbl-pulse 1.2s ease-in-out infinite;animation-delay:calc(.3s + var(--k)*60ms),calc(1.2s + var(--k)*120ms)}
-.cbl__b{opacity:0;transform:translateY(8px) scale(.92);transform-origin:60px 58px;animation:cbl-b .35s cubic-bezier(.34,1.56,.64,1) .5s forwards}
-.cbl__shine{animation:cbl-shine 1.6s ease-in-out .85s infinite}
-.cbl__bar{width:96px;height:3px;border-radius:3px;background:rgba(0,230,225,.14);overflow:hidden}
-.cbl__bar i{display:block;width:40%;height:100%;border-radius:inherit;background:#00e6e1;animation:cbl-bar 1.1s ease-in-out infinite}
-.cbl__sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+const CSS = `.cbl{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:radial-gradient(80% 62% at 50% 44%,#123d4a 0,#0c2730 50%,#071419 100%);opacity:0;pointer-events:none;visibility:hidden}
+.cbl--on{visibility:visible;animation:cbl-in .22s ease-out forwards}
+.cbl__stage{position:relative;width:min(88vw,calc(64vh*540/636),440px);aspect-ratio:540/636;-webkit-mask:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(180deg,transparent,#000 12%,#000 80%,transparent);-webkit-mask-composite:source-in;mask:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent),linear-gradient(180deg,transparent,#000 12%,#000 80%,transparent);mask-composite:intersect}
+.cbl__stage img,.cbl__stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.cbl__label{position:absolute;left:0;right:0;bottom:max(7vh,28px);margin:0;text-align:center;font:800 15px/1 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#9df9ff;opacity:.85}
+.cbl__label i{display:inline-block;animation:cbl-dot 1.2s infinite;font-style:normal}.cbl__label i+i{animation-delay:.2s}.cbl__label i+i+i{animation-delay:.4s}
 .cbl--out{animation:cbl-out .25s ease forwards}
-@keyframes cbl-in{to{opacity:1}}
+@keyframes cbl-in{from{opacity:0}to{opacity:1}}
 @keyframes cbl-out{from{opacity:1}to{opacity:0}}
-@keyframes cbl-draw{to{stroke-dashoffset:0}}
-@keyframes cbl-fill{to{fill-opacity:1}}
-@keyframes cbl-bit{to{opacity:1;transform:none}}
-@keyframes cbl-pulse{0%,100%{fill:#00e6e1}50%{fill:#9df9ff}}
-@keyframes cbl-b{to{opacity:1;transform:none}}
-@keyframes cbl-shine{0%{transform:skewX(-18deg) translateX(0)}55%,100%{transform:skewX(-18deg) translateX(200px)}}
-@keyframes cbl-bar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
-@media (prefers-reduced-motion:reduce){.cbl *{animation:none!important}.cbl{animation:cbl-in 0s .15s forwards}.cbl--out{animation:none;opacity:0}.cbl__card{stroke-dashoffset:0;fill-opacity:1}.cbl__bits rect,.cbl__b{opacity:1;transform:none}.cbl__shine,.cbl__bar{display:none}}`;
+@keyframes cbl-dot{0%,100%{opacity:.25}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.cbl--on{animation:none;opacity:1}.cbl--out{animation:none;opacity:0}.cbl__stage video{display:none}.cbl__label i{animation:none}}`;
 
 /** Loader overlay markup, placed first in <body>. wait: ready names to wait for; maxMs: hard cap. */
 export function loaderMarkup(opts: { wait?: string[]; maxMs?: number } = {}): string {
   const wait = (opts.wait ?? ["dom"]).filter((w) => /^[a-z]+$/.test(w));
-  const maxMs = Math.max(500, Math.min(opts.maxMs ?? 3000, 8000));
+  const maxMs = Math.max(800, Math.min(opts.maxMs ?? 4000, 8000));
+  const cfg = JSON.stringify({
+    need: wait, max: maxMs, after: SHOW_AFTER_MS, key: SEEN_KEY,
+    poster: fastUrl("latch-shuffle-poster.webp"), mp4: fastUrl("latch-shuffle.mp4"),
+  }).replace(/</g, "\\u003c");
   return `<style>${CSS}</style>
-  <div class="cbl" id="cbl" role="status" aria-live="polite"><div class="cbl__box">${EMBLEM}<div class="cbl__bar"><i></i></div><span class="cbl__sr">Loading cardbit</span></div></div>
-  <script>(function(){var el=document.getElementById('cbl'),t0=Date.now(),need=${JSON.stringify(wait)},done=0;function hide(){if(done)return;done=1;if(Date.now()-t0<150){el.remove();return}el.classList.add('cbl--out');setTimeout(function(){el.remove()},260)}var q=window.cbLQ||[];window.cbLoaderReady=function(n){need=need.filter(function(x){return x!==n});if(!need.length)hide()};q.forEach(window.cbLoaderReady);setTimeout(hide,${maxMs});document.addEventListener('DOMContentLoaded',function(){window.cbLoaderReady('dom')});})();</script>`;
+  <div class="cbl" id="cbl" role="status" aria-live="polite"><div class="cbl__stage" id="cbl-stage"></div><p class="cbl__label">Shuffling<i>.</i><i>.</i><i>.</i></p></div>
+  <script>(function(c){var el=document.getElementById('cbl'),done=0,shown=0,seen=0;try{seen=sessionStorage.getItem(c.key)==='1'}catch(e){}
+function hide(){if(done)return;done=1;clearTimeout(st);if(!shown){el.remove();return}el.classList.add('cbl--out');setTimeout(function(){el.remove()},260)}
+function show(){if(done||seen)return;shown=1;try{sessionStorage.setItem(c.key,'1')}catch(e){}var s=document.getElementById('cbl-stage'),rm=matchMedia('(prefers-reduced-motion: reduce)').matches,p=new Image();p.alt='';p.src=c.poster;s.appendChild(p);
+if(!rm){var v=document.createElement('video');v.muted=true;v.defaultMuted=true;v.loop=true;v.autoplay=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('aria-hidden','true');v.preload='auto';v.poster=c.poster;
+var b=document.createElement('source');b.src=c.mp4;b.type='video/mp4';v.appendChild(b);s.appendChild(v);var pr=v.play();if(pr&&pr.catch)pr.catch(function(){})}
+el.classList.add('cbl--on')}
+var st=setTimeout(show,c.after),q=window.cbLQ||[];window.cbLoaderReady=function(n){c.need=c.need.filter(function(x){return x!==n});if(!c.need.length)hide()};q.forEach(window.cbLoaderReady);setTimeout(hide,c.max);document.addEventListener('DOMContentLoaded',function(){window.cbLoaderReady('dom')});})(${cfg});</script>`;
 }
 
 /** Head stub: queues ready signals sent before the loader markup is parsed (e.g. a cached stylesheet's onload). */

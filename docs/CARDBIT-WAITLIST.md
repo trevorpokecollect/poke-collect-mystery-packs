@@ -19,9 +19,17 @@ Trevor, Nov 25 2026. Until launch the waitlist replaces cardbit.com for the publ
   Re-run the script after changing a source image. `port-theme.mjs` does not touch this folder.
 - Below-the-fold images are `loading="lazy"`; the hero rip cards load after the page `load` event (they stay hidden until
   the first tear); pack foil masks are set when the lineup is near; Ask Latch loads when the page is idle.
-- `waitlist.css` no longer blocks the first paint. The branded loader (`app/site/loader.server.ts`) covers the page
-  until the stylesheet and DOM are ready (cap 5 s), and `waitlist.js` boots on the `cb:css` event. The loader only
-  appears if the page is not ready after 150 ms. The storefront shell uses the same loader until the shop renders.
+- `waitlist.css` no longer blocks the first paint; the page stays hidden (dark background) until it applies, and
+  `waitlist.js` boots on the `cb:css` event.
+- Page loader (`app/site/loader.server.ts`, Trevor Nov 25 2026): full-screen clip of 3D Latch shuffling a deck, same
+  clip on the waitlist and the shop, at most once per visit (sessionStorage `cb-loader-seen`) and only on slow loads
+  (shows after 300 ms; the clip is only requested then). Reduced motion shows a still frame. Leaves when the page is
+  ready (waitlist: CSS + DOM, cap 5 s; shop: first render, cap 6 s).
+- The clip is rendered in Blender from the pack-opening films' Latch scene (Trevor's Mac:
+  `~/Documents/Codex/2026-11-21/new-chat-5/Latch-Opening/source/pack-studio/Latch-Opens-the-Pack.blend`) by
+  `source/loader/shuffle.py` in that folder (32-frame seamless loop, 540x636, Cycles 32 samples, Khronos PBR Neutral).
+  Encoded to `public/site/fast/latch-shuffle.mp4` (360 px H.264) + `latch-shuffle-poster.webp`, then
+  `scripts/site/optimize-fast-assets.py` refreshes the manifest.
 - app-site starts with `scripts/site/serve.mjs` instead of `react-router-serve`: same server, but `?v=`-versioned
   static files get `Cache-Control: public, max-age=31536000, immutable` (was `max-age=0`, so Cloudflare and browsers
   re-checked every file on every visit).

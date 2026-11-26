@@ -51,6 +51,12 @@ dest = os.path.join(OUT, "atkinson.woff2")
 font.save(dest)
 made["atkinson.woff2"] = hashlib.sha256(open(dest, "rb").read()).hexdigest()[:10]
 
+# The Latch shuffle loader clip and poster are rendered in Blender (see docs/CARDBIT-WAITLIST.md); keep their hashes.
+for name in ["latch-shuffle.mp4", "latch-shuffle-poster.webp"]:
+    path = os.path.join(OUT, name)
+    if os.path.exists(path):
+        made[name] = hashlib.sha256(open(path, "rb").read()).hexdigest()[:10]
+
 with open(os.path.join(OUT, "manifest.json"), "w") as f:
     json.dump(dict(sorted(made.items())), f, indent=1)
     f.write("\n")
