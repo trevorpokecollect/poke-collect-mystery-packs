@@ -97,7 +97,10 @@
 .cbc label{display:flex;gap:10px;align-items:flex-start;margin:0 0 12px;cursor:pointer}
 .cbc input{margin-top:4px;width:18px;height:18px;accent-color:#00e6e1}
 .cbc small{display:block;color:#9fb0b1}
-.cbc-foot{color:inherit;opacity:.8;text-decoration:underline;font-size:13px;background:none;border:0;padding:0;cursor:pointer;font-family:inherit}`;
+.cbc-foot-left{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+button.cbc-foot.cbc-foot,#cardbit-store button.cbc-foot{display:inline;min-height:0;margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:#a8b3c7;font:400 12px/1.5 'Cardbit Atkinson','Atkinson Hyperlegible Next',system-ui,sans-serif;letter-spacing:0;text-transform:none;text-align:left;text-decoration:none;cursor:pointer}
+button.cbc-foot.cbc-foot:hover,#cardbit-store button.cbc-foot:hover{color:#d3dbe7;text-decoration:underline;text-underline-offset:2px}
+button.cbc-foot.cbc-foot:focus-visible,#cardbit-store button.cbc-foot:focus-visible{outline:2px solid #00e6e1;outline-offset:2px;border-radius:2px}`;
   let box = null;
   function ensureCss() {
     if (document.getElementById('cbc-css')) return;
@@ -160,10 +163,21 @@
   function addFooterLink() {
     const foot = document.querySelector('footer');
     if (!foot || foot.querySelector('[data-privacy-choices]')) return !!foot;
-    const p = document.createElement('p');
-    p.style.cssText = 'margin:8px 0 0;text-align:center';
-    p.innerHTML = '<button type="button" class="cbc-foot" data-privacy-choices>Your Privacy Choices · Do Not Sell or Share My Personal Information</button>';
     ensureCss();
+    const btn = '<button type="button" class="cbc-foot" data-privacy-choices>Your Privacy Choices · Do Not Sell or Share My Personal Information</button>';
+    // Sit under "Cardbit, LLC · Madison, Alabama" in the footer's bottom row, in the same small muted text.
+    const company = foot.querySelector('.cb-foot-end > span');
+    if (company) {
+      const left = document.createElement('div');
+      left.className = 'cbc-foot-left';
+      company.replaceWith(left);
+      left.appendChild(company);
+      left.insertAdjacentHTML('beforeend', btn);
+      return true;
+    }
+    const p = document.createElement('p');
+    p.style.cssText = 'margin:8px 0 0';
+    p.innerHTML = btn;
     foot.appendChild(p);
     return true;
   }
