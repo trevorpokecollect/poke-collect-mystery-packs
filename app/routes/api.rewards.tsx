@@ -13,6 +13,7 @@ import { activeTier } from "../site/play/subscriptions.server";
 import { CLUB_SUFFIX, clubIcons, isClubIcon } from "../site/play/club-icons";
 import { SITE_SHOP, siteLeaderboardOn, siteLevelsOn, siteWeeklyStandings } from "../site/rewards/rewards.server";
 import { gateApi } from "../site/waitlist/gate.server";
+import { PLAN } from "../site/play/plan-brand";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   if (!siteOn()) return new Response("Not found", { status: 404 });
@@ -67,7 +68,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
     if (input?.action === "avatar" && isClubIcon(input.iconId)) {
-      if (!(await activeTier(db, customer.id))) return json({ error: "Club icons are for Cardbit Club members." }, 403);
+      if (!(await activeTier(db, customer.id))) return json({ error: `${PLAN.short} icons are for ${PLAN.name} members.` }, 403);
       await setAvatar(db, SITE_SHOP, customer.id, { color: input.color ?? undefined });
       await db.cardbitProfile.update({ where: { shop_customerId: { shop: SITE_SHOP, customerId: customer.id } }, data: { iconId: input.iconId } });
       return json(await viewWithClub(customer.id));

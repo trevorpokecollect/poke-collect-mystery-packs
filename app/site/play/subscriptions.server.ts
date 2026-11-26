@@ -11,6 +11,7 @@
 // - A cool-off or self-exclusion cancels renewal at the processor and pauses perks' purchases.
 import type { Prisma, PrismaClient, SiteSubscription } from "@prisma/client";
 import { applyLedger, balanceOf } from "../core/ledger.server";
+import { PLAN } from "./plan-brand";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 type Tx = Prisma.TransactionClient;
@@ -78,7 +79,7 @@ export async function startSubscription(db: PrismaClient, input: { customerId: s
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`site-customer:${input.customerId}`}, 0))::text`;
     const cur = await currentSubscription(tx, input.customerId);
-    if (cur && cur.providerRef !== input.providerRef) throw new SubscriptionError("exists", "You already have a Cardbit Club plan. Cancel it before switching.");
+    if (cur && cur.providerRef !== input.providerRef) throw new SubscriptionError("exists", `You already have a ${PLAN.name} plan. Cancel it before switching.`);
     if (cur) return cur;
     return tx.siteSubscription.create({ data: { customerId: input.customerId, tier: tier.id, provider: input.provider, providerRef: input.providerRef, status: "PENDING" } });
   });
@@ -121,9 +122,9 @@ export async function creditSubscriptionPayment(
     const pay = await tx.siteSubscriptionPayment.create({
       data: { subscriptionId: s.id, customerId: s.customerId, paymentId: input.paymentId, cents: tier.cents, paidBits: paid, bonusBits: bonus, periodStart: start, periodEnd: end },
     });
-    await applyLedger(tx, { customerId: s.customerId, delta: paid, kind: "SUBSCRIPTION", idempotencyKey: `sub:${pay.id}:paid`, ref: input.paymentId, note: `Cardbit Club ${tier.name} monthly Cardbits` });
+    await applyLedger(tx, { customerId: s.customerId, delta: paid, kind: "SUBSCRIPTION", idempotencyKey: `sub:${pay.id}:paid`, ref: input.paymentId, note: `${PLAN.name} ${tier.name} monthly Cardbits` });
     if (bonus > 0)
-      await applyLedger(tx, { customerId: s.customerId, delta: bonus, kind: "BONUS", idempotencyKey: `sub:${pay.id}:bonus`, ref: input.paymentId, note: `Cardbit Club ${tier.name} bonus` });
+      await applyLedger(tx, { customerId: s.customerId, delta: bonus, kind: "BONUS", idempotencyKey: `sub:${pay.id}:bonus`, ref: input.paymentId, note: `${PLAN.name} ${tier.name} bonus` });
     await tx.siteSubscription.update({ where: { id: s.id }, data: { status: s.status === "CANCELED" ? "CANCELED" : "ACTIVE", currentPeriodEnd: end } });
     return "credited";
   });
@@ -154,7 +155,7 @@ export async function reverseSubscriptionPayment(db: PrismaClient, paymentId: st
     const want = p.paidBits + p.bonusBits - p.clawedBits;
     const balance = await balanceOf(tx, p.customerId);
     const taken = Math.max(0, Math.min(balance, want));
-    if (taken > 0) await applyLedger(tx, { customerId: p.customerId, delta: -taken, kind, idempotencyKey: key, ref: p.id, note: `Cardbit Club ${kind.toLowerCase()}` });
+    if (taken > 0) await applyLedger(tx, { customerId: p.customerId, delta: -taken, kind, idempotencyKey: key, ref: p.id, note: `${PLAN.name} ${kind.toLowerCase()}` });
     await tx.siteSubscriptionPayment.update({ where: { id: p.id }, data: { status: kind === "REFUND" ? "REFUNDED" : "CHARGEBACK", clawedBits: { increment: taken }, owedBits: { increment: want - taken } } });
     if (kind === "CHARGEBACK") {
       await tx.siteCustomer.update({ where: { id: p.customerId }, data: { frozenAt: new Date() } });
@@ -193,7 +194,7 @@ export async function subscriberBonusForOpening(
     if (existing) sparks = existing.delta;
     else {
       await tx.$executeRaw`INSERT INTO "CardbitSparkWallet" (shop, "customerId") VALUES (${shop}, ${customerId}) ON CONFLICT (shop, "customerId") DO NOTHING`;
-      await tx.cardbitSparkTxn.create({ data: { shop, customerId, eventKey, kind: "award", delta: sparks, source: openingId, note: `Cardbit Club ${tier.name} +${tier.sparksBonusPct}%` } });
+      await tx.cardbitSparkTxn.create({ data: { shop, customerId, eventKey, kind: "award", delta: sparks, source: openingId, note: `${PLAN.name} ${tier.name} +${tier.sparksBonusPct}%` } });
       await tx.cardbitSparkWallet.update({ where: { shop_customerId: { shop, customerId } }, data: { balance: { increment: sparks } } });
     }
   }

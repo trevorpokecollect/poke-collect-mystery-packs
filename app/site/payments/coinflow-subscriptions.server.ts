@@ -20,6 +20,7 @@ import {
   type Tier,
   type TierId,
 } from "../play/subscriptions.server";
+import { PLAN } from "../play/plan-brand";
 
 type Env = NodeJS.ProcessEnv;
 const apiRoot = (env: Env) => (env.COINFLOW_API_BASE || (env.COINFLOW_ENV === "production" ? "https://api.coinflow.cash/api" : "https://api-sandbox.coinflow.cash/api")).replace(/\/$/, "");
@@ -39,7 +40,7 @@ export async function createSubscriptionLink(
 ) {
   const tier = tierById(i.tier);
   const code = tier && planCode(tier.id, env);
-  if (!tier || !code || !subscriptionsReady(env)) throw new CoinflowError("Cardbit Club isn't open yet.");
+  if (!tier || !code || !subscriptionsReady(env)) throw new CoinflowError(`${PLAN.name} isn't open yet.`);
   const res = await fetcher(`${apiRoot(env)}/checkout/link`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json", Authorization: env.COINFLOW_API_KEY!, "x-coinflow-auth-user-id": i.customerId },
@@ -51,7 +52,7 @@ export async function createSubscriptionLink(
       webhookInfo: { kind: "cardbit_club", tier: tier.id, customerId: i.customerId },
       standaloneLinkConfig: { callbackUrl: i.callbackUrl, endUserDeviceIpAddress: i.ip },
       chargebackProtectionData: [
-        { productName: `Cardbit Club ${tier.name}`, productType: env.COINFLOW_PRODUCT_TYPE || "topUp", quantity: 1, rawProductData: { sku: `club-${tier.id}`, monthlyBits: tier.monthlyBits, bonusBits: tier.bonusBits } },
+        { productName: `${PLAN.name} ${tier.name}`, productType: env.COINFLOW_PRODUCT_TYPE || "topUp", quantity: 1, rawProductData: { sku: `club-${tier.id}`, monthlyBits: tier.monthlyBits, bonusBits: tier.bonusBits } },
       ],
     }),
   });
@@ -102,7 +103,14 @@ const subIdOf = (d: NonNullable<SubEvent["data"]>) => d.subscription?.id || d.su
  * Subscription events, and payment events that belong to a subscription. Returns null when the
  * event isn't about a subscription (the top-up handler owns it).
  */
-export async function handleCoinflowSubscriptionEvent(db: PrismaClient, ev: SubEvent, env: Env = process.env): Promise<string | null> {
+export type SubscriptionHooks = {
+  /** A plan month was credited for this processor payment id (send the receipt). */
+  onPaid?: (paymentId: string) => Promise<void>;
+  /** The processor reported a subscription canceled (send the notice). */
+  onCanceled?: (providerRef: string) => Promise<void>;
+};
+
+export async function handleCoinflowSubscriptionEvent(db: PrismaClient, ev: SubEvent, env: Env = process.env, hooks: SubscriptionHooks = {}): Promise<string | null> {
   const type = ev.eventType || "";
   const d = ev.data || {};
   const isSubEvent = type.startsWith("Subscription ");
@@ -122,7 +130,12 @@ export async function handleCoinflowSubscriptionEvent(db: PrismaClient, ev: SubE
     });
     return "subscription_created";
   }
-  if (type === "Subscription Canceled") return subId ? markSubscription(db, subId, "CANCELED", d.reason) : "ignored:no_subscription";
+  if (type === "Subscription Canceled") {
+    if (!subId) return "ignored:no_subscription";
+    const r = await markSubscription(db, subId, "CANCELED", d.reason);
+    if (r === "canceled") await hooks.onCanceled?.(subId);
+    return r;
+  }
   if (type === "Subscription Expired") return subId ? markSubscription(db, subId, "EXPIRED") : "ignored:no_subscription";
   if (type === "Subscription Failure") return subId ? markSubscription(db, subId, "PAST_DUE", d.reason) : "ignored:no_subscription";
 
@@ -132,7 +145,9 @@ export async function handleCoinflowSubscriptionEvent(db: PrismaClient, ev: SubE
     if (!ref || !paymentId) return "ignored:no_subscription";
     const cents = d.subtotal?.cents ?? d.totals?.subtotal?.cents ?? d.total?.cents;
     if (typeof cents !== "number") return "rejected:no_amount";
-    return creditSubscriptionPayment(db, { providerRef: ref, paymentId, cents, currency: d.subtotal?.currency });
+    const r = await creditSubscriptionPayment(db, { providerRef: ref, paymentId, cents, currency: d.subtotal?.currency });
+    if (r === "credited") await hooks.onPaid?.(paymentId);
+    return r;
   }
   if (type === "Refund") {
     const paymentId = d.paymentId || d.id;

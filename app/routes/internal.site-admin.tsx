@@ -9,14 +9,17 @@
 // POST {op:"export", customerId, reason, requestId}                          → JSON of everything held about the person
 // POST {op:"erase", customerId, reason, requestId, confirmEmail}             → privacy erase (account must be closed)
 // POST {op:"staff-actions", customerId}                                      → staff actions on that customer
+// POST {op:"cancel-plan", customerId, reason, requestId}                     → stop Pack Pass renewal {processorCanceled, perksUntil}
 // POST {op:"nexus"}                                                          → sales tax economic nexus report
 import type { ActionFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
 import {
-  AdminError, addOrderNote, adjustBalance, closeAccount, customerStaffActions, eraseCustomer, exportCustomer, orderDetail, reopenAccount, reversePack, reverseSingle,
+  AdminError, addOrderNote, adjustBalance, cancelPlan, closeAccount, customerStaffActions, eraseCustomer, exportCustomer, orderDetail, reopenAccount, reversePack, reverseSingle,
 } from "../site/core/admin-desk.server";
 import { nexusReport } from "../site/core/nexus.server";
+import { cancelAtCoinflow } from "../site/payments/coinflow-subscriptions.server";
+import { sendPlanCanceledEmail } from "../site/play/plan-emails.server";
 
 export const loader = () => new Response("Not found", { status: 404 });
 
@@ -55,6 +58,11 @@ export async function action({ request }: ActionFunctionArgs) {
         return ok(await eraseCustomer(db, actor, { customerId: b.customerId, reason: b.reason, requestId: b.requestId, confirmEmail: b.confirmEmail }));
       case "staff-actions":
         return ok({ actions: await customerStaffActions(db, b.customerId) });
+      case "cancel-plan": {
+        const r = await cancelPlan(db, actor, { customerId: b.customerId, reason: b.reason, requestId: b.requestId }, cancelAtCoinflow);
+        if (!r.replay && r.subscriptionId) await sendPlanCanceledEmail(db, r.subscriptionId);
+        return ok(r);
+      }
       case "nexus":
         return ok(await nexusReport(db));
     }

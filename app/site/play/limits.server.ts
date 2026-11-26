@@ -195,8 +195,12 @@ export async function selfExclude(db: Db, customerId: string, months: number, no
   return next;
 }
 
-/** Top-up dollars (cents) in the window: credited payments plus checkouts started in the last 2 hours. */
+/**
+ * Top-up dollars (cents) in the window: credited payments plus checkouts started in the last 2 hours,
+ * plus monthly plan charges (they buy Cardbits too, so they count toward Top-Up Limits).
+ */
 export async function topupCentsSince(db: Db, customerId: string, since: Date, now = new Date()) {
+  const plans = await db.siteSubscriptionPayment.aggregate({ where: { customerId, createdAt: { gte: since }, status: "CREDITED" }, _sum: { cents: true } });
   const rows = await db.siteTopup.findMany({
     where: {
       customerId,
@@ -205,7 +209,7 @@ export async function topupCentsSince(db: Db, customerId: string, since: Date, n
     },
     select: { cents: true },
   });
-  return rows.reduce((s, r) => s + r.cents, 0);
+  return rows.reduce((s, r) => s + r.cents, plans._sum.cents ?? 0);
 }
 
 /** Cardbits spent on packs and singles in the window (PACK and SINGLE debits net of their refunds). */

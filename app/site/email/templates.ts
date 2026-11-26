@@ -2,6 +2,7 @@
 // Copy rules: "Cardbits" in customer copy, Title Case headings and buttons, no retail values.
 
 import { BRAND, bits, esc, siteUrl, usd } from "../brand/html";
+import { PLAN } from "../play/plan-brand";
 
 export type EmailCard = { title: string; image?: string | null; offerBits?: number | null };
 export type EmailAddress = { name: string; street1: string; street2?: string; city: string; state: string; zip: string };
@@ -39,6 +40,18 @@ export type EmailData = {
     trackingUrl: string | null;
   };
   shipment_delivered: { shipmentId: string; cardCount: number; trackingUrl: string | null };
+  /** Monthly plan: first payment (first=true) or a renewal. Doubles as the auto-renewal acknowledgment. */
+  plan_payment: {
+    paymentId: string;
+    first: boolean;
+    tierName: string;
+    paidCents: number;
+    bits: number;
+    bonusBits: number;
+    balanceBits: number;
+    renewsAt: string;
+  };
+  plan_canceled: { tierName: string; perksUntil: string | null; byBreak: boolean };
 };
 
 export type EmailKind = keyof EmailData;
@@ -101,6 +114,8 @@ const fmtDate = (iso: string) =>
     minute: "2-digit",
     timeZoneName: "short",
   });
+
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "long", day: "numeric", year: "numeric" });
 
 // ---------- templates ----------
 
@@ -270,6 +285,52 @@ export function renderEmail<K extends EmailKind>(kind: K, data: EmailData[K], en
           footnote: "Package missing or damaged? File a claim with the carrier, and write to us if you need help.",
         }),
         text: `Delivered\n\nTracking shows your ${d.cardCount} card${d.cardCount === 1 ? "" : "s"} arrived.${d.trackingUrl ? `\n${d.trackingUrl}` : ""}${textFooter}`,
+      };
+    }
+    case "plan_payment": {
+      const d = data as EmailData["plan_payment"];
+      const plan = `${PLAN.name} ${d.tierName}`;
+      const total = d.bits + d.bonusBits;
+      const renews = fmtDay(d.renewsAt);
+      const manage = `${base}${PLAN.path}`;
+      const terms = `Your plan renews automatically every month at ${usd(d.paidCents)}, charged to the same card, until you cancel. Next renewal: ${renews}. Cancel any time at ${manage} or by emailing Support@cardbit.com, at least a day before your renewal date to avoid the next charge. Perks last through the month you paid for.`;
+      const preheader = `${bits(total)} added. Renews ${renews}.`;
+      return {
+        subject: d.first ? `Welcome to ${plan}` : `Receipt: ${plan} Renewed`,
+        preheader,
+        html: layout({
+          preheader,
+          heading: d.first ? `Welcome to ${plan}` : `${plan} Renewed`,
+          intro: d.first ? "Thanks for joining. This month's Cardbits are in your balance and your member perks are on." : "Thanks for staying. This month's Cardbits are in your balance.",
+          body: table(
+            row("Paid", esc(`${usd(d.paidCents)} · Card (Coinflow)`)) +
+              row("Cardbits", esc(bits(d.bits))) +
+              (d.bonusBits ? row("Bonus Cardbits", esc(`+${bits(d.bonusBits)}`)) : "") +
+              row("New balance", esc(bits(d.balanceBits)), true) +
+              row("Next renewal", esc(renews)),
+          ) + `<p style="margin:14px 0 0;font-size:13px;color:${BRAND.muted}">${esc(terms)} Payment ${esc(d.paymentId)}.</p>`,
+          cta: { label: "Manage My Plan", href: manage },
+        }),
+        text: `${d.first ? `Welcome to ${plan}` : `${plan} renewed`}\n\nPaid: ${usd(d.paidCents)} (Card, Coinflow)\nCardbits: ${bits(d.bits)}${d.bonusBits ? `\nBonus Cardbits: +${bits(d.bonusBits)}` : ""}\nNew balance: ${bits(d.balanceBits)}\nNext renewal: ${renews}\n\n${terms}\nPayment ${d.paymentId}.${textFooter}`,
+      };
+    }
+    case "plan_canceled": {
+      const d = data as EmailData["plan_canceled"];
+      const plan = `${PLAN.name} ${d.tierName}`;
+      const until = d.perksUntil ? fmtDay(d.perksUntil) : null;
+      const intro = `${d.byBreak ? "Because you started a break, " : ""}your ${plan} plan won't renew and you won't be charged again.${until ? ` Your perks last until ${until}.` : ""}`;
+      const preheader = "You won't be charged again.";
+      return {
+        subject: `${plan} Renewal Canceled`,
+        preheader,
+        html: layout({
+          preheader,
+          heading: "Renewal Canceled",
+          intro: esc(intro),
+          body: `<p style="margin:0;font-size:14px;color:${BRAND.muted}">Cardbits already added stay in your balance. You can join again any time.</p>`,
+          cta: d.byBreak ? undefined : { label: "See Plans", href: `${base}${PLAN.path}` },
+        }),
+        text: `Renewal canceled\n\n${intro}\nCardbits already added stay in your balance.${textFooter}`,
       };
     }
   }

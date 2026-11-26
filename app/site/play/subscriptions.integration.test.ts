@@ -3,12 +3,18 @@ import { PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { balanceOf, postLedger } from "../core/ledger.server";
 import { handleCoinflowSubscriptionEvent } from "../payments/coinflow-subscriptions.server";
+import { cancelPlan } from "../core/admin-desk.server";
+import { topupCentsSince } from "./limits.server";
+import { sendPlanCanceledEmail, sendPlanPaymentEmail } from "./plan-emails.server";
+import { PLAN, withPlanCopy } from "./plan-brand";
 import { activeTier, monthlyCredit, requestCancel, subscriberBonusForOpening, subscriptionView, tierById, TIERS } from "./subscriptions.server";
 
 const url = process.env.TEST_DATABASE_URL;
 const db = new PrismaClient({ datasources: { db: { url: url || "postgresql://localhost/unconfigured_test" } } });
 const env = { SITE_SUBSCRIPTIONS: "on", SITE_COINFLOW_PLAN_PLUS: "cb-plus", SITE_COINFLOW_PLAN_PRO: "cb-pro", SITE_COINFLOW_PLAN_ULTIMATE: "cb-ult" } as NodeJS.ProcessEnv;
 const wipe = async () => {
+  await db.siteEmail.deleteMany({ where: { to: { endsWith: "@sub.test" } } });
+  await db.siteStaffAction.deleteMany({ where: { requestId: { startsWith: "subtest" } } });
   await db.siteSubscriptionPayment.deleteMany();
   await db.siteSubscription.deleteMany();
   const ids = (await db.siteCustomer.findMany({ where: { email: { endsWith: "@sub.test" } }, select: { id: true } })).map((c) => c.id);
@@ -28,7 +34,7 @@ describe("tiers", () => {
   });
 });
 
-describe.skipIf(!url)("Cardbit Club subscriptions", () => {
+describe.skipIf(!url)("Pack Pass subscriptions", () => {
   let customerId = "";
   const prev = process.env.SITE_SUBSCRIPTIONS;
   beforeAll(() => {
@@ -100,6 +106,49 @@ describe.skipIf(!url)("Cardbit Club subscriptions", () => {
     expect(await handleCoinflowSubscriptionEvent(db, { eventType: "Subscription Expired", data: { subscription: { id: "sub_1" } } }, env)).toBe("expired");
   });
 
+  it("passes paid months and processor cancels to the email hooks, and emails once each", async () => {
+    await created();
+    const paid: string[] = [];
+    const canceled: string[] = [];
+    const hooks = { onPaid: async (id: string) => void paid.push(id), onCanceled: async (ref: string) => void canceled.push(ref) };
+    await handleCoinflowSubscriptionEvent(db, { eventType: "Settled", data: { id: "pay_1", subtotal: { cents: 4999 }, subscription: { id: "sub_1" } } }, env, hooks);
+    await handleCoinflowSubscriptionEvent(db, { eventType: "Settled", data: { id: "pay_1", subtotal: { cents: 4999 }, subscription: { id: "sub_1" } } }, env, hooks);
+    expect(paid).toEqual(["pay_1"]);
+    const sent: string[] = [];
+    const deps = { db, mailer: { send: async (m: { subject: string }) => (sent.push(m.subject), { id: "m" }) }, env: {} };
+    await sendPlanPaymentEmail(db, "pay_1", deps);
+    await sendPlanPaymentEmail(db, "pay_1", deps);
+    expect(sent).toEqual([`Welcome to ${PLAN.name} Pro`]);
+    await handleCoinflowSubscriptionEvent(db, { eventType: "Subscription Canceled", data: { subscription: { id: "sub_1" } } }, env, hooks);
+    await handleCoinflowSubscriptionEvent(db, { eventType: "Subscription Canceled", data: { subscription: { id: "sub_1" } } }, env, hooks);
+    expect(canceled).toEqual(["sub_1"]);
+    const s = await db.siteSubscription.findFirstOrThrow();
+    await sendPlanCanceledEmail(db, s.id, deps);
+    await sendPlanCanceledEmail(db, s.id, deps);
+    expect(sent).toEqual([`Welcome to ${PLAN.name} Pro`, `${PLAN.name} Pro Renewal Canceled`]);
+  });
+
+  it("counts plan charges toward Top-Up Limits", async () => {
+    await created();
+    await settled("pay_1");
+    expect(await topupCentsSince(db, customerId, new Date(Date.now() - 86_400_000))).toBe(4999);
+    await handleCoinflowSubscriptionEvent(db, { eventType: "Refund", data: { paymentId: "pay_1" } }, env);
+    expect(await topupCentsSince(db, customerId, new Date(Date.now() - 86_400_000))).toBe(0);
+  });
+
+  it("lets staff cancel a plan once per request, even when the processor refuses", async () => {
+    await created();
+    await settled("pay_1");
+    const r = await cancelPlan(db, "staff@test", { customerId, reason: "customer asked", requestId: "subtest-cancel-1" }, async () => {
+      throw new Error("down");
+    });
+    expect(r).toMatchObject({ replay: false, processorCanceled: false });
+    expect((await db.siteSubscription.findFirstOrThrow()).cancelReason).toBe("staff_processor_cancel_failed");
+    expect(await cancelPlan(db, "staff@test", { customerId, reason: "customer asked", requestId: "subtest-cancel-1" }, async () => {})).toMatchObject({ replay: true });
+    await expect(cancelPlan(db, "staff@test", { customerId, reason: "again", requestId: "subtest-cancel-2" }, async () => {})).rejects.toThrow("no plan");
+    expect((await activeTier(db, customerId))?.id).toBe("pro");
+  });
+
   it("adds subscriber XP and Sparks once per opening", async () => {
     await created();
     await settled("pay_1");
@@ -110,5 +159,13 @@ describe.skipIf(!url)("Cardbit Club subscriptions", () => {
     expect(await run()).toEqual({ xp: 25, sparks: 4 });
     expect(await db.cardbitSparkTxn.count({ where: { shop: "sub-test" } })).toBe(1);
     expect((await db.cardbitSparkWallet.findFirstOrThrow({ where: { shop: "sub-test" } })).balance).toBe(4);
+  });
+});
+
+describe("plan copy", () => {
+  const html = "<p>A</p><!--plan:start--><p>{{PLAN_NAME}} at {{PLAN_PATH}}</p><!--plan:end--><p>the {{PLAN_SHORT}} room</p>";
+  it("hides plan-only blocks until plans open and fills the name", () => {
+    expect(withPlanCopy(html, false)).toBe(`<p>A</p><p>the ${PLAN.short} room</p>`);
+    expect(withPlanCopy(html, true)).toBe(`<p>A</p><p>${PLAN.name} at ${PLAN.path}</p><p>the ${PLAN.short} room</p>`);
   });
 });
