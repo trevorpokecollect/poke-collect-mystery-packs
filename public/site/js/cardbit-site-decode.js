@@ -34,7 +34,8 @@
   const GLY = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#%&@';
 
   /* ---------- Sound: one shared graph, made live (no audio files) ---------- */
-  const soundPref = () => { try { return (window.CardbitMedia?.soundChoice?.() || localStorage.getItem('cardbit.sound.v1')) === 'on'; } catch { return false; } };
+  // Openings play with sound unless the customer turned it off (Trevor, Nov 25 2026). Audio still waits for their tap.
+  const soundPref = () => { try { return (window.CardbitMedia?.soundChoice?.() || localStorage.getItem('cardbit.sound.v1')) !== 'off'; } catch { return true; } };
   const saveSound = on => { try { if (window.CardbitMedia?.setSound) window.CardbitMedia.setSound(on); else localStorage.setItem('cardbit.sound.v1', on ? 'on' : 'off'); } catch {} };
   let ac = null, master, verb, noiseBuf;
   function audio(on) {
