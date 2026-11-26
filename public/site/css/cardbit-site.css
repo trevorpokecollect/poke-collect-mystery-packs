@@ -125,3 +125,23 @@
 #cardbit-store .cbpp-note { margin:10px 0 0; color:#d6e3e3; font-size:14px; }
 @keyframes cbpp-next { 50% { opacity:.35; } }
 @media (prefers-reduced-motion: reduce) { #cardbit-store .cbpp-bar i.cbpp-bar-next { animation:none; } }
+
+/* Phones: the Daily Giveaway shortcut is an icon-only round button with a gentle nudge (Trevor, Nov 25 2026).
+   The label stays in the button for screen readers; the dismiss "x" becomes a small corner badge. */
+@media (max-width:640px){
+  .cbg-shortcut{border-radius:50%;padding:0;background:radial-gradient(circle at 35% 30%,#22424a,#142226);border-color:#00e6e1aa;
+    box-shadow:0 8px 22px #000a,0 0 0 0 #00e6e166;animation:cb-nudge 7s ease-in-out 1.5s infinite}
+  .cbg-shortcut [data-giveaway-open]{width:48px;height:48px;min-height:0;padding:0;justify-content:center;font-size:0;gap:0;border-radius:50%}
+  .cbg-shortcut [data-giveaway-open] img{width:24px;height:auto}
+  .cbg-shortcut [data-cbg-dismiss]{position:absolute;top:-6px;right:-6px;width:20px;height:20px;min-height:0!important;padding:0!important;display:grid;place-items:center;
+    border-radius:50%;background:#0d1517;border:1px solid #55847f;font-size:13px;line-height:1;color:#a9b9bb}
+}
+@keyframes cb-nudge{
+  0%,12%,100%{transform:none;box-shadow:0 8px 22px #000a,0 0 0 0 #00e6e166}
+  2%{transform:translateY(-4px) rotate(-8deg)}
+  4%{transform:translateY(0) rotate(7deg)}
+  6%{transform:rotate(-5deg)}
+  8%{transform:rotate(3deg)}
+  10%{transform:none;box-shadow:0 8px 22px #000a,0 0 0 12px #00e6e100}
+}
+@media (prefers-reduced-motion:reduce){.cbg-shortcut{animation:none!important}}
