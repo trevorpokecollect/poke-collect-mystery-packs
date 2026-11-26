@@ -45,7 +45,7 @@ body:has(dialog[open]) .cb-help{display:none}
 .cb-help.is-hinting .cb-help-hint{opacity:1;transform:none}
 
 /* ---------- Panel ---------- */
-.cb-help-panel{position:absolute;right:0;bottom:78px;width:min(392px,calc(100vw - 32px));height:min(74vh,640px);display:flex;flex-direction:column;
+.cb-help-panel{position:absolute;right:0;bottom:78px;width:min(392px,calc(100vw - 32px));height:min(74vh,640px,calc(100vh - var(--cb-help-lift,16px) - 96px));min-height:340px;display:flex;flex-direction:column;
   border-radius:22px;background:linear-gradient(180deg,#10201f 0%,var(--hc-panel) 120px);border:1px solid var(--hc-line-2);
   box-shadow:0 30px 90px #000d,0 0 0 1px #00e6e114,inset 0 1px 0 #ffffff0d;overflow:hidden;transform-origin:calc(100% - 32px) 100%;
   animation:cb-help-pop .32s var(--hc-ease)}
