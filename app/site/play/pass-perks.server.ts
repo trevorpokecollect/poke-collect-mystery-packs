@@ -1,7 +1,7 @@
 // Pack Pass perks beyond Cardbits/XP/Sparks (Trevor, Nov 25 2026):
-// - Free Ship Together: Pro waives the shipping fee on one shipment per calendar month (Central time);
-//   Ultimate waives it on every shipment. Use is recorded as a SitePlayEvent "pass_free_ship".
-// - Buyback bonus: Ultimate members get +5% of market on every buyback offer (85% instead of 80%).
+// - Free Ship Together: the shipping fee is waived on 1 shipment per calendar month (Central time) on Pro and
+//   2 on Ultimate (Trevor, Nov 26: unlimited would hurt margins). Use is recorded as a SitePlayEvent "pass_free_ship".
+// - Buyback bonus: Ultimate members get +5% Cardbits on every buyback offer (whatever the base rate is).
 // None of these touch odds, spins, giveaway entries or leaderboard points.
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { activeTier } from "./subscriptions.server";
@@ -9,6 +9,7 @@ import { activeTier } from "./subscriptions.server";
 type Db = PrismaClient | Prisma.TransactionClient;
 export const FREE_SHIP_EVENT = "pass_free_ship";
 export const ULTIMATE_BUYBACK_BONUS = 0.05;
+export const FREE_SHIPS_PER_MONTH = { pro: 1, ultimate: 2 } as const;
 
 /** First instant of the current calendar month in America/Chicago. */
 export function centralMonthStart(now = new Date()): Date {
@@ -30,38 +31,37 @@ export function centralMonthStart(now = new Date()): Date {
   return hour ? new Date(start.getTime() - hour * 3_600_000) : start;
 }
 
-export type FreeShip = { kind: "unlimited" | "monthly"; tier: "pro" | "ultimate" } | null;
+export type FreeShip = { kind: "monthly"; tier: "pro" | "ultimate"; left: number } | null;
+
+const usedThisMonth = (db: Db, customerId: string, now: Date) =>
+  db.sitePlayEvent.count({ where: { customerId, kind: FREE_SHIP_EVENT, createdAt: { gte: centralMonthStart(now) } } });
 
 /** Whether the member's next shipment ships free through Pack Pass. */
 export async function passFreeShip(db: Db, customerId: string, now = new Date()): Promise<FreeShip> {
   const tier = await activeTier(db as PrismaClient, customerId, now);
-  if (tier?.id === "ultimate") return { kind: "unlimited", tier: "ultimate" };
-  if (tier?.id !== "pro") return null;
-  const used = await db.sitePlayEvent.count({ where: { customerId, kind: FREE_SHIP_EVENT, createdAt: { gte: centralMonthStart(now) } } });
-  return used ? null : { kind: "monthly", tier: "pro" };
+  if (tier?.id !== "pro" && tier?.id !== "ultimate") return null;
+  const left = FREE_SHIPS_PER_MONTH[tier.id] - (await usedThisMonth(db, customerId, now));
+  return left > 0 ? { kind: "monthly", tier: tier.id, left } : null;
 }
 
 /**
  * Claim the waiver for a shipment inside its transaction. Serialized per customer, so two shipments
- * sent at once can't both use a Pro member's monthly free one. Returns false when it's already used.
+ * sent at once can't go past the member's monthly free shipments. Returns false when it's already used.
  */
 export async function claimFreeShip(tx: Prisma.TransactionClient, customerId: string, shipmentId: string, perk: NonNullable<FreeShip>, now = new Date()) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"pass-free-ship:" + customerId}, 0))`;
-  if (perk.kind === "monthly") {
-    const used = await tx.sitePlayEvent.count({ where: { customerId, kind: FREE_SHIP_EVENT, createdAt: { gte: centralMonthStart(now) } } });
-    if (used) return false;
-  }
+  if ((await usedThisMonth(tx, customerId, now)) >= FREE_SHIPS_PER_MONTH[perk.tier]) return false;
   await tx.sitePlayEvent.create({ data: { customerId, kind: FREE_SHIP_EVENT, detail: { shipmentId, tier: perk.tier, kind: perk.kind }, createdAt: now } });
   return true;
 }
 
 /**
- * The sell-back offer for a member. Offers are 80% of market (or Poke-Collect's own offer); Ultimate gets the
- * same offer scaled to 85% of market (x 85/80, rounded down), never above the card's retail price.
+ * The sell-back offer for a member: Ultimate gets +5% Cardbits on top of the regular offer (rounded down),
+ * never above the card's retail price. Copy says "+5% Cardbits", never a fixed rate (the base can change).
  */
 export function memberBuyback(base: number | null, bonus: number, retail: number | null = null): number | null {
   if (base == null || base <= 0 || !bonus) return base;
-  const up = Math.floor((base * (0.8 + bonus)) / 0.8);
+  const up = Math.floor(base * (1 + bonus));
   return retail != null && retail > 0 ? Math.max(base, Math.min(up, retail)) : up;
 }
 

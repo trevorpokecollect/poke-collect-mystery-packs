@@ -158,13 +158,13 @@ describe.skipIf(!url)("site shipping (integration)", () => {
     expect(mailer.sent.map((m) => m.subject)).toEqual(["Shipment Requested: 2 Cards"]);
   });
 
-  it("Pack Pass: Pro ships one shipment free each month, Ultimate every shipment, and the claim is recorded", async () => {
-    let perk: "monthly" | "unlimited" | null = "monthly";
+  it("Pack Pass: monthly free shipments (Pro 1, Ultimate 2) and the claim is recorded", async () => {
+    let perk: "monthly" | null = "monthly";
     const claimed: string[] = [];
     const passDeps: ShippingDeps = {
       ...deps,
       passShip: {
-        available: async () => (perk ? { kind: perk, tier: perk === "monthly" ? "pro" : "ultimate" } : null),
+        available: async () => (perk ? { kind: perk, tier: "pro", left: 1 } : null),
         claim: async (_tx, _c, shipmentId) => { claimed.push(shipmentId); return true; },
       },
     };

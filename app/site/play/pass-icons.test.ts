@@ -50,9 +50,10 @@ describe("Pack Pass emotes", () => {
 
 import { centralMonthStart, memberBuyback } from "./pass-perks.server";
 describe("Pack Pass perks", () => {
-  it("Ultimate sell-backs pay 85% of market instead of 80%, never above retail", () => {
+  it("Ultimate sell-backs get +5% Cardbits, never above retail", () => {
     expect(memberBuyback(800, 0)).toBe(800);
-    expect(memberBuyback(800, 0.05)).toBe(850);
+    expect(memberBuyback(800, 0.05)).toBe(840);
+    expect(memberBuyback(333, 0.05)).toBe(349);
     expect(memberBuyback(800, 0.05, 820)).toBe(820);
     expect(memberBuyback(null, 0.05)).toBeNull();
   });

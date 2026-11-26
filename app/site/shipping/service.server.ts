@@ -168,7 +168,7 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
   if (copyIds.length !== input.copyIds.length)
     throw new ShippingError("A card was picked twice.", "DUPLICATE_COPY");
   let fee: ShippingFee = shippingFee(copyIds.length, input.method, await shipmentValueBits(db, input.customerId, copyIds));
-  // Pack Pass: Pro ships one shipment free each month, Ultimate every shipment.
+  // Pack Pass: free shipments each month (Pro 1, Ultimate 2).
   const passPerk = fee.kind !== "FREE" && deps.passShip ? await deps.passShip.available(input.customerId, deps.now?.() ?? new Date()) : null;
   if (passPerk) fee = { kind: "FREE", bits: 0, cents: 0 };
 

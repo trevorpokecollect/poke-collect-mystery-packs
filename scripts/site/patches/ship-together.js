@@ -12,9 +12,9 @@
     const valueOf = c => Math.max(0, Number(c?.retailBits ?? c?.buybackBits ?? 0) || 0);
     const valueOfIds = ids => (get().binder || []).filter(c => ids.includes(c.id)).reduce((sum, c) => sum + valueOf(c), 0);
     const freeShip = (n, v) => n >= FREE_CARDS || v >= FREE_VALUE;
-    // Pack Pass: Pro ships one shipment free each month, Ultimate every shipment (server re-checks).
+    // Pack Pass: free shipments each month, Pro 1 and Ultimate 2 (server re-checks).
     const passShip = () => get().account?.passFreeShip || null;
-    const passShipNote = () => { const p = passShip(); return p ? (p.kind === 'unlimited' ? 'Free With Pack Pass Ultimate' : 'Free With Pack Pass Pro (1 Free Shipment a Month)') : ''; };
+    const passShipNote = () => { const p = passShip(); if (!p) return ''; const n = Number(p.left) || 1; return 'Free With Pack Pass '+(p.tier === 'ultimate' ? 'Ultimate' : 'Pro')+' ('+n+' Free Shipment'+(n === 1 ? '' : 's')+' Left This Month)'; };
     const fee = (n, v) => freeShip(n, v) || passShip() ? 0 : SHIP_FEE_BITS;
     let barWas = {cards:0, value:0};
     function freeBars(n, v) {

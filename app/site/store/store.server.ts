@@ -145,7 +145,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
   const packRules = new Map(allPacks.map((p) => [p.id, tierRules(p.tierRules)]));
   const openingPack = new Map(openings.map((o) => [o.id, o.packId]));
   const rulesFor = (c: SiteCopy) => packRules.get((c.openingId && openingPack.get(c.openingId)) || c.packId || "") ?? DEFAULT_TIERS;
-  const buybackBonus = await buybackBonusFor(db, customer.id); // Pack Pass Ultimate: 85% of market instead of 80%
+  const buybackBonus = await buybackBonusFor(db, customer.id); // Pack Pass Ultimate: +5% Cardbits on buyback offers
   const withBonus = (v: ReturnType<typeof cardView>) => {
     const offer = memberBuyback(v.buybackBits, buybackBonus, v.retailBits);
     return offer === v.buybackBits ? v : { ...v, buybackBits: offer, cardbitValue: offer ?? v.cardbitValue };
@@ -364,7 +364,7 @@ function storeTx(db: PrismaClient, customer: SiteCustomer, a: StoreAction, reqId
           console.error("[site] buyback offer above retail, refused", pk(c), base, retailNow);
           throw new StoreError("no_offer", "No current buyback offer for this copy.");
         }
-        // Pack Pass Ultimate: 85% of market instead of 80% (same rule the vault view shows).
+        // Pack Pass Ultimate: +5% Cardbits on the offer (same rule the vault view shows).
         const offer = memberBuyback(base, await buybackBonusFor(tx, customer.id), retailNow)!;
         if (a.amount !== offer) throw new StoreError("catalog_changed", "The Cardbits offer changed. Review the current price.");
         await applyLedger(tx, { customerId: customer.id, delta: offer, kind: "BUYBACK", idempotencyKey: key, ref: c.id, note: `Sold back ${c.title}` });

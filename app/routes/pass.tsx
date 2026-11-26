@@ -70,8 +70,8 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
         ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Animated emotes:</b> 4 for every Latch &amp; Friends character</span></li>`}
         ${t.id === "ultimate" ? `<li>${ICON.star}<span><b>Legendary emotes</b>, only on Ultimate</span></li>` : ""}
         ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Card sleeves + reveal effects</b> for your openings${t.id === "ultimate" ? ", including the Gold Legendary sleeve" : ""}</span></li>`}
-        ${t.id === "plus" ? "" : `<li>${ICON.box}<span><b>Free Ship Together</b> ${t.id === "ultimate" ? "on every shipment" : "once a month"}</span></li>`}
-        ${t.id === "ultimate" ? `<li>${ICON.coin}<span><b>85% buyback</b> when you sell cards back (instead of 80%)</span></li>` : ""}
+        ${t.id === "plus" ? "" : `<li>${ICON.box}<span><b>Free Ship Together</b> ${t.id === "ultimate" ? "2 shipments a month" : "1 shipment a month"}</span></li>`}
+        ${t.id === "ultimate" ? `<li>${ICON.coin}<span><b>+5% Cardbits</b> on all buybacks</span></li>` : ""}
         <li>${ICON.chat}<span>Members' chat room + <b>${esc(PLAN.name)}</b> Discord role</span></li>
       </ul>${cta}</section>`;
   }).join("");

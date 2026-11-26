@@ -88,18 +88,23 @@ describe.skipIf(!url)("Pack Pass subscriptions", () => {
     expect(await activeTier(db, customerId)).toBeNull();
   });
 
-  it("Pro gets one free shipment a month; Ultimate unlimited plus the buyback bonus", async () => {
+  it("Pro gets one free shipment a month; Ultimate two plus the buyback bonus", async () => {
     expect(await passFreeShip(db, customerId)).toBeNull();
     await created();
     await settled("pay_1");
     const perk = await passFreeShip(db, customerId);
-    expect(perk).toEqual({ kind: "monthly", tier: "pro" });
+    expect(perk).toEqual({ kind: "monthly", tier: "pro", left: 1 });
     expect(await db.$transaction((tx) => claimFreeShip(tx, customerId, "ship_a", perk!))).toBe(true);
     expect(await db.$transaction((tx) => claimFreeShip(tx, customerId, "ship_b", perk!))).toBe(false);
     expect(await passFreeShip(db, customerId)).toBeNull();
     expect(await buybackBonusFor(db, customerId)).toBe(0);
     await db.siteSubscription.updateMany({ where: { customerId }, data: { tier: "ultimate" } });
-    expect(await passFreeShip(db, customerId)).toEqual({ kind: "unlimited", tier: "ultimate" });
+    // Ultimate: 2 a month, and the Pro one already used this month counts.
+    expect(await passFreeShip(db, customerId)).toEqual({ kind: "monthly", tier: "ultimate", left: 1 });
+    const ult = (await passFreeShip(db, customerId))!;
+    expect(await db.$transaction((tx) => claimFreeShip(tx, customerId, "ship_c", ult))).toBe(true);
+    expect(await db.$transaction((tx) => claimFreeShip(tx, customerId, "ship_d", ult))).toBe(false);
+    expect(await passFreeShip(db, customerId)).toBeNull();
     expect(await buybackBonusFor(db, customerId)).toBe(0.05);
   });
 
