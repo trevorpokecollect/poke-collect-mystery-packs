@@ -47,3 +47,18 @@ describe("Pack Pass emotes", () => {
     expect(map["wyrmware-shock"]).toBe("/site/img/pass/emotes/wyrmware-shock.svg");
   });
 });
+
+import { centralMonthStart, memberBuyback } from "./pass-perks.server";
+describe("Pack Pass perks", () => {
+  it("Ultimate sell-backs pay 85% of market instead of 80%, never above retail", () => {
+    expect(memberBuyback(800, 0)).toBe(800);
+    expect(memberBuyback(800, 0.05)).toBe(850);
+    expect(memberBuyback(800, 0.05, 820)).toBe(820);
+    expect(memberBuyback(null, 0.05)).toBeNull();
+  });
+  it("counts the monthly free shipment by Central-time calendar month", () => {
+    expect(centralMonthStart(new Date("2026-12-01T05:59:00Z")).toISOString()).toBe("2026-11-01T05:00:00.000Z");
+    expect(centralMonthStart(new Date("2026-12-01T06:01:00Z")).toISOString()).toBe("2026-12-01T06:00:00.000Z");
+    expect(centralMonthStart(new Date("2026-04-01T05:01:00Z")).toISOString()).toBe("2026-04-01T05:00:00.000Z");
+  });
+});

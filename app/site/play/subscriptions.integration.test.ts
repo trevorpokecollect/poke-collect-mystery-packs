@@ -7,6 +7,7 @@ import { cancelPlan } from "../core/admin-desk.server";
 import { topupCentsSince } from "./limits.server";
 import { sendPlanCanceledEmail, sendPlanPaymentEmail } from "./plan-emails.server";
 import { PLAN, withPlanCopy } from "./plan-brand";
+import { buybackBonusFor, claimFreeShip, passFreeShip } from "./pass-perks.server";
 import { activeTier, activeTiers, monthlyCredit, requestCancel, subscriberBonusForOpening, subscriptionView, tierById, TIERS } from "./subscriptions.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -17,6 +18,7 @@ const wipe = async () => {
   await db.siteStaffAction.deleteMany({ where: { requestId: { startsWith: "subtest" } } });
   await db.siteSubscriptionPayment.deleteMany();
   await db.siteSubscription.deleteMany();
+  await db.sitePlayEvent.deleteMany({ where: { kind: "pass_free_ship" } });
   const ids = (await db.siteCustomer.findMany({ where: { email: { endsWith: "@sub.test" } }, select: { id: true } })).map((c) => c.id);
   await db.siteLedger.deleteMany({ where: { customerId: { in: ids } } });
   await db.siteWallet.deleteMany({ where: { customerId: { in: ids } } });
@@ -84,6 +86,21 @@ describe.skipIf(!url)("Pack Pass subscriptions", () => {
     tiers = await activeTiers(db, [customerId]);
     expect(tiers.size).toBe(0);
     expect(await activeTier(db, customerId)).toBeNull();
+  });
+
+  it("Pro gets one free shipment a month; Ultimate unlimited plus the buyback bonus", async () => {
+    expect(await passFreeShip(db, customerId)).toBeNull();
+    await created();
+    await settled("pay_1");
+    const perk = await passFreeShip(db, customerId);
+    expect(perk).toEqual({ kind: "monthly", tier: "pro" });
+    expect(await db.$transaction((tx) => claimFreeShip(tx, customerId, "ship_a", perk!))).toBe(true);
+    expect(await db.$transaction((tx) => claimFreeShip(tx, customerId, "ship_b", perk!))).toBe(false);
+    expect(await passFreeShip(db, customerId)).toBeNull();
+    expect(await buybackBonusFor(db, customerId)).toBe(0);
+    await db.siteSubscription.updateMany({ where: { customerId }, data: { tier: "ultimate" } });
+    expect(await passFreeShip(db, customerId)).toEqual({ kind: "unlimited", tier: "ultimate" });
+    expect(await buybackBonusFor(db, customerId)).toBe(0.05);
   });
 
   it("rejects a wrong amount and ignores unknown subscriptions", async () => {

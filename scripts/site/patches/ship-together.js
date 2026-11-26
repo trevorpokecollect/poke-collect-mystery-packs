@@ -12,10 +12,14 @@
     const valueOf = c => Math.max(0, Number(c?.retailBits ?? c?.buybackBits ?? 0) || 0);
     const valueOfIds = ids => (get().binder || []).filter(c => ids.includes(c.id)).reduce((sum, c) => sum + valueOf(c), 0);
     const freeShip = (n, v) => n >= FREE_CARDS || v >= FREE_VALUE;
-    const fee = (n, v) => freeShip(n, v) ? 0 : SHIP_FEE_BITS;
+    // Pack Pass: Pro ships one shipment free each month, Ultimate every shipment (server re-checks).
+    const passShip = () => get().account?.passFreeShip || null;
+    const passShipNote = () => { const p = passShip(); return p ? (p.kind === 'unlimited' ? 'Free With Pack Pass Ultimate' : 'Free With Pack Pass Pro (1 Free Shipment a Month)') : ''; };
+    const fee = (n, v) => freeShip(n, v) || passShip() ? 0 : SHIP_FEE_BITS;
     let barWas = {cards:0, value:0};
     function freeBars(n, v) {
       const free = n > 0 && freeShip(n, v);
+      if (!free && passShip()) return '<div class="ct-free is-free"><p class="ct-free-head">'+icon('check',16)+esc(passShipNote())+'</p></div>';
       const bar = (key, label, now, goal, text) => {
         const to = Math.min(100, now / goal * 100), from = barWas[key]; barWas[key] = to;
         return '<div class="ct-bar'+(now >= goal ? ' is-full' : '')+'"><div class="ct-bar-top"><span>'+label+'</span><span>'+text+'</span></div>'+
@@ -47,7 +51,7 @@
     }
     function siteSummary() {
       const n = selected.size, v = valueOfIds([...selected]), cost = fee(n, v), balance = get().account?.bits ?? 0;
-      const line = !n ? '—' : cost ? bits(cost) : 'Free Shipping';
+      const line = !n ? '—' : cost ? bits(cost) : (passShip() && !freeShip(n, v) ? 'Free With Pack Pass' : 'Free Shipping');
       const short = n && cost > balance;
       return '<p class="ct-price"><span aria-live="polite">'+n+' Selected</span><strong>'+line+'</strong></p>'+
         freeBars(n, v)+

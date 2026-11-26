@@ -13,6 +13,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { levelForXp, rankFor } from "../../lib/cardbit-levels";
+import { activeTier, activeTiers } from "../play/subscriptions.server";
 import { siteOrigin } from "../core/auth.server";
 import { SITE_SHOP, alias } from "../rewards/rewards.server";
 
@@ -35,7 +36,14 @@ export const feedTiers = (env: Env = process.env) =>
 /** The one metadata field the rank roles compare against. type 2 = INTEGER_GREATER_THAN_OR_EQUAL. */
 export const ROLE_METADATA = [
   { key: "level", name: "Cardbit Level", description: "Collector level on cardbit.com", type: 2 },
+  // Pack Pass role (Trevor, Nov 25): 0 none, 1 Plus, 2 Pro, 3 Ultimate. The "Pack Pass" role requires >= 1.
+  { key: "pass_tier", name: "Pack Pass Tier", description: "1 Plus, 2 Pro, 3 Ultimate", type: 2 },
 ] as const;
+const PASS_TIER_NUM: Record<string, number> = { plus: 1, pro: 2, ultimate: 3 };
+async function passTierNum(db: PrismaClient, customerId: string, now = new Date()) {
+  const t = await activeTier(db, customerId, now);
+  return t ? PASS_TIER_NUM[t.id] ?? 0 : 0;
+}
 
 // ---- Token encryption (AES-256-GCM, key derived from the app's client secret) -----------------
 // Rotating the client secret makes old tokens unreadable; those links simply ask the customer to link again.
@@ -160,25 +168,25 @@ export async function levelOf(db: PrismaClient, customerId: string) {
 }
 
 /** The role-connection body Discord stores for the customer (shown on their Discord profile). */
-export const roleConnectionBody = (customerId: string, level: number) => ({
+export const roleConnectionBody = (customerId: string, level: number, passTier = 0) => ({
   platform_name: "Cardbit",
   platform_username: `${alias(customerId)} · ${rankFor(level)}`,
-  metadata: { level: String(level) },
+  metadata: { level: String(level), pass_tier: String(passTier) },
 });
 
 /** Send the customer's current level to Discord. Returns the pushed level, or null when the link needs redoing. */
 export async function pushLevel(db: PrismaClient, customerId: string, fetcher: typeof fetch = fetch, env: Env = process.env, now = new Date()) {
   const token = await accessTokenFor(db, customerId, fetcher, env, now);
   if (!token) return null;
-  const level = await levelOf(db, customerId);
+  const [level, passTier] = await Promise.all([levelOf(db, customerId), passTierNum(db, customerId, now)]);
   const res = await fetcher(`${API}/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(roleConnectionBody(customerId, level)),
+    body: JSON.stringify(roleConnectionBody(customerId, level, passTier)),
   });
   if (res.status === 401 || res.status === 403) return dropTokens(db, customerId);
   if (!res.ok) throw new DiscordLinkError("Discord is unavailable right now.");
-  await db.siteDiscordLink.update({ where: { customerId }, data: { pushedLevel: level, pushedAt: now } });
+  await db.siteDiscordLink.update({ where: { customerId }, data: { pushedLevel: level, pushedPassTier: passTier, pushedAt: now } });
   return level;
 }
 
@@ -225,7 +233,7 @@ export async function discordStatus(db: PrismaClient, customerId: string) {
 // ---- Hourly level sync --------------------------------------------------------------------------
 /** Push every linked customer whose level changed since the last push. Closed accounts are unlinked. */
 export async function syncLevels(db: PrismaClient, fetcher: typeof fetch = fetch, env: Env = process.env, now = new Date()) {
-  const links = await db.siteDiscordLink.findMany({ where: { accessToken: { not: null } }, select: { customerId: true, pushedLevel: true } });
+  const links = await db.siteDiscordLink.findMany({ where: { accessToken: { not: null } }, select: { customerId: true, pushedLevel: true, pushedPassTier: true } });
   if (!links.length) return { pushed: 0, unlinked: 0 };
   const ids = links.map((l) => l.customerId);
   const [profiles, closed] = await Promise.all([
@@ -233,6 +241,7 @@ export async function syncLevels(db: PrismaClient, fetcher: typeof fetch = fetch
     db.siteCustomer.findMany({ where: { id: { in: ids }, closedAt: { not: null } }, select: { id: true } }),
   ]);
   const xp = new Map(profiles.map((p) => [p.customerId, p.xp]));
+  const tiers = await activeTiers(db, ids, now);
   const closedIds = new Set(closed.map((c) => c.id));
   let pushed = 0, unlinked = 0;
   for (const l of links) {
@@ -242,7 +251,8 @@ export async function syncLevels(db: PrismaClient, fetcher: typeof fetch = fetch
         unlinked++;
         continue;
       }
-      if (levelForXp(xp.get(l.customerId) ?? 0) === l.pushedLevel) continue;
+      const tierNow = PASS_TIER_NUM[tiers.get(l.customerId)?.id ?? ""] ?? 0;
+      if (levelForXp(xp.get(l.customerId) ?? 0) === l.pushedLevel && tierNow === (l.pushedPassTier ?? 0)) continue;
       if ((await pushLevel(db, l.customerId, fetcher, env, now)) !== null) pushed++;
     } catch {
       // Discord hiccup or rate limit: try again next hour.

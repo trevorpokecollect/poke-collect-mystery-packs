@@ -1881,6 +1881,7 @@ model SiteDiscordLink {
   refreshToken  String? // encrypted
   expiresAt     DateTime?
   pushedLevel   Int? // level last sent to Discord
+  pushedPassTier Int? // Pack Pass tier last sent (0 none, 1 Plus, 2 Pro, 3 Ultimate)
   pushedAt      DateTime?
   shareFeedAt   DateTime? // opted in to the live pulls feed at this time; null = off (default)
   createdAt     DateTime  @default(now())

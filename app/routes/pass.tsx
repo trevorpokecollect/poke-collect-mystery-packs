@@ -68,7 +68,9 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
         <li>${ICON.star}<span><b>${esc(t.name)} portrait frame</b> around your icon</span></li>
         ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Animated emotes:</b> 4 for every Latch &amp; Friends character</span></li>`}
         ${t.id === "ultimate" ? `<li>${ICON.star}<span><b>Legendary emotes</b>, only on Ultimate</span></li>` : ""}
-        <li>${ICON.chat}<span>Members' chat room</span></li>
+        ${t.id === "plus" ? "" : `<li>${ICON.box}<span><b>Free Ship Together</b> ${t.id === "ultimate" ? "on every shipment" : "once a month"}</span></li>`}
+        ${t.id === "ultimate" ? `<li>${ICON.coin}<span><b>85% buyback</b> when you sell cards back (instead of 80%)</span></li>` : ""}
+        <li>${ICON.chat}<span>Members' chat room + <b>${esc(PLAN.name)}</b> Discord role</span></li>
       </ul>${cta}</section>`;
   }).join("");
   const status = live && v.current
@@ -112,6 +114,8 @@ const ICON = {
   spark: svg('<path d="M12 2l2.2 6.3L20 10l-5.8 1.7L12 18l-2.2-6.3L4 10l5.8-1.7z" fill="currentColor"/><circle cx="19" cy="19" r="2" fill="currentColor"/>'),
   star: svg('<path d="m12 3 2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="currentColor"/>'),
   chat: svg('<path d="M4 5h16v10H9l-5 4z" fill="currentColor"/>'),
+  box: svg('<path d="M12 2 3 6.5v11L12 22l9-4.5v-11zM12 4.3l6.4 3.2L12 10.7 5.6 7.5zM5 9.1l6 3v7.6l-6-3zm8 10.6v-7.6l6-3v7.6z" fill="currentColor"/>'),
+  coin: svg('<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v10M9.5 9.5h4a1.8 1.8 0 0 1 0 3.5h-3a1.8 1.8 0 0 0 0 3.5h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
   gift: svg('<path d="M3 10h18v4H3zM5 14h14v7H5zM11 10h2v11h-2zM12 10c-2-4-6-4-6-1.5S10 10 12 10c2 0 6-.5 6-1.5S14 6 12 10z" fill="currentColor"/>'),
 };
 

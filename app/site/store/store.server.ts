@@ -1,6 +1,7 @@
 // Store API for the standalone site: the server-side twin of the theme adapter's view()/actions.
 // Balances live in SiteLedger, physical cards in SiteCopy. Every paid action is idempotent per
 // (customer, requestId) and runs in one transaction with the ledger debit.
+import { buybackBonusFor, memberBuyback, passFreeShip } from "../play/pass-perks.server";
 import { createHash, randomInt } from "node:crypto";
 import type { Prisma, PrismaClient, SiteCopy, SiteCustomer } from "@prisma/client";
 import { applyLedger, balanceOf, InsufficientCardbits } from "../core/ledger.server";
@@ -144,8 +145,13 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
   const packRules = new Map(allPacks.map((p) => [p.id, tierRules(p.tierRules)]));
   const openingPack = new Map(openings.map((o) => [o.id, o.packId]));
   const rulesFor = (c: SiteCopy) => packRules.get((c.openingId && openingPack.get(c.openingId)) || c.packId || "") ?? DEFAULT_TIERS;
+  const buybackBonus = await buybackBonusFor(db, customer.id); // Pack Pass Ultimate: 85% of market instead of 80%
+  const withBonus = (v: ReturnType<typeof cardView>) => {
+    const offer = memberBuyback(v.buybackBits, buybackBonus, v.retailBits);
+    return offer === v.buybackBits ? v : { ...v, buybackBits: offer, cardbitValue: offer ?? v.cardbitValue };
+  };
   const copyView = (c: SiteCopy, p: Prices) => ({
-    ...cardView(c, p.get(pk(c)), c.id, rulesFor(c)),
+    ...withBonus(cardView(c, p.get(pk(c)), c.id, rulesFor(c))),
     physicalCopyId: singleKey(c),
     cardId: singleKey(c),
     status: c.ownerId === customer.id ? (c.status === "VAULTED" ? "held" : c.status === "SHIP_LOCKED" ? "shipping" : c.status === "SHIPPED" ? "shipped" : "returned") : "returned",
@@ -158,7 +164,7 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
 
   return {
     site: true,
-    account: { id: customer.id, name: customer.name || customer.email.split("@")[0], email: customer.email, bits: balance, frozen: Boolean(customer.frozenAt), level: progress.level, sparks: progress.sparks, play: await playStateFor(db, customer.id) },
+    account: { id: customer.id, name: customer.name || customer.email.split("@")[0], email: customer.email, bits: balance, frozen: Boolean(customer.frozenAt), level: progress.level, sparks: progress.sparks, play: await playStateFor(db, customer.id), passFreeShip: await passFreeShip(db, customer.id) },
     packs: packViews,
     singles,
     binder: owned.filter((c) => !c.openingId || !sealed.has(c.openingId)).map((c) => ({ ...copyView(c, prices), tier: null })),
@@ -350,14 +356,16 @@ function storeTx(db: PrismaClient, customer: SiteCustomer, a: StoreAction, reqId
           if (o?.sealed) throw new StoreError("not_found", "Open this pack first.", 404);
         }
         const price = (await pricesFor(tx, [pk(c)])).get(pk(c));
-        const offer = price?.buybackBits ?? null;
-        if (!offer || offer <= 0) throw new StoreError("no_offer", "No current buyback offer for this copy.");
+        const base = price?.buybackBits ?? null;
+        if (!base || base <= 0) throw new StoreError("no_offer", "No current buyback offer for this copy.");
         // Sanity: an offer above the selling price is a pricing error (it would let buy + sell back mint Cardbits).
         const retailNow = c.retailBits ?? price?.retailBits ?? null;
-        if (retailNow != null && offer > retailNow) {
-          console.error("[site] buyback offer above retail, refused", pk(c), offer, retailNow);
+        if (retailNow != null && base > retailNow) {
+          console.error("[site] buyback offer above retail, refused", pk(c), base, retailNow);
           throw new StoreError("no_offer", "No current buyback offer for this copy.");
         }
+        // Pack Pass Ultimate: 85% of market instead of 80% (same rule the vault view shows).
+        const offer = memberBuyback(base, await buybackBonusFor(tx, customer.id), retailNow)!;
         if (a.amount !== offer) throw new StoreError("catalog_changed", "The Cardbits offer changed. Review the current price.");
         await applyLedger(tx, { customerId: customer.id, delta: offer, kind: "BUYBACK", idempotencyKey: key, ref: c.id, note: `Sold back ${c.title}` });
         // Verified restocks (Trevor, Nov 25): the card goes to Draft, same slot, marked for the hourly automatic

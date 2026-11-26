@@ -107,7 +107,7 @@ describe.skipIf(!url)("Discord linked roles and pulls feed", () => {
     await linkFinish(db, c.id, new URLSearchParams({ state: "s", code: "c" }), "s", fetcher, env);
     const put = calls.find((x) => x.url.endsWith(`/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`))!;
     expect(JSON.parse(String(put.init!.body))).toEqual(roleConnectionBody(c.id, 12));
-    expect(JSON.parse(String(put.init!.body)).metadata).toEqual({ level: "12" });
+    expect(JSON.parse(String(put.init!.body)).metadata).toEqual({ level: "12", pass_tier: "0" });
     const row = await db.siteDiscordLink.findUniqueOrThrow({ where: { customerId: c.id } });
     expect(row.accessToken).not.toContain("at-");
     expect(row.pushedLevel).toBe(12);
@@ -152,7 +152,7 @@ describe.skipIf(!url)("Discord linked roles and pulls feed", () => {
     expect(await registerRoleMetadata(fetcher, env)).toBe(false);
     expect(await registerRoleMetadata(fetcher, { ...env, DISCORD_BOT_TOKEN: "bot" })).toBe(true);
     const body = JSON.parse(String(calls[0].init!.body));
-    expect(body).toEqual([{ key: "level", name: "Cardbit Level", description: "Collector level on cardbit.com", type: 2 }]);
+    expect(body).toEqual([{ key: "level", name: "Cardbit Level", description: "Collector level on cardbit.com", type: 2 }, { key: "pass_tier", name: "Pack Pass Tier", description: "1 Plus, 2 Pro, 3 Ultimate", type: 2 }]);
   });
 
   it("posts only opted-in, top-tier, post-opt-in pulls, once, with no values and no pings", async () => {

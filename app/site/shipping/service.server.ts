@@ -1,7 +1,8 @@
 // Vault shipping for the standalone site: quote -> create (lock copies + take fee) -> buy label
 // (staff) -> tracking webhooks -> delivered. Shopify is not involved.
 
-import type { PrismaClient, SiteShipment } from "@prisma/client";
+import type { Prisma, PrismaClient, SiteShipment } from "@prisma/client";
+import type { FreeShip } from "../play/pass-perks.server";
 import { assertAllowedRegion, US_STATES, zipStateMismatch, type GeoLookup } from "../region.server";
 import {
   cardsUntilFree,
@@ -41,7 +42,8 @@ export class ShippingError extends Error {
       | "LABEL_FAILED"
       | "PROVIDER_MISSING"
       | "DUPLICATE_COPY"
-      | "BAD_PACKAGE",
+      | "BAD_PACKAGE"
+      | "PASS_SHIP_USED",
     public details: string[] = [],
   ) {
     super(message);
@@ -61,6 +63,11 @@ export type ShippingDeps = {
   /** Preferred service level tokens (Shippo style, EasyPost rates are mapped to them), best first. */
   services?: string[];
   now?: () => Date;
+  /** Pack Pass free shipping (app/site/play/pass-perks.server.ts). Left out, every fee applies as usual. */
+  passShip?: {
+    available(customerId: string, now: Date): Promise<FreeShip>;
+    claim(tx: Prisma.TransactionClient, customerId: string, shipmentId: string, perk: NonNullable<FreeShip>, now: Date): Promise<boolean>;
+  };
 };
 
 export const DEFAULT_SERVICES = ["usps_ground_advantage", "usps_priority", "ups_ground_saver", "ups_ground"];
@@ -160,7 +167,10 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
   const copyIds = [...new Set(input.copyIds)];
   if (copyIds.length !== input.copyIds.length)
     throw new ShippingError("A card was picked twice.", "DUPLICATE_COPY");
-  const fee: ShippingFee = shippingFee(copyIds.length, input.method, await shipmentValueBits(db, input.customerId, copyIds));
+  let fee: ShippingFee = shippingFee(copyIds.length, input.method, await shipmentValueBits(db, input.customerId, copyIds));
+  // Pack Pass: Pro ships one shipment free each month, Ultimate every shipment.
+  const passPerk = fee.kind !== "FREE" && deps.passShip ? await deps.passShip.available(input.customerId, deps.now?.() ?? new Date()) : null;
+  if (passPerk) fee = { kind: "FREE", bits: 0, cents: 0 };
 
   const billing = input.billing ?? { country: input.address.country, state: input.address.state };
   await assertAllowedRegion(
@@ -242,6 +252,8 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
         })),
       });
       let paymentRef = created.paymentRef;
+      if (passPerk && !(await deps.passShip!.claim(tx, input.customerId, created.id, passPerk, now)))
+        throw new ShippingError("Your free Pack Pass shipment for this month was just used. Review the shipping fee and try again.", "PASS_SHIP_USED");
       if (fee.kind === "CARDBITS") {
         const debit = await deps.fees.debitBits(
           tx,
@@ -259,7 +271,7 @@ export async function createShipment(deps: ShippingDeps, input: CreateShipmentIn
           fromStatus: null,
           toStatus: "PAID",
           actor: `customer:${input.customerId}`,
-          detail: { fee, validated, cards: copyIds.length },
+          detail: { fee, validated, cards: copyIds.length, ...(passPerk ? { passFreeShip: passPerk } : {}) },
         },
       });
       return tx.siteShipment.update({
