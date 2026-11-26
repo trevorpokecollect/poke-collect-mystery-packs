@@ -1,6 +1,6 @@
 // Coming-soon waitlist page (cardbit.com before launch). Server-rendered HTML; motion lives in
 // public/site/waitlist/waitlist.{css,js} (no libraries). Copy rules: Title Case UI, Cardbits only (no
-// retail values), "Launching Soon" with no date, Latch & Friends throughout (Trevor, Nov 25 2026).
+// retail values), "Launching Soon" with no date, Latch & the BitBots throughout (renamed from Latch & Friends Nov 26) (Trevor, Nov 25 2026).
 import { createHash } from "node:crypto";
 import { assetUrl, pulseTag, shareMeta, SITE_SECURITY_HEADERS } from "../shell.server";
 import { robotsTags } from "../seo.server";
@@ -274,7 +274,7 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
         </article>
         <article class="wl-card wl-feature" data-wl-reveal>
           <div class="wl-level" aria-hidden="true"><img src="${friend("nimbyte")}" alt="" ${lazy}><div><b>Level <span data-wl-level>7</span></b><div class="wl-xp"><i data-wl-xp></i></div><small>XP From Every Pack You Open</small></div></div>
-          <h3>Levels & XP</h3><p>Earn XP as you open packs and check in. Higher levels unlock new Latch & Friends icons and better daily rewards.</p>
+          <h3>Levels & XP</h3><p>Earn XP as you open packs and check in. Higher levels unlock new BitBot icons and better daily rewards.</p>
         </article>
         <article class="wl-card wl-feature" data-wl-reveal>
           <div class="wl-sparkbox" aria-hidden="true"><img src="${assetUrl("cardbit-sparks.svg")}" alt=""><span></span><span></span><span></span><span></span></div>
@@ -303,8 +303,8 @@ export function waitlistPage(env: NodeJS.ProcessEnv = process.env): string {
 
     <section class="wl-friends" aria-labelledby="wl-friends-h">
       <p class="wl-eyebrow" data-wl-reveal>Say Hi</p>
-      <h2 id="wl-friends-h" class="wl-h2" data-wl-reveal>Meet Latch & Friends</h2>
-      <p class="wl-sub" data-wl-reveal>Latch is the Cardbit mascot. Collect his digital friends as profile icons as you level up.</p>
+      <h2 id="wl-friends-h" class="wl-h2" data-wl-reveal>Meet Latch &amp; the BitBots</h2>
+      <p class="wl-sub" data-wl-reveal>Latch is the Cardbit mascot and leader of the BitBots. Collect him and the rest of the crew as profile icons as you level up.</p>
       <ul class="wl-friendrow">
         ${FRIENDS.map(([id, name], i) => `<li style="--i:${i}" data-wl-reveal><img src="${friend(id)}" alt="" width="96" height="96" ${lazy}><span>${name}</span></li>`).join("")}
       </ul>

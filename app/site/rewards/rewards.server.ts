@@ -1,4 +1,4 @@
-// Rewards on the standalone site: Levels/XP, daily check-in, Latch & Friends icons, Daily Spins,
+// Rewards on the standalone site: Levels/XP, daily check-in, Latch & the BitBots icons, Daily Spins,
 // Sparks and the Weekly Leaderboard. The same engagement code as the Shopify store runs here, with
 // the site's own shop key (SITE_REWARDS_SHOP) and site customer ids, so the two never mix.
 import { createHash } from "node:crypto";

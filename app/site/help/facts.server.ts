@@ -25,7 +25,7 @@ export function siteFacts(plansOpen: boolean): string {
     "- XP has no cash value and never turns into Cardbits.",
     `- Levels go from 1 to ${MAX_LEVEL}. Total XP needed: ${levelSteps}.`,
     `- Ranks shown beside the level: ${RANKS.map((r) => `${r.name} (Level ${r.minLevel})`).join(", ")}.`,
-    `- Latch & Friends icons: ${ICONS.map((i) => `${i.name} (Level ${i.minLevel})`).join(", ")}. Members can also pick a color for their initials instead.`,
+    `- BitBot icons (the characters are called BitBots; the set is "Latch & the BitBots", formerly "Latch & Friends"): ${ICONS.map((i) => `${i.name} (Level ${i.minLevel})`).join(", ")}. Members can also pick a color for their initials instead.`,
     "",
     "## Daily Spins (cardbit.com/rewards)",
     `- Every spin you've unlocked is free once per Cardbit day. Spins unlock by level: ${SPINNER_TIERS.map((t) => `${t.name} (Level ${t.minLevel})`).join(", ")}. Leveling up adds more free spins each day; higher spins have better prizes.`,
@@ -64,8 +64,8 @@ export function siteFacts(plansOpen: boolean): string {
         (t) =>
           `- ${t.name}: $${(t.cents / 100).toFixed(2)}/month. Each paid month adds ${n(t.monthlyBits)} Cardbits + ${n(t.bonusBits)} bonus Cardbits, +${t.xpBonusPct}% XP from packs and +${t.sparksBonusPct}% Sparks.`,
       ),
-      `- Cosmetic perks: every plan puts a ${PLAN.name} portrait frame (Plus, Pro or Ultimate) around the member's icon and opens the members' chat room. Pro and Ultimate unlock 4 animated emotes (Hype, Love, LOL, Shocked) for every Latch & Friends character, picked on the Rewards page. Ultimate also gets Legendary emotes. Emotes switch back to the regular icon when the plan ends.`,
-      `- Opening style (Pro and Ultimate, Rewards page "My Opening Style"): a card sleeve (Neon, Holo, Midnight, Pro Circuit; Gold Legendary is Ultimate only) covers each card until it prints, and a reveal effect in a Latch & Friends character's element (default: the member's icon) plays behind the card. Only in the member's own openings; looks only, never changes what is pulled.`,
+      `- Cosmetic perks: every plan puts a ${PLAN.name} portrait frame (Plus, Pro or Ultimate) around the member's icon and opens the members' chat room. Pro and Ultimate unlock 4 animated emotes (Hype, Love, LOL, Shocked) for every BitBot, picked on the Rewards page. Ultimate also gets Legendary emotes. Emotes switch back to the regular icon when the plan ends.`,
+      `- Opening style (Pro and Ultimate, Rewards page "My Opening Style"): a card sleeve (Neon, Holo, Midnight, Pro Circuit; Gold Legendary is Ultimate only) covers each card until it prints, and a reveal effect in a BitBot's element (default: the member's icon) plays behind the card. Only in the member's own openings; looks only, never changes what is pulled.`,
       `- Other perks: Pro ships one Ship Together shipment free each calendar month (Central time); Ultimate ships two free each calendar month. Ultimate gets +5% Cardbits on all buyback offers (never above the card's price); never quote a buyback percentage. Linking Discord on the account page gives members the ${PLAN.name} Discord role. Perks never add spins, entries, points or better odds.`,
       `- ${PLAN.name} never adds Daily Spins, giveaway entries or leaderboard points. Cancel any time; perks last until the paid month ends. A break (cool-off or self-exclusion) stops renewal.`,
     );

@@ -1,4 +1,4 @@
-// Builds the Pack Pass animated emotes for Latch & Friends from the reference spec (characters.mjs).
+// Builds the Pack Pass animated emotes for Latch & the BitBots from the reference spec (characters.mjs).
 //   node scripts/site/emotes/make-emotes.mjs [characterId ...]
 // Writes public/site/img/pass/emotes/<id>-<emote>.svg. Each file is a self-contained animated SVG
 // (CSS keyframes, no scripts, no external files) that loops seamlessly and holds a clean still pose

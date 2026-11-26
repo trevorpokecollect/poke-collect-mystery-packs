@@ -1,4 +1,4 @@
-// Latch & Friends reference spec: the single source of truth for every character's look.
+// Latch & the BitBots reference spec: the single source of truth for every character's look.
 // Each emote and each reference sheet is drawn from this file, so a character always matches its sheet.
 //   base   = the approved starter icon (public/site/assets/cardbit-icon-<id>.*); its body is reused as-is.
 //   face   = where the screen face sits (cx, eye line, eye spacing, mouth line) in the 256x256 icon.

@@ -67,7 +67,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
         <li>${ICON.xp}<span><b>+${t.xpBonusPct}% XP</b> on every paid pack</span></li>
         <li>${ICON.spark}<span><b>+${t.sparksBonusPct}% Sparks</b> on every paid pack</span></li>
         <li>${ICON.star}<span><b>${esc(t.name)} portrait frame</b> around your icon</span></li>
-        ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Animated emotes:</b> 4 for every Latch &amp; Friends character</span></li>`}
+        ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Animated emotes:</b> 4 for every BitBot</span></li>`}
         ${t.id === "ultimate" ? `<li>${ICON.star}<span><b>Legendary emotes</b>, only on Ultimate</span></li>` : ""}
         ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Card sleeves + reveal effects</b> for your openings${t.id === "ultimate" ? ", including the Gold Legendary sleeve" : ""}</span></li>`}
         ${t.id === "plus" ? "" : `<li>${ICON.box}<span><b>Free Ship Together</b> ${t.id === "ultimate" ? "2 shipments a month" : "1 shipment a month"}</span></li>`}

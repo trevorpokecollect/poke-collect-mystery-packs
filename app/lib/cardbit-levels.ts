@@ -1,5 +1,5 @@
 /**
- * Cardbit levels, XP and Latch & Friends icons. Pure rules shared by the server and tests.
+ * Cardbit levels, XP and Latch & the BitBots icons. Pure rules shared by the server and tests.
  * XP never has cash value and never converts to Cardbits.
  */
 
@@ -75,7 +75,7 @@ export const RANKS = [
 export const rankFor = (level: number) => [...RANKS].reverse().find((r) => level >= r.minLevel)!.name;
 
 export type Icon = { id: string; name: string; minLevel: number; animated?: boolean; subscription?: boolean };
-/** Latch & Friends. Basic static icons are open at level 1; the rest unlock by level. */
+/** Latch & the BitBots. Basic static icons are open at level 1; the rest unlock by level. */
 export const ICONS: Icon[] = [
   { id: "latch", name: "Latch", minLevel: 1 },
   { id: "blazebit", name: "Blazebit", minLevel: 1 },

@@ -105,7 +105,7 @@
   function spinTile(t, paused) {
     const id = tierId(t);
     const label = esc(String(t.name || '').replace(/\s*Spin$/i, ''));
-    // Same Latch & Friends characters as the Rewards page: the happy animation once unlocked, a still when locked.
+    // Same Latch & the BitBots characters as the Rewards page: the happy animation once unlocked, a still when locked.
     const icon = asset('spin-' + id + (t.unlocked ? '-happy' : '-still') + '.svg') || asset('spin-' + id + '.svg');
     let state, cls;
     if (!t.unlocked && t.minLevel <= 1) { cls = 'is-locked'; state = '<span class="cb-lr-tile-state">Free Daily</span>'; }

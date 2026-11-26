@@ -13,7 +13,7 @@ import { leaderboardEnabled, weeklyStandings } from "../lib/cardbit-leaderboard.
 import { ageConfirmed, AGE_REQUIRED } from "../lib/cardbit-age.server";
 import { guardRequest } from "../lib/cardbit-guard.server";
 
-/** Levels, daily check-in and Latch & Friends icons for the signed-in Cardbit customer. */
+/** Levels, daily check-in and Latch & the BitBots icons for the signed-in Cardbit customer. */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { shop, viewer } = await proxyContext(request);
   if (!levelsEnabled(shop, viewer?.customerId)) return json({ enabled: false });

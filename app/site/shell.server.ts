@@ -152,7 +152,7 @@ function assetMap(): string {
 
 const ICON_IDS = ["latch", "blazebit", "driplink", "mossbit", "zappix", "cryobyte", "glitchog", "phantab", "nimbyte", "wyrmware", "latch-gold", "latch-holo"];
 function rewardIcons(): string {
-  // Latch & Friends icons for the header Rewards badge (same files as the Rewards page).
+  // Latch & the BitBots icons for the header Rewards badge (same files as the Rewards page).
   const map: Record<string, string> = {};
   for (const id of ICON_IDS) map[id] = assetUrl(`cardbit-icon-${id}${id.startsWith("latch") ? ".webp" : ".svg"}`);
   Object.assign(map, PASS_ICON_URLS); // Pack Pass emotes (site only)

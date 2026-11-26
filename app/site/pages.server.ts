@@ -101,7 +101,7 @@ const script = (name: string) => `<script src="${assetUrl(name)}" defer></script
 
 export function rewardsPage(customer: { name: string | null; email: string } | null): string {
   const body = withChrome(member(withPassIconUrls(customer ? rewardsIn : rewardsOut), customer)) + walletScript + (customer ? `<script>window.cardbitPlan=${planClientJson()}</script>` + passTag() + script("cardbit-rewards.js") : "");
-  return page("Rewards", "Cardbit Rewards: levels, XP, daily check-in streaks, free Daily Spins and Latch & Friends icons.", body, rewardStyles, "/rewards");
+  return page("Rewards", "Cardbit Rewards: levels, XP, daily check-in streaks, free Daily Spins and BitBot icons.", body, rewardStyles, "/rewards");
 }
 
 export function leaderboardPage(customer: { name: string | null; email: string } | null): string {

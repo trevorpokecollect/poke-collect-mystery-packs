@@ -1,4 +1,4 @@
-// Builds the Daily Spin mascot art for the Rewards page from the Latch & Friends spec (characters.mjs).
+// Builds the Daily Spin mascot art for the Rewards page from the Latch & the BitBots spec (characters.mjs).
 //   node scripts/site/emotes/make-spin-art.mjs
 // Writes public/site/assets/cardbit-spin-<tier>-happy.svg: a self-contained animated SVG (CSS keyframes only)
 // of the tier's character looking happy, with a clean still pose under prefers-reduced-motion.

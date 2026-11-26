@@ -1,4 +1,4 @@
-// Renders a reference sheet PNG for every Latch & Friends character plus a roster sheet, from characters.mjs
+// Renders a reference sheet PNG for every Latch & the BitBots character plus a roster sheet, from characters.mjs
 // and the generated emotes. Needs Playwright (preinstalled in dev containers).
 //   node scripts/site/emotes/make-sheets.mjs <outDir>
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -26,7 +26,7 @@ function sheet(c) {
 <div style="width:360px;flex:none"><div style="width:360px;height:360px">${baseIcon(c)}</div>
 <p class="dim" style="margin:10px 0 0;text-align:center">Approved starter icon (the master)</p></div>
 <div style="display:grid;gap:18px;min-width:0">
-<div><p class="dim" style="margin:0;letter-spacing:.12em;text-transform:uppercase;font-size:13px">Latch &amp; Friends reference sheet</p>
+<div><p class="dim" style="margin:0;letter-spacing:.12em;text-transform:uppercase;font-size:13px">Latch &amp; the BitBots reference sheet</p>
 <h1 style="font-size:58px;color:${c.colors.rim}">${c.name}</h1><p style="margin:2px 0 0;font-size:19px"><b>Element:</b> ${c.element[0].toUpperCase() + c.element.slice(1)} &nbsp;·&nbsp; <b>Effects:</b> ${c.fx}</p></div>
 <p style="margin:0">${c.body}</p>
 <p style="margin:0"><b>Personality:</b> ${c.personality}</p>
@@ -40,7 +40,7 @@ function sheet(c) {
 }
 function roster() {
   return `<!doctype html><meta charset="utf-8"><style>${css}</style><body style="width:1400px;padding:44px">
-<h1 style="font-size:46px;margin-bottom:6px">Latch &amp; Friends: Character Roster</h1><p class="dim" style="margin:0 0 26px">12 characters. Each has 4 Pack Pass emotes (Hype, Love, LOL, Shocked) plus a Legendary emote for Ultimate.</p>
+<h1 style="font-size:46px;margin-bottom:6px">Latch &amp; the BitBots: Character Roster</h1><p class="dim" style="margin:0 0 26px">12 characters. Each has 4 Pack Pass emotes (Hype, Love, LOL, Shocked) plus a Legendary emote for Ultimate.</p>
 <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:22px">${CHARACTERS.map((c) => `<figure style="margin:0;text-align:center"><div style="width:190px;height:190px;margin:auto">${baseIcon(c)}</div>
 <figcaption><b style="font-family:O;font-size:20px;color:${c.colors.rim}">${c.name}</b><br><span class="dim">${c.element[0].toUpperCase() + c.element.slice(1)}</span></figcaption></figure>`).join("")}</div></body>`;
 }

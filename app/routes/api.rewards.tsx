@@ -1,4 +1,4 @@
-// GET/POST /api/rewards: Levels, daily check-in, Latch & Friends icons, Daily Spins and the Weekly
+// GET/POST /api/rewards: Levels, daily check-in, Latch & the BitBots icons, Daily Spins and the Weekly
 // Leaderboard for the signed-in site customer. Same engagement code and response shape as the
 // Shopify proxy route (proxy.api.rewards.tsx), keyed by the site's own shop key.
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";

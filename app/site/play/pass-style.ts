@@ -1,7 +1,7 @@
 // Pack Pass opening cosmetics (site only; Trevor approved the mockup Nov 25 2026, 11:26 PM CT).
 // - Card sleeves: cover the not-yet-printed card in the member's own Signal Decode openings and the empty
 //   result slots, like a matte sleeve on a real card. Pro and Ultimate get 4; Ultimate adds Gold Legendary.
-// - Reveal effect: a burst in a Latch & Friends character's element when each card is decoded. It plays behind
+// - Reveal effect: a burst in a Latch & the BitBots character's element when each card is decoded. It plays behind
 //   and around the card. Default is the character of the member's icon; "off" turns it off.
 // Looks only: never changes what is pulled, and nobody else's openings or the live pulls feed change.
 // Art: scripts/site/emotes/make-sleeves.mjs -> public/site/img/pass/sleeves/.
