@@ -179,7 +179,7 @@
       root = document.createElement('div');
       root.className = 'cb-launch';
       root.innerHTML = '<button type="button" class="cb-launch-btn" aria-expanded="false" aria-controls="cb-launch-panel">' +
-        '<span class="cb-launch-orb"><img alt="" width="44" height="44" src="' + esc(asset('icon-latch.webp') || asset('brand-emblem.png')) + '"></span>' +
+        '<span class="cb-launch-orb"><img alt="" width="44" height="44" src="/site/img/nav/daily-rewards.webp?v=r2"></span>' +
         '<span class="cb-launch-text"><span class="cb-launch-label">Daily Rewards</span><span class="cb-launch-sub"></span></span>' +
         '<b class="cb-launch-badge" hidden></b></button>' +
         '<section class="cb-launch-panel" id="cb-launch-panel" role="dialog" aria-labelledby="cb-launch-title" hidden></section>';

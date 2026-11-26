@@ -15,17 +15,11 @@
   const PHONE = window.matchMedia('(max-width: 640px)');
   const html = document.documentElement;
 
-  // Cardbit nav icons (Nov 26 2026): one set for the phone tab bar, the desktop header and the app designs.
-  // Stroke = currentColor; fills come from CSS vars (--ic-fill body, --ic-accent / --ic-accent2 highlights, --ic-solid backing),
-  // so the same icon reads quiet when idle and lights up when current. Standalone files: public/site/img/nav/.
-  const ICONS = {
-    packs: `<path class="f" d="M5 4.6 7.33 3l2.33 1.6L12 3l2.33 1.6L16.67 3 19 4.6V19.4L16.67 21l-2.33-1.6L12 21l-2.33-1.6L7.33 21 5 19.4z"/><path class="a" d="M13.4 7.2h4.2L9.8 16.8H5.6z" stroke="none" opacity=".45"/><path d="M5 4.6 7.33 3l2.33 1.6L12 3l2.33 1.6L16.67 3 19 4.6V19.4L16.67 21l-2.33-1.6L12 21l-2.33-1.6L7.33 21 5 19.4z"/><path d="M5 7.4h14M5 16.6h14"/><path class="a2" d="m12 9.2 1.15 2.8L12 14.8 10.85 12z" stroke-width="1.4"/>`,
-    chase: `<rect class="f" x="4.2" y="5.2" width="11" height="15.3" rx="1.8" transform="rotate(-9 9.7 12.9)"/><rect x="4.2" y="5.2" width="11" height="15.3" rx="1.8" transform="rotate(-9 9.7 12.9)"/><path class="a2" d="M17.6 2.4l1.1 2.6 2.6 1.1-2.6 1.1-1.1 2.6-1.1-2.6-2.6-1.1 2.6-1.1z" stroke-width="1.2"/><path class="a" d="m9.6 9.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" stroke-width="1.2"/>`,
-    shop: `<rect class="a2" x="9.4" y="2.4" width="7" height="9.6" rx="1.1" transform="rotate(12 12.9 7.2)" stroke-width="1.4"/><path class="s" d="M4.6 9.6h14.8l-1.2 10a1.6 1.6 0 0 1-1.6 1.4H7.4a1.6 1.6 0 0 1-1.6-1.4z" stroke="none"/><path class="f" d="M4.6 9.6h14.8l-1.2 10a1.6 1.6 0 0 1-1.6 1.4H7.4a1.6 1.6 0 0 1-1.6-1.4z"/><circle cx="9" cy="13" r=".9" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r=".9" fill="currentColor" stroke="none"/><path d="M9 13v1.2a3 3 0 0 0 6 0V13" stroke-width="1.4"/>`,
-    pass: `<path class="f" d="M3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5v2.2a2.4 2.4 0 0 0 0 4.6v2.2a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5v-2.2a2.4 2.4 0 0 0 0-4.6z"/><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5v2.2a2.4 2.4 0 0 0 0 4.6v2.2a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5v-2.2a2.4 2.4 0 0 0 0-4.6z"/><path d="M15.6 6.4v11.2" stroke-dasharray="1.4 1.9"/><path class="a" d="m9.4 8.6 1.05 2.1 2.3.34-1.66 1.62.4 2.3-2.09-1.1-2.09 1.1.4-2.3-1.66-1.62 2.3-.34z" stroke-width="1.25"/>`,
-    help: `<rect class="f" x="4" y="4.5" width="16" height="13.5" rx="4.2"/><rect x="4" y="4.5" width="16" height="13.5" rx="4.2"/><path d="M8.5 18v2.6l3.2-2.6"/><path class="a2" d="M8.2 10.4c.5-.9 1.5-.9 2 0M13.8 10.4c.5-.9 1.5-.9 2 0" stroke-width="1.7"/><path d="M9.6 13.6c1.4 1.1 3.4 1.1 4.8 0" stroke-width="1.6"/><path d="M12 4.5V2.6" /><circle class="a" cx="12" cy="2.2" r="1.1" stroke-width="1.1"/>`,
-  };
-  const icon = id => '<svg class="cb-ic cb-ic-' + id + '" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + ICONS[id] + '</svg>';
+  // Cardbit nav icons (Trevor picked Nov 26 2026): small renders of the site's own art: a real Mystery pack, a glowing
+  // Legendary card, two Cardbit cards, the gold Cardbit coin (Pack Pass) and a help bubble. Gray when idle, full color
+  // when current (CSS). Files: public/site/img/nav/<id>.webp (192px, also used for the app designs).
+  const ICON_V = 'r2';
+  const icon = id => '<img class="cb-ic cb-ic-' + id + '" src="/site/img/nav/' + id + '.webp?v=' + ICON_V + '" alt="" width="24" height="24" decoding="async">';
   // Same five destinations as the desktop header menu.
   const TABS = [
     { id: 'packs', href: '/packs', label: 'Packs' },

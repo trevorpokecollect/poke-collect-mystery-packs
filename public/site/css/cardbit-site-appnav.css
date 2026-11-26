@@ -7,21 +7,14 @@
 html[data-dock="bar"]{--cb-dock-bottom:calc(var(--cb-tabbar-total) + 4px)}
 .cb-tabbar,.cb-dockbar{display:none}
 
-/* ---- Cardbit nav icons (shared by the tab bar and the desktop header) ---- */
-.cb-ic{display:block;overflow:visible}
-.cb-ic .f{fill:var(--ic-fill,#ffffff0d)}
-.cb-ic .s{fill:var(--ic-solid,#0b1214)}
-.cb-ic .a{fill:var(--ic-accent,transparent)}
-.cb-ic .a2{fill:var(--ic-accent2,transparent)}
-.cb-ic,.cb-ic *{transition:fill .2s,color .2s}
-:is(.cb-tab,.cb-navlink)[aria-current="page"],.cb-navlink:hover,.cb-navlink:focus-visible{--ic-fill:#00e6e124;--ic-accent:#00e6e1;--ic-accent2:#00e6e155}
-:is(.cb-tab,.cb-navlink)[aria-current="page"] .cb-ic{filter:drop-shadow(0 0 5px #00e6e166)}
-.cb-tab-pass,.cb-navlink.cb-nav-passlink{--ic-fill:#ffb65c14}
-:is(.cb-tab-pass,.cb-nav-passlink)[aria-current="page"],.cb-nav-passlink:hover,.cb-nav-passlink:focus-visible{--ic-fill:#ffb65c26;--ic-accent:#FFB65C;--ic-accent2:#ffb65c55}
-:is(.cb-tab-pass,.cb-nav-passlink)[aria-current="page"] .cb-ic{filter:drop-shadow(0 0 5px #ffb65c66)}
+/* ---- Cardbit nav icons (shared by the tab bar and the desktop header): art images, gray when idle ---- */
+.cb-ic{display:block;object-fit:contain;filter:grayscale(1) brightness(.78);opacity:.72;transition:filter .2s,opacity .2s,transform .2s}
+:is(.cb-tab,.cb-navlink)[aria-current="page"] .cb-ic,.cb-navlink:is(:hover,:focus-visible) .cb-ic{filter:drop-shadow(0 0 5px #00e6e199);opacity:1}
+:is(.cb-tab-pass,.cb-nav-passlink)[aria-current="page"] .cb-ic,.cb-nav-passlink:is(:hover,:focus-visible) .cb-ic,
+:is(.cb-tab,.cb-navlink)[aria-current="page"] .cb-ic-chase{filter:drop-shadow(0 0 5px #ffb65c99);opacity:1}
 /* Desktop header: the icon sits in the old mask span. */
 .cb-nav-icon.cb-ic-host{-webkit-mask:none!important;mask:none!important;background:none!important;display:inline-grid;place-items:center;width:20px!important;height:20px!important}
-.cb-nav-icon.cb-ic-host .cb-ic{width:20px;height:20px}
+.cb-nav-icon.cb-ic-host .cb-ic{width:22px;height:22px}
 #cardbit-store .cb-navlink[aria-current] .cb-ic-host,.cb-navlink[aria-current] .cb-ic-host{color:#00e6e1}
 #cardbit-store .cb-navlink.cb-nav-passlink,.cb-navlink.cb-nav-passlink{color:#ffcf8a}
 #cardbit-store .cb-nav-passlink .cb-ic-host,.cb-nav-passlink .cb-ic-host{color:#FFB65C}
@@ -40,11 +33,11 @@ html[data-dock="bar"]{--cb-dock-bottom:calc(var(--cb-tabbar-total) + 4px)}
     height:var(--cb-tabbar-total);padding:0 max(4px,env(safe-area-inset-right)) var(--cb-safe-b) max(4px,env(safe-area-inset-left));box-sizing:border-box;
     background:rgba(10,18,20,.94);-webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);
     border-top:1px solid #1f3236;box-shadow:0 -8px 24px #0007;font-family:"Cardbit Outfit",var(--cb-display,system-ui),sans-serif}
-  .cb-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;height:var(--cb-tab-h);
+  .cb-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;height:var(--cb-tab-h);
     color:#8ea3a6;text-decoration:none;font-weight:800;font-size:10.5px;line-height:1;letter-spacing:.01em;-webkit-tap-highlight-color:transparent}
   .cb-tab span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .cb-tab .cb-ic{width:24px;height:24px;flex:none}
-  .cb-tab[aria-current="page"] .cb-ic{animation:cb-tab-pop .32s cubic-bezier(.2,.9,.3,1.4)}
+  .cb-tab .cb-ic{width:28px;height:28px;flex:none}
+  .cb-tab[aria-current="page"] .cb-ic{transform:translateY(-1px) scale(1.1);animation:cb-tab-pop .32s cubic-bezier(.2,.9,.3,1.4)}
   .cb-tab[aria-current="page"]{color:#00e6e1}
   .cb-tab[aria-current="page"]::before{content:"";position:absolute;top:0;left:50%;width:26px;height:3px;margin-left:-13px;border-radius:0 0 3px 3px;background:#00e6e1;box-shadow:0 0 10px #00e6e1aa}
   .cb-tab-pass{color:#d9a868}
@@ -85,5 +78,9 @@ html[data-dock="bar"]{--cb-dock-bottom:calc(var(--cb-tabbar-total) + 4px)}
   html.cb-app-immersive body{padding-bottom:0}
   body:has(.cb-help.is-open) .cb-dock-item:not(.cb-help),html.cb-chat-open .cb-dock-item:not(.cb-chat-btn){visibility:hidden}
 }
-@keyframes cb-tab-pop{from{transform:scale(.82)}to{transform:none}}
+@keyframes cb-tab-pop{from{transform:scale(.82)}to{transform:translateY(-1px) scale(1.1)}}
 @media (prefers-reduced-motion:reduce){.cb-tab:active{transform:none}.cb-tab .cb-ic{animation:none!important}}
+/* Desktop header keeps the icons in full color (labels sit beside them); only the phone tab bar grays idle tabs. */
+.cb-nav-icon.cb-ic-host .cb-ic{filter:none;opacity:1}
+.cb-navlink[aria-current="page"] .cb-nav-icon.cb-ic-host .cb-ic{filter:drop-shadow(0 0 5px #00e6e199)}
+.cb-nav-passlink .cb-nav-icon.cb-ic-host .cb-ic{filter:drop-shadow(0 0 4px #ffb65c66)}
