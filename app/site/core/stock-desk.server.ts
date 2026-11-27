@@ -405,6 +405,7 @@ export async function listStock(db: PrismaClient, query: StockQuery) {
         finish: r.finish,
         language: r.language,
         condition: r.condition,
+        tcgplayerId: r.tcgplayerId, // Card Broker finds the copy's catalog product (and lookalikes) by this
         image: r.image,
         status: r.status,
         demo: r.demo,
