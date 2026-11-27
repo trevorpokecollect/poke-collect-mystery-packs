@@ -22,10 +22,19 @@
   const easeOut = k => 1 - Math.pow(1 - k, 3);
   // Cardbit value per card: the same buyback number the pool pages show (never retail).
   const BITS_ICON = document.currentScript?.dataset.bits || '';
-  // Opening music: "Treasure Token Trot", made in Trevor's ElevenLabs account (picked Nov 25 2026), trimmed
-  // to a seamless 44 s loop. Loaded only when sound is on; the built-in chiptune plays if it can't load.
-  const MUSIC_URL = document.currentScript?.dataset.music || '';
-  let musicBuf = null;
+  // Opening music: six original 8-bit songs written for Cardbit (Trevor, Nov 27 2026), each a seamless loop.
+  // data-music lists them (space separated); every opening picks one at random, never the same song twice
+  // in a row. Only the picked file loads, and only when sound is on; the built-in chiptune plays if it can't load.
+  const MUSIC_URLS = String(document.currentScript?.dataset.music || '').split(/[\s,]+/).filter(Boolean);
+  const musicBufs = new Map(); // url -> Promise<AudioBuffer> | false (failed)
+  function pickMusic() {
+    if (!MUSIC_URLS.length) return '';
+    let last = -1; try { last = Number(sessionStorage.getItem('cardbit.music.last') ?? -1); } catch {}
+    let i = Math.floor(Math.random() * MUSIC_URLS.length);
+    if (MUSIC_URLS.length > 1 && i === last) i = (i + 1 + Math.floor(Math.random() * (MUSIC_URLS.length - 1))) % MUSIC_URLS.length;
+    try { sessionStorage.setItem('cardbit.music.last', String(i)); } catch {}
+    return MUSIC_URLS[i];
+  }
   const bitsOf = c => { const v = Number(c?.buybackBits); return Number.isSafeInteger(v) && v > 0 ? v : 0; };
   const fmtBits = n => Math.round(n).toLocaleString('en-US');
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -55,7 +64,7 @@
       return ac;
     } catch { return null; }
   }
-  function makeSfx(isOn) {
+  function makeSfx(isOn, MUSIC_URL = '') {
     const A = () => audio(isOn());
     const out = (node, wet = 0) => { node.connect(master); if (wet && verb) { const s = ac.createGain(); s.gain.value = wet; node.connect(s).connect(verb); } };
     const env = (gn, t, a, peak, d) => { gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(peak, t + a); gn.gain.exponentialRampToValueAtTime(.0001, t + a + d); };
@@ -73,22 +82,22 @@
     let musicPos = 0;
     function startMusic() {
       const c = A(); if (!c || music) return;
-      if (MUSIC_URL && musicBuf !== false) return startTrack(c);
+      if (MUSIC_URL && musicBufs.get(MUSIC_URL) !== false) return startTrack(c);
       startSynth(c);
     }
     function startTrack(c) {
       let src = null, t0 = 0, stopped = false;
       const bus = c.createGain(); bus.gain.setValueAtTime(.0001, c.currentTime); bus.connect(master);
       const me = music = { stop() { stopped = true; const t = c.currentTime; if (src) musicPos = (musicPos + t - t0) % src.buffer.duration; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(Math.max(.0001, bus.gain.value), t); bus.gain.exponentialRampToValueAtTime(.0001, t + .5); setTimeout(() => { try { src?.stop(); bus.disconnect(); } catch {} }, 700); } };
-      (musicBuf ||= fetch(MUSIC_URL).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(b => new Promise((ok, no) => c.decodeAudioData(b, ok, no))))
+      (musicBufs.get(MUSIC_URL) || musicBufs.set(MUSIC_URL, fetch(MUSIC_URL).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(b => new Promise((ok, no) => c.decodeAudioData(b, ok, no)))).get(MUSIC_URL))
         .then(buf => {
-          musicBuf = Promise.resolve(buf);
+          musicBufs.set(MUSIC_URL, Promise.resolve(buf));
           if (stopped || music !== me) return;
           src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(bus);
           t0 = c.currentTime; src.start(t0, musicPos % buf.duration);
           bus.gain.exponentialRampToValueAtTime(.32, t0 + 1);
         })
-        .catch(() => { musicBuf = false; if (!stopped && music === me) { music = null; startSynth(c); } });
+        .catch(() => { musicBufs.set(MUSIC_URL, false); if (!stopped && music === me) { music = null; startSynth(c); } });
     }
     function startSynth(c) {
       const bus = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
@@ -169,7 +178,7 @@
     const name = String(edition.name || 'Cardbit Pack');
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const S = { sound: soundPref(), reduced: mq.matches, destroyed: false };
-    const sfx = makeSfx(() => S.sound && !S.destroyed);
+    const sfx = makeSfx(() => S.sound && !S.destroyed, pickMusic());
     const vib = p => { if (S.reduced) return; try { navigator.vibrate && navigator.vibrate(p); } catch {} };
     const events = new AbortController(), on = (t, e, f, o) => t.addEventListener(e, f, { signal: events.signal, ...(o || {}) });
 

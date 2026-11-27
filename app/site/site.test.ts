@@ -59,7 +59,7 @@ describe("Cardbit site pages", () => {
     // Live Pulls presentation layer (flip-in, tier glows, Big Hit spotlight, Biggest Hit Today).
     expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-live-pulls\.js\?v=\w+" data-back="\/site\/assets\/cardbit-card-back-en\.webp\?v=\w+" defer>/);
     expect(home).toContain("/site/css/cardbit-site-live-pulls.css?v=");
-    expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-decode\.js\?v=\w+" data-bits="[^"]*cardbit-bits-card-emblem[^"]*" data-music="\/site\/audio\/cardbit-opening-music\.mp3\?v=\w+" defer>/);
+    expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-decode\.js\?v=\w+" data-bits="[^"]*cardbit-bits-card-emblem[^"]*" data-music="(\/site\/audio\/opening\/[a-z-]+\.mp3\?v=\w+ ?){6}" defer>/);
     expect(home).toMatch(/<script src="\/site\/js\/cardbit-site-upright\.js\?v=\w+" defer>/);
     expect(home).toContain("/site/css/cardbit-site-decode.css?v=");
     expect(home.indexOf("cardbit-opening.js")).toBeLessThan(home.indexOf("cardbit-site-decode.js"));

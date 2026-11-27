@@ -57,6 +57,11 @@ const SITE_LIVE_PULLS_V = version(siteLivePullsSource);
 const SITE_LIVE_PULLS_CSS_V = version(siteLivePullsCssSource);
 const SITE_DECODE_V = version(siteDecodeSource);
 const SITE_DECODE_CSS_V = version(siteDecodeCssSource);
+// Pack opening music: six original 8-bit loops; the decode script picks one at random per opening.
+// Bump OPENING_MUSIC_V whenever a file in public/site/audio/opening/ changes (source: scripts/audio/cardbit-opening-songs.py).
+const OPENING_MUSIC_V = "s1";
+const OPENING_MUSIC = ["pixel-rush", "neon-vault", "lucky-shuffle", "holo-hunt", "gold-rush-gallop", "boss-bit-showdown"]
+  .map((name) => `/site/audio/opening/${name}.mp3?v=${OPENING_MUSIC_V}`).join(" ");
 /** Sideways (landscape) card scans shown upright everywhere (Trevor, Nov 25 2026). */
 const SITE_UPRIGHT_V = version(siteUprightSource);
 /** Signal Decode opening (Trevor approved Nov 25 2026). SITE_DECODE=off falls back to the previous player. */
@@ -243,7 +248,7 @@ export function storefrontShell({ title = "cardbit · Packs and Singles", data =
     `\n    <script src="/site/js/cardbit-site-play.js?v=${SITE_PLAY_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-upright.js?v=${SITE_UPRIGHT_V}" defer></script>` +
     `\n    <script src="/site/js/cardbit-site-live-pulls.js?v=${SITE_LIVE_PULLS_V}" data-back="${assetUrl("cardbit-card-back-en.webp")}" defer></script>` +
-    (decodeOn() ? `\n    <script src="/site/js/cardbit-site-decode.js?v=${SITE_DECODE_V}" data-bits="${assetUrl("cardbit-bits-card-emblem.png")}" data-music="/site/audio/cardbit-opening-music.mp3?v=ttt1" defer></script>` : "") +
+    (decodeOn() ? `\n    <script src="/site/js/cardbit-site-decode.js?v=${SITE_DECODE_V}" data-bits="${assetUrl("cardbit-bits-card-emblem.png")}" data-music="${OPENING_MUSIC}" defer></script>` : "") +
     (chatOn() ? `\n    <script src="/site/js/cardbit-site-chat.js?v=${SITE_CHAT_V}" defer></script>` : "") +
     (helpTags("site", assetUrl("cardbit-latch-cheer.webp")) ? `\n    ${helpTags("site", assetUrl("cardbit-latch-cheer.webp"))}` : "");
 
