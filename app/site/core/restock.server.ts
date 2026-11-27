@@ -27,7 +27,7 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 const cleanIds = (copyIds: unknown) =>
   [...new Set((Array.isArray(copyIds) ? copyIds : []).filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 60))].slice(0, 500);
 
-async function lockPack(tx: Tx, packId: string) {
+export async function lockPack(tx: Tx, packId: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`site-pack:${packId}`}, 0))::text`;
 }
 
@@ -267,7 +267,7 @@ export async function unstageRestock(db: PrismaClient, actor: string, copyIds: u
  * Apply adds/removes to a pack pool and save the next version. Caller holds the pack lock and has
  * recorded the baseline. Copies that changed state since staging are released and skipped.
  */
-async function applyRestock(
+export async function applyRestock(
   tx: Tx,
   pack: { id: string; tierRules: unknown; cardsPerPack: number; priceBits: number },
   prev: { version: number | null },

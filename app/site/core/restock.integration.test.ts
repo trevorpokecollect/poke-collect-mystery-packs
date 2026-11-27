@@ -4,7 +4,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { postLedger } from "./ledger.server";
 import { priceKey, receiveSiteIntake } from "./stock.server";
-import { movePool, setListing } from "./stock-desk.server";
+import { DeskError, fixPooledCopy, movePool, setListing } from "./stock-desk.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { storeAction, storeState } from "../store/store.server";
 import { eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, trimToBand, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
@@ -182,6 +182,72 @@ describe.skipIf(!url)("verified restocks", () => {
     const state = await storeState(db, null);
     expect(state.packs.find((p) => p.id === "cobalt")?.restocks[0]).toMatchObject({ version: 3, poolSize: 3 });
     expect(JSON.stringify(state.packs)).not.toContain("evPct");
+  });
+
+  it("fixes or deletes a pooled card as its own correction version, never touching pulls or other staged cards", async () => {
+    const a = await stock("Fixme", 5, 500);
+    await stageRestock(db, "t", "cobalt", a.map((c) => c.id), "add");
+    const v2 = await publishRestock(db, "t", "cobalt");
+    // Someone else's staged removal and a staged add for later must survive the correction.
+    const [extra] = await stock("Later", 1, 700);
+    await stageRestock(db, "t", "cobalt", [extra.id], "add");
+    await movePool(db, "t", [a[4].id], null);
+    // One pack opened first: the pulled card is in a vault and can't be changed.
+    const r = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+    const pulled = await db.siteCopy.findFirstOrThrow({ where: { openingId: String(r.openingId) } });
+    await expect(fixPooledCopy(db, "t", { copyId: pulled.id, action: "delete", reason: "x" })).rejects.toThrow(/vault|isn't in a pack pool/);
+    const pool = await db.siteCopy.findMany({ where: { packId: "cobalt", status: "POOLED", restockId: null }, orderBy: { id: "asc" } });
+    await expect(fixPooledCopy(db, "t", { copyId: pool[0].id, action: "delete", reason: "" })).rejects.toThrow(DeskError);
+
+    // Delete: v3 drops exactly that card (new hash), the card is REMOVED and out of its pocket.
+    const del = await fixPooledCopy(db, "card-broker:emily", { copyId: pool[0].id, action: "delete", reason: "Listed twice" });
+    expect(del).toMatchObject({ packId: "cobalt", version: 3, deleted: true });
+    const v3 = await db.siteRestock.findFirstOrThrow({ where: { packId: "cobalt", version: 3 } });
+    expect(v3.removeIds).toEqual([pool[0].id]);
+    expect(v3.addIds).toEqual([]);
+    expect(v3.note).toBe("Correction: Card Removed");
+    expect(v3.poolHash).not.toBe(v2.poolHash);
+    expect(v3.poolHash).toBe(poolHashOf(v3.poolIds as string[]));
+    expect(await db.siteCopy.findUniqueOrThrow({ where: { id: pool[0].id } })).toMatchObject({ status: "REMOVED", packId: null, slot: null });
+    // Other staged cards are untouched and the pulled card's stored opening is unchanged.
+    expect((await db.siteCopy.findUniqueOrThrow({ where: { id: extra.id } })).restockId).not.toBeNull();
+    if (a[4].id !== pulled.id) expect((await db.siteCopy.findUniqueOrThrow({ where: { id: a[4].id } })).restockId).not.toBeNull();
+    expect(await db.siteCopy.findUniqueOrThrow({ where: { id: pulled.id } })).toMatchObject({ status: "VAULTED", openingId: pulled.openingId });
+
+    // Change: switch condition on a copy already staged to leave (its staged removal is folded in).
+    const staged = a[4].id === pulled.id ? pool[1].id : a[4].id;
+    const sw = await fixPooledCopy(db, "t", { copyId: staged, action: "switch", reason: "Wrong condition", condition: "Lightly Played" });
+    expect(sw).toMatchObject({ version: 4, switched: true, condition: "Lightly Played" });
+    expect(await db.siteCopy.findUniqueOrThrow({ where: { id: staged } })).toMatchObject({ status: "DRAFT", packId: null, restockId: null, condition: "Lightly Played" });
+    // Change with nothing to change is refused; a card no longer pooled is refused.
+    const keep = (await db.siteCopy.findFirstOrThrow({ where: { packId: "cobalt", status: "POOLED", restockId: null } })).id;
+    await expect(fixPooledCopy(db, "t", { copyId: keep, action: "switch", reason: "x" })).rejects.toThrow(/right card or condition/);
+    await expect(fixPooledCopy(db, "t", { copyId: staged, action: "pull", reason: "x" })).rejects.toThrow(/isn't in a pack pool/);
+
+    // Public history shows the corrections with no staff names or reasons.
+    const hist = (await restockHistory(db, ["cobalt"])).get("cobalt")!;
+    expect(hist.slice(0, 2).map((h) => [h.version, h.removed, h.note])).toEqual([[4, 1, "Correction: Card Taken Out To Fix"], [3, 1, "Correction: Card Removed"]]);
+    expect(JSON.stringify(hist)).not.toContain("emily");
+    // The next staged restock still publishes normally on top.
+    expect(await publishRestock(db, "t", "cobalt")).toMatchObject({ version: 5, addIds: [extra.id] });
+  });
+
+  it("a pooled-card fix and a pack opening racing for the same pool never double-use a card", async () => {
+    const a = await stock("Race", 1, 500);
+    await stageRestock(db, "t", "cobalt", a.map((c) => c.id), "add");
+    await publishRestock(db, "t", "cobalt");
+    const [fix, open] = await Promise.allSettled([
+      fixPooledCopy(db, "t", { copyId: a[0].id, action: "delete", reason: "Damaged" }),
+      storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" }),
+    ]);
+    const c = await db.siteCopy.findUniqueOrThrow({ where: { id: a[0].id } });
+    if (fix.status === "fulfilled") {
+      expect(c.status).toBe("REMOVED");
+      expect(open.status).toBe("rejected");
+    } else {
+      expect(c.status).toBe("VAULTED");
+      expect(open.status).toBe("fulfilled");
+    }
   });
 
   it("records the starting pool as version 1 when an opening comes first", async () => {

@@ -22,7 +22,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
-import { DeskError, boxSummary, listStock, moveToSlot, movePool, relinkCopy, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
+import { DeskError, boxSummary, fixPooledCopy, listStock, moveToSlot, movePool, relinkCopy, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
 import { RestockError, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
 import { applyBrokerPrice, intakePrice, priceKey } from "../site/core/stock.server";
 import { SpinTableError, saveSiteSpinTier, siteSpinTableView } from "../site/rewards/spin-table.server";
@@ -103,6 +103,19 @@ export async function action({ request }: ActionFunctionArgs) {
       case "relink": {
         const r = await relinkCopy(db, actor, b.copyId, b.product as Record<string, unknown> | undefined);
         const price = intakePrice(b);
+        if (price) await applyBrokerPrice(db, priceKey(r.printingKey, r.condition), price);
+        return Response.json({ ok: true, ...r });
+      }
+      // Fix or delete a pooled card (Trevor, Nov 27 2026): leaves the pool as a published correction version first.
+      case "pool-fix": {
+        const r = await fixPooledCopy(db, actor, {
+          copyId: b.copyId,
+          action: b.action,
+          reason: b.reason,
+          product: (b.product as Record<string, unknown> | undefined) ?? null,
+          condition: b.condition,
+        });
+        const price = r.switched ? intakePrice(b) : null;
         if (price) await applyBrokerPrice(db, priceKey(r.printingKey, r.condition), price);
         return Response.json({ ok: true, ...r });
       }

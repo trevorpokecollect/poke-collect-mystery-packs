@@ -1,7 +1,7 @@
 // Stock desk operations shared by /staff/stock (site staff) and /internal/site-stock (Card Broker).
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient, SiteCopy } from "@prisma/client";
 import { POCKETS_PER_SLOT, ROWS_PER_BOX, SITE_FIRST_SLOT, SLOTS_PER_ROW, faceKey, legacyPrintingKey, lookKey, priceKey, printingKey, shelfAddress, shelfLabel } from "./stock.server";
-import { RestockError, stageRestock } from "./restock.server";
+import { RestockError, applyRestock, ensureBaseline, lockPack, stageRestock } from "./restock.server";
 import { cardImage } from "./card-image";
 
 export const STOCK_STATUSES = ["DRAFT", "FOR_SALE", "POOLED", "VAULTED", "SHIP_LOCKED", "SHIPPED", "REMOVED"] as const;
@@ -152,6 +152,21 @@ export async function relinkCopy(
 ) {
   const id = typeof copyId === "string" && copyId.length <= 60 ? copyId : "";
   if (!id) throw new DeskError("Choose a card first.");
+  const next = productOf(product);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;
+    const c = await tx.siteCopy.findUnique({ where: { id } });
+    if (!c) throw new DeskError("That card isn't in cardbit.com stock.");
+    if (!["DRAFT", "FOR_SALE"].includes(c.status) || c.ownerId || c.orderId || c.packId || c.restockId)
+      throw new DeskError("Only unsold Draft or Active cards outside pack pools and restocks can be switched. Unpool it first.");
+    return switchProduct(tx, actor, c, next, null);
+  });
+}
+
+type Product = ReturnType<typeof productOf>;
+
+/** The catalog product Card Broker sends for a relink, checked. */
+function productOf(product: Record<string, unknown> | null | undefined) {
   const p = product ?? {};
   const text = (k: string, max: number) => {
     const v = p[k];
@@ -162,34 +177,120 @@ export async function relinkCopy(
   if (!Number.isSafeInteger(tcgplayerId) || (tcgplayerId as number) < 1) throw new DeskError("Choose the TCGplayer product.");
   const image = p.image == null || p.image === "" ? null : p.image;
   if (image !== null && (typeof image !== "string" || !/^https:\/\//.test(image) || image.length > 2000)) throw new DeskError("Image must be an https URL.");
-  const next = {
+  return {
     game: text("game", 40), setName: text("setName", 350), number: text("number", 60), finish: text("finish", 80), language: text("language", 60),
     name: text("name", 350), title: text("title", 500), tcgplayerId: tcgplayerId as number, image: cardImage({ image: image as string | null, tcgplayerId: tcgplayerId as number }),
   };
-  return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;
-    const c = await tx.siteCopy.findUnique({ where: { id } });
-    if (!c) throw new DeskError("That card isn't in cardbit.com stock.");
-    if (!["DRAFT", "FOR_SALE"].includes(c.status) || c.ownerId || c.orderId || c.packId || c.restockId)
-      throw new DeskError("Only unsold Draft or Active cards outside pack pools and restocks can be switched. Unpool it first.");
-    if (lookKey(c) !== lookKey(next) || legacyPrintingKey(c) !== legacyPrintingKey(next))
-      throw new DeskError("The new product must be the same set, number, finish and language as the card on the shelf.");
-    if (c.tcgplayerId === next.tcgplayerId && c.name === next.name) return { id: c.id, switched: false, printingKey: c.printingKey, condition: c.condition };
-    const face = faceKey(next.name);
-    if (c.slot != null && face !== c.faceKey) {
-      const twin = await tx.siteCopy.findFirst({ where: { slot: c.slot, faceKey: face, id: { not: c.id } }, select: { id: true } });
-      if (twin) throw new DeskError(`${shelfLabel(c.slot)} already holds a ${next.name}. Move this card to another slot first.`);
-    }
-    const key = printingKey(next);
-    await tx.siteCopy.update({
-      where: { id: c.id },
-      data: { tcgplayerId: next.tcgplayerId, name: next.name, title: next.title, image: next.image, faceKey: face, printingKey: key },
-    });
-    await tx.siteCopyEvent.create({
-      data: { copyId: c.id, fromStatus: c.status, toStatus: c.status, actor, reason: `switched product from TCGplayer ${c.tcgplayerId ?? "none"} "${c.name}" to ${next.tcgplayerId} "${next.name}"`.slice(0, 500) },
-    });
-    return { id: c.id, switched: true, printingKey: key, condition: c.condition };
+}
+
+/**
+ * Switch one copy to another product (same set, number, finish and language) and/or another condition. Caller holds
+ * the shelf lock and has checked the copy may change. Logged.
+ */
+async function switchProduct(tx: Prisma.TransactionClient, actor: string, c: SiteCopy, next: Product | null, condition: string | null) {
+  const target = next ?? { tcgplayerId: c.tcgplayerId, name: c.name, title: c.title, image: c.image, setName: c.setName, number: c.number, finish: c.finish, language: c.language, game: c.game };
+  const newCondition = condition && condition !== c.condition ? condition : c.condition;
+  if (next && (lookKey(c) !== lookKey(next) || legacyPrintingKey(c) !== legacyPrintingKey(next)))
+    throw new DeskError("The new product must be the same set, number, finish and language as the card on the shelf.");
+  const sameProduct = c.tcgplayerId === target.tcgplayerId && c.name === target.name;
+  if (sameProduct && newCondition === c.condition) return { id: c.id, switched: false, printingKey: c.printingKey, condition: c.condition };
+  const face = faceKey(target.name);
+  if (c.slot != null && face !== c.faceKey) {
+    const twin = await tx.siteCopy.findFirst({ where: { slot: c.slot, faceKey: face, id: { not: c.id } }, select: { id: true } });
+    if (twin) throw new DeskError(`${shelfLabel(c.slot)} already holds a ${target.name}. Move this card to another slot first.`);
+  }
+  const key = sameProduct ? c.printingKey : printingKey(target as Product);
+  await tx.siteCopy.update({
+    where: { id: c.id },
+    data: sameProduct
+      ? { condition: newCondition }
+      : { tcgplayerId: target.tcgplayerId, name: target.name, title: target.title, image: target.image, faceKey: face, printingKey: key, condition: newCondition },
   });
+  const what = [
+    sameProduct ? null : `switched product from TCGplayer ${c.tcgplayerId ?? "none"} "${c.name}" to ${target.tcgplayerId} "${target.name}"`,
+    newCondition === c.condition ? null : `condition ${c.condition} to ${newCondition}`,
+  ].filter(Boolean).join("; ");
+  await tx.siteCopyEvent.create({ data: { copyId: c.id, fromStatus: c.status, toStatus: c.status, actor, reason: what.slice(0, 500) } });
+  return { id: c.id, switched: true, printingKey: key, condition: newCondition };
+}
+
+/**
+ * Fix or delete a card that's already in a pack pool (Trevor, Nov 27 2026: staff listed Pokémon Center stamped cards as
+ * regular and need to change or delete them). In one transaction, under the pack's lock (the same lock pack openings
+ * take, so a copy can't be pulled mid-fix):
+ * 1. the copy leaves the pool as its own published correction version (new pool hash, tiers and EV); any removal
+ *    already staged for it is folded in, and other staged restock cards are left alone;
+ * 2. then "delete" makes it REMOVED (frees its pocket), "switch" changes its product and/or condition (it stays in
+ *    Draft, priced fresh), and "pull" just leaves it in Draft.
+ * A copy that's been pulled, vaulted, on an order or locked for shipping is refused. Stored openings never change.
+ */
+export async function fixPooledCopy(
+  db: PrismaClient,
+  actor: string,
+  input: { copyId: unknown; action: unknown; reason?: unknown; product?: Record<string, unknown> | null; condition?: unknown },
+) {
+  const id = typeof input.copyId === "string" && input.copyId.length <= 60 ? input.copyId : "";
+  if (!id) throw new DeskError("Choose a card first.");
+  const action = String(input.action);
+  if (!["delete", "switch", "pull"].includes(action)) throw new DeskError("Choose Delete, Change or Take Out.");
+  const why = String(input.reason ?? "").trim().slice(0, 200);
+  if (!why) throw new DeskError("Say why this card is being changed.");
+  const next = action === "switch" && input.product ? productOf(input.product) : null;
+  const rawCondition = typeof input.condition === "string" ? input.condition.trim() : "";
+  if (rawCondition.length > 60) throw new DeskError("Choose a condition.");
+  const condition = action === "switch" && rawCondition ? rawCondition : null;
+  if (action === "switch" && !next && !condition) throw new DeskError("Choose the right card or condition.");
+  const first = await db.siteCopy.findUnique({ where: { id }, select: { packId: true } });
+  if (!first) throw new DeskError("That card isn't in cardbit.com stock.");
+  if (!first.packId) throw new DeskError("That card isn't in a pack pool any more. Refresh and use Delete or Change on it there.");
+  const packId = first.packId;
+  try {
+    return await db.$transaction(
+      async (tx) => {
+        await lockPack(tx, packId);
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('cardbit-site-shelf', 0))::text`;
+        const c = await tx.siteCopy.findUnique({ where: { id } });
+        if (!c) throw new DeskError("That card isn't in cardbit.com stock.");
+        if (c.ownerId || c.status === "VAULTED") throw new DeskError("That card was pulled and is in a customer's vault, so it can't be changed.");
+        if (c.status === "SHIP_LOCKED" || c.status === "SHIPPED") throw new DeskError("That card is locked for a shipment, so it can't be changed.");
+        if (c.orderId) throw new DeskError("That card is on an order, so it can't be changed.");
+        if (c.status !== "POOLED" || c.packId !== packId) throw new DeskError("That card isn't in a pack pool any more. Refresh and try again.");
+        if (c.restockId) {
+          // Only a removal staged in this pack's open restock can be folded in.
+          const open = await tx.siteRestock.findFirst({ where: { id: c.restockId, packId, status: "STAGED" }, select: { id: true } });
+          if (!open) throw new DeskError("That card is staged in another restock. Unstage it first.");
+          await tx.siteCopy.update({ where: { id: c.id }, data: { restockId: null } });
+          c.restockId = null;
+        }
+        const pack = (await tx.sitePack.findUnique({ where: { id: packId } }))!;
+        const prev = await ensureBaseline(tx, packId, actor);
+        // Public note: no staff names or reasons (those go on the card's own log).
+        const note = action === "delete" ? "Correction: Card Removed" : "Correction: Card Taken Out To Fix";
+        const version = await applyRestock(tx, pack, prev, [c], null, { actor, note, auto: false });
+        if (!version) throw new DeskError("That card changed while fixing it. Refresh and try again.");
+        await tx.siteCopyEvent.create({
+          data: { copyId: c.id, fromStatus: "POOLED", toStatus: "DRAFT", actor, reason: `correction v${version.version}: ${action === "delete" ? "delete" : action === "switch" ? "change" : "take out"} (${why})`.slice(0, 500) },
+        });
+        const out = { packId, version: version.version!, poolHash: version.poolHash!, poolSize: version.poolSize ?? 0, evPct: version.evPct ?? null, deleted: false, switched: false, printingKey: c.printingKey, condition: c.condition };
+        const now = (await tx.siteCopy.findUnique({ where: { id } }))!;
+        if (action === "delete") {
+          const was = now.slot != null ? ` (was slot ${now.slot}${now.pocket ? ` pocket ${now.pocket}` : ""})` : "";
+          await tx.siteCopy.update({ where: { id }, data: { status: "REMOVED", slot: null, pocket: null, autoRestock: false } });
+          await tx.siteCopyEvent.create({ data: { copyId: id, fromStatus: "DRAFT", toStatus: "REMOVED", actor, reason: `deleted: ${why}${was}`.slice(0, 500) } });
+          return { ...out, deleted: true };
+        }
+        if (action === "switch") {
+          const r = await switchProduct(tx, actor, now, next, condition);
+          return { ...out, switched: r.switched, printingKey: r.printingKey, condition: r.condition };
+        }
+        return out;
+      },
+      { timeout: 20_000 },
+    );
+  } catch (e) {
+    if (e instanceof RestockError) throw new DeskError(e.message);
+    throw e;
+  }
 }
 
 export async function moveToSlot(db: PrismaClient, actor: string, copyId: unknown, slotIn: unknown, pocketIn: unknown) {
