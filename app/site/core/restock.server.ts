@@ -589,6 +589,152 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
   return { ran: true, routed, held, drafts, versions, retiered };
 }
 
+// ---------- Auto-pick packs for Drafts (Trevor, Nov 27 2026) ----------
+
+/**
+ * Pool state per pack as it will be after its open (staged) restock publishes: live pool minus staged removals
+ * plus staged additions. Auto-pick routes on top of this so a second press never overfills a pack.
+ */
+async function poolStatesAfterStaged(db: Db) {
+  const states = await poolStates(db);
+  const open = await db.siteRestock.findMany({ where: { status: "STAGED" }, select: { id: true, packId: true } });
+  if (!open.length) return states;
+  const packOf = new Map(open.map((r) => [r.id, r.packId]));
+  const staged = await db.siteCopy.findMany({
+    where: { restockId: { in: open.map((r) => r.id) } },
+    select: { status: true, packId: true, restockId: true, printingKey: true, condition: true, retailBits: true, language: true, era: true, setName: true },
+  });
+  const values = await retailOf(db, staged);
+  staged.forEach((c, i) => {
+    const st = states.get(packOf.get(c.restockId!)!);
+    if (!st) return;
+    const v = values[i] ?? 0;
+    const isTop = tierFor(values[i], tierRules(st.pack.tierRules)) === st.topTier;
+    if (c.status === "DRAFT") {
+      st.cards++;
+      st.retail += v;
+      st.mix = addType(st.mix!, c);
+      if (isTop) st.top++;
+    } else if (c.status === "POOLED" && c.packId === st.pack.id) {
+      st.cards--;
+      st.retail -= v;
+      const m = { ...st.mix! };
+      for (const t of typesOf(c)) m[t] = Math.max(0, (m[t] ?? 0) - 1);
+      st.mix = m;
+      if (isTop) st.top = Math.max(0, st.top - 1);
+    }
+  });
+  return states;
+}
+
+/**
+ * Staff "Auto-Pick Packs": choose the pack for Draft cards with the same routing the hourly Auto-Fill uses
+ * (Pool Rules, mix caps, EV band, top-tier need, one pool per card, batch trimmed to the band), then STAGE
+ * them into each pack's open restock. Nothing goes live until staff press Publish. Unlike the hourly run there
+ * is no 2-hour wait and the Auto-Fill switch doesn't matter: staff chose these cards. Packs need a Target EV.
+ * copyIds: the selected Draft cards, or "all" = every unowned, unstaged, non-demo Draft card.
+ */
+export async function autoStageDrafts(db: PrismaClient, actor: string, copyIds: unknown) {
+  const all = copyIds === "all";
+  const ids = all ? null : cleanIds(copyIds);
+  if (ids && !ids.length) throw new RestockError("Select cards first.");
+  const free = { status: "DRAFT", ownerId: null, restockId: null } as const;
+  const cands = await db.siteCopy.findMany({
+    where: ids ? { ...free, id: { in: ids } } : { ...free, demo: false },
+    orderBy: { createdAt: "asc" },
+    take: 3000,
+  });
+  const states = await poolStatesAfterStaged(db);
+  const packs = [...states.values()].filter((st) => !isPrizePool(st.pack) && st.pack.targetEvPct != null);
+  if (!packs.length) throw new RestockError("No pack has a Target EV yet. Set one in Pools → EV & Pool Rules first.");
+  const values = await retailOf(db, cands);
+  const valueOf = new Map(cands.map((c, i) => [c.id, values[i] ?? 0]));
+  const base = new Map(packs.map((st) => [st.pack.id, { cards: st.cards, retail: st.retail }]));
+  const plan = new Map<string, SiteCopy[]>();
+  const noPrice = cands.filter((c) => !(valueOf.get(c.id)! > 0)).length;
+  // Highest value first, so scarce chase cards go where they're needed most (same as the hourly run). Then each
+  // pack's batch is trimmed to its EV band. A card a pack's trim dropped gets another try at the other packs
+  // (the hourly run just leaves it in Drafts), so one big card in an empty pool doesn't strand the rest.
+  const banned = new Map<string, Set<string>>();
+  let todo = cands.filter((c) => valueOf.get(c.id)! > 0).sort((a, b) => valueOf.get(b.id)! - valueOf.get(a.id)!);
+  for (let pass = 0; pass < 6 && todo.length; pass++) {
+    const snap = new Map(packs.map((st) => [st.pack.id, { cards: st.cards, retail: st.retail, mix: st.mix, top: st.top }]));
+    const round = new Map<string, SiteCopy[]>();
+    for (const c of todo) {
+      const v = valueOf.get(c.id)!;
+      const st = routeCard(v, c, packs.filter((x) => !banned.get(c.id)?.has(x.pack.id)));
+      if (!st) continue;
+      st.cards++;
+      st.retail += v;
+      if (st.mix) st.mix = addType(st.mix, c);
+      if (tierFor(v, tierRules(st.pack.tierRules)) === st.topTier) st.top++;
+      round.set(st.pack.id, [...(round.get(st.pack.id) ?? []), c]);
+    }
+    const retry: SiteCopy[] = [];
+    for (const st of packs) {
+      const s0 = snap.get(st.pack.id)!;
+      Object.assign(st, s0);
+      const cards = round.get(st.pack.id);
+      if (!cards) continue;
+      const kept = trimToBand(st.pack, s0, cards.map((c) => ({ c, v: valueOf.get(c.id)! })));
+      const keptIds = new Set(kept.map((x) => x.c.id));
+      for (const c of cards) {
+        if (keptIds.has(c.id)) continue;
+        banned.set(c.id, (banned.get(c.id) ?? new Set()).add(st.pack.id));
+        retry.push(c);
+      }
+      for (const { c, v } of kept) {
+        st.cards++;
+        st.retail += v;
+        if (st.mix) st.mix = addType(st.mix, c);
+        if (tierFor(v, tierRules(st.pack.tierRules)) === st.topTier) st.top++;
+      }
+      if (kept.length) plan.set(st.pack.id, [...(plan.get(st.pack.id) ?? []), ...kept.map((x) => x.c)]);
+    }
+    todo = retry.sort((a, b) => valueOf.get(b.id)! - valueOf.get(a.id)!);
+  }
+  const results: { packId: string; title: string; staged: number; evAfterPct: number | null }[] = [];
+  const blocked: { id: string; reason: string }[] = [];
+  let staged = 0;
+  for (const [packId, cards] of plan) {
+    const st = states.get(packId)!;
+    const b0 = base.get(packId)!;
+    const kept = cards.map((c) => ({ c, v: valueOf.get(c.id)! }));
+    // stageRestock re-checks Pool Rules and caps under the pack lock and skips anything taken meanwhile.
+    const r = await stageRestock(db, actor, packId, kept.map((x) => x.c.id), "add");
+    blocked.push(...r.blocked);
+    if (!r.staged) continue;
+    staged += r.staged;
+    const blockedIds = new Set(r.blocked.map((x) => x.id));
+    const added = kept.filter((x) => !blockedIds.has(x.c.id));
+    results.push({
+      packId,
+      title: st.pack.title,
+      staged: r.staged,
+      evAfterPct: evPct(b0.retail + added.reduce((a, x) => a + x.v, 0), b0.cards + added.length, st.pack),
+    });
+  }
+  return { considered: cands.length, staged, left: cands.length - staged, noPrice, packs: results, blocked: blocked.slice(0, 20) };
+}
+
+/** Publish every pack's staged restock now (one new pool version per pack). Prize pools included. */
+export async function publishAllStaged(db: PrismaClient, actor: string, note?: unknown) {
+  const open = await db.siteRestock.findMany({ where: { status: "STAGED" }, select: { packId: true, id: true } });
+  const out: { packId: string; version: number; added: number; removed: number }[] = [];
+  const skipped: { packId: string; reason: string }[] = [];
+  for (const r of open) {
+    if (!(await db.siteCopy.count({ where: { restockId: r.id } }))) continue;
+    try {
+      const v = await publishRestock(db, actor, r.packId, note);
+      out.push({ packId: r.packId, version: v.version!, added: (v.addIds as string[]).length, removed: (v.removeIds as string[]).length });
+    } catch (e) {
+      if (!(e instanceof RestockError)) throw e;
+      skipped.push({ packId: r.packId, reason: e.message });
+    }
+  }
+  return { published: out, skipped };
+}
+
 /** Once a day (after price refreshes) re-rank each pool's tiers so cutoffs follow current prices. */
 async function dailyTiers(db: PrismaClient, now: Date) {
   const day = new Date(now.getTime() - 24 * 60 * 60_000);

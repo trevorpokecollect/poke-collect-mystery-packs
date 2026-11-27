@@ -9,6 +9,8 @@
 //      {intent:"restock-unstage", copyIds} | {intent:"restock-publish", packId, note?} (goes live now, new pool version)
 //      {intent:"pack-ev", packId, targetEvPct|null, evBandPct, minTopPer100|null, languages?, eras?,
 //        minValueBits?, maxValueBits?, typeCaps?, tierMix?, topTierMin?, autoDrafts?} (only sent fields change; EV/rules internal only)
+//      {intent:"restock-auto-stage", copyIds | "all"} picks the pack for each Draft card (same rules as Auto-Fill, no
+//        2-hour wait) and STAGES it there; {intent:"restock-publish-all", note?} publishes every staged restock now
 //      {intent:"auto-restock-run"} runs the hourly automatic restock now (buybacks + listed Drafts for Auto-Fill packs)
 //      {intent:"remove", copyIds, reason} deletes unsold Draft/Active copies (→ REMOVED, pocket freed, logged)
 //      {intent:"slot", copyId, slot, pocket?} moves one copy to a chosen slot (10001+) and pocket
@@ -23,7 +25,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
 import { DeskError, boxSummary, fixPooledCopy, listStock, moveToSlot, movePool, relinkCopy, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
-import { RestockError, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
+import { RestockError, autoStageDrafts, publishAllStaged, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
 import { applyBrokerPrice, intakePrice, priceKey } from "../site/core/stock.server";
 import { SpinTableError, saveSiteSpinTier, siteSpinTableView } from "../site/rewards/spin-table.server";
 
@@ -90,6 +92,11 @@ export async function action({ request }: ActionFunctionArgs) {
         const r = await publishRestock(db, actor, String(b.packId || ""), b.note);
         return Response.json({ ok: true, restock: { packId: r.packId, version: r.version, poolHash: r.poolHash, poolSize: r.poolSize, added: (r.addIds as string[]).length, removed: (r.removeIds as string[]).length } });
       }
+      // Auto-pick packs (Trevor, Nov 27 2026): staff don't choose the pack; nothing is live until published.
+      case "restock-auto-stage":
+        return Response.json({ ok: true, ...(await autoStageDrafts(db, actor, b.copyIds === "all" ? "all" : b.copyIds)) });
+      case "restock-publish-all":
+        return Response.json({ ok: true, ...(await publishAllStaged(db, actor, b.note)) });
       case "pack-ev": {
         const p = await savePackEv(db, String(b.packId || ""), b);
         return Response.json({ ok: true, pack: { id: p.id, kind: p.kind, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, autoDrafts: p.autoDrafts, fillTargets: p.fillTargets } });

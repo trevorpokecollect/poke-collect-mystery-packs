@@ -7,7 +7,7 @@ import { priceKey, receiveSiteIntake } from "./stock.server";
 import { DeskError, fixPooledCopy, movePool, setListing } from "./stock-desk.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { storeAction, storeState } from "../store/store.server";
-import { eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, trimToBand, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
+import { autoStageDrafts, publishAllStaged, eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, trimToBand, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
 import { autoTierRules } from "../store/tiers";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -360,6 +360,40 @@ describe.skipIf(!url)("verified restocks", () => {
     // Clearing the target turns the switch off.
     await savePackEv(db, "gold", { targetEvPct: null });
     expect((await db.sitePack.findUniqueOrThrow({ where: { id: "gold" } })).autoDrafts).toBe(false);
+  });
+
+  it("Auto-Pick Packs stages Drafts into the pack that fits (no hold, switch not needed), then Publish All", async () => {
+    await expect(autoStageDrafts(db, "t", "all")).rejects.toThrow(/Target EV/);
+    await savePackEv(db, "cobalt", { targetEvPct: 100, evBandPct: 10 });
+    await savePackEv(db, "gold", { targetEvPct: 100, evBandPct: 10 });
+    const base = await stock("PickBase", 10, 1000);
+    await stageRestock(db, "t", "cobalt", base.map((c) => c.id), "add");
+    await publishRestock(db, "t", "cobalt");
+    const fit = await stock("PickFit", 2, 1000); // listed just now: no 2-hour wait for staff
+    const jp = await stock("PickJp", 1, 3899, { language: "Japanese" }); // Mystery is English only → Gold
+    const demo = await stock("PickDemo", 1, 1000);
+    await db.siteCopy.update({ where: { id: demo[0].id }, data: { demo: true } });
+    const unpriced = await stock("PickNoPrice", 1, 1000);
+    await db.siteCopy.update({ where: { id: unpriced[0].id }, data: { retailBits: 0 } });
+    await db.sitePrice.deleteMany({ where: { printingKey: { contains: "PickNoPrice" } } });
+    const big = await stock("PickBig", 1, 50_000); // would push either pool far out of band
+    const r = await autoStageDrafts(db, "t", "all");
+    expect(r).toMatchObject({ staged: 3 });
+    expect(r.packs.map((p) => [p.packId, p.staged]).sort()).toEqual([["cobalt", 2], ["gold", 1]]);
+    // Staged only: pools are unchanged until publish, and the cards are locked to their restock.
+    expect(await db.siteCopy.count({ where: { status: "POOLED", packId: "cobalt" } })).toBe(10);
+    for (const c of fit) expect((await db.siteCopy.findUniqueOrThrow({ where: { id: c.id } })).restockId).not.toBeNull();
+    for (const c of [...demo, ...unpriced, ...big]) expect((await db.siteCopy.findUniqueOrThrow({ where: { id: c.id } })).restockId).toBeNull();
+    // A second press doesn't stage anything twice, and counts already staged cards toward each pool's EV.
+    expect((await autoStageDrafts(db, "t", "all")).staged).toBe(0);
+    // Selected cards only: a demo card can be picked explicitly.
+    const more = await stock("PickMore", 1, 1000);
+    expect((await autoStageDrafts(db, "t", [more[0].id])).packs).toEqual([expect.objectContaining({ packId: "cobalt", staged: 1 })]);
+    const pub = await publishAllStaged(db, "t");
+    expect(pub.published.map((p) => [p.packId, p.added]).sort()).toEqual([["cobalt", 3], ["gold", 1]]);
+    expect(await db.siteCopy.count({ where: { status: "POOLED", packId: "cobalt" } })).toBe(13);
+    expect((await db.siteCopy.findUniqueOrThrow({ where: { id: jp[0].id } })).packId).toBe("gold");
+    expect((await publishAllStaged(db, "t")).published).toEqual([]);
   });
 
   it("enforces pool rules at staging and re-ranks tiers at each restock; a pull keeps its tier", async () => {
