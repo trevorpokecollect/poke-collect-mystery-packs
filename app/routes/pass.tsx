@@ -12,6 +12,7 @@ import { cancelAtCoinflow, createSubscriptionLink, subscriptionsReady } from "..
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, fmtDate } from "../site/play/limits.server";
 import { PLAN } from "../site/play/plan-brand";
 import { sendPlanCanceledEmail } from "../site/play/plan-emails.server";
+import { SOUNDTRACK, soundtrackPath, soundtrackReady } from "../site/play/soundtrack.server";
 import { SubscriptionError, TIERS, currentSubscription, requestCancel, subscriptionView, tierById, type TierId } from "../site/play/subscriptions.server";
 import { AGE_REQUIRED, ageConfirmed } from "../lib/cardbit-age.server";
 import { SITE_SHOP } from "../site/rewards/rewards.server";
@@ -67,6 +68,7 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
         <li>${ICON.xp}<span><b>+${t.xpBonusPct}% XP</b> on every paid pack</span></li>
         <li>${ICON.spark}<span><b>+${t.sparksBonusPct}% Sparks</b> on every paid pack</span></li>
         <li>${ICON.star}<span><b>${esc(t.name)} portrait frame</b> around your icon</span></li>
+        <li>${ICON.note}<span><b>Pack opening soundtrack:</b> download all 6 songs in full</span></li>
         ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Animated emotes:</b> 4 for every BitBot</span></li>`}
         ${t.id === "ultimate" ? `<li>${ICON.star}<span><b>Legendary emotes</b>, only on Ultimate</span></li>` : ""}
         ${t.id === "plus" ? "" : `<li>${ICON.star}<span><b>Card sleeves + reveal effects</b> for your openings${t.id === "ultimate" ? ", including the Gold Legendary sleeve" : ""}</span></li>`}
@@ -98,11 +100,28 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
        <div><label for="zip">Billing ZIP Code</label><input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" maxlength="5" required></div></div>
        <label class="agree"><input type="checkbox" name="renew_ok" value="yes" required> ${RENEW_CONSENT}</label></form>` : ""}
      <div class="plans">${cards}</div>
+     ${soundtrackBox(ready && soundtrackReady(), !!v.perksTier && soundtrackReady(), !!customerId)}
      <p class="free">${ICON.gift}<span>Daily Spins, giveaway entries and the leaderboard stay <b>free for everyone</b>. A plan never adds spins, entries or points.</span></p>
      <p class="fine">Renews automatically every month at the plan's price, charged to the card you use at checkout, until you cancel. Cancel any time on this page or by emailing Support@cardbit.com, at least a day before your renewal date to avoid the next charge; perks last through the month you paid for. Monthly charges are final once the month's Cardbits are added, except as the <a href="/policies#refund-policy">Refund Policy</a> says. Plan Cardbits are store credit (100 = $1), never cash, and follow the Terms. Bonus Cardbits are promotional. Plan charges count toward your Top-Up Limits.
      Not available in ${EXCLUDED_STATES.join(", ")}. 18+. <a href="/policies#terms">Terms</a> · <a href="/">Back to Cardbit</a></p>`,
     appNavTags(), // phones: the site's bottom tab bar, with Pack Pass lit
   );
+}
+
+/** Full-length soundtrack downloads (every plan). Non-members see the list with a lock and a join hint. */
+function soundtrackBox(ready: boolean, member: boolean, signedIn: boolean) {
+  const action = (slug: string, title: string) => member
+    ? `<a class="dl" href="${soundtrackPath(slug)}" download aria-label="Download ${esc(title)}">${ICON.down}<span>Download</span></a>`
+    : `<span class="lock">${ICON.lock}<span>${ready ? "Members" : "Coming Soon"}</span></span>`;
+  const hint = member
+    ? "Thanks for being a member. Download any song, as often as you like, for your own listening."
+    : !ready ? `Downloads open with ${esc(PLAN.name)}.`
+    : signedIn ? "Join any plan above to download the full versions." : `<a href="/sign-in?return_to=${encodeURIComponent(PATH + "#soundtrack")}">Sign in</a> and join any plan above to download the full versions.`;
+  return `<section id="soundtrack" class="sound" aria-labelledby="st-h">
+    <div class="sound-top">${ICON.note}<div><h2 id="st-h">Pack Opening Soundtrack</h2>
+    <p>Six original 8-bit songs made for Cardbit. One plays at random every time you open a pack. ${esc(PLAN.name)} members on any plan can download the full versions.</p></div></div>
+    <ol class="songs">${SOUNDTRACK.map((s) => `<li><span class="st"><b>${esc(s.title)}</b><span class="len">${s.length}</span></span>${action(s.slug, s.title)}</li>`).join("")}</ol>
+    <p class="fine">${hint}</p></section>`;
 }
 
 const TIER_LOOK: Record<TierId, { icon: string; tag?: string }> = {
@@ -119,6 +138,9 @@ const ICON = {
   chat: svg('<path d="M4 5h16v10H9l-5 4z" fill="currentColor"/>'),
   box: svg('<path d="M12 2 3 6.5v11L12 22l9-4.5v-11zM12 4.3l6.4 3.2L12 10.7 5.6 7.5zM5 9.1l6 3v7.6l-6-3zm8 10.6v-7.6l6-3v7.6z" fill="currentColor"/>'),
   coin: svg('<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v10M9.5 9.5h4a1.8 1.8 0 0 1 0 3.5h-3a1.8 1.8 0 0 0 0 3.5h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
+  note: svg('<path d="M9 18.5a3 3 0 1 1-2-2.83V5l12-2v12.5a3 3 0 1 1-2-2.83V7.1L9 8.6z" fill="currentColor"/>'),
+  down: svg('<path d="M11 3h2v10l3.5-3.5 1.4 1.4L12 16.8l-5.9-5.9 1.4-1.4L11 13zM4 19h16v2H4z" fill="currentColor"/>'),
+  lock: svg('<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z" fill="currentColor"/>'),
   gift: svg('<path d="M3 10h18v4H3zM5 14h14v7H5zM11 10h2v11h-2zM12 10c-2-4-6-4-6-1.5S10 10 12 10c2 0 6-.5 6-1.5S14 6 12 10z" fill="currentColor"/>'),
 };
 
@@ -165,6 +187,16 @@ main{max-width:1040px;background:radial-gradient(700px 320px at 50% -60px,#00e6e
 .is-mine{box-shadow:0 0 0 3px var(--glow),0 18px 50px -20px var(--glow)}
 .free{display:flex;gap:10px;align-items:center;justify-content:center;margin:22px auto 4px;max-width:640px;padding:10px 14px;border-radius:12px;background:#00e6e10f;border:1px solid #00e6e133;font-size:.92rem;text-align:left}.free .pi{color:var(--accent)}
 .fine{margin-top:14px}
+.sound{max-width:760px;margin:26px auto 0;padding:18px;border-radius:16px;border:1px solid #00e6e133;background:linear-gradient(180deg,#00e6e10d,transparent)}
+.sound-top{display:flex;gap:12px;align-items:flex-start}.sound-top>.pi{width:30px;height:30px;color:var(--accent);margin-top:2px}
+.sound h2{margin:0 0 4px;font:800 1.35rem 'Cardbit Outfit',system-ui,sans-serif}.sound-top p{margin:0;font-size:.95rem}
+.songs{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:8px;counter-reset:s}
+.songs li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;background:#0d1416aa;border:1px solid var(--line);counter-increment:s}
+.songs li::before{content:counter(s);display:grid;place-items:center;width:24px;height:24px;border-radius:6px;background:#00e6e122;color:var(--accent);font:800 .8rem 'Cardbit Outfit',system-ui,sans-serif}
+.st{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;min-width:0}.songs b{font:800 1rem 'Cardbit Outfit',system-ui,sans-serif;min-width:0;margin-right:auto}.len{color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+.dl,.lock{display:inline-flex;gap:6px;align-items:center;font:800 .85rem 'Cardbit Outfit',system-ui,sans-serif;border-radius:999px;padding:6px 12px;white-space:nowrap}
+.dl{background:linear-gradient(90deg,#00e6e1,#6f86ff);color:#062022;text-decoration:none}.dl:focus-visible{outline:3px solid #fff;outline-offset:2px}.dl .pi{color:#062022;width:16px;height:16px;margin:0}
+.lock{color:var(--muted);border:1px solid var(--line)}.lock .pi{color:var(--muted);width:16px;height:16px;margin:0}
 @media (max-width:560px){.bill{grid-template-columns:1fr}.orbit{height:70px}.o{width:48px;height:48px}.o2{width:64px;height:64px}}
 @media (prefers-reduced-motion:reduce){.o,.title,.t-pro::after{animation:none}.plan,.plan:hover{transition:none;transform:none}}
 `;

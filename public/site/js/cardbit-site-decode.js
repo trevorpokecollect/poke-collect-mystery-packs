@@ -27,6 +27,10 @@
   // in a row. Only the picked file loads, and only when sound is on; the built-in chiptune plays if it can't load.
   const MUSIC_URLS = String(document.currentScript?.dataset.music || '').split(/[\s,]+/).filter(Boolean);
   const musicBufs = new Map(); // url -> Promise<AudioBuffer> | false (failed)
+  // "holo-hunt.mp3?v=s1" -> slug "holo-hunt", title "Holo Hunt". Full versions download from /pass/soundtrack/<slug>
+  // (Pack Pass members; everyone else lands on the Pack Pass page).
+  const songSlug = url => (String(url).split('?')[0].split('/').pop() || '').replace(/\.mp3$/, '').replace(/[^a-z0-9-]/g, '');
+  const songTitle = slug => slug.split('-').filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
   function pickMusic() {
     if (!MUSIC_URLS.length) return '';
     let last = -1; try { last = Number(sessionStorage.getItem('cardbit.music.last') ?? -1); } catch {}
@@ -64,7 +68,7 @@
       return ac;
     } catch { return null; }
   }
-  function makeSfx(isOn, MUSIC_URL = '') {
+  function makeSfx(isOn, MUSIC_URL = '', onMusic = () => {}) {
     const A = () => audio(isOn());
     const out = (node, wet = 0) => { node.connect(master); if (wet && verb) { const s = ac.createGain(); s.gain.value = wet; node.connect(s).connect(verb); } };
     const env = (gn, t, a, peak, d) => { gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(peak, t + a); gn.gain.exponentialRampToValueAtTime(.0001, t + a + d); };
@@ -88,13 +92,13 @@
     function startTrack(c) {
       let src = null, t0 = 0, stopped = false;
       const bus = c.createGain(); bus.gain.setValueAtTime(.0001, c.currentTime); bus.connect(master);
-      const me = music = { stop() { stopped = true; const t = c.currentTime; if (src) musicPos = (musicPos + t - t0) % src.buffer.duration; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(Math.max(.0001, bus.gain.value), t); bus.gain.exponentialRampToValueAtTime(.0001, t + .5); setTimeout(() => { try { src?.stop(); bus.disconnect(); } catch {} }, 700); } };
+      const me = music = { stop() { stopped = true; if (src) onMusic(false); const t = c.currentTime; if (src) musicPos = (musicPos + t - t0) % src.buffer.duration; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(Math.max(.0001, bus.gain.value), t); bus.gain.exponentialRampToValueAtTime(.0001, t + .5); setTimeout(() => { try { src?.stop(); bus.disconnect(); } catch {} }, 700); } };
       (musicBufs.get(MUSIC_URL) || musicBufs.set(MUSIC_URL, fetch(MUSIC_URL).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(b => new Promise((ok, no) => c.decodeAudioData(b, ok, no)))).get(MUSIC_URL))
         .then(buf => {
           musicBufs.set(MUSIC_URL, Promise.resolve(buf));
           if (stopped || music !== me) return;
           src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(bus);
-          t0 = c.currentTime; src.start(t0, musicPos % buf.duration);
+          t0 = c.currentTime; src.start(t0, musicPos % buf.duration); onMusic(true);
           bus.gain.exponentialRampToValueAtTime(.32, t0 + 1);
         })
         .catch(() => { musicBufs.set(MUSIC_URL, false); if (!stopped && music === me) { music = null; startSynth(c); } });
@@ -178,7 +182,9 @@
     const name = String(edition.name || 'Cardbit Pack');
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
     const S = { sound: soundPref(), reduced: mq.matches, destroyed: false };
-    const sfx = makeSfx(() => S.sound && !S.destroyed, pickMusic());
+    const MUSIC = pickMusic();
+    let npEl = null;
+    const sfx = makeSfx(() => S.sound && !S.destroyed, MUSIC, playing => { if (npEl) npEl.hidden = !playing || S.destroyed; });
     const vib = p => { if (S.reduced) return; try { navigator.vibrate && navigator.vibrate(p); } catch {} };
     const events = new AbortController(), on = (t, e, f, o) => t.addEventListener(e, f, { signal: events.signal, ...(o || {}) });
 
@@ -191,12 +197,14 @@
       '<div class="cbd-tools"><button type="button" class="cbd-btn" data-cbd="sound" aria-pressed="false"></button><button type="button" class="cbd-btn" data-cbd="motion" aria-pressed="false">Reduce Motion</button><button type="button" class="cbd-btn" data-cbd="skip">Skip</button></div></div>' +
       '<div class="cbd-stage" tabindex="0" aria-label="Opening stage. Press Enter or Space to continue."><canvas aria-hidden="true"></canvas>' +
       '<div class="cbd-readout" aria-hidden="true"></div><div class="cbd-tier" aria-hidden="true"><small>Signal Lock</small><span></span></div>' +
-      '<div class="cbd-banner" aria-hidden="true"></div><div class="cbd-row" aria-hidden="true"></div><div class="cbd-hint" aria-live="polite"></div></div>' +
+      '<div class="cbd-banner" aria-hidden="true"></div><div class="cbd-row" aria-hidden="true"></div><div class="cbd-hint" aria-live="polite"></div>' +
+      (songSlug(MUSIC) ? '<p class="cbd-np" hidden><span class="cbd-np-now"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18.5a3 3 0 1 1-2-2.83V5l12-2v12.5a3 3 0 1 1-2-2.83V7.1L9 8.6z" fill="currentColor"/></svg>Now Playing <b>' + esc(songTitle(songSlug(MUSIC))) + '</b></span><a class="cbd-np-dl" href="/pass/soundtrack/' + songSlug(MUSIC) + '">Download Full Version with Pack Pass</a></p>' : '') + '</div>' +
       (sample ? '<p class="cbd-note">A Demo Opening spends zero Cardbits and awards no physical card.</p>' : '');
     host.append(root);
     const stage = root.querySelector('.cbd-stage'), cv = stage.querySelector('canvas'), g = cv.getContext('2d');
     const ro = stage.querySelector('.cbd-readout'), tierlab = stage.querySelector('.cbd-tier'), tierTxt = tierlab.querySelector('span');
     const banner = stage.querySelector('.cbd-banner'), rowEl = stage.querySelector('.cbd-row'), hint = stage.querySelector('.cbd-hint');
+    npEl = root.querySelector('.cbd-np');
     const soundBtn = root.querySelector('[data-cbd=sound]'), motionBtn = root.querySelector('[data-cbd=motion]'), skipBtn = root.querySelector('[data-cbd=skip]');
     const syncButtons = () => { soundBtn.textContent = S.sound ? 'Sound On' : 'Sound Off'; soundBtn.setAttribute('aria-pressed', S.sound); motionBtn.setAttribute('aria-pressed', S.reduced); root.classList.toggle('cbd-calm', S.reduced); };
     syncButtons();
