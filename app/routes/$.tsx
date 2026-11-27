@@ -8,7 +8,7 @@ import { redirect } from "react-router";
 import { SITE_ENABLED, htmlResponse, notFound, storefrontShell } from "../site/shell.server";
 import { shareFor } from "../site/share.server";
 import { isPublicPath } from "../site/seo.server";
-import { BROWSE_BASES, gatePage } from "../site/waitlist/gate.server";
+import { gatePage } from "../site/waitlist/gate.server";
 import { linksResponse } from "../site/waitlist/links.server";
 
 // First path segment -> page title before the client app takes over.
@@ -41,7 +41,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const legacy = legacyRedirect(path);
   if (legacy) return new Response(null, { status: 301, headers: { Location: legacy } });
   if (path === "links") return linksResponse(); // Instagram bio links: open to everyone, even in coming-soon mode
-  if (!BROWSE_BASES.has(base)) { const gated = gatePage(request); if (gated) return gated; }
+  { const gated = gatePage(request); if (gated) return gated; }
   const title = PAGES[base];
   if (!title) return htmlResponse(storefrontShell({ title: "Page Unavailable · cardbit" }), 404);
   void request;

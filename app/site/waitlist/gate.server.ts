@@ -2,15 +2,11 @@
 // On when CARDBIT_WAITLIST=on (app-site). Staff open https://cardbit.com/?preview=<CARDBIT_PREVIEW_KEY> once
 // per browser; that sets a signed cookie (30 days) and the full site works as normal. ?preview=off clears it.
 // Policies, Official Rules, Verified Shuffle, webhooks, staff/internal routes and sign-in callbacks are never gated.
-// Browse pages (How It Works, Packs, Shop, Cardbits) and the read-only catalog are open to everyone so payment
-// reviewers can see what is sold (Trevor, Nov 26 2026); buying, top-ups, sign-in and account pages stay gated.
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { waitlistOn } from "./waitlist.server";
 import { cookieValue } from "../core/auth.server";
 
 export const PREVIEW_COOKIE = "cb_preview";
-/** First path segments anyone may browse in coming-soon mode. */
-export const BROWSE_BASES = new Set(["help", "packs", "shop", "cardbits"]);
 const MAX_AGE = 30 * 24 * 3600;
 
 const previewKey = (env: NodeJS.ProcessEnv = process.env) => {
