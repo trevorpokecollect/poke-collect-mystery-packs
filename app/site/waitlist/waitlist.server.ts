@@ -81,9 +81,9 @@ function cleanSource(raw: unknown) {
   return Object.keys(out).length ? out : null;
 }
 
-/** Short source label for the Card Broker Waitlist tab: UTM first, then ad click IDs, then the referring site. */
+/** Short source label for the Card Broker Waitlist tab: UTM first (utm_content names the ad, e.g. Meta's {{ad.name}}), then ad click IDs, then the referring site. */
 export function sourceLabel(src: Record<string, string>): string | null {
-  if (src.utm_source) return [src.utm_source, src.utm_medium, src.utm_campaign].filter(Boolean).join(" / ");
+  if (src.utm_source) return [src.utm_source, src.utm_medium, src.utm_campaign, src.utm_content].filter(Boolean).join(" / ");
   if (src.fbclid) return "meta (click id)";
   if (src.gclid) return "google ads (click id)";
   if (src.ttclid) return "tiktok (click id)";

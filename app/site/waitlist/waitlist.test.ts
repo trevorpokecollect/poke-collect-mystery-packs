@@ -121,6 +121,9 @@ describe("waitlist source label", () => {
   it("prefers UTMs, then ad click IDs, then the referring site", async () => {
     const { sourceLabel } = await import("./waitlist.server");
     expect(sourceLabel({ utm_source: "meta", utm_medium: "paid_social", utm_campaign: "waitlist", fbclid: "x" })).toBe("meta / paid_social / waitlist");
+    expect(sourceLabel({ utm_source: "meta", utm_medium: "paid_social", utm_campaign: "waitlist_signups", utm_content: "W1 - 1,000 Free Cardbits" })).toBe(
+      "meta / paid_social / waitlist_signups / W1 - 1,000 Free Cardbits",
+    );
     expect(sourceLabel({ fbclid: "x" })).toBe("meta (click id)");
     expect(sourceLabel({ gclid: "x" })).toBe("google ads (click id)");
     expect(sourceLabel({ ttclid: "x" })).toBe("tiktok (click id)");
