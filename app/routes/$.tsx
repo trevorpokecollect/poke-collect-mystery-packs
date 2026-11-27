@@ -14,7 +14,7 @@ import { linksResponse } from "../site/waitlist/links.server";
 // First path segment -> page title before the client app takes over.
 const PAGES: Record<string, string> = {
   packs: "Shop Packs",
-  chase: "Top Hits",
+  chase: "Chase",
   shop: "Shop Singles",
   "ship-together": "Ship Together",
   account: "My Account",

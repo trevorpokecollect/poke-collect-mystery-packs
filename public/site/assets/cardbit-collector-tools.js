@@ -118,7 +118,7 @@
         cmd('next','Next',state.page===last?' disabled':'','cb-secondary')+'</div>':'');
     }
     function page() {
-      const model=search(getRows(),state,keys), count=activeCount(), title=chase?/* SITE */ 'Top Hits':'Shop Singles';
+      const model=search(getRows(),state,keys), count=activeCount(), title=chase?'Chase':'Shop Singles';
       const range='<details class="cf-group" open><summary>'+priceLabel+' <small>Cardbits</small></summary><div class="cf-range">'+
         ['min','max'].map((k,i)=>'<label>'+(i?'Maximum':'Minimum')+'<input inputmode="numeric" type="text" data-cf-bound="'+k+'" value="'+esc(state[k])+'" placeholder="'+(i?'Any':'0')+'"></label>').join('')+
         '</div><div class="cf-bands">'+bands.map(([label,min,max])=>cmd('band',label,attr('min',min)+attr('max',max)+' aria-pressed="'+(state.min===min&&state.max===max)+'"')).join('')+'</div></details>';
@@ -280,7 +280,7 @@
       const samples=r.samples.filter(s=>s.id!=='mystery'||!r.recorded).map(ed=>link('latch/'+enc(ed.id),'Try '+esc(ed.name)+' Opening '+icon('arrow',15),'cb-textlink')).join(' ');
       const active=r.packs.map(p=>link('packs/'+enc(p.id),'<b>'+esc(packTitle(p))+'</b>'+[...r.tiersByPack.get(p.id)].map(tier=>ctx.tierMarkup({tier})).join('')+'<span>View Pack '+icon('arrow',15)+'</span>','ct-option')).join('');
       const singles=r.singles.map(s=>link('shop/'+enc(s.id),'<b>Buy This Printing as a Single</b><span>View Single '+icon('arrow',15)+'</span>','ct-option')).join('');
-      return '<div class="cb-wrap cb-page cb-collector">'+bread('chase',/* SITE */ 'Top Hits')+'<div class="ct-print"><div class="ct-print-art">'+art(c,true)+'</div><div><p class="cb-kicker">Exact Printing</p><h1>'+esc(c.name)+'</h1><p class="cb-lead">'+esc(metadata(c))+'</p>'+
+      return '<div class="cb-wrap cb-page cb-collector">'+bread('chase','Chase')+'<div class="ct-print"><div class="ct-print-art">'+art(c,true)+'</div><div><p class="cb-kicker">Exact Printing</p><h1>'+esc(c.name)+'</h1><p class="cb-lead">'+esc(metadata(c))+'</p>'+
         btn('chase-save',saved?'Remove from Want List':'Save to Want List','cb-secondary','data-key="'+esc(key)+'" aria-pressed="'+saved+'"')+'<p data-want-status role="status" class="cb-sub"></p><h2>Where to Find It</h2>'+
         (active+singles||'<p class="cb-sub">This Printing Has No Pack or Single Listing.</p>')+
         (r.recorded?'<div class="ct-reference"><strong>Mystery Edition Reference Pool</strong><p>This Printing Appears in the Archived Mystery Edition Pool.</p>'+link('latch/mystery','Try Mystery Edition '+icon('arrow',15),'cb-textlink')+'</div>':'')+(samples?'<div class="ct-reference"><strong>Demo Opening</strong><p>See This Printing in the Opening Sequence.</p>'+samples+'</div>':'')+'</div></div></div>';

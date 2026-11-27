@@ -19,7 +19,7 @@ const n = (x: number) => x.toLocaleString("en-US");
 const PACKS = [
   { id: "mystery", name: "Mystery", cards: "1 Card", tags: ["Modern", "English"], line: "One Modern English Card per Rip." },
   { id: "booster", name: "Booster", cards: "5 Cards", tags: ["Modern", "English", "Japanese"], line: "Five Cards per Rip, Just Like a Real Booster." },
-  { id: "gold", name: "Gold", cards: "1 Card", tags: ["Modern", "Vintage", "English", "Japanese"], line: "The Premium Pull With the Biggest Hits." },
+  { id: "gold", name: "Gold", cards: "1 Card", tags: ["Modern", "Vintage", "English", "Japanese"], line: "The Premium Pull With the Biggest Chases." },
   { id: "japanese", name: "Japanese", cards: "1 Card", tags: ["Modern", "Japanese"], line: "Modern Japanese Cards and Their Stunning Art." },
   { id: "wildcard", name: "Wildcard", cards: "1 Card", tags: ["Modern", "Vintage", "English", "Japanese"], line: "Anything Can Happen. That's the Point." },
 ];

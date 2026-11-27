@@ -5,7 +5,7 @@
    - Epic and Legendary pulls get a "Big Hit" badge and, at most once every 20 seconds, a short
      spotlight over the section (only while it is on screen; never with reduced motion)
    - a "Biggest Hit Today" tile from /api/recent (revealed, paid pulls only). Without a Rare or better
-     pull today it shows the highest-Cardbits card in the packs' Top Hits as "Top Hit in the Packs", so the
+     pull today it shows the highest-Cardbits card in the packs' Top Chases as "Top Hit Right Now", so the
      tile never drops out (Trevor, Nov 27).
    It shows nothing the feed doesn't already show: no customer names, no retail values. */
 (() => {
@@ -140,7 +140,7 @@
       hit.hidden = false;
       section.classList.add('cbx-has-hit');
     }
-    // Highest Cardbits offer among the pack tiles' Top Hits (same cards and amounts the page already shows).
+    // Highest Cardbits offer among the pack tiles' Top Chases (same cards and amounts the page already shows).
     function poolHit() {
       let best = null;
       for (const a of document.querySelectorAll('#cardbit-store .cb-chase-link')) {
@@ -149,7 +149,7 @@
         if (src && amount > 0 && (!best || amount > best.amount)) best = { amount, src, a };
       }
       if (!best) return null;
-      return { label: 'Top Hit in the Packs', r: -1, color: '#00e6e1', src: best.src, name: best.a.querySelector('.cb-pull-name')?.textContent || '', meta: best.amount.toLocaleString('en-US') + ' Cardbits', href: best.a.getAttribute('href') || '' };
+      return { label: 'Top Hit Right Now', r: -1, color: '#00e6e1', src: best.src, name: best.a.querySelector('.cb-pull-name')?.textContent || '', meta: best.amount.toLocaleString('en-US') + ' Cardbits', href: best.a.getAttribute('href') || '' };
     }
     function feedHit(items) {
       const top = poolHit();

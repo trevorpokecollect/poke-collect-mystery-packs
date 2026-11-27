@@ -1,7 +1,7 @@
 /*
  * Cardbit standalone site: app-style navigation on phones (Trevor, Nov 26 2026).
  *
- * - A slim bottom tab bar replaces the header's menu row: Packs, Top Hits, Card Shop, Pack Pass, How It Works.
+ * - A slim bottom tab bar replaces the header's menu row: Packs, Chase, Card Shop, Pack Pass, How It Works.
  * - The round floating buttons (Chat, Daily Giveaway, Ask Latch, Daily Rewards) become small, static buttons
  *   in one slim row just above the tab bar. Each widget keeps its own button and panel; this script only places
  *   the buttons (inline !important styles beat the widgets' own measured offsets).
@@ -23,7 +23,7 @@
   // Same five destinations as the desktop header menu.
   const TABS = [
     { id: 'packs', href: '/packs', label: 'Packs' },
-    { id: 'chase', href: '/chase', label: 'Top Hits' },
+    { id: 'chase', href: '/chase', label: 'Chase' },
     { id: 'shop', href: '/shop', label: 'Card Shop' },
     { id: 'pass', href: '/pass', label: 'Pack Pass', pass: true },
     { id: 'help', href: '/help', label: 'How It Works', short: 'Help' },
