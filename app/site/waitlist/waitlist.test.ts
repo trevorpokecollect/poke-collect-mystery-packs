@@ -129,3 +129,18 @@ describe("waitlist source label", () => {
     expect(sourceLabel({})).toBeNull();
   });
 });
+
+describe("browse pages in coming-soon mode", () => {
+  it("How It Works, Packs, Shop and Cardbits open to everyone; account pages stay on the waitlist", async () => {
+    const prev = { ...process.env };
+    Object.assign(process.env, on, { CARDBIT_SITE: "on" });
+    try {
+      const { loader } = await import("../../routes/$");
+      const get = (path: string) => loader({ request: new Request("https://cardbit.com/" + path), params: { "*": path } } as never) as Promise<Response>;
+      for (const p of ["help", "packs", "packs/mystery", "shop", "cardbits"]) expect((await get(p)).status, p).toBe(200);
+      for (const p of ["vault", "account", "orders"]) expect((await get(p)).headers.get("Location"), p).toBe("/");
+    } finally {
+      process.env = prev;
+    }
+  });
+});
