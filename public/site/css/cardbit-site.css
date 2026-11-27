@@ -241,3 +241,52 @@
 #cardbit-store .cb-pull-quote,#cardbit-store .cb-art-value{text-align:center}
 #cardbit-store .cb-pull-quote .cb-reference,#cardbit-store .cb-art-value .cb-reference{justify-content:center}
 .cb-reference .cb-unit{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Card and pack images: no tilt, just a soft highlight with a light holo sheen (Trevor, Nov 27 2026).
+   The theme scripts still report the pointer position (--scan-x/y, --cbf-mx/my); nothing rotates or scales.
+   Pointer-only and off with reduced motion, because those scripts never start then. */
+#cardbit-store [data-cb-tilting] .cb-scan-face,
+#cardbit-store .cbf-tilt-host.cbf-tilting,
+#cardbit-store .cbf-sheen.cbf-tilting { transform:none !important; }
+#cardbit-store .cbf-sheen::after, #cardbit-store .cbf-sheen.cbf-tilting::after { display:none; }
+#cardbit-store .cbf-sheen:is(:hover,:focus-visible,.cbf-tilting) { box-shadow:none; }
+#cardbit-store [data-cb-scan] .cb-scan-face::after,
+#cardbit-store .cb-chase-link .cb-mini-scan::after {
+  content:""; position:absolute; inset:0; z-index:2; border-radius:inherit; pointer-events:none; opacity:0;
+  transition:opacity .25s ease-out;
+  background:
+    radial-gradient(circle at var(--scan-x,var(--cbf-mx,50%)) var(--scan-y,var(--cbf-my,30%)), #ffffff2e 0%, #ffffff00 46%),
+    linear-gradient(115deg, #ffffff00 30%, #7af7ff14 42%, #c6acfc14 50%, #ffd27a12 58%, #ffffff00 70%);
+  background-size:100% 100%, 240% 240%;
+  background-position:center, calc(100% - var(--scan-x,var(--cbf-mx,50%))) calc(100% - var(--scan-y,var(--cbf-my,50%)));
+  mix-blend-mode:screen;
+}
+#cardbit-store [data-cb-tilting] .cb-scan-face::after,
+#cardbit-store .cb-chase-link.cbf-tilting .cb-mini-scan::after { opacity:1; }
+#cardbit-store .cb-chase-link .cb-mini-scan { overflow:hidden; }
+#cardbit-store [data-cb-scan] .cb-scan-face { transition:box-shadow .25s ease-out; }
+#cardbit-store [data-cb-tilting] .cb-scan-face { box-shadow:0 6px 16px #03071080; }
+/* Pack wrappers: same soft highlight, clipped to the wrapper art. */
+#cardbit-store .cbf-holo {
+  background:
+    radial-gradient(circle at var(--cbf-mx,50%) var(--cbf-my,40%), #ffffff38 0%, #ffffff00 42%),
+    linear-gradient(115deg, #ffffff00 28%, #7af7ff1a 42%, #c6acfc1a 50%, #ffd27a17 58%, #ffffff00 72%);
+  background-size:100% 100%, 240% 240%;
+  background-position:center, calc(100% - var(--cbf-mx,50%)) calc(100% - var(--cbf-my,50%));
+  mix-blend-mode:screen;
+}
+#cardbit-store .cbf-tilt-host.cbf-tilting > .cbf-holo { opacity:1; }
+@media (prefers-reduced-motion: reduce) {
+  #cardbit-store [data-cb-scan] .cb-scan-face::after, #cardbit-store .cb-chase-link .cb-mini-scan::after { display:none; }
+}
+
+/* Top Hits page tiles match the pack pool tiles: art with its Cardbits value, name, printing, where to find it. */
+#cardbit-store .ct-chase-tile { display:block; color:inherit; text-decoration:none; }
+#cardbit-store .ct-chase-tile h3 { font-family:var(--cb-display); font-weight:800; }
+#cardbit-store .ct-chase-tile .ct-chase-where { display:block; margin-top:4px; font-size:12px; font-weight:650; line-height:1.35; color:#92dcd8; }
+#cardbit-store .ct-chase-tile .ct-saved { margin-top:4px; }
+
+/* Home Top Hits rows: no tier, so the card number shows instead (phones). */
+@media (max-width: 700px) {
+  #cardbit-store .cb-chase-link .cb-pull-meta { font-size:.68rem; }
+}

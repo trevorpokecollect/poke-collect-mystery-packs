@@ -55,8 +55,9 @@
 
   function create(ctx,mode,getRows,tile) {
     const {esc,icon}=ctx, chase=mode==='chase', key='cardbit:catalog-filters:v2:'+mode;
-    const keys=Object.keys(fields).filter(k=>chase ? k!=='kind' : !['edition','tier'].includes(k));
-    const state=defaults(), size=chase?12:20;
+    const keys=Object.keys(fields).filter(k=>chase ? /* SITE */ !['kind','tier'].includes(k) : !['edition','tier'].includes(k));
+    /* SITE */ const start=()=>({...defaults(),sort:chase?'high':'featured'});
+    const state=start(), size=chase?12:20;
     let expanded=false;
     function persist(){try{sessionStorage.setItem(key,JSON.stringify(state));}catch{}}
     try {
@@ -117,14 +118,14 @@
         cmd('next','Next',state.page===last?' disabled':'','cb-secondary')+'</div>':'');
     }
     function page() {
-      const model=search(getRows(),state,keys), count=activeCount(), title=chase?'Chase':'Shop Singles';
+      const model=search(getRows(),state,keys), count=activeCount(), title=chase?/* SITE */ 'Top Hits':'Shop Singles';
       const range='<details class="cf-group" open><summary>'+priceLabel+' <small>Cardbits</small></summary><div class="cf-range">'+
         ['min','max'].map((k,i)=>'<label>'+(i?'Maximum':'Minimum')+'<input inputmode="numeric" type="text" data-cf-bound="'+k+'" value="'+esc(state[k])+'" placeholder="'+(i?'Any':'0')+'"></label>').join('')+
         '</div><div class="cf-bands">'+bands.map(([label,min,max])=>cmd('band',label,attr('min',min)+attr('max',max)+' aria-pressed="'+(state.min===min&&state.max===max)+'"')).join('')+'</div></details>';
       return '<div class="cb-wrap cb-page cf-page" data-catalog="'+mode+'"><h1>'+title+'</h1><div class="cf-toolbar"><label class="cf-search">'+icon('search',19)+
         '<input type="search" data-cf-query aria-label="Search cards" placeholder="Search cards, numbers, or sets" value="'+esc(state.q)+'"></label>'+
         cmd('toggle','Filters'+(count?' ('+count+')':''),' aria-controls="cf-sidebar" aria-expanded="'+expanded+'"','cf-toggle')+
-        '<label class="cf-sort">Sort<select data-cf-sort>'+[['featured','Featured'],['az','Name A–Z'],['low',chase?'Value: low to high':'Price: low to high'],['high',chase?'Value: high to low':'Price: high to low']].map(([k,v])=>'<option value="'+k+'"'+(state.sort===k?' selected':'')+'>'+v+'</option>').join('')+'</select></label></div>'+
+        '<label class="cf-sort">Sort<select data-cf-sort>'+/* SITE */(chase?[['high','Cardbits: High to Low'],['low','Cardbits: Low to High'],['featured','Featured'],['az','Name A–Z']]:[['featured','Featured'],['az','Name A–Z'],['low','Price: low to high'],['high','Price: high to low']]).map(([k,v])=>'<option value="'+k+'"'+(state.sort===k?' selected':'')+'>'+v+'</option>').join('')+'</select></label></div>'+
         '<div class="cf-layout"><aside id="cf-sidebar" class="cf-sidebar" data-expanded="'+expanded+'" aria-label="'+title+' filters"><h2>Filters</h2>'+range+
         keys.map(k=>group(k,model.options[k])).join('')+cmd('done','Show results','','cb-primary cf-done')+'</aside>'+
         '<section class="cf-list" aria-label="Card results"><div class="cf-chips" data-cf-chips>'+chips()+'</div><div data-cf-results>'+results(model)+'</div></section></div></div>';
@@ -175,7 +176,7 @@
       else{
         state.page=1;
         if(action==='clear'){
-          Object.assign(state,defaults());
+          Object.assign(state,/* SITE */ start());
           box.querySelectorAll('[data-cf-find]').forEach(el=>{el.value='';input(el);});
         }
         if(action==='remove')state.selected[el.dataset.group]=state.selected[el.dataset.group].filter(v=>v!==el.dataset.value);
@@ -185,7 +186,7 @@
       const firstNew=(state.page-1)*size;
       update();
       if(!el.isConnected){
-        const focus=action==='more'?box.querySelectorAll('.ct-chase-card')[firstNew]:
+        const focus=action==='more'?box.querySelectorAll('.ct-chase-card,.ct-chase-tile')[firstNew]:
           ['prev','next'].includes(action)?box.querySelector('.cf-list .cb-card-tile'):box.querySelector('[data-cf-query]');
         focus?.focus();
       }
@@ -252,14 +253,23 @@
       for(const r of searchRows)r.wanted=saved.has(r.key);
       return searchRows;
     }
-    function chaseTile({row,variants},index){
+    function chaseTile({row,variants,price},index){
       const c=variants[0].card;
+      /* SITE */ return siteChaseTile(row,variants,price,c,index);
       const tiers=new Set(variants.filter(v=>v.values.edition).map(v=>v.values.tier||''));
       const badge=tiers.size===1 ? ctx.tierMarkup({tier:[...tiers][0]}) : '';
       const places=[...new Set(variants.map(v=>v.values.edition || v.values.availability))].join(' · ');
       return link('chase/'+enc(row.key),art(c,/* SITE */ index<15)+'<div><strong>'+esc(c.name || c.title)+'</strong>'+badge+
         '<small>'+esc([c.set,c.number].filter(Boolean).join(' · '))+'</small><small>'+esc([c.printing,language(c)].filter(Boolean).join(' · '))+'</small>'+
         '<span>'+esc(places)+'</span>'+(row.wanted?'<b class="ct-saved">Saved</b>':'')+'</div>','ct-chase-card');
+    }
+    /* SITE */ function siteChaseTile(row,variants,price,c,index){
+      const editions=[...new Set(variants.map(v=>v.values.edition).filter(Boolean))];
+      const single=variants.some(v=>v.values.availability==='Available single');
+      const where=[editions.length===1?editions[0]:editions.length?'In '+editions.length+' Packs':'',single?'Single Available':''].filter(Boolean).join(' · ')||'Unavailable';
+      const lang=language(c), details=[c.set,c.number,c.printing,lang!=='English'?lang:''].filter(Boolean).join(' · ');
+      const value='<span class="cb-art-value">'+(price==null?'Offer Unavailable':esc(price.toLocaleString('en-US')+' Cardbits'))+'</span>';
+      return link('chase/'+enc(row.key),ctx.frontScan(c,index<15)+value+'<h3>'+esc(c.name || c.title)+'</h3><small>'+esc(details)+'</small><span class="ct-chase-where">'+esc(where)+'</span>'+(row.wanted?'<b class="ct-saved">Saved</b>':''),'cb-card-tile ct-chase-tile');
     }
     const filters=catalog.create(ctx,'chase',chaseRows,chaseTile);
     function chasePage(key){return key?chaseDetail(key):filters.page();}
@@ -270,7 +280,7 @@
       const samples=r.samples.filter(s=>s.id!=='mystery'||!r.recorded).map(ed=>link('latch/'+enc(ed.id),'Try '+esc(ed.name)+' Opening '+icon('arrow',15),'cb-textlink')).join(' ');
       const active=r.packs.map(p=>link('packs/'+enc(p.id),'<b>'+esc(packTitle(p))+'</b>'+[...r.tiersByPack.get(p.id)].map(tier=>ctx.tierMarkup({tier})).join('')+'<span>View Pack '+icon('arrow',15)+'</span>','ct-option')).join('');
       const singles=r.singles.map(s=>link('shop/'+enc(s.id),'<b>Buy This Printing as a Single</b><span>View Single '+icon('arrow',15)+'</span>','ct-option')).join('');
-      return '<div class="cb-wrap cb-page cb-collector">'+bread('chase','Chase')+'<div class="ct-print"><div class="ct-print-art">'+art(c,true)+'</div><div><p class="cb-kicker">Exact Printing</p><h1>'+esc(c.name)+'</h1><p class="cb-lead">'+esc(metadata(c))+'</p>'+
+      return '<div class="cb-wrap cb-page cb-collector">'+bread('chase',/* SITE */ 'Top Hits')+'<div class="ct-print"><div class="ct-print-art">'+art(c,true)+'</div><div><p class="cb-kicker">Exact Printing</p><h1>'+esc(c.name)+'</h1><p class="cb-lead">'+esc(metadata(c))+'</p>'+
         btn('chase-save',saved?'Remove from Want List':'Save to Want List','cb-secondary','data-key="'+esc(key)+'" aria-pressed="'+saved+'"')+'<p data-want-status role="status" class="cb-sub"></p><h2>Where to Find It</h2>'+
         (active+singles||'<p class="cb-sub">This Printing Has No Pack or Single Listing.</p>')+
         (r.recorded?'<div class="ct-reference"><strong>Mystery Edition Reference Pool</strong><p>This Printing Appears in the Archived Mystery Edition Pool.</p>'+link('latch/mystery','Try Mystery Edition '+icon('arrow',15),'cb-textlink')+'</div>':'')+(samples?'<div class="ct-reference"><strong>Demo Opening</strong><p>See This Printing in the Opening Sequence.</p>'+samples+'</div>':'')+'</div></div></div>';

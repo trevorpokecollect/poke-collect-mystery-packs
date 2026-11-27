@@ -4,8 +4,9 @@
    - new pulls slide in face down and flip over, with a glow in their tier color
    - Epic and Legendary pulls get a "Big Hit" badge and, at most once every 20 seconds, a short
      spotlight over the section (only while it is on screen; never with reduced motion)
-   - a "Biggest Hit Today" tile from /api/recent (revealed, paid pulls only). With no live pulls yet
-     it shows the best card currently in the feed as "Top Chase Right Now".
+   - a "Biggest Hit Today" tile from /api/recent (revealed, paid pulls only). Without a Rare or better
+     pull today it shows the highest-Cardbits card in the packs' Top Hits as "Top Hit in the Packs", so the
+     tile never drops out (Trevor, Nov 27).
    It shows nothing the feed doesn't already show: no customer names, no retail values. */
 (() => {
   'use strict';
@@ -130,7 +131,7 @@
       const key = [h.label, h.name, h.src, h.meta, h.when].join('|');
       if (hit.dataset.key === key) return;
       hit.dataset.key = key;
-      hit.style.setProperty('--cbx-tc', COLORS[Math.max(0, h.r)]);
+      hit.style.setProperty('--cbx-tc', h.color || COLORS[Math.max(0, h.r)]);
       const inner = '<i class="cbx-rays" aria-hidden="true"></i><span class="cbx-hit-label">' + esc(h.label) + '</span>' +
         '<img alt="' + esc(h.name) + '" src="' + esc(h.src) + '" loading="lazy" decoding="async">' +
         '<strong class="cbx-hit-name">' + esc(h.name) + '</strong><span class="cbx-hit-meta">' + esc(h.meta) + '</span>' +
@@ -139,7 +140,20 @@
       hit.hidden = false;
       section.classList.add('cbx-has-hit');
     }
+    // Highest Cardbits offer among the pack tiles' Top Hits (same cards and amounts the page already shows).
+    function poolHit() {
+      let best = null;
+      for (const a of document.querySelectorAll('#cardbit-store .cb-chase-link')) {
+        const amount = Number((a.querySelector('.cb-pull-amount')?.textContent || '').replace(/[^\d]/g, ''));
+        const src = safeSrc(a.querySelector('.cb-mini-scan img')?.src);
+        if (src && amount > 0 && (!best || amount > best.amount)) best = { amount, src, a };
+      }
+      if (!best) return null;
+      return { label: 'Top Hit in the Packs', r: -1, color: '#00e6e1', src: best.src, name: best.a.querySelector('.cb-pull-name')?.textContent || '', meta: best.amount.toLocaleString('en-US') + ' Cardbits', href: best.a.getAttribute('href') || '' };
+    }
     function feedHit(items) {
+      const top = poolHit();
+      if (top) return drawHit(top);
       let best = null;
       for (const li of items) {
         const a = li.querySelector('.cb-feed-card');
@@ -148,7 +162,7 @@
         if (src && (!best || r > best.r)) best = { r, src, a };
       }
       if (!best || best.r < 2) return drawHit(null);
-      drawHit({ label: 'Top Chase Right Now', r: best.r, src: best.src, name: best.a.querySelector('.cb-pull-name')?.textContent || '', meta: NAMES[best.r] || '', href: best.a.getAttribute('href') || '' });
+      drawHit({ label: 'Top Hit Right Now', r: best.r, src: best.src, name: best.a.querySelector('.cb-pull-name')?.textContent || '', meta: NAMES[best.r] || '', href: best.a.getAttribute('href') || '' });
     }
     function ago(iso) {
       const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);

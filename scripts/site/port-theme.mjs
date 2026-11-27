@@ -85,6 +85,18 @@ const PATCHES = {
     ["    function reviewParcel(){\n", "    function reviewParcel(){\n      /* SITE */ if(siteShip())return siteReview();\n"],
     ["    async function commitParcel(){\n", "    async function commitParcel(){\n      /* SITE */ if(siteShip())return siteCommit();\n"],
     ["      if(el.hasAttribute('data-parcel-copy')){", "      /* SITE */ if(el.hasAttribute('data-parcel-field')){address[el.dataset.parcelField]=el.value;saveAddress();if(ctx.root().querySelector('[data-parcel-summary] [role=alert]'))updateSummary();return true;}\n      if(el.hasAttribute('data-parcel-copy')){"],
+    // Chase (site): no Pool Tier filter, highest Cardbits first by default, Title Case Cardbits sort labels (Trevor, Nov 27).
+    ["    const keys=Object.keys(fields).filter(k=>chase ? k!=='kind' : !['edition','tier'].includes(k));", "    const keys=Object.keys(fields).filter(k=>chase ? /* SITE */ !['kind','tier'].includes(k) : !['edition','tier'].includes(k));"],
+    ["    const state=defaults(), size=chase?12:20;", "    /* SITE */ const start=()=>({...defaults(),sort:chase?'high':'featured'});\n    const state=start(), size=chase?12:20;"],
+    ["          Object.assign(state,defaults());", "          Object.assign(state,/* SITE */ start());"],
+    ["[['featured','Featured'],['az','Name A–Z'],['low',chase?'Value: low to high':'Price: low to high'],['high',chase?'Value: high to low':'Price: high to low']].map(", "/* SITE */(chase?[['high','Cardbits: High to Low'],['low','Cardbits: Low to High'],['featured','Featured'],['az','Name A–Z']]:[['featured','Featured'],['az','Name A–Z'],['low','Price: low to high'],['high','Price: high to low']]).map("],
+    ["box.querySelectorAll('.ct-chase-card')[firstNew]", "box.querySelectorAll('.ct-chase-card,.ct-chase-tile')[firstNew]"],
+    // Chase tiles look like the pack pool tiles: art, Cardbits value, name, printing, where to find it. No tier label (tiers are pack-specific).
+    ["    function chaseTile({row,variants},index){\n      const c=variants[0].card;\n", "    function chaseTile({row,variants,price},index){\n      const c=variants[0].card;\n      /* SITE */ return siteChaseTile(row,variants,price,c,index);\n"],
+    ["    const filters=catalog.create(ctx,'chase',chaseRows,chaseTile);\n", "    /* SITE */ function siteChaseTile(row,variants,price,c,index){\n      const editions=[...new Set(variants.map(v=>v.values.edition).filter(Boolean))];\n      const single=variants.some(v=>v.values.availability==='Available single');\n      const where=[editions.length===1?editions[0]:editions.length?'In '+editions.length+' Packs':'',single?'Single Available':''].filter(Boolean).join(' · ')||'Unavailable';\n      const lang=language(c), details=[c.set,c.number,c.printing,lang!=='English'?lang:''].filter(Boolean).join(' · ');\n      const value='<span class=\"cb-art-value\">'+(price==null?'Offer Unavailable':esc(price.toLocaleString('en-US')+' Cardbits'))+'</span>';\n      return link('chase/'+enc(row.key),ctx.frontScan(c,index<15)+value+'<h3>'+esc(c.name || c.title)+'</h3><small>'+esc(details)+'</small><span class=\"ct-chase-where\">'+esc(where)+'</span>'+(row.wanted?'<b class=\"ct-saved\">Saved</b>':''),'cb-card-tile ct-chase-tile');\n    }\n    const filters=catalog.create(ctx,'chase',chaseRows,chaseTile);\n"],
+    // Customer copy says Top Hits, not Chase (Trevor, Nov 27).
+    ["title=chase?'Chase':'Shop Singles';", "title=chase?/* SITE */ 'Top Hits':'Shop Singles';"],
+    ["bread('chase','Chase')", "bread('chase',/* SITE */ 'Top Hits')"],
   ],
   'cardbit-collector-pages.js': [
     // Vault market data on the site: per-card labels and the Vault Portfolio panel read /api/portfolio.
@@ -155,6 +167,19 @@ const PATCHES = {
     ["    function draw() {\n      const markup = visible.map(", "    function draw() {\n      /* SITE */ if (live) return drawLive();\n      const markup = visible.map("],
     ["        toggle.hidden = printings.size <= 5;", "        toggle.hidden = live ? true : printings.size <= 5;"],
     ["    toggle.addEventListener('click',()=>{paused=!paused;syncControl();},{signal});\n", LIVE_PULLS + "    toggle.addEventListener('click',()=>{paused=!paused;syncControl();},{signal});\n"],
+    // Top Chases (site): ranked by the Cardbits offer shown, no tier label or tier ring (tiers only appear in pools, Trevor Nov 27).
+    ["    esc, enc, link, btn, art, asset, artURL, icon, tierMarkup,", "    esc, enc, link, btn, art, /* SITE */ frontScan, asset, artURL, icon, tierMarkup,"],
+    ["      printings.set(key, {card, key, value});", "      printings.set(key, {card, key, value: /* SITE */ cardBuyback(card).amount ?? value});"],
+    ["    const color = /^#[\\da-f]{6}$/i.test(tier?.color || '') ? tier.color : '';", "    const color = /* SITE */ !isChase && /^#[\\da-f]{6}$/i.test(tier?.color || '') ? tier.color : '';"],
+    ["    const meta = [tierMarkup(card), esc(isChase ? card.number || cardSet(card) : packTitle(pack))]", "    const meta = [/* SITE */ isChase ? '' : tierMarkup(card), esc(isChase ? card.number || cardSet(card) : packTitle(pack))]"],
+    ["isChase ? card.printing : '', tierLabel,", "isChase ? card.printing : '', /* SITE */ isChase ? '' : tierLabel,"],
+    // Customer copy says Top Hits, not Chase (Trevor, Nov 27). The /chase URLs stay.
+    ["nav('chase','Chase')", "nav('chase',/* SITE */ 'Top Hits')"],
+    ["link('chase','Chase')", "link('chase',/* SITE */ 'Top Hits')"],
+    ["'<p class=\"cb-chase-heading\">Top Chases</p>", "'<p class=\"cb-chase-heading\">'+/* SITE */ 'Top Hits</p>"],
+    ["'Sold Out' : 'Chases Unavailable')", "'Sold Out' : /* SITE */ 'Top Hits Unavailable')"],
+    ["heading.textContent='Chases Unavailable';", "heading.textContent=/* SITE */ 'Top Hits Unavailable';"],
+    ["title='Chase';}", "title=/* SITE */ 'Top Hits';}"],
   ],
   'cardbit-opening.js': [
     // Site: XP and Sparks earned by this pack, above the pulls (public/site/js/cardbit-site-store.js renders them).
@@ -320,6 +345,9 @@ const PAGE_COPY = {
     // Pack Pass monthly plans (shown only while plans are open).
     ["<p class=\"hiw-small\">XP has no cash value.", "<!--plan:start--><h3>{{PLAN_NAME}}</h3>\n      <p>Want Cardbits every month? <a href=\"{{PLAN_PATH}}\">{{PLAN_NAME}}</a> adds a set amount of Cardbits plus bonus Cardbits each month, with extra XP and Sparks on paid packs, a portrait frame around your icon, animated emotes, card sleeves and reveal effects for your openings on Pro and Ultimate, free Ship Together shipping each month on Pro and Ultimate, +5% Cardbits on all buybacks on Ultimate, a Discord role and a members' chat room. Plans are Plus ($24.99), Pro ($49.99) and Ultimate ($199.99), renew monthly until you cancel, and you can cancel any time on the {{PLAN_NAME}} page. A plan never adds Daily Spins or giveaway entries; those stay free for everyone.</p><!--plan:end-->\n      <p class=\"hiw-small\">XP has no cash value."],
     ["<details><summary>How Is a Buyback Offer Decided?</summary>", "<!--plan:start--><details><summary>How Do I Cancel {{PLAN_NAME}}?</summary><p>Go to the <a href=\"{{PLAN_PATH}}\">{{PLAN_NAME}}</a> page and choose Cancel Renewal, or email Support@cardbit.com. Cancel at least a day before your renewal date to avoid the next charge. You won't be charged again, Cardbits already added stay in your balance, and your perks last until the end of the month you paid for.</p></details><!--plan:end-->\n      <details><summary>How Is a Buyback Offer Decided?</summary>"],
+    // Top Hit, not Chase (Trevor, Nov 27).
+    ["Chase<b>3%</b>", "Top Hit<b>3%</b>"],
+    ["<span>Chase Cards Left</span>", "<span>Top Hit Cards Left</span>"],
   ],
   'policies.html': [
     // Verified Shuffle (site only).
