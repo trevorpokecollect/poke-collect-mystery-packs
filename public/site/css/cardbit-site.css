@@ -285,8 +285,3 @@
 #cardbit-store .ct-chase-tile h3 { font-family:var(--cb-display); font-weight:800; }
 #cardbit-store .ct-chase-tile .ct-chase-where { display:block; margin-top:4px; font-size:12px; font-weight:650; line-height:1.35; color:#92dcd8; }
 #cardbit-store .ct-chase-tile .ct-saved { margin-top:4px; }
-
-/* Home Top Chases rows: no tier, so the card number shows instead (phones). */
-@media (max-width: 700px) {
-  #cardbit-store .cb-chase-link .cb-pull-meta { font-size:.68rem; }
-}

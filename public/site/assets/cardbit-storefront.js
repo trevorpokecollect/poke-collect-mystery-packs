@@ -283,14 +283,14 @@
     const hasOffer = amount !== null;
     const tier = window.CardbitOpening?.tierFor(card);
     const tierLabel = tier?.name || (typeof card.tier === 'string' ? card.tier.trim() : '');
-    const color = /* SITE */ !isChase && /^#[\da-f]{6}$/i.test(tier?.color || '') ? tier.color : '';
-    const meta = [/* SITE */ isChase ? '' : tierMarkup(card), esc(isChase ? card.number || cardSet(card) : packTitle(pack))]
+    const color = /^#[\da-f]{6}$/i.test(tier?.color || '') ? tier.color : '';
+    const meta = [tierMarkup(card), esc(isChase ? card.number || cardSet(card) : packTitle(pack))]
       .filter(Boolean).join('<span aria-hidden="true"> · </span>');
     const content = miniature(card)+'<span class="cb-pull-copy"><strong class="cb-pull-name">'+esc(shortName(card))+
       '</strong><span class="cb-pull-meta">'+meta+'</span></span><span class="cb-pull-quote">'+
       (hasOffer ? '<strong class="cb-pull-amount">'+esc(quote)+'</strong>' :
         '<span class="cb-offer-unavailable">'+esc(quote)+'</span>')+'</span>';
-    const description = [cardName(card), isChase ? cardSet(card) : packTitle(pack), isChase ? card.printing : '', /* SITE */ isChase ? '' : tierLabel,
+    const description = [cardName(card), isChase ? cardSet(card) : packTitle(pack), isChase ? card.printing : '', tierLabel,
       quote].filter(Boolean).join(' · ');
     const attributes = 'aria-label="'+esc(description)+'"'+(color ? ' style="--cb-pull-tier:'+color+'"' : '');
     return link('chase/'+enc(key),content,isChase ? 'cb-chase-link'+(color?' cb-tier-glow':'') : 'cb-feed-card',attributes);
@@ -1249,8 +1249,19 @@
   function fixtureOdds(pack) {
     return poolOdds({...pack,packsRemaining:pack.remaining}, pack.cards || [], pack.drawModel === 'uniform-without-replacement');
   }
+  /* SITE */ function mergeCopies(cards) {
+    const groups = new Map();
+    for (const card of cards || []) {
+      const key = [window.CardbitCollectorRules.printingKey(card), card.condition || '', tierName(card)].join('|');
+      const group = groups.get(key);
+      if (!group) { groups.set(key, {...card}); continue; }
+      group.remaining = (Number(group.remaining) || 0) + (Number(card.remaining) || 0);
+      group.packsContaining = Number.isSafeInteger(group.packsContaining) && Number.isSafeInteger(card.packsContaining) ? group.packsContaining + card.packsContaining : undefined;
+    }
+    return [...groups.values()];
+  }
   function fixturePoolPage(pack, walkthrough, tier = '') {
-    const rows = window.CardbitPackStage && pack.cards ? window.CardbitPackStage.aggregate(pack.cards, pack.cardsPerPack) : (pack.cards || []);
+    const rows = /* SITE */ site() ? mergeCopies(pack.cards) : window.CardbitPackStage && pack.cards ? window.CardbitPackStage.aggregate(pack.cards, pack.cardsPerPack) : (pack.cards || []);
     const model = fixtureOdds(pack);
     const path = 'packs/' + enc(pack.id) + (walkthrough ? '/walkthrough' : '');
     const available = availableRows(rows).filter(card => !tier || (tierName(card) || 'Unassigned') === tier);
@@ -1273,7 +1284,7 @@
     }
     if (!walkthrough && appSeriesEnabled(pack)) return mysteryProduct(pack, portrait);
     const count = pack.cardsPerPack || 5;
-    const rows = window.CardbitPackStage && pack.cards ? window.CardbitPackStage.aggregate(pack.cards, pack.cardsPerPack) : (pack.cards || []);
+    const rows = /* SITE */ site() ? mergeCopies(pack.cards) : window.CardbitPackStage && pack.cards ? window.CardbitPackStage.aggregate(pack.cards, pack.cardsPerPack) : (pack.cards || []);
     const available = pack.remaining > 0;
     const inStock = availableRows(rows);
     const odds = fixtureOdds(pack);
