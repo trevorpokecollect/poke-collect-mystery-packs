@@ -1631,6 +1631,8 @@ model SiteOpeningFair {
   poolIds        Json // pack's remaining copy ids, ascending, at draw time
   pickIds        Json // drawn copy ids in pick order
   poolVersion    Int? // pack pool version (SiteRestock.version) in force at draw time
+  drawRule       Int          @default(1) // 1 = pick by pick (before Nov 27 2026); 2 = different printings per pack
+  poolGroups     Json? // rule 2: per pool copy, index of the first copy of the same printing
   createdAt      DateTime     @default(now())
   @@index([seedId])
 }

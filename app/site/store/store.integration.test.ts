@@ -8,7 +8,7 @@ import { sitePortfolio } from "./portfolio.server";
 import { giveDemoPacks, wipeDemo } from "../core/demo.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { setLimit, startCoolOff } from "../play/limits.server";
-import { fairDraw, fairView, rotateSeed, setClientSeed, sha256 } from "../play/fair.server";
+import { distinctDraw, fairView, rotateSeed, setClientSeed, sha256 } from "../play/fair.server";
 import { DEFAULT_TIERS, drawCopies, recentPulls, singleKey, storeAction, storeState, StoreError, tierFor, tierRules } from "./store.server";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -128,7 +128,9 @@ describe.skipIf(!url)("site store", () => {
   });
 
   it("records a verifiable draw for each opening and reveals the seed on rotate", async () => {
-    await receiveSiteIntake(db, card("st:vs", 6, "Mew"));
+    // Three printings, two copies each (different collector numbers = different printings).
+    for (const [i, name] of ["Mew", "Mewtwo", "Ditto"].entries())
+      await receiveSiteIntake(db, { ...card(`st:vs${i}`, 2, name), title: `${name} - ${i + 1}/100`, number: `${i + 1}/100` });
     await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
     await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 500, cardsPerPack: 2 } });
     await setClientSeed(db, customer.id, "my-lucky-seed");
@@ -146,9 +148,41 @@ describe.skipIf(!url)("site store", () => {
     v = await fairView(db, customer.id);
     const revealed = v.openings.find((o) => o.openingId === a.openingId)!;
     expect(sha256(revealed.serverSeed!)).toBe(revealed.serverSeedHash);
-    expect(fairDraw(revealed.poolIds, 2, revealed.serverSeed!, revealed.clientSeed, revealed.nonce)).toEqual(revealed.pickIds);
+    expect(revealed.drawRule).toBe(2);
+    const idx = distinctDraw(revealed.poolGroups, 2, revealed.serverSeed!, revealed.clientSeed, revealed.nonce)!;
+    expect(idx.map((i) => revealed.poolIds[i])).toEqual(revealed.pickIds);
+    // Never two copies of the same printing in one pack.
+    const keyOf = new Map((await db.siteCopy.findMany({ where: { id: { in: revealed.pickIds } } })).map((c) => [c.id, c.printingKey]));
+    expect(new Set(revealed.pickIds.map((id) => keyOf.get(id))).size).toBe(2);
     expect(v.active.serverSeedHash).not.toBe(before.active.serverSeedHash);
     expect(v.active.nonce).toBe(0);
+  });
+
+  it("never puts the same card twice in a multi-card pack; extra copies wait for a restock", async () => {
+    // 4 copies of Pikachu + 1 Eevee + 1 Snorlax, 2-card packs: only 2 packs can be filled with different cards.
+    for (const [i, [name, qty]] of ([["Pikachu", 4], ["Eevee", 1], ["Snorlax", 1]] as const).entries())
+      await receiveSiteIntake(db, { ...card(`st:dup${i}`, qty, name), title: `${name} - ${i + 1}/100`, number: `${i + 1}/100` });
+    await db.siteCopy.updateMany({ data: { status: "POOLED", packId: "cobalt" } });
+    await db.sitePack.update({ where: { id: "cobalt" }, data: { active: true, priceBits: 100, cardsPerPack: 2 } });
+    let pack = (await storeState(db, customer)).packs.find((p) => p.id === "cobalt")!;
+    expect(pack.remaining).toBe(2);
+    expect(pack.drawModel).toBe("distinct-printings");
+    // Pikachu is in every possible pack: 4·1 + 4·1 Pikachu packs out of 4+4+1 = 9 → each copy 2/9.
+    const pika = pack.cards.filter((c) => c.name === "Pikachu");
+    expect(pika.reduce((a, c) => a + c.chanceInPack, 0)).toBeCloseTo(8 / 9, 9);
+    let opened = 0;
+    while (pack.remaining > 0) {
+      const o = await storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" });
+      const got = await db.siteCopy.findMany({ where: { openingId: String(o.openingId) } });
+      expect(new Set(got.map((c) => c.printingKey)).size).toBe(2);
+      opened++;
+      pack = (await storeState(db, customer)).packs.find((p) => p.id === "cobalt")!;
+    }
+    expect(opened).toBeGreaterThanOrEqual(1); // 2 packs, or 1 if the first was Eevee + Snorlax
+    // Only Pikachu copies are left: no pack of two different cards, so the pack is sold out.
+    const left = await db.siteCopy.findMany({ where: { status: "POOLED", packId: "cobalt" } });
+    expect(new Set(left.map((c) => c.name))).toEqual(new Set(["Pikachu"]));
+    await expect(storeAction(db, customer, { action: "open", requestId: randomUUID(), id: "cobalt" })).rejects.toMatchObject({ code: "sold_out" });
   });
 
   it("opens packs from the pool without double-selling, sealed until revealed", async () => {

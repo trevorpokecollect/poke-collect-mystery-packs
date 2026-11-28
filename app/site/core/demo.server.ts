@@ -78,8 +78,15 @@ export async function giveDemoPacks(db: PrismaClient, actor: string, email: stri
       const openings: string[] = [];
       for (let k = 0; k < n; k++) {
         const opening = await tx.siteOpening.create({ data: { customerId: customer.id, packId: pack.id, priceBits: 0, sealed: true, demo: true } });
+        // Like paid packs (draw rule 2), a demo pack never holds the same printing twice.
         const drawn: SiteCopy[] = [];
-        for (let i = 0; i < pack.cardsPerPack; i++) drawn.push(left.splice(rand(left.length), 1)[0]);
+        for (let i = 0; i < pack.cardsPerPack; i++) {
+          const open = left.filter((c) => !drawn.some((d) => d.printingKey === c.printingKey));
+          if (!open.length) throw new DemoError(`${pack.title}'s demo pool doesn't have enough different cards for ${n} pack${n === 1 ? "" : "s"}.`);
+          const pick = open[rand(open.length)];
+          left.splice(left.indexOf(pick), 1);
+          drawn.push(pick);
+        }
         drawn.sort((x, y) => value(x) - value(y));
         for (const [i, c] of drawn.entries()) {
           const moved = await tx.siteCopy.updateMany({

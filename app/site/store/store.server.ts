@@ -9,7 +9,7 @@ import { noteShortfall } from "../marketing/klaviyo.server";
 import { priceKey } from "../core/stock.server";
 import { AGE_REQUIRED, ageConfirmed } from "../../lib/cardbit-age.server";
 import { LimitReached, PlayPaused, assertNotPaused, assertWithinLimits, playStateFor } from "../play/limits.server";
-import { drawForOpening } from "../play/fair.server";
+import { distinctOdds, distinctPacks, drawForOpening, maxDistinctPacks, printingGroups } from "../play/fair.server";
 import { currentPoolVersion, restockHistory } from "../core/restock.server";
 import { subscriberBonusForOpening } from "../play/subscriptions.server";
 import { SITE_SHOP as SITE_REWARDS_SHOP_KEY } from "../rewards/rewards.server";
@@ -80,6 +80,13 @@ function cardView(c: SiteCopy, p: Price | undefined, id: string, rules: TierRule
   };
 }
 
+/** Copies per printing (same card = same printingKey, any condition). */
+export function copiesPerPrinting(pool: readonly { printingKey: string }[]) {
+  const m = new Map<string, number>();
+  for (const c of pool) m.set(c.printingKey, (m.get(c.printingKey) ?? 0) + 1);
+  return [...m.values()];
+}
+
 export async function storeState(db: PrismaClient, customer: SiteCustomer | null) {
   const [packs, pooled, forSale] = await Promise.all([
     db.sitePack.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
@@ -93,20 +100,29 @@ export async function storeState(db: PrismaClient, customer: SiteCustomer | null
   const restocks = await restockHistory(db, packs.map((p) => p.id));
 
   const packViews = packs.map((p) => {
-    const pool = pooled.filter((c) => c.packId === p.id);
+    // Same order as the draw (copy id ascending), so odds and draw count the same packs.
+    const pool = pooled.filter((c) => c.packId === p.id).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const n = pool.length;
+    const rules = tierRules(p.tierRules);
+    const views = pool.map((c) => cardView(c, prices.get(pk(c)), c.id, rules));
+    const remaining = maxDistinctPacks(copiesPerPrinting(pool), p.cardsPerPack);
+    const odds = remaining ? distinctOdds(printingGroups(pool), p.cardsPerPack, (i) => views[i].tier ?? "Unassigned") : null;
     return {
       id: p.id,
       title: p.title,
       priceBits: p.priceBits,
       cardsPerPack: p.cardsPerPack,
       cardIds: pool.map((c) => c.id),
-      remaining: Math.floor(n / p.cardsPerPack),
+      // Packs that can still be filled with different cards; extra copies of one card wait for a restock.
+      remaining,
       remainingCards: n,
-      drawModel: "uniform-without-replacement",
+      drawModel: "distinct-printings",
+      // Chance of at least one card from each tier in one pack (exact, from the same count the draw uses).
+      tierChance: odds ? Object.fromEntries(odds.tiers) : {},
       // Verified restocks: published pool versions, newest first (version 1 = starting pool).
       restocks: restocks.get(p.id) ?? [],
-      cards: pool.map((c) => ({ ...cardView(c, prices.get(pk(c)), c.id, tierRules(p.tierRules)), remaining: 1, chanceInPack: n >= p.cardsPerPack ? p.cardsPerPack / n : 0 })),
+      // sameCard: short id shared by copies of one printing (the demo opening uses it to avoid repeats too).
+      cards: views.map((v, i) => ({ ...v, remaining: 1, chanceInPack: odds ? odds.copy[i] : 0, sameCard: createHash("sha256").update(pool[i].printingKey).digest("hex").slice(0, 12) })),
     };
   });
 
@@ -292,7 +308,8 @@ function storeTx(db: PrismaClient, customer: SiteCustomer, a: StoreAction, reqId
         await playGuard(() => assertWithinLimits(tx, customer.id, "spend", pack.priceBits));
         await lockKey(tx, `site-pack:${pack.id}`);
         const pool = await tx.siteCopy.findMany({ where: { packId: pack.id, status: "POOLED" }, orderBy: { id: "asc" } });
-        if (pool.length < pack.cardsPerPack) throw new StoreError("sold_out", "This pack has sold out.");
+        // Rule 2: every card in a pack is a different printing. A pool without enough different cards is sold out.
+        if (distinctPacks(copiesPerPrinting(pool), pack.cardsPerPack) === 0n) throw new StoreError("sold_out", "This pack has sold out.");
         const opening = await tx.siteOpening.create({
           data: { customerId: customer.id, packId: pack.id, priceBits: pack.priceBits, sealed: a.openLater === true, revealedAt: a.openLater === true ? null : new Date() },
         });

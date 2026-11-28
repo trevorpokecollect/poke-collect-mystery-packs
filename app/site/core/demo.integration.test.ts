@@ -49,10 +49,10 @@ describe.skipIf(!url)("demo panel", () => {
     await movePool(db, "t", [real[0].id], "prism");
 
     for (let i = 0; i < 8; i++) await receiveSiteIntake(db, card(`demo:${i}`, 2, `Demomon${i}`, 10 + i));
-    const demo = await db.siteCopy.findMany({ where: { name: { startsWith: "Demomon" } } });
+    const demo = await db.siteCopy.findMany({ where: { name: { startsWith: "Demomon" } }, orderBy: [{ name: "asc" }, { id: "asc" }] }); // 2 copies per printing, printings together
     expect(await markDemo(db, "t", demo.map((c) => c.id), true)).toEqual({ changed: 16 });
     for (const c of demo) await setPrice(db, "t", c.printingKey, c.condition, 300, 240);
-    await movePool(db, "t", demo.slice(0, 10).map((c) => c.id), "prism"); // 2 Booster packs of demo cards
+    await movePool(db, "t", demo.slice(0, 10).map((c) => c.id), "prism"); // 2 Booster packs of demo cards: 5 printings × 2 copies
     await publishRestock(db, "t", "prism");
 
     const rid = randomUUID();
@@ -65,6 +65,10 @@ describe.skipIf(!url)("demo panel", () => {
     await expect(giveDemoPacks(db, "t", EMAIL, "prism", 3)).rejects.toThrow(DemoError); // only 10 demo cards pooled
     const packs = await giveDemoPacks(db, "t", EMAIL, "prism", 2);
     expect(packs.openings).toHaveLength(2);
+    for (const id of packs.openings) {
+      const got = await db.siteCopy.findMany({ where: { openingId: id } });
+      expect(new Set(got.map((c) => c.printingKey)).size).toBe(got.length); // never the same card twice in a pack
+    }
     expect(await db.siteCopy.count({ where: { id: real[0].id, status: "POOLED" } })).toBe(1); // real copy untouched
 
     const vault = await giveDemoVaultCards(db, "t", EMAIL, 4);

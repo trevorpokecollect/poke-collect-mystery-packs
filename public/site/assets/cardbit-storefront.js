@@ -956,12 +956,18 @@
     let total = copies.reduce((sum, row) => sum + row.count, 0);
     if (total < size || size < 1) return [];
     const sample = [];
+    /* SITE */ // Like paid packs, a demo pack never shows the same printing twice (Trevor, Nov 27 2026).
+    const printing = card => card.sameCard ? card.sameCard : window.CardbitCollectorRules?.printingKey ? window.CardbitCollectorRules.printingKey(card) : String(card.id);
+    const used = new Set();
     for (let i=0; i<size; i++) {
+      const open = copies.filter(row => row.count > 0 && !used.has(printing(row.card)));
+      total = open.reduce((sum, row) => sum + row.count, 0);
+      if (!total) return [];
       let target = Math.floor(Math.random() * total);
-      const selected = copies.find(row => { target -= row.count; return target < 0; });
+      const selected = open.find(row => { target -= row.count; return target < 0; });
       sample.push({...selected.card, copyId:'sample-mystery-' + (i+1)});
+      used.add(printing(selected.card));
       selected.count--;
-      total--;
     }
     const ranks=window.CardbitPackStage?.tiers;
     return ranks ? sample.sort((a,b)=>(a.cardbitValue??0)-(b.cardbitValue??0) || ranks.indexOf(a.tier)-ranks.indexOf(b.tier)) : sample;
@@ -1246,7 +1252,25 @@
     };
   }
 
+  /* SITE */ function chanceText(x) {
+    if (!Number.isFinite(x) || x < 0) return null;
+    if (x > 0 && x < 0.00005) return '<0.01%';
+    if (x < 1 && x > 0.99995) return '>99.99%';
+    return (Math.round(x * 10000) / 100).toLocaleString('en-US') + '%';
+  }
+  /* SITE */ function distinctOdds(pack) {
+    // Rule 2 (different cards in every pack): the server counts every possible pack exactly and sends each
+    // tier's chance of at least one card and each copy's chance; a merged tile adds its copies' chances.
+    if (!(pack.remaining > 0)) return {message:'There Are No Complete Packs Left.'};
+    const chance = pack.tierChance || {};
+    const names = new Map();
+    for (const [name, x] of Object.entries(chance)) names.set(tierName({tier:name}) || 'Unassigned', x);
+    const assigned = [...names.keys()].some(name => name !== 'Unassigned');
+    const tiers = assigned ? [...names].map(([name, x]) => ({name, odds:chanceText(x)})) : [];
+    return {tiers, card:card => chanceText(card.chanceInPack), multi:pack.cardsPerPack > 1, uniform:false};
+  }
   function fixtureOdds(pack) {
+    if (/* SITE */ pack.drawModel === 'distinct-printings') return distinctOdds(pack);
     return poolOdds({...pack,packsRemaining:pack.remaining}, pack.cards || [], pack.drawModel === 'uniform-without-replacement');
   }
   /* SITE */ function mergeCopies(cards) {
@@ -1256,6 +1280,7 @@
       const group = groups.get(key);
       if (!group) { groups.set(key, {...card}); continue; }
       group.remaining = (Number(group.remaining) || 0) + (Number(card.remaining) || 0);
+      if (Number.isFinite(group.chanceInPack) && Number.isFinite(card.chanceInPack)) group.chanceInPack += card.chanceInPack;
       group.packsContaining = Number.isSafeInteger(group.packsContaining) && Number.isSafeInteger(card.packsContaining) ? group.packsContaining + card.packsContaining : undefined;
     }
     return [...groups.values()];

@@ -8,6 +8,14 @@
 //     HMAC_SHA256(key = serverSeed, msg = `${clientSeed}:${nonce}:${i}`) → first 13 hex digits → integer
 //     mod (cards left)
 //   from the list, removing each pick before the next.
+// - Rule 2, "Different Cards" (Trevor, Nov 27 2026): a pack never holds two copies of the same printing
+//   (same TCGplayer product, finish and language, any condition). Every possible pack made of different
+//   printings is numbered and one number is picked:
+//     R = HMAC_SHA256(key = serverSeed, msg = `${clientSeed}:${nonce}`) → all 64 hex digits → integer
+//         mod (number of possible packs)
+//   See distinctDraw() for the numbering. Each possible pack is equally likely, so every copy's chance is
+//   exact and the pack page odds come from the same count. Openings made before Nov 27 2026 used rule 1
+//   (the pick-by-pick formula above) and still verify with it; every seed active at the switch was revealed.
 // - When the customer rotates the seed, we reveal the old one. Anyone can then recompute every
 //   opening made with it (the Verified Shuffle page does it in the browser).
 import { createHash, createHmac, randomBytes } from "node:crypto";
@@ -37,6 +45,117 @@ export function fairDraw<T>(pool: readonly T[], count: number, serverSeed: strin
   return out;
 }
 
+/** Current draw rule for new openings. 1 = pick by pick (before Nov 27 2026), 2 = different printings per pack. */
+export const DRAW_RULE = 2;
+
+/**
+ * Group label for each copy of an id-ordered pool: the position of the first copy with the same printing.
+ * Copies with the same label are the same card; the labels reveal nothing else.
+ */
+export function printingGroups(ordered: readonly { printingKey: string }[]) {
+  const first = new Map<string, number>();
+  return ordered.map((c, i) => {
+    if (!first.has(c.printingKey)) first.set(c.printingKey, i);
+    return first.get(c.printingKey)!;
+  });
+}
+
+/** Copy indexes per printing, printings in order of first appearance. */
+function groupLists(groups: readonly number[]) {
+  const members = new Map<number, number[]>();
+  groups.forEach((g, i) => {
+    const l = members.get(g);
+    if (l) l.push(i);
+    else members.set(g, [i]);
+  });
+  return [...members.values()];
+}
+
+/** Elementary symmetric sums e_0..e_k of the weights, as BigInt (e_r = ways to choose r different groups, one copy each). */
+function esym(weights: readonly number[], k: number) {
+  const e = [1n, ...new Array<bigint>(k).fill(0n)];
+  for (const w of weights) for (let r = k; r >= 1; r--) e[r] += BigInt(w) * e[r - 1];
+  return e;
+}
+
+/** Number of different packs of `k` cards with no printing twice, given copies per printing. */
+export function distinctPacks(weights: readonly number[], k: number) {
+  return esym(weights, k)[k];
+}
+
+/**
+ * Most packs the pool can still fill with `k` different printings each: largest p ≤ cards/k with
+ * Σ min(copies, p) ≥ k·p. Copies past that wait for a restock that adds other cards.
+ */
+export function maxDistinctPacks(weights: readonly number[], k: number) {
+  const n = weights.reduce((a, w) => a + w, 0);
+  for (let p = Math.floor(n / k); p > 0; p--) if (weights.reduce((a, w) => a + Math.min(w, p), 0) >= k * p) return p;
+  return 0;
+}
+
+/**
+ * Exact chances for a rule 2 pack. `tierOf(i)` names copy i's tier. Returns each copy's chance of being in the
+ * pack (every copy of a printing is equally likely) and each tier's chance of at least one card in the pack.
+ */
+export function distinctOdds(groups: readonly number[], k: number, tierOf: (i: number) => string) {
+  const lists = groupLists(groups);
+  const weights = lists.map((l) => l.length);
+  const e = esym(weights, k);
+  const total = e[k];
+  const ratio = (num: bigint) => (total > 0n ? Number((num * 1_000_000_000_000n) / total) / 1e12 : 0);
+  const copy = new Array<number>(groups.length).fill(0);
+  for (const l of lists) {
+    // e_{k-1} without this group: f_r = e_r − w·f_{r-1}.
+    const w = BigInt(l.length);
+    let f = 1n;
+    for (let r = 1; r <= k - 1; r++) f = e[r] - w * f;
+    const each = ratio(f);
+    for (const i of l) copy[i] = each;
+  }
+  const tiers = new Map<string, number>();
+  for (const name of new Set(groups.map((_, i) => tierOf(i)))) {
+    const without = lists.map((l) => l.filter((i) => tierOf(i) !== name).length);
+    tiers.set(name, total > 0n ? 1 - ratio(esym(without, k)[k]) : 0);
+  }
+  return { copy, tiers };
+}
+
+/**
+ * Rule 2 draw: indexes (into the id-ordered pool) of a pack with `count` different printings.
+ * Printings are taken in order of first appearance; copies of a printing in id order. Possible packs are
+ * numbered by walking the printings: for printing j with w copies, the numbers that include it come first,
+ * w·e_{r-1}(later printings) of them (copy = number ÷ e_{r-1}(later), rest = number mod e_{r-1}(later)),
+ * then the ones that skip it. R picks one number. Returns null when no such pack exists.
+ */
+export function distinctDraw(groups: readonly number[], count: number, serverSeed: string, clientSeed: string, nonce: number): number[] | null {
+  const lists = groupLists(groups);
+  // suffix[j][r] = e_r of printings j.. (end)
+  const suffix: bigint[][] = new Array(lists.length + 1);
+  suffix[lists.length] = [1n, ...new Array<bigint>(count).fill(0n)];
+  for (let j = lists.length - 1; j >= 0; j--) {
+    const w = BigInt(lists[j].length);
+    const next = suffix[j + 1];
+    suffix[j] = next.map((v, r) => (r === 0 ? v : v + w * next[r - 1]));
+  }
+  const total = suffix[0][count];
+  if (total === 0n) return null;
+  let R = BigInt(`0x${createHmac("sha256", serverSeed).update(`${clientSeed}:${nonce}`).digest("hex")}`) % total;
+  const out: number[] = [];
+  let r = count;
+  for (let j = 0; j < lists.length && r > 0; j++) {
+    const w = BigInt(lists[j].length);
+    const rest = suffix[j + 1][r - 1];
+    if (R < w * rest) {
+      out.push(lists[j][Number(R / rest)]);
+      R %= rest;
+      r--;
+    } else R -= w * rest;
+  }
+  return out;
+}
+
+export class NoDistinctPack extends Error {}
+
 /** The customer's active seed, created on first use. */
 export async function activeSeed(db: Db, customerId: string) {
   const cur = await db.siteFairSeed.findFirst({ where: { customerId, revealedAt: null }, orderBy: { createdAt: "desc" } });
@@ -51,10 +170,13 @@ export async function activeSeed(db: Db, customerId: string) {
  * Draw for an opening inside the caller's transaction (which already holds the customer lock),
  * advance the nonce and record everything needed to verify it later.
  */
-export async function drawForOpening<T extends { id: string }>(tx: Prisma.TransactionClient, customerId: string, openingId: string, pool: readonly T[], count: number, poolVersion: number | null = null) {
+export async function drawForOpening<T extends { id: string; printingKey: string }>(tx: Prisma.TransactionClient, customerId: string, openingId: string, pool: readonly T[], count: number, poolVersion: number | null = null) {
   const seed = await activeSeed(tx, customerId);
   const ordered = [...pool].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const picks = fairDraw(ordered, count, seed.serverSeed, seed.clientSeed, seed.nonce);
+  const groups = printingGroups(ordered);
+  const idx = distinctDraw(groups, count, seed.serverSeed, seed.clientSeed, seed.nonce);
+  if (!idx) throw new NoDistinctPack("Not enough different cards left for a pack.");
+  const picks = idx.map((i) => ordered[i]);
   await tx.siteFairSeed.update({ where: { id: seed.id }, data: { nonce: { increment: 1 } } });
   await tx.siteOpeningFair.create({
     data: {
@@ -66,6 +188,8 @@ export async function drawForOpening<T extends { id: string }>(tx: Prisma.Transa
       poolIds: ordered.map((c) => c.id),
       pickIds: picks.map((c) => c.id),
       poolVersion,
+      drawRule: DRAW_RULE,
+      poolGroups: groups,
     },
   });
   return picks;
@@ -116,6 +240,8 @@ export async function fairView(db: Db, customerId: string, take = 50) {
       clientSeed: r.clientSeed,
       nonce: r.nonce,
       poolVersion: r.poolVersion,
+      drawRule: r.drawRule,
+      poolGroups: r.opening.sealed || !Array.isArray(r.poolGroups) ? [] : (r.poolGroups as number[]),
       poolIds: r.opening.sealed ? [] : (r.poolIds as string[]),
       pickIds: r.opening.sealed ? [] : (r.pickIds as string[]),
       picks: r.opening.sealed ? [] : (r.pickIds as string[]).map((id) => title.get(id) ?? "Card"),

@@ -36,8 +36,25 @@ function verifierScript() {
     var d=JSON.parse(b.getAttribute('data-verify')),out=b.parentNode.querySelector('.vr');
     try{
       if(await sha(d.serverSeed)!==d.serverSeedHash){out.textContent='✗ Seed does not match its fingerprint.';out.className='vr err';return}
-      var left=d.poolIds.slice(),picks=[];
-      for(var i=0;i<d.pickIds.length;i++){var h=await hmac(d.serverSeed,d.clientSeed+':'+d.nonce+':'+i);picks.push(left.splice(parseInt(h.slice(0,13),16)%left.length,1)[0])}
+      var picks=[];
+      if(d.drawRule===2){
+        // Rule 2 (different cards per pack): number every possible pack, pick number R. Mirrors distinctDraw().
+        if(!Array.isArray(d.poolGroups)||d.poolGroups.length!==d.poolIds.length){out.textContent='✗ Card groups are missing.';out.className='vr err';return}
+        var lists=[],at=new Map();
+        d.poolGroups.forEach(function(g,i){if(!at.has(g)){at.set(g,lists.length);lists.push([])}lists[at.get(g)].push(i)});
+        var k=d.pickIds.length,suf=new Array(lists.length+1);
+        suf[lists.length]=[1n].concat(new Array(k).fill(0n));
+        for(var j=lists.length-1;j>=0;j--){var w=BigInt(lists[j].length),nx=suf[j+1];suf[j]=nx.map(function(v,r){return r===0?v:v+w*nx[r-1]})}
+        var total=suf[0][k];if(total===0n){out.textContent='✗ No possible pack.';out.className='vr err';return}
+        var R=BigInt('0x'+await hmac(d.serverSeed,d.clientSeed+':'+d.nonce))%total,r=k;
+        for(var j=0;j<lists.length&&r>0;j++){var w=BigInt(lists[j].length),rest=suf[j+1][r-1];
+          if(R<w*rest){picks.push(d.poolIds[lists[j][Number(R/rest)]]);R%=rest;r--}else R-=w*rest}
+        var seen=new Set(picks.map(function(id){return d.poolGroups[d.poolIds.indexOf(id)]}));
+        if(seen.size!==picks.length){out.textContent='✗ This pack repeats a card.';out.className='vr err';return}
+      }else{
+        var left=d.poolIds.slice();
+        for(var i=0;i<d.pickIds.length;i++){var h=await hmac(d.serverSeed,d.clientSeed+':'+d.nonce+':'+i);picks.push(left.splice(parseInt(h.slice(0,13),16)%left.length,1)[0])}
+      }
       var ok=picks.join()===d.pickIds.join();
       if(!ok){out.textContent='✗ Picks do not match.';out.className='vr err';return}
       var extra='';
@@ -75,9 +92,9 @@ async function page(customerId: string | null, flash?: { ok?: string; error?: st
     ? v.openings
         .map((o) => {
           const when = new Date(o.at).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-          const data = o.serverSeed && !o.sealed ? esc(JSON.stringify({ serverSeed: o.serverSeed, serverSeedHash: o.serverSeedHash, clientSeed: o.clientSeed, nonce: o.nonce, poolIds: o.poolIds, pickIds: o.pickIds, packId: o.packId, poolVersion: o.poolVersion })) : "";
+          const data = o.serverSeed && !o.sealed ? esc(JSON.stringify({ serverSeed: o.serverSeed, serverSeedHash: o.serverSeedHash, clientSeed: o.clientSeed, nonce: o.nonce, poolIds: o.poolIds, pickIds: o.pickIds, packId: o.packId, poolVersion: o.poolVersion, drawRule: o.drawRule, poolGroups: o.poolGroups })) : "";
           return `<div class="op"><h3>${esc(o.packTitle)} · ${esc(when)} CT</h3>
-            <div class="fine">${o.poolVersion ? `Pool version <a href="/api/pool-version?pack=${encodeURIComponent(o.packId)}&amp;v=${o.poolVersion}">${o.poolVersion}</a> · ` : ""}Nonce ${o.nonce} · Client seed <span class="mono">${esc(o.clientSeed)}</span></div>
+            <div class="fine">${o.poolVersion ? `Pool version <a href="/api/pool-version?pack=${encodeURIComponent(o.packId)}&amp;v=${o.poolVersion}">${o.poolVersion}</a> · ` : ""}${o.drawRule === 2 ? "Different-cards rule · " : ""}Nonce ${o.nonce} · Client seed <span class="mono">${esc(o.clientSeed)}</span></div>
             <div class="fine">Fingerprint <span class="mono">${esc(o.serverSeedHash)}</span></div>
             ${o.sealed ? `<div class="fine">Open this pack to see its cards.</div>` : `<div class="fine">Cards: ${esc(o.picks.join(", "))} (from ${o.poolIds.length} left in the pack)</div>`}
             ${o.serverSeed ? `<div class="fine">Server seed <span class="mono">${esc(o.serverSeed)}</span></div>` : `<div class="fine">Server seed hidden until you reveal it.</div>`}

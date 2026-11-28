@@ -227,14 +227,16 @@
 
     function typicalValue(cards, pool) {
       if (!cards.length) return '—';
-      const uniform = pool.drawModel === 'uniform-without-replacement' || (!pool.drawModel && pool.preview === true) ||
+      // Different-cards packs: each copy's exact chance is its weight (totals the cards per pack, not 1).
+      const distinct = pool.drawModel === 'distinct-printings';
+      const uniform = distinct || pool.drawModel === 'uniform-without-replacement' || (!pool.drawModel && pool.preview === true) ||
         (pool.completePacks > 0 && pool.completePacks === pool.packsRemaining && !pool.drawModel);
       const weights = new Map();
       let total = 0;
       for (const card of cards) {
         const {amount} = ctx.cardBuyback(card);
         // At-least-one odds in a multi-card pack are not per-card draw probabilities.
-        const weight = uniform ? card.remaining : card.drawProbability ?? (pool.cardsPerPack === 1 ? card.chanceInPack : undefined);
+        const weight = distinct ? card.chanceInPack : uniform ? card.remaining : card.drawProbability ?? (pool.cardsPerPack === 1 ? card.chanceInPack : undefined);
         if (amount === null || !Number.isFinite(weight) || weight < 0) return 'Unavailable';
         if (!weight) continue;
         weights.set(amount,(weights.get(amount) || 0)+weight);
@@ -258,7 +260,8 @@
       const languages = [...new Set(rows.map(c => c.language).filter(Boolean).map(language))].sort().join(' / ');
       const valid = Number.isSafeInteger(stock) && stock >= 0 && pool.cardsPerPack > 0 &&
         Array.isArray(pool.cards) && pool.cards.every(c => Number.isSafeInteger(c.remaining) && c.remaining >= 0) &&
-        Math.floor(rows.reduce((n,c) => n+c.remaining,0)/pool.cardsPerPack) === stock;
+        (pool.drawModel === 'distinct-printings' ? stock <= Math.floor(rows.reduce((n,c) => n+c.remaining,0)/pool.cardsPerPack) :
+        Math.floor(rows.reduce((n,c) => n+c.remaining,0)/pool.cardsPerPack) === stock);
       const available = valid && !sold ? rows : [];
       const range = valid || sold ? valueRange(available) : 'Unavailable';
       const typical = valid || sold ? typicalValue(available,pool) : 'Unavailable';
