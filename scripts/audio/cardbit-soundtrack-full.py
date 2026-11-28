@@ -111,7 +111,11 @@ def render_full(song):
             for i in range(16):
                 t0 = at(ob, i)
                 if p['fill'] and i >= 12:
-                    drum.add(tom([260, 210, 170, 130][i - 12]) if dp != 'shuffle' else snare(), t0, .5); continue
+                    if dp != 'shuffle': drum.add(tom([260, 210, 170, 130][i - 12]), t0, .5); continue
+                    # Lucky Shuffle: two even snare hits on beat 4 (Trevor, Nov 27: its quick swung snare fill sounded off)
+                    if i in (12, 14): drum.add(snare(), t0, .45)
+                    if i == 12: drum.add(kick(), t0, .5)
+                    continue
                 if light:
                     if i in (0, 8): drum.add(kick(), t0, .45)
                     if i % 4 == 2: drum.add(hat(), t0, .25, .2)

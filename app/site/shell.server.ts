@@ -59,7 +59,7 @@ const SITE_DECODE_V = version(siteDecodeSource);
 const SITE_DECODE_CSS_V = version(siteDecodeCssSource);
 // Pack opening music: six original 8-bit loops; the decode script picks one at random per opening.
 // Bump OPENING_MUSIC_V whenever a file in public/site/audio/opening/ changes (source: scripts/audio/cardbit-opening-songs.py).
-const OPENING_MUSIC_V = "s1";
+const OPENING_MUSIC_V = "s2";
 const OPENING_MUSIC = ["pixel-rush", "neon-vault", "lucky-shuffle", "holo-hunt", "gold-rush-gallop", "boss-bit-showdown"]
   .map((name) => `/site/audio/opening/${name}.mp3?v=${OPENING_MUSIC_V}`).join(" ");
 /** Sideways (landscape) card scans shown upright everywhere (Trevor, Nov 25 2026). */
