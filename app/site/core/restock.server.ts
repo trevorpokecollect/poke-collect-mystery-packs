@@ -412,10 +412,9 @@ export function routeCard(value: number, card: Pick<SiteCopy, "language" | "era"
     if (st.mix && capBreak(p, addType(st.mix, card), st.cards + 1)) continue;
     const before = evPct(st.retail, st.cards, p);
     const after = evPct(st.retail + value, st.cards + 1, p)!;
-    const lo = p.targetEvPct - p.evBandPct;
-    const hi = p.targetEvPct + p.evBandPct;
-    const gapBefore = before == null ? Infinity : Math.abs(before - p.targetEvPct);
-    const gapAfter = Math.abs(after - p.targetEvPct);
+    const { lo, hi, aim } = evBand(p)!;
+    const gapBefore = before == null ? Infinity : Math.abs(before - aim);
+    const gapAfter = Math.abs(after - aim);
     const inBand = after >= lo && after <= hi;
     if (!inBand && !(gapAfter < gapBefore)) continue; // would push the pool (further) out of band
     const isTop = tierFor(value, tierRules(p.tierRules)) === st.topTier;
@@ -436,10 +435,9 @@ export function trimToBand<T extends { v: number }>(
   base: { cards: number; retail: number },
   planned: T[],
 ): T[] {
-  if (pack.targetEvPct == null) return [];
-  const target = pack.targetEvPct;
-  const lo = target - pack.evBandPct;
-  const hi = target + pack.evBandPct;
+  const band = evBand(pack);
+  if (!band) return [];
+  const { lo, hi, aim: target } = band;
   const before = evPct(base.retail, base.cards, pack);
   const gapBefore = before == null ? Infinity : Math.abs(before - target);
   const kept = [...planned].sort((a, b) => b.v - a.v);
@@ -451,6 +449,135 @@ export function trimToBand<T extends { v: number }>(
   }
   return kept;
 }
+
+// ---------- Buyback-loop margin (Trevor, Nov 27 2026) ----------
+// A pulled card can be sold back for 80% of its Poke-Collect retail, in Cardbits that get spent on more packs.
+// So for every 100 Cardbits a pack brings in, up to 0.8 × EV comes back as buyback Cardbits. Loop margin =
+// 100 − 0.8 × EV. Rule: at least 10%, target 10–15%, which means EV from 106.25% to 112.5%.
+// - No pack's EV band may reach past 112.5% (the ceiling), whatever its Target EV ± band says.
+// - The hourly auto-restock fixes a pack outside its band by ADDING Drafts only (lower-value Drafts if EV is
+//   too high, higher-value if too low), aiming at the target. Removing cards is staff-only (Reshuffle).
+export const LOOP_BUYBACK_SHARE = 0.8;
+export const LOOP_MARGIN_MIN = 10;
+export const LOOP_MARGIN_TARGET_MAX = 15;
+/** Highest EV that still keeps the minimum loop margin: 112.5. */
+export const EV_CEILING = (100 - LOOP_MARGIN_MIN) / LOOP_BUYBACK_SHARE;
+/** EV below this gives a loop margin above the 15% target (allowed; customers just get less value): 106.25. */
+export const EV_LOOP_FLOOR = (100 - LOOP_MARGIN_TARGET_MAX) / LOOP_BUYBACK_SHARE;
+/** Buyback-loop margin % for an EV % (null when there's no EV). */
+export const loopMarginPct = (ev: number | null) => (ev == null ? null : Math.round((100 - LOOP_BUYBACK_SHARE * ev) * 100) / 100);
+
+/** A pack's working EV band: Target EV ± band, with the top cut at the loop ceiling. aim = where fixes head. */
+export function evBand(pack: { targetEvPct: number | null; evBandPct: number }) {
+  if (pack.targetEvPct == null) return null;
+  const hi = Math.min(pack.targetEvPct + pack.evBandPct, EV_CEILING);
+  const lo = Math.min(pack.targetEvPct - pack.evBandPct, hi);
+  return { lo, hi, aim: Math.min(pack.targetEvPct, hi), capped: pack.targetEvPct + pack.evBandPct > EV_CEILING };
+}
+
+export type RebalanceCard = { id: string; v: number; key: string; language: string; era: string | null; setName: string };
+type RebalancePack = RulePack & { targetEvPct: number | null; evBandPct: number; cardsPerPack: number; priceBits: number; minTopPer100: number | null; tierRules: unknown };
+
+/**
+ * Plan the smallest set of moves that brings a pool's EV into its band and close to its aim (pure; no writes).
+ * Each step takes the single move that lands EV closest to the aim: adding an eligible Draft (Pool Rules, mix
+ * caps, at most one copy of a printing per pack's worth of cards) or, if `allowRemove`, taking a pooled card out.
+ * Adding is always preferred; a removal is used only when no add helps and EV is still outside the band. Never drops the pool below one pack or
+ * below its top-tier minimum. Stops once EV is within half a point of the aim, or nothing helps.
+ */
+export function planRebalance(
+  pack: RebalancePack,
+  pool: RebalanceCard[],
+  drafts: RebalanceCard[],
+  opts: { allowRemove: boolean; maxMoves?: number; keep?: Set<string> },
+) {
+  const band = evBand(pack);
+  const before = evPct(pool.reduce((a, c) => a + c.v, 0), pool.length, pack);
+  const out = { band, before, after: before, adds: [] as RebalanceCard[], removes: [] as RebalanceCard[], inBand: false };
+  if (!band || isPrizePool(pack)) return out;
+  const rules = tierRules(pack.tierRules);
+  const topTier = topTierOf(rules);
+  const isTop = (c: RebalanceCard) => tierFor(c.v, rules) === topTier;
+  let cards = pool.length;
+  let retail = pool.reduce((a, c) => a + c.v, 0);
+  let top = pool.filter(isTop).length;
+  let mix = typeCounts(pool);
+  const perKey = new Map<string, number>();
+  for (const c of pool) perKey.set(c.key, (perKey.get(c.key) ?? 0) + 1);
+  const inPool = new Map(pool.map((c) => [c.id, c]));
+  const free = drafts.filter((c) => c.v > 0 && !ruleBreak(pack, c, c.v));
+  const used = new Set<string>();
+  const gapOf = (r: number, n: number) => {
+    const ev = evPct(r, n, pack);
+    return ev == null ? Infinity : Math.abs(ev - band.aim);
+  };
+  const max = opts.maxMoves ?? 500;
+  for (let step = 0; step < max; step++) {
+    const ev = evPct(retail, cards, pack);
+    const gap = ev == null ? Infinity : Math.abs(ev - band.aim);
+    if (gap <= 0.5) break;
+    // Best add.
+    let add: RebalanceCard | null = null;
+    let addGap = gap;
+    const keyCap = Math.max(1, Math.floor((cards + 1) / Math.max(pack.cardsPerPack, 1)));
+    for (const c of free) {
+      if (used.has(c.id)) continue;
+      if (pack.cardsPerPack > 1 && (perKey.get(c.key) ?? 0) >= keyCap) continue;
+      const g = gapOf(retail + c.v, cards + 1);
+      if (g < addGap - 1e-9 && !(mix && capBreak(pack, addType(mix, c), cards + 1))) {
+        add = c;
+        addGap = g;
+      }
+    }
+    if (add) {
+      used.add(add.id);
+      out.adds.push(add);
+      cards++;
+      retail += add.v;
+      mix = addType(mix, add);
+      perKey.set(add.key, (perKey.get(add.key) ?? 0) + 1);
+      if (isTop(add)) top++;
+      continue;
+    }
+    // Removing is a last resort, only to get back inside the band (never just to fine-tune).
+    if (!opts.allowRemove || (ev != null && ev >= band.lo && ev <= band.hi) || cards - 1 < Math.max(pack.cardsPerPack, 1)) break;
+    let rem: RebalanceCard | null = null;
+    let remGap = gap;
+    for (const c of inPool.values()) {
+      if (opts.keep?.has(c.id)) continue;
+      const t = isTop(c);
+      if (t && pack.minTopPer100 != null && top - 1 < Math.ceil(((cards - 1) * pack.minTopPer100) / 100)) continue;
+      if (t && top - 1 < 1) continue; // keep at least one top-tier card
+      const g = gapOf(retail - c.v, cards - 1);
+      if (g < remGap - 1e-9) {
+        rem = c;
+        remGap = g;
+      }
+    }
+    if (!rem) break;
+    inPool.delete(rem.id);
+    out.removes.push(rem);
+    cards--;
+    retail -= rem.v;
+    const m = { ...mix };
+    for (const t of typesOf(rem)) m[t] = Math.max(0, (m[t] ?? 0) - 1);
+    mix = m;
+    perKey.set(rem.key, Math.max(0, (perKey.get(rem.key) ?? 0) - 1));
+    if (isTop(rem)) top--;
+  }
+  out.after = evPct(retail, cards, pack);
+  out.inBand = out.after != null && out.after >= band.lo && out.after <= band.hi;
+  return out;
+}
+
+const rebalanceCard = (c: Pick<SiteCopy, "id" | "printingKey" | "language" | "era" | "setName">, v: number | null): RebalanceCard => ({
+  id: c.id,
+  v: v ?? 0,
+  key: c.printingKey,
+  language: c.language,
+  era: c.era,
+  setName: c.setName,
+});
 
 const AUTO_KEY = "cardbit-site:auto-restock";
 /** A newly listed Draft card waits this long before the hourly auto-restock may pool it, so staff can Make Active first. */
@@ -522,6 +649,10 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
     if (kept.length) plan.set(packId, kept);
     else plan.delete(packId);
   }
+  // Buyback-loop fix (Trevor, Nov 27 2026): a pack (Auto-Fill on) still outside its EV band after routing gets
+  // more Drafts, ADD-ONLY: lower-value ones if EV is too high, higher-value ones if too low, aiming at its target
+  // (never past the 112.5% ceiling). Removing cards stays a staff Reshuffle. Same 2-hour hold as above.
+  const fixed = await addOnlyFix(db, states, plan, waiting, valueOf);
   // Prize pools with Auto-Fill on (Daily Spins, Spark Shop): top up each Fill Rule range from whatever no pack took,
   // oldest listing first. Packs always get first pick.
   const taken = new Set([...plan.values()].flat().map((c) => c.id));
@@ -586,7 +717,37 @@ export async function runAutoRestock(db: PrismaClient, opts: { force?: boolean; 
       drafts += out.fromDrafts;
     }
   }
-  return { ran: true, routed, held, drafts, versions, retiered };
+  return { ran: true, routed, held, drafts, versions, retiered, loopFixed: fixed };
+}
+
+/** Hourly add-only EV fix; adds its picks to `plan` and returns how many cards it added per pack. */
+async function addOnlyFix(db: Db, states: Map<string, PoolState>, plan: Map<string, SiteCopy[]>, waiting: SiteCopy[], valueOf: Map<string, number>) {
+  const packs = [...states.values()].filter((st) => !isPrizePool(st.pack) && st.pack.autoDrafts && evBand(st.pack));
+  if (!packs.length) return [];
+  const pooled = await db.siteCopy.findMany({
+    where: { status: "POOLED", packId: { in: packs.map((st) => st.pack.id) } },
+    select: { id: true, packId: true, printingKey: true, condition: true, retailBits: true, language: true, era: true, setName: true },
+  });
+  const vals = await retailOf(db, pooled);
+  const out: { packId: string; added: number; evBefore: number | null; evAfter: number | null; inBand: boolean }[] = [];
+  for (const st of packs) {
+    const planned = plan.get(st.pack.id) ?? [];
+    const pool = [
+      ...pooled.flatMap((c, i) => (c.packId === st.pack.id ? [rebalanceCard(c, vals[i])] : [])),
+      ...planned.map((c) => rebalanceCard(c, valueOf.get(c.id) ?? 0)),
+    ];
+    const band = evBand(st.pack)!;
+    const ev = evPct(pool.reduce((a, c) => a + c.v, 0), pool.length, st.pack);
+    if (ev == null || (ev >= band.lo && ev <= band.hi)) continue;
+    const taken = new Set([...plan.values()].flat().map((c) => c.id));
+    const free = waiting.filter((c) => !taken.has(c.id) && (c.autoRestock || !c.demo));
+    const r = planRebalance(st.pack, pool, free.map((c) => rebalanceCard(c, valueOf.get(c.id) ?? 0)), { allowRemove: false });
+    out.push({ packId: st.pack.id, added: r.adds.length, evBefore: ev, evAfter: r.after, inBand: r.inBand });
+    if (!r.adds.length) continue;
+    const byId = new Map(free.map((c) => [c.id, c]));
+    plan.set(st.pack.id, [...planned, ...r.adds.map((a) => byId.get(a.id)!)]);
+  }
+  return out;
 }
 
 // ---------- Auto-pick packs for Drafts (Trevor, Nov 27 2026) ----------
@@ -715,6 +876,79 @@ export async function autoStageDrafts(db: PrismaClient, actor: string, copyIds: 
     });
   }
   return { considered: cands.length, staged, left: cands.length - staged, noPrice, packs: results, blocked: blocked.slice(0, 20) };
+}
+
+// ---------- Reshuffle (Trevor, Nov 27 2026) ----------
+
+/**
+ * Staff "Reshuffle": bring one pack's EV into its band (and buyback-loop margin) by adding Draft cards and, only
+ * when adding can't do it, taking pooled cards out (they go back to Draft). Tiers re-rank on the new pool. With
+ * apply=false it only previews. With apply=true it does it in ONE transaction under the pack lock that openings
+ * take, together with anything already staged for this pack, and publishes it as a new pool version (new list
+ * and hash). Pulled, vaulted and shipped cards are never touched, and past openings keep the version they drew.
+ */
+export async function reshufflePack(db: PrismaClient, actor: string, packId: string, apply: boolean) {
+  const pack = await packOrThrow(db, packId);
+  if (isPrizePool(pack)) throw new RestockError("Prize pools have no EV. Use Fill Rules instead.");
+  if (pack.targetEvPct == null) throw new RestockError("Set a Target EV for this pack first.");
+  const run = async (tx: Db) => {
+    const restock = await tx.siteRestock.findFirst({ where: { packId, status: "STAGED" } });
+    // The pool as it will be after anything already staged: live pool minus staged removals plus staged adds.
+    const pool = await tx.siteCopy.findMany({
+      where: {
+        OR: [
+          { packId, status: "POOLED", restockId: null },
+          ...(restock ? [{ restockId: restock.id, status: "DRAFT" as const }] : []),
+        ],
+      },
+    });
+    const drafts = await tx.siteCopy.findMany({ where: { status: "DRAFT", ownerId: null, restockId: null, demo: false }, orderBy: { createdAt: "asc" }, take: 3000 });
+    const [poolVals, draftVals] = await Promise.all([retailOf(tx, pool), retailOf(tx, drafts)]);
+    const plan = planRebalance(
+      pack,
+      pool.map((c, i) => rebalanceCard(c, poolVals[i])),
+      drafts.map((c, i) => rebalanceCard(c, draftVals[i])),
+      // Cards already staged to add can't be "removed" by the plan; only live pooled cards can.
+      { allowRemove: true, keep: new Set(pool.filter((c) => c.status !== "POOLED").map((c) => c.id)) },
+    );
+    return { restock, pool, drafts, plan };
+  };
+  const view = (p: Awaited<ReturnType<typeof run>>["plan"], extra: Record<string, unknown> = {}) => ({
+    packId,
+    title: pack.title,
+    band: p.band,
+    evBefore: p.before,
+    evAfter: p.after,
+    marginBefore: loopMarginPct(p.before),
+    marginAfter: loopMarginPct(p.after),
+    inBand: p.inBand,
+    adds: p.adds.map((c) => ({ id: c.id, retailBits: c.v })),
+    removes: p.removes.map((c) => ({ id: c.id, retailBits: c.v })),
+    ...extra,
+  });
+  if (!apply) {
+    const { plan, drafts, pool } = await run(db);
+    const titles = new Map([...drafts, ...pool].map((c) => [c.id, { title: c.title, condition: c.condition, slot: c.slot, pocket: c.pocket }]));
+    const v = view(plan);
+    return { ...v, adds: v.adds.map((a) => ({ ...a, ...titles.get(a.id) })), removes: v.removes.map((a) => ({ ...a, ...titles.get(a.id) })), applied: false };
+  }
+  return db.$transaction(
+    async (tx) => {
+      await lockPack(tx, packId);
+      const prev = await ensureBaseline(tx, packId, actor);
+      const { plan } = await run(tx);
+      if (!plan.adds.length && !plan.removes.length) throw new RestockError(plan.inBand ? "This pack is already on target." : "No Draft card or pooled card would move this pack's EV closer to target.");
+      const restock = await stagedRestock(tx, packId);
+      // Conditional updates: a card another pack or staff member took meanwhile is just skipped.
+      for (const c of plan.adds) await tx.siteCopy.updateMany({ where: { id: c.id, status: "DRAFT", ownerId: null, restockId: null }, data: { restockId: restock.id, autoRestock: false } });
+      for (const c of plan.removes) await tx.siteCopy.updateMany({ where: { id: c.id, status: "POOLED", packId, ownerId: null, restockId: null }, data: { restockId: restock.id } });
+      const staged = await tx.siteCopy.findMany({ where: { restockId: restock.id } });
+      const out = await applyRestock(tx, pack, prev, staged, restock.id, { actor, note: "Reshuffle", auto: false });
+      if (!out) throw new RestockError("None of the cards could be applied. Refresh and try again.");
+      return view(plan, { applied: true, version: out.version, poolHash: out.poolHash, poolSize: out.poolSize, evAfter: out.evPct, marginAfter: loopMarginPct(out.evPct) });
+    },
+    { timeout: 30_000 },
+  );
 }
 
 /** Publish every pack's staged restock now (one new pool version per pack). Prize pools included. */
@@ -855,8 +1089,18 @@ export async function stagedRestocks(db: PrismaClient) {
       const fill = prize
         ? targets.map((t) => ({ ...t, have: nowValues.filter((v) => v != null && inRange(v, t)).length }))
         : null;
-      const band = p.targetEvPct == null ? null : { lo: p.targetEvPct - p.evBandPct, hi: p.targetEvPct + p.evBandPct };
+      const band = evBand(p);
+      const afterOdds = await odds(after, projected.cards ? projected.rules : rules);
       const needsRestock = Boolean(band && nowOdds.evPct != null && (nowOdds.evPct < band.lo || nowOdds.evPct > band.hi));
+      const addOnly =
+        needsRestock && !prize
+          ? planRebalance(
+              p,
+              (await retailOf(db, now)).map((v, i) => rebalanceCard(now[i], v)),
+              drafts.map((c, i) => rebalanceCard(c, draftValues[i])).filter((c, i) => !drafts[i].demo),
+              { allowRemove: false },
+            )
+          : { inBand: false };
       // Suggestions: eligible Draft cards that move EV toward target the most (internal, staff only).
       const suggestions = prize
         ? drafts
@@ -870,8 +1114,8 @@ export async function stagedRestocks(db: PrismaClient) {
               .map((c, i) => ({ c, v: draftValues[i] }))
               .filter(({ c, v }) => v && v > 0 && !ruleBreak(p, c, v))
               .map(({ c, v }) => ({ c, v: v!, after: evPct(nowOdds.retailBits + v!, now.length + 1, p)! }))
-              .filter((x) => Math.abs(x.after - p.targetEvPct!) < Math.abs(nowOdds.evPct! - p.targetEvPct!))
-              .sort((a, b) => Math.abs(a.after - p.targetEvPct!) - Math.abs(b.after - p.targetEvPct!))
+              .filter((x) => Math.abs(x.after - band!.aim) < Math.abs(nowOdds.evPct! - band!.aim))
+              .sort((a, b) => Math.abs(a.after - band!.aim) - Math.abs(b.after - band!.aim))
               .slice(0, 10)
               .map(({ c, v, after: ev }) => ({ id: c.id, title: c.title, condition: c.condition, retailBits: v, evAfterPct: ev, slot: c.slot, pocket: c.pocket }));
       return {
@@ -882,12 +1126,27 @@ export async function stagedRestocks(db: PrismaClient) {
         cardsPerPack: p.cardsPerPack,
         priceBits: p.priceBits,
         ev: { targetPct: p.targetEvPct, bandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, needsRestock, autoDrafts: p.autoDrafts },
+        // Buyback-loop margin (Trevor, Nov 27): 100 − 0.8 × EV; at least 10%, target 10–15%.
+        loop: prize
+          ? null
+          : {
+              buybackPct: LOOP_BUYBACK_SHARE * 100,
+              minPct: LOOP_MARGIN_MIN,
+              targetMaxPct: LOOP_MARGIN_TARGET_MAX,
+              evCeilingPct: EV_CEILING,
+              evLoopFloorPct: EV_LOOP_FLOOR,
+              band: band ? { lo: band.lo, hi: band.hi, aim: band.aim, capped: band.capped } : null,
+              marginNowPct: loopMarginPct(nowOdds.evPct),
+              marginAfterPct: loopMarginPct(afterOdds.evPct),
+              // What the hourly add-only fix could do with today's Drafts; false = staff need to press Reshuffle.
+              draftsCanFix: needsRestock ? addOnly.inBand : null,
+            },
         restockId: r?.id ?? null,
         adds: adds.map((c) => ({ id: c.id, title: c.title, condition: c.condition, slot: c.slot, pocket: c.pocket })),
         removes: removes.map((c) => ({ id: c.id, title: c.title, condition: c.condition, slot: c.slot, pocket: c.pocket })),
         now: nowOdds,
         // After publish, tiers re-rank on the new pool (auto tiers), so "after" odds use the projected cutoffs.
-        after: await odds(after, projected.cards ? projected.rules : rules),
+        after: afterOdds,
         rules: {
           minValueBits: p.minValueBits,
           maxValueBits: p.maxValueBits,
@@ -954,6 +1213,9 @@ export async function savePackEv(db: PrismaClient, packId: string, b: Record<str
   // Only the fields a form sends change (the EV form and the Pool Rules form save separately).
   if ("targetEvPct" in b) {
     data.targetEvPct = int(b.targetEvPct, 10, 500, "Target EV");
+    // Buyback-loop margin (Trevor, Nov 27): EV above 112.5% leaves under 10% margin. The band's top is cut there too.
+    if (!prize && data.targetEvPct != null && data.targetEvPct > EV_CEILING)
+      throw new RestockError(`Target EV can be at most ${Math.floor(EV_CEILING)}% so the buyback loop keeps at least a ${LOOP_MARGIN_MIN}% margin.`);
     data.evBandPct = int(b.evBandPct, 1, 50, "EV band") ?? 5;
     data.minTopPer100 = int(b.minTopPer100, 0, 100, "Top-tier minimum");
   }

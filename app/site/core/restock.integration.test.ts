@@ -7,7 +7,7 @@ import { priceKey, receiveSiteIntake } from "./stock.server";
 import { DeskError, fixPooledCopy, movePool, setListing } from "./stock-desk.server";
 import { confirmAge } from "../../lib/cardbit-age.server";
 import { storeAction, storeState } from "../store/store.server";
-import { autoStageDrafts, publishAllStaged, eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, trimToBand, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
+import { EV_CEILING, evBand, loopMarginPct, planRebalance, reshufflePack, autoStageDrafts, publishAllStaged, eligible, eraOf, evPct, poolHashOf, poolVersion, publishRestock, restockHistory, routeCard, runAutoRestock, trimToBand, savePackEv, stageRestock, stagedRestocks, unstageRestock, RestockError, ruleBreak, capBreak, typeCounts, type PoolState } from "./restock.server";
 import { autoTierRules } from "../store/tiers";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -111,6 +111,59 @@ describe("pool rules and auto tiers", () => {
     expect(mix).toMatchObject({ English: 2, Japanese: 1, Modern: 3 });
     expect(capBreak(pack, { ...mix, Japanese: 2 }, 4)).toMatch(/Japanese cards would be more than 30%/);
     expect(capBreak(pack, { ...mix, Japanese: 2 }, 7)).toBeNull();
+  });
+});
+
+describe("buyback-loop margin", () => {
+  const rc = (id: string, v: number, key = id) => ({ id, v, key, language: "English", era: null, setName: "Modern Set" });
+  const pk = (extra = {}) => ({
+    id: "p", kind: "pack", targetEvPct: 109, evBandPct: 3, cardsPerPack: 1, priceBits: 1000, minTopPer100: null, tierRules: null,
+    languages: null, eras: null, minValueBits: null, maxValueBits: null, typeCaps: null, ...extra,
+  });
+  it("margin = 100 − 0.8 × EV; no band reaches past 112.5% EV", () => {
+    expect(EV_CEILING).toBe(112.5);
+    expect(loopMarginPct(114)).toBe(8.8);
+    expect(loopMarginPct(112.5)).toBe(10);
+    expect(loopMarginPct(106.25)).toBe(15);
+    expect(loopMarginPct(null)).toBeNull();
+    // Booster today: 110 ± 5 would allow 115; the top is cut at 112.5.
+    expect(evBand({ targetEvPct: 110, evBandPct: 5 })).toEqual({ lo: 105, hi: 112.5, aim: 110, capped: true });
+    expect(evBand({ targetEvPct: 109, evBandPct: 3 })).toEqual({ lo: 106, hi: 112, aim: 109, capped: false });
+    expect(evBand({ targetEvPct: null, evBandPct: 5 })).toBeNull();
+  });
+  it("plans adds first, removes only when adding can't help, and keeps the top tier", () => {
+    // 10 cards worth 11,400 → EV 114 (margin 8.8%). Cheap Drafts bring it down without removing anything.
+    const pool = [...Array.from({ length: 9 }, (_, i) => rc(`c${i}`, 1000)), rc("big", 2400)];
+    const drafts = [rc("d1", 300), rc("d2", 200), rc("d3", 5000)];
+    const a = planRebalance(pk(), pool, drafts, { allowRemove: true });
+    expect(a.before).toBe(114);
+    expect(a.removes).toEqual([]);
+    expect(a.adds.map((c) => c.id)).toEqual(["d1"]);
+    expect(a.after).toBeCloseTo(106.36, 1);
+    expect(a.inBand).toBe(true);
+    // No Drafts: add-only can't fix it; with removal allowed it takes out a card, never the only top-tier one.
+    expect(planRebalance(pk(), pool, [], { allowRemove: false })).toMatchObject({ adds: [], removes: [], inBand: false });
+    // Only taking out "big" (the only top-tier card) would lower EV, so it stays and the plan says it can't fix it.
+    const ladder = { tierRules: [{ name: "Common", min: 0 }, { name: "Legendary", min: 2400 }] };
+    expect(planRebalance(pk(ladder), pool, [], { allowRemove: true })).toMatchObject({ removes: [], inBand: false });
+    // With a second high card, that one goes instead.
+    // 18 × 1,000 + 2,600 + top-tier 3,000 = EV 118; taking out the 2,600 lands at 110.5.
+    const pool2 = [...Array.from({ length: 18 }, (_, i) => rc(`m${i}`, 1000)), rc("hi2", 2600), rc("big", 3000)];
+    const b = planRebalance(pk({ tierRules: [{ name: "Common", min: 0 }, { name: "Legendary", min: 3000 }] }), pool2, [], { allowRemove: true });
+    expect(b.removes.map((c) => c.id)).toEqual(["hi2"]);
+    expect(b.inBand).toBe(true);
+    // Too low: a high-value Draft lifts it; Pool Rules still apply (max value blocks the 5,000).
+    const low = Array.from({ length: 10 }, (_, i) => rc(`l${i}`, 900));
+    const up = planRebalance(pk(), low, drafts, { allowRemove: false });
+    expect(up.adds.map((c) => c.id)).toContain("d3");
+    expect(up.removes).toEqual([]);
+    expect(up.inBand).toBe(true);
+    expect(planRebalance(pk({ maxValueBits: 4000 }), low, drafts, { allowRemove: false }).adds).toEqual([]);
+    // Multi-card packs: at most one copy of a printing per pack's worth of cards.
+    const booster = pk({ cardsPerPack: 5, priceBits: 5000 });
+    const bpool = Array.from({ length: 10 }, (_, i) => rc(`b${i}`, 1200));
+    const r = planRebalance(booster, bpool, Array.from({ length: 6 }, (_, i) => rc(`s${i}`, 100, "same")), { allowRemove: false });
+    expect(r.adds.length).toBeLessThanOrEqual(2);
   });
 });
 
@@ -397,9 +450,9 @@ describe.skipIf(!url)("verified restocks", () => {
   });
 
   it("enforces pool rules at staging and re-ranks tiers at each restock; a pull keeps its tier", async () => {
-    await savePackEv(db, "cobalt", { targetEvPct: 120, evBandPct: 10 });
+    await savePackEv(db, "cobalt", { targetEvPct: 110, evBandPct: 10 });
     await savePackEv(db, "cobalt", { languages: ["English", "Japanese"], minValueBits: 100, maxValueBits: 50_000, typeCaps: { Japanese: 40 }, tierMix: [50, 25, 15, 8, 2], topTierMin: null });
-    expect(await db.sitePack.findUniqueOrThrow({ where: { id: "cobalt" } })).toMatchObject({ targetEvPct: 120, evBandPct: 10, minValueBits: 100 }); // rules save keeps EV
+    expect(await db.sitePack.findUniqueOrThrow({ where: { id: "cobalt" } })).toMatchObject({ targetEvPct: 110, evBandPct: 10, minValueBits: 100 }); // rules save keeps EV
     await expect(savePackEv(db, "cobalt", { tierMix: [50, 25, 15, 8, 0] })).rejects.toThrow(RestockError);
     await expect(savePackEv(db, "cobalt", { minValueBits: 900, maxValueBits: 100 })).rejects.toThrow(RestockError);
     const low = await stock("Lowball", 1, 50);
@@ -433,6 +486,54 @@ describe.skipIf(!url)("verified restocks", () => {
     const view = (await stagedRestocks(db)).find((p) => p.packId === "cobalt")!;
     expect(view.rules.cutoffs.at(-1)?.name).toBe("Legendary");
     expect(view.rules.mix).toMatchObject({ Japanese: 7 });
+  });
+
+  it("Target EV can't pass the loop ceiling; Reshuffle previews, then publishes one version; hourly fix only adds", async () => {
+    await expect(savePackEv(db, "cobalt", { targetEvPct: 115, evBandPct: 5 })).rejects.toThrow(/at most 112%/);
+    await savePackEv(db, "cobalt", { targetEvPct: 110, evBandPct: 5 });
+    // Pool: 10 cards, EV 120 → margin 4%.
+    const base = await stock("LoopBase", 7, 1000);
+    const mid = await stock("LoopMid", 2, 1500);
+    const chase = await stock("LoopChase", 1, 2000);
+    await stageRestock(db, "t", "cobalt", [...base, ...mid, ...chase].map((c) => c.id), "add");
+    await publishRestock(db, "t", "cobalt");
+    let v = (await stagedRestocks(db)).find((p) => p.packId === "cobalt")!;
+    expect(v.now.evPct).toBe(120);
+    expect(v.loop).toMatchObject({ marginNowPct: 4, minPct: 10, evCeilingPct: 112.5, band: { lo: 105, hi: 112.5, aim: 110, capped: true }, draftsCanFix: false });
+    // Reshuffle with no Drafts: preview takes a card out (not the chase); nothing changes until applied.
+    const prev = await reshufflePack(db, "t", "cobalt", false);
+    expect(prev).toMatchObject({ applied: false, evBefore: 120, evAfter: 112.5, marginAfter: 10, adds: [], inBand: true });
+    expect(prev.removes.map((r) => r.id).sort()).toEqual(mid.map((c) => c.id).sort());
+    expect(prev.removes.map((r) => r.id)).not.toContain(chase[0].id);
+    expect(await db.siteCopy.count({ where: { packId: "cobalt", status: "POOLED" } })).toBe(10);
+    const done = await reshufflePack(db, "t", "cobalt", true);
+    expect(done).toMatchObject({ applied: true, version: 3 });
+    expect(done.evAfter!).toBeLessThanOrEqual(112.5);
+    expect(done.marginAfter!).toBeGreaterThanOrEqual(10);
+    const v3 = await db.siteRestock.findFirstOrThrow({ where: { packId: "cobalt", version: 3 } });
+    expect(v3).toMatchObject({ note: "Reshuffle", auto: false });
+    expect((v3.removeIds as string[]).length).toBe(prev.removes.length);
+    for (const id of v3.removeIds as string[]) expect((await db.siteCopy.findUniqueOrThrow({ where: { id } })).status).toBe("DRAFT");
+    await expect(reshufflePack(db, "t", "cobalt", true)).rejects.toThrow(RestockError);
+
+    // Hourly add-only fix: push EV up with a new chase card, list cheap Drafts past the hold → it adds, never removes.
+    const old = new Date(Date.now() - 3 * 60 * 60_000);
+    const hot = await stock("LoopHot", 1, 4000);
+    await stageRestock(db, "t", "cobalt", hot.map((c) => c.id), "add");
+    await publishRestock(db, "t", "cobalt");
+    const evHot = (await stagedRestocks(db)).find((p) => p.packId === "cobalt")!.now.evPct!;
+    expect(evHot).toBeGreaterThan(112.5);
+    await db.siteCopy.updateMany({ where: { status: "DRAFT" }, data: { createdAt: old } });
+    const cheap = await stock("LoopCheap", 6, 400);
+    await db.siteCopy.updateMany({ where: { id: { in: cheap.map((c) => c.id) } }, data: { createdAt: old } });
+    await savePackEv(db, "cobalt", { autoDrafts: true });
+    const poolBefore = await db.siteCopy.findMany({ where: { packId: "cobalt", status: "POOLED" }, select: { id: true } });
+    const run = await runAutoRestock(db, { now: new Date(Date.now() + 61 * 60_000) });
+    expect(run.ran).toBe(true);
+    for (const c of poolBefore) expect((await db.siteCopy.findUniqueOrThrow({ where: { id: c.id } })).status).toBe("POOLED");
+    v = (await stagedRestocks(db)).find((p) => p.packId === "cobalt")!;
+    expect(v.now.evPct!).toBeLessThanOrEqual(112.5);
+    expect(v.now.evPct!).toBeGreaterThanOrEqual(105);
   });
 
   it("flags pools outside their EV band and suggests Draft cards that bring them back", async () => {

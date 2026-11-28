@@ -11,6 +11,8 @@
 //        minValueBits?, maxValueBits?, typeCaps?, tierMix?, topTierMin?, autoDrafts?} (only sent fields change; EV/rules internal only)
 //      {intent:"restock-auto-stage", copyIds | "all"} picks the pack for each Draft card (same rules as Auto-Fill, no
 //        2-hour wait) and STAGES it there; {intent:"restock-publish-all", note?} publishes every staged restock now
+//      {intent:"pack-reshuffle", packId, apply?} previews (apply false) or publishes (apply true) a Reshuffle: adds Drafts
+//        and, only if adding can't, takes pooled cards out so EV lands in band (loop margin ≥ 10%); new pool version
 //      {intent:"auto-restock-run"} runs the hourly automatic restock now (buybacks + listed Drafts for Auto-Fill packs)
 //      {intent:"remove", copyIds, reason} deletes unsold Draft/Active copies (→ REMOVED, pocket freed, logged)
 //      {intent:"slot", copyId, slot, pocket?} moves one copy to a chosen slot (10001+) and pocket
@@ -25,7 +27,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import db from "../db.server";
 import { brokerActor, cardBrokerAuthorized } from "../site/core/internal-auth.server";
 import { DeskError, boxSummary, fixPooledCopy, listStock, moveToSlot, movePool, relinkCopy, removeCopies, savePack, setListing, setPrice } from "../site/core/stock-desk.server";
-import { RestockError, autoStageDrafts, publishAllStaged, publishRestock, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
+import { RestockError, autoStageDrafts, publishAllStaged, publishRestock, reshufflePack, runAutoRestock, savePackEv, stagedRestocks, unstageRestock } from "../site/core/restock.server";
 import { applyBrokerPrice, intakePrice, priceKey } from "../site/core/stock.server";
 import { SpinTableError, saveSiteSpinTier, siteSpinTableView } from "../site/rewards/spin-table.server";
 
@@ -97,6 +99,9 @@ export async function action({ request }: ActionFunctionArgs) {
         return Response.json({ ok: true, ...(await autoStageDrafts(db, actor, b.copyIds === "all" ? "all" : b.copyIds)) });
       case "restock-publish-all":
         return Response.json({ ok: true, ...(await publishAllStaged(db, actor, b.note)) });
+      // Reshuffle (Trevor, Nov 27 2026): bring one pack's EV into its band / buyback-loop margin; apply publishes a version.
+      case "pack-reshuffle":
+        return Response.json({ ok: true, ...(await reshufflePack(db, actor, String(b.packId || ""), b.apply === true)) });
       case "pack-ev": {
         const p = await savePackEv(db, String(b.packId || ""), b);
         return Response.json({ ok: true, pack: { id: p.id, kind: p.kind, targetEvPct: p.targetEvPct, evBandPct: p.evBandPct, minTopPer100: p.minTopPer100, languages: p.languages, eras: p.eras, autoDrafts: p.autoDrafts, fillTargets: p.fillTargets } });
