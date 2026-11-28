@@ -165,6 +165,22 @@ describe("buyback-loop margin", () => {
     const r = planRebalance(booster, bpool, Array.from({ length: 6 }, (_, i) => rc(`s${i}`, 100, "same")), { allowRemove: false });
     expect(r.adds.length).toBeLessThanOrEqual(2);
   });
+  it("Reshuffle first takes out pooled cards the Pool Rules now block (e.g. a raised minimum value)", () => {
+    // Minimum raised to 300 after two 240 cards were pooled; one card has no price yet and is left alone.
+    const pool = [...Array.from({ length: 8 }, (_, i) => rc(`k${i}`, 1200)), rc("x1", 240), rc("x2", 240), rc("np", 0)];
+    const drafts = [rc("d1", 300), rc("d2", 200)];
+    const rules = pk({ minValueBits: 300 });
+    const r = planRebalance(rules, pool, drafts, { allowRemove: true });
+    expect(r.ruleRemoves).toBe(2);
+    expect(r.removes.slice(0, 2).map((c) => c.id)).toEqual(["x1", "x2"]);
+    expect(r.removes.map((c) => c.id)).not.toContain("np");
+    // The 200 Draft is below the minimum too, so only the 300 can come in.
+    expect(r.adds.map((c) => c.id)).not.toContain("d2");
+    // The hourly add-only fix never takes cards out, rule breakers included.
+    expect(planRebalance(rules, pool, drafts, { allowRemove: false })).toMatchObject({ removes: [], ruleRemoves: 0 });
+    // Staged adds (kept) are never taken out.
+    expect(planRebalance(rules, pool, drafts, { allowRemove: true, keep: new Set(["x1"]) }).removes.map((c) => c.id)).not.toContain("x1");
+  });
 });
 
 describe.skipIf(!url)("verified restocks", () => {

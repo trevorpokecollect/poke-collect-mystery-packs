@@ -493,7 +493,7 @@ export function planRebalance(
 ) {
   const band = evBand(pack);
   const before = evPct(pool.reduce((a, c) => a + c.v, 0), pool.length, pack);
-  const out = { band, before, after: before, adds: [] as RebalanceCard[], removes: [] as RebalanceCard[], inBand: false };
+  const out = { band, before, after: before, adds: [] as RebalanceCard[], removes: [] as RebalanceCard[], ruleRemoves: 0, inBand: false };
   if (!band || isPrizePool(pack)) return out;
   const rules = tierRules(pack.tierRules);
   const topTier = topTierOf(rules);
@@ -511,6 +511,26 @@ export function planRebalance(
     const ev = evPct(r, n, pack);
     return ev == null ? Infinity : Math.abs(ev - band.aim);
   };
+  const takeOut = (rem: RebalanceCard) => {
+    inPool.delete(rem.id);
+    out.removes.push(rem);
+    cards--;
+    retail -= rem.v;
+    const m = { ...mix };
+    for (const t of typesOf(rem)) m[t] = Math.max(0, (m[t] ?? 0) - 1);
+    mix = m;
+    perKey.set(rem.key, Math.max(0, (perKey.get(rem.key) ?? 0) - 1));
+    if (isTop(rem)) top--;
+  };
+  // Pool Rules changed after cards were pooled (Trevor, Nov 27: raised Mystery's minimum, cheap cards stayed):
+  // a Reshuffle first takes out every priced pooled card the pack's rules now block, then rebalances EV.
+  if (opts.allowRemove)
+    for (const c of pool) {
+      if (opts.keep?.has(c.id) || !(c.v > 0) || !ruleBreak(pack, c, c.v)) continue;
+      if (cards - 1 < Math.max(pack.cardsPerPack, 1)) break;
+      takeOut(c);
+      out.ruleRemoves++;
+    }
   const max = opts.maxMoves ?? 500;
   for (let step = 0; step < max; step++) {
     const ev = evPct(retail, cards, pack);
@@ -555,15 +575,7 @@ export function planRebalance(
       }
     }
     if (!rem) break;
-    inPool.delete(rem.id);
-    out.removes.push(rem);
-    cards--;
-    retail -= rem.v;
-    const m = { ...mix };
-    for (const t of typesOf(rem)) m[t] = Math.max(0, (m[t] ?? 0) - 1);
-    mix = m;
-    perKey.set(rem.key, Math.max(0, (perKey.get(rem.key) ?? 0) - 1));
-    if (isTop(rem)) top--;
+    takeOut(rem);
   }
   out.after = evPct(retail, cards, pack);
   out.inBand = out.after != null && out.after >= band.lo && out.after <= band.hi;
@@ -923,7 +935,8 @@ export async function reshufflePack(db: PrismaClient, actor: string, packId: str
     marginAfter: loopMarginPct(p.after),
     inBand: p.inBand,
     adds: p.adds.map((c) => ({ id: c.id, retailBits: c.v })),
-    removes: p.removes.map((c) => ({ id: c.id, retailBits: c.v })),
+    removes: p.removes.map((c, i) => ({ id: c.id, retailBits: c.v, breaksRules: i < p.ruleRemoves })),
+    ruleRemoves: p.ruleRemoves,
     ...extra,
   });
   if (!apply) {
@@ -1082,6 +1095,9 @@ export async function stagedRestocks(db: PrismaClient) {
         return { cards: cards.length, packs: Math.floor(cards.length / p.cardsPerPack), tiers: counts, retailBits: retail, evPct: evPct(retail, cards.length, p) };
       };
       const nowOdds = await odds(now);
+      const nowVals = await retailOf(db, now);
+      // Pooled cards the pack's Pool Rules now block (rules changed after they were pooled). Reshuffle takes them out.
+      const breakers = isPrizePool(p) ? [] : now.filter((c, i) => (nowVals[i] ?? 0) > 0 && ruleBreak(p, c, nowVals[i]));
       const projected = autoTierRules(await retailOf(db, after), tierMix(p.tierMix), p.topTierMin);
       const prize = isPrizePool(p);
       const nowValues = prize ? await retailOf(db, now) : [];
@@ -1096,7 +1112,7 @@ export async function stagedRestocks(db: PrismaClient) {
         needsRestock && !prize
           ? planRebalance(
               p,
-              (await retailOf(db, now)).map((v, i) => rebalanceCard(now[i], v)),
+              nowVals.map((v, i) => rebalanceCard(now[i], v)),
               drafts.map((c, i) => rebalanceCard(c, draftValues[i])).filter((c, i) => !drafts[i].demo),
               { allowRemove: false },
             )
@@ -1158,6 +1174,8 @@ export async function stagedRestocks(db: PrismaClient) {
           topShort: projected.topShort,
           tiersAt: p.tiersAt?.toISOString() ?? null,
           mix: typeCounts(nowTyped.filter((c) => c.packId === p.id)),
+          // Pooled cards outside the current Pool Rules (e.g. below a raised minimum value).
+          breakingCards: breakers.length,
         },
         suggestions,
         history: (history.get(p.id) ?? []).map((h) => ({ ...h, evPct: evRows.find((e) => e.packId === p.id && e.version === h.version)?.evPct ?? null })),
