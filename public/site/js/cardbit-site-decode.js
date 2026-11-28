@@ -92,16 +92,16 @@
     function startTrack(c) {
       let src = null, t0 = 0, stopped = false;
       const bus = c.createGain(); bus.gain.setValueAtTime(.0001, c.currentTime); bus.connect(master);
-      const me = music = { stop() { stopped = true; if (src) onMusic(false); const t = c.currentTime; if (src) musicPos = (musicPos + t - t0) % src.buffer.duration; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(Math.max(.0001, bus.gain.value), t); bus.gain.exponentialRampToValueAtTime(.0001, t + .5); setTimeout(() => { try { src?.stop(); bus.disconnect(); } catch {} }, 700); } };
+      const me = music = { stop() { stopped = true; const t = c.currentTime; if (src) musicPos = (musicPos + t - t0) % src.buffer.duration; bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(Math.max(.0001, bus.gain.value), t); bus.gain.exponentialRampToValueAtTime(.0001, t + .5); setTimeout(() => { try { src?.stop(); bus.disconnect(); } catch {} }, 700); } };
       (musicBufs.get(MUSIC_URL) || musicBufs.set(MUSIC_URL, fetch(MUSIC_URL).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(b => new Promise((ok, no) => c.decodeAudioData(b, ok, no)))).get(MUSIC_URL))
         .then(buf => {
           musicBufs.set(MUSIC_URL, Promise.resolve(buf));
           if (stopped || music !== me) return;
           src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(bus);
-          t0 = c.currentTime; src.start(t0, musicPos % buf.duration); onMusic(true);
+          t0 = c.currentTime; src.start(t0, musicPos % buf.duration);
           bus.gain.exponentialRampToValueAtTime(.32, t0 + 1);
         })
-        .catch(() => { musicBufs.set(MUSIC_URL, false); if (!stopped && music === me) { music = null; startSynth(c); } });
+        .catch(() => { musicBufs.set(MUSIC_URL, false); onMusic(false); if (!stopped && music === me) { music = null; startSynth(c); } });
     }
     function startSynth(c) {
       const bus = c.createGain(), lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
@@ -184,7 +184,9 @@
     const S = { sound: soundPref(), reduced: mq.matches, destroyed: false };
     const MUSIC = pickMusic();
     let npEl = null;
-    const sfx = makeSfx(() => S.sound && !S.destroyed, MUSIC, playing => { if (npEl) npEl.hidden = !playing || S.destroyed; });
+    // Song banner (Trevor, Nov 27): on the whole animation, paid and demo, from the first frame until the results.
+    // Hidden only if the song file can't load (the built-in tune plays then) and on the results screen.
+    const sfx = makeSfx(() => S.sound && !S.destroyed, MUSIC, ok => { if (!ok && npEl) npEl.remove(); });
     const vib = p => { if (S.reduced) return; try { navigator.vibrate && navigator.vibrate(p); } catch {} };
     const events = new AbortController(), on = (t, e, f, o) => t.addEventListener(e, f, { signal: events.signal, ...(o || {}) });
 
@@ -198,15 +200,16 @@
       '<div class="cbd-stage" tabindex="0" aria-label="Opening stage. Press Enter or Space to continue."><canvas aria-hidden="true"></canvas>' +
       '<div class="cbd-readout" aria-hidden="true"></div><div class="cbd-tier" aria-hidden="true"><small>Signal Lock</small><span></span></div>' +
       '<div class="cbd-banner" aria-hidden="true"></div><div class="cbd-row" aria-hidden="true"></div><div class="cbd-hint" aria-live="polite"></div>' +
-      (songSlug(MUSIC) ? '<p class="cbd-np" hidden><span class="cbd-np-now"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18.5a3 3 0 1 1-2-2.83V5l12-2v12.5a3 3 0 1 1-2-2.83V7.1L9 8.6z" fill="currentColor"/></svg>Now Playing <b>' + esc(songTitle(songSlug(MUSIC))) + '</b></span><a class="cbd-np-dl" href="/pass/soundtrack/' + songSlug(MUSIC) + '">Download Full Version with Pack Pass</a></p>' : '') + '</div>' +
+      (songSlug(MUSIC) ? '<p class="cbd-np"><span class="cbd-np-now"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18.5a3 3 0 1 1-2-2.83V5l12-2v12.5a3 3 0 1 1-2-2.83V7.1L9 8.6z" fill="currentColor"/></svg><span class="cbd-np-lab">Now Playing</span> <b>' + esc(songTitle(songSlug(MUSIC))) + '</b></span><a class="cbd-np-dl" href="/pass/soundtrack/' + songSlug(MUSIC) + '">Download Full Version with Pack Pass</a></p>' : '') + '</div>' +
       (sample ? '<p class="cbd-note">A Demo Opening spends zero Cardbits and awards no physical card.</p>' : '');
     host.append(root);
     const stage = root.querySelector('.cbd-stage'), cv = stage.querySelector('canvas'), g = cv.getContext('2d');
     const ro = stage.querySelector('.cbd-readout'), tierlab = stage.querySelector('.cbd-tier'), tierTxt = tierlab.querySelector('span');
     const banner = stage.querySelector('.cbd-banner'), rowEl = stage.querySelector('.cbd-row'), hint = stage.querySelector('.cbd-hint');
     npEl = root.querySelector('.cbd-np');
+    if (MUSIC_URLS.length && musicBufs.get(MUSIC) === false) npEl?.remove();
     const soundBtn = root.querySelector('[data-cbd=sound]'), motionBtn = root.querySelector('[data-cbd=motion]'), skipBtn = root.querySelector('[data-cbd=skip]');
-    const syncButtons = () => { soundBtn.textContent = S.sound ? 'Sound On' : 'Sound Off'; soundBtn.setAttribute('aria-pressed', S.sound); motionBtn.setAttribute('aria-pressed', S.reduced); root.classList.toggle('cbd-calm', S.reduced); };
+    const syncButtons = () => { soundBtn.textContent = S.sound ? 'Sound On' : 'Sound Off'; soundBtn.setAttribute('aria-pressed', S.sound); motionBtn.setAttribute('aria-pressed', S.reduced); root.classList.toggle('cbd-calm', S.reduced); const lab = root.querySelector('.cbd-np-lab'); if (lab) lab.textContent = S.sound ? 'Now Playing' : 'Opening Song'; };
     syncButtons();
     on(soundBtn, 'click', () => { S.sound = !S.sound; saveSound(S.sound); syncButtons(); if (S.sound) { audio(true); sfx.tick(3); if (sfx.musicWanted && !done) sfx.musicOn(); } else sfx.musicPause(); });
     on(motionBtn, 'click', () => { S.reduced = !S.reduced; syncButtons(); });
@@ -579,7 +582,7 @@
     /* ---------- results ---------- */
     function finish(instant) {
       if (done || S.destroyed) return; done = true; RUN++; tapRes = null; holdAction = null;
-      sfx.musicOff(); Object.assign(W, { dim: 0, beams: 0, raster: null, packAlpha: 0, scanOn: false }); W.core.a = 0; W.ring.a = 0; W.bits.length = 0;
+      sfx.musicOff(); npEl?.remove(); Object.assign(W, { dim: 0, beams: 0, raster: null, packAlpha: 0, scanOn: false }); W.core.a = 0; W.ring.a = 0; W.bits.length = 0;
       stage.querySelectorAll('.cbd-card,.cbd-hold').forEach(n => n.remove()); tierlab.classList.remove('on'); setHint(''); rowEl.replaceChildren(); ro.textContent = '';
       skipBtn.hidden = true;
       const box = document.createElement('div'); box.className = 'cbd-summary';
