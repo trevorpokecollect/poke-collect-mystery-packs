@@ -104,6 +104,11 @@ const PATCHES = {
     ["['Destination',dest?.label],\n            ['Postage','Calculated at Shipping Checkout']",
      "['Destination',dest?.label || (typeof p.destination==='string' ? p.destination : null)],\n            /* SITE */ ['Shipping',root.CardbitStore?.site ? (p.feeBits ? Number(p.feeBits).toLocaleString('en-US')+' Cardbits' : 'Free') : 'Calculated at Shipping Checkout']"],
     ["esc([p.tracking.company,'Tracking Number '+p.tracking.number]", "esc([p.tracking.company || p.tracking.carrier,'Tracking Number '+p.tracking.number]"],
+    // Edition Guide + Compare: no Typical Cardbits (pool Cardbits are sell-back offers, so a median isn't a true EV; Trevor Nov 27 2026).
+    ["        ['Cardbits per card',d.range],['Typical Cardbits',d.typical],['Packs remaining',format(d.stock)],['Distinct printings',format(d.count)]", "        /* SITE */ ['Cardbits per card',d.range],['Packs remaining',format(d.stock)],['Distinct printings',format(d.count)]"],
+    ["Cardbit values show the current sell-back offer per card. Typical is the median across remaining draws.</p>'+compareLink(p);", "Cardbit values show the current sell-back offer per card.</p>'+compareLink(p);"],
+    ["          ['Cardbits per card',d.range],['Typical Cardbits',d.typical],\n", "          /* SITE */ ['Cardbits per card',d.range],\n"],
+    ["<p class=\"cg-note\">Cardbit values are current sell-back offers per card. Typical is the median across remaining draws.</p>');", "<p class=\"cg-note\">Cardbit values are current sell-back offers per card.</p>');"],
   ],
   'cardbit-storefront.js': [
     // Pack Pass links in the header and footer (site only, Trevor Nov 25).

@@ -278,7 +278,7 @@
       const info = '<p class="cg-basics">'+basics.map(esc).join('<span aria-hidden="true"> · </span>')+'</p>';
       if (d.sold || !d.valid) return info+'<p class="cg-note">'+(d.sold ? 'Sold out' : 'Current pool details are unavailable.')+'</p>'+compareLink(p);
       const stats = '<dl class="cg-metrics">'+[
-        ['Cardbits per card',d.range],['Typical Cardbits',d.typical],['Packs remaining',format(d.stock)],['Distinct printings',format(d.count)]
+        /* SITE */ ['Cardbits per card',d.range],['Packs remaining',format(d.stock)],['Distinct printings',format(d.count)]
       ].map(([label,value]) => '<div><dt>'+label+'</dt><dd>'+esc(value)+'</dd></div>').join('')+'</dl>';
       const odds = new Map((model?.tiers || []).map(t => [t.name,t.odds]));
       const names = [...new Set([...odds.keys(),...d.available.map(c => ctx.tierName(c) || 'Unassigned')])].sort(ctx.compareTiers);
@@ -289,7 +289,7 @@
         return link(path+'/'+enc(name),'<span class="cg-tier-name">'+ctx.tierSymbol(name)+esc(name)+'</span><span>'+esc(chance)+'</span><span>'+esc(range)+'</span><span>'+count+icon('angle',12)+'</span>',
           'cg-tier-row','aria-label="'+esc(name+', pull odds '+chance+', Cardbit range '+range+', '+plural(count,'printing'))+'"');
       }).join('');
-      return info+stats+header+rows+'<p class="cg-note">Odds are the chance of pulling at least one card from a tier. Cardbit values show the current sell-back offer per card. Typical is the median across remaining draws.</p>'+compareLink(p);
+      return info+stats+header+rows+'<p class="cg-note">Odds are the chance of pulling at least one card from a tier. Cardbit values show the current sell-back offer per card.</p>'+compareLink(p);
     }
 
     function detailsForPack(p,pool=p,model,path='packs/'+enc(p.id)+'/pool') {
@@ -309,7 +309,7 @@
           ['Pack price',Number.isSafeInteger(pack.priceBits) ? money(pack.priceBits) : 'Unavailable'],
           ['Cards per pack',pack.cardsPerPack ?? 'Unavailable'],
           ['Language',d.languages || ({cobalt:'English',prism:'English',ember:'Japanese',gold:'English / Japanese',amethyst:'English / Japanese'})[pack.id] || 'Unlisted'],
-          ['Cardbits per card',d.range],['Typical Cardbits',d.typical],
+          /* SITE */ ['Cardbits per card',d.range],
           ['Packs remaining',d.sold ? 'Sold out' : d.valid ? format(d.stock) : 'Unavailable']
         ];
         const chase = d.top;
@@ -324,7 +324,7 @@
           action('packs/'+slug,'View Pack','cb-secondary')+'</section>';
       }
       return page(bread('packs','Packs')+start('Compare Editions')+'<div class="cg-compare" data-compare-pools>'+
-        [left,right].map(column).join('')+'</div><p class="cg-note">Cardbit values are current sell-back offers per card. Typical is the median across remaining draws.</p>');
+        [left,right].map(column).join('')+'</div><p class="cg-note">Cardbit values are current sell-back offers per card.</p>');
     }
     function variantList(c) {
       const others = (get().singles || []).filter(x => x.name === c.name && !sameId(x.id,c.id));

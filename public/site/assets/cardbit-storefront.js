@@ -1334,7 +1334,7 @@
     return '<div class="cb-wrap cb-page" data-fixture-odds>' + bread('packs', 'All Packs') + '<div class="cb-detail cb-detail-with-odds">' + portrait + intro +
       '</div><section class="cb-pool"><div class="cb-section-head"><div>' +
       '<h2>Inside This Edition</h2></div><span>' + plural(remaining, 'eligible copy') + '</span></div>' +
-      poolNote + tiles + fullList + '</section>' + (/* SITE */ site() ? restockHistory(pack) : '') + pages.detailsForPack(pack,pack,odds,path+'/pool') + '</div>';
+      poolNote + tiles + fullList + '</section>' + pages.detailsForPack(pack,pack,odds,path+'/pool') + (/* SITE */ site() ? restockHistory(pack) : '') + '</div>';
   }
   /* SITE */ // Verified restocks: every published pool version, newest first. Odds above already use what's left now.
   function restockHistory(pack){
@@ -1350,9 +1350,10 @@
         '<a class="cb-textlink" href="/api/pool-version?pack=' + enc(pack.id) + '&amp;v=' + enc(r.version) + '" target="_blank" rel="noopener">Card List</a>' +
         '<code title="SHA-256 of every card ID in this version">' + esc(String(r.poolHash || '').slice(0,16)) + '…</code></li>';
     }).join('');
-    return '<section class="cb-pool cb-restocks"><div class="cb-section-head"><div><h2>Restock History</h2></div><span>Pool Version ' + number(list[0].version) + '</span></div>' +
+    // Bottom of the pack page, closed until opened (Trevor, Nov 27 2026).
+    return '<details class="cg-guide cb-restocks"><summary><span>Restock History <small class="cb-restock-version">Pool Version ' + number(list[0].version) + '</small></span>' + icon('chevron',18) + '</summary><div>' +
       '<p class="cb-sub">Cards Join or Leave This Pool Only in a Published Restock. Each Version Lists Every Card With a SHA-256 Hash, and Verified Shuffle Shows Which Version Each Opening Drew From.</p>' +
-      '<ol class="cb-restock-list">' + rows + '</ol></section>';
+      '<ol class="cb-restock-list">' + rows + '</ol></div></details>';
   }
   function purchaseControl(action,id,price,available,label){
     if(!available && !readRequest(action,id))return '<button class="cb-primary" type="button" disabled>Sold Out</button>';

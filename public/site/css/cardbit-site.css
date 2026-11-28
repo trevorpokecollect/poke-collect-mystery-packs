@@ -285,3 +285,11 @@
 #cardbit-store .ct-chase-tile h3 { font-family:var(--cb-display); font-weight:800; }
 #cardbit-store .ct-chase-tile .ct-chase-where { display:block; margin-top:4px; font-size:12px; font-weight:650; line-height:1.35; color:#92dcd8; }
 #cardbit-store .ct-chase-tile .ct-saved { margin-top:4px; }
+
+/* Pack page (Nov 27 2026): Edition Guide has three tiles (no Typical Cardbits); Restock History is a closed dropdown at the bottom. */
+#cardbit-store .cb-edition-guide .cg-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+@media (max-width: 640px) { #cardbit-store .cb-edition-guide .cg-metrics { grid-template-columns: 1fr 1fr; } #cardbit-store .cb-edition-guide .cg-metrics > div:first-child { grid-column: 1 / -1; } }
+#cardbit-store .cb-edition-guide + .cb-restocks { margin-top: -20px; }
+#cardbit-store .cb-restocks summary > span { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+#cardbit-store .cb-restocks .cb-restock-version { font-size: 13px; font-weight: 500; color: var(--cb-muted); }
+#cardbit-store .cb-restocks .cb-sub { margin-top: 0; }
