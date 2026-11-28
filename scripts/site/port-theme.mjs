@@ -316,6 +316,9 @@ async function section(file, settings = {}) {
 // updates them in the same change. Each anchor must exist, so a theme rewrite fails loudly here.
 const PAGE_COPY = {
   'how-it-works.html': [
+    // No repeated card in a pack (Trevor, Nov 27): Verified Shuffle draw rule 2.
+    ["A Booster gives you five cards. Mystery, Gold, Japanese and Wildcard packs give you one card each.</p>", "A Booster gives you five cards, and <strong>they're always five different cards</strong>: a pack never holds two copies of the same printing. Mystery, Gold, Japanese and Wildcard packs give you one card each.</p>"],
+    ["When someone pulls a big card, it leaves the pool and the odds update for everyone.", "When someone pulls a big card, it leaves the pool and the odds update for everyone. Booster odds count only packs of five different cards, the same way the draw does."],
     // Verified Shuffle (site only).
     ["still waiting to be pulled.</p>", "still waiting to be pulled.</p>\n      <h3>Verified Shuffle</h3>\n      <p>Every paid opening is drawn with a locked secret seed whose fingerprint you can see before you open, plus a client seed you can set yourself. Reveal the seed any time on the <a href=\"/verified-shuffle\">Verified Shuffle</a> page and check that it picked exactly your cards.</p>"],
     ['<b>Free Shipping</b> on Vault shipments of more than 30 cards.', '<b>Free Shipping</b> on Vault shipments of 30 or more cards, or 10,000 Cardbits or more in card value.'],
@@ -340,6 +343,8 @@ const PAGE_COPY = {
     // Verified Shuffle (site only).
     ["<li class=\"is-yes\">Odds update live from the packs still unclaimed</li>", "<li class=\"is-yes\">Odds update live from the packs still unclaimed</li>\n          <li class=\"is-yes\">Every draw can be checked on the <a href=\"/verified-shuffle\">Verified Shuffle</a> page</li>"],
     ["Odds change as packs are opened. <strong>Packs have no minimum card value.</strong>", "Odds change as packs are opened. Each paid opening is drawn with a committed server seed, your client seed and an opening number, and you can verify the draw after revealing the seed on the Verified Shuffle page. <strong>Packs have no minimum card value.</strong>"],
+    // No repeated card in a pack (Trevor, Nov 27).
+    ["Verified Shuffle page. <strong>Packs have no minimum card value.</strong>", "Verified Shuffle page. A multi-card pack never contains two copies of the same printing; if a pool does not have enough different cards left to fill a pack, that pack is unavailable until the next restock. <strong>Packs have no minimum card value.</strong>"],
     ['$6 or 600 Cardbits, free over 30 cards.', '$6 or 600 Cardbits, free at 30+ cards or 10,000 Cardbits of card value.'],
     ['<div class="is-free"><b>Free</b><span>Over 30 cards</span></div>', '<div class="is-free"><b>Free</b><span>30+ cards or 10,000 Cardbits value</span></div>'],
     ['shipments of more than 30 cards ship free.', 'shipments of 30 or more cards, or of cards worth 10,000 Cardbits or more in total, ship free.'],
