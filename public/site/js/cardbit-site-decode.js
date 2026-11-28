@@ -197,10 +197,11 @@
     root.innerHTML =
       '<div class="cbd-top"><div><p class="cbd-kicker">' + (sample ? 'Demo Opening <span class="cbd-demo">Demo — No Purchase.</span>' : 'Pack Opening') + '</p><h1 class="cbd-title">' + esc(name) + '</h1></div>' +
       '<div class="cbd-tools"><button type="button" class="cbd-btn" data-cbd="sound" aria-pressed="false"></button><button type="button" class="cbd-btn" data-cbd="motion" aria-pressed="false">Reduce Motion</button><button type="button" class="cbd-btn" data-cbd="skip">Skip</button></div></div>' +
+      (songSlug(MUSIC) ? '<p class="cbd-np"><span class="cbd-np-now"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18.5a3 3 0 1 1-2-2.83V5l12-2v12.5a3 3 0 1 1-2-2.83V7.1L9 8.6z" fill="currentColor"/></svg><span class="cbd-np-lab">Now Playing</span> <b>' + esc(songTitle(songSlug(MUSIC))) + '</b></span><a class="cbd-np-dl" href="/pass/soundtrack/' + songSlug(MUSIC) + '">Download Full Version with Pack Pass</a></p>' : '') +
       '<div class="cbd-stage" tabindex="0" aria-label="Opening stage. Press Enter or Space to continue."><canvas aria-hidden="true"></canvas>' +
       '<div class="cbd-readout" aria-hidden="true"></div><div class="cbd-tier" aria-hidden="true"><small>Signal Lock</small><span></span></div>' +
       '<div class="cbd-banner" aria-hidden="true"></div><div class="cbd-row" aria-hidden="true"></div><div class="cbd-hint" aria-live="polite"></div>' +
-      (songSlug(MUSIC) ? '<p class="cbd-np"><span class="cbd-np-now"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18.5a3 3 0 1 1-2-2.83V5l12-2v12.5a3 3 0 1 1-2-2.83V7.1L9 8.6z" fill="currentColor"/></svg><span class="cbd-np-lab">Now Playing</span> <b>' + esc(songTitle(songSlug(MUSIC))) + '</b></span><a class="cbd-np-dl" href="/pass/soundtrack/' + songSlug(MUSIC) + '">Download Full Version with Pack Pass</a></p>' : '') + '</div>' +
+      '</div>' +
       (sample ? '<p class="cbd-note">A Demo Opening spends zero Cardbits and awards no physical card.</p>' : '');
     host.append(root);
     const stage = root.querySelector('.cbd-stage'), cv = stage.querySelector('canvas'), g = cv.getContext('2d');
